@@ -1,0 +1,3802 @@
+{
+  "seed": 42,
+  "cycle_count": 2,
+  "sectors": {
+    "1": {
+      "id": 1,
+      "name": "Sol Federation Central",
+      "security": "FEDERATION",
+      "warps": [
+        2,
+        3,
+        9,
+        12,
+        30
+      ],
+      "port": {
+        "sector_id": 1,
+        "name": "Stardock Central",
+        "port_class": "0 (DOCK)",
+        "stock": {
+          "ORE": 950,
+          "ORGANICS": 950,
+          "EQUIPMENT": 950
+        },
+        "max_stock": {
+          "ORE": 1000,
+          "ORGANICS": 1000,
+          "EQUIPMENT": 1000
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "2": {
+      "id": 2,
+      "name": "Void Reach",
+      "security": "FEDERATION",
+      "warps": [
+        1,
+        3,
+        4,
+        6,
+        7
+      ],
+      "port": {
+        "sector_id": 2,
+        "name": "Helios Refinery #2",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 821,
+          "ORGANICS": 224,
+          "EQUIPMENT": 601
+        },
+        "max_stock": {
+          "ORE": 1014,
+          "ORGANICS": 769,
+          "EQUIPMENT": 730
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": [
+        "player_1"
+      ]
+    },
+    "3": {
+      "id": 3,
+      "name": "Starlight Rift",
+      "security": "FEDERATION",
+      "warps": [
+        1,
+        2,
+        5,
+        6,
+        8,
+        13
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "4": {
+      "id": 4,
+      "name": "Echo Gateway",
+      "security": "FEDERATION",
+      "warps": [
+        2,
+        7,
+        12,
+        13
+      ],
+      "port": {
+        "sector_id": 4,
+        "name": "Cygnus Outpost #4",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 492,
+          "ORGANICS": 218,
+          "EQUIPMENT": 408
+        },
+        "max_stock": {
+          "ORE": 685,
+          "ORGANICS": 738,
+          "EQUIPMENT": 786
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": [
+        "ai_vane"
+      ]
+    },
+    "5": {
+      "id": 5,
+      "name": "Void Sanctum",
+      "security": "FEDERATION",
+      "warps": [
+        3,
+        9,
+        10
+      ],
+      "port": {
+        "sector_id": 5,
+        "name": "Aegis Munitions #5",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 226,
+          "ORGANICS": 601,
+          "EQUIPMENT": 283
+        },
+        "max_stock": {
+          "ORE": 934,
+          "ORGANICS": 988,
+          "EQUIPMENT": 1031
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "6": {
+      "id": 6,
+      "name": "Radiant Spire",
+      "security": "FEDERATION",
+      "warps": [
+        2,
+        3,
+        8,
+        9
+      ],
+      "port": {
+        "sector_id": 6,
+        "name": "Helios Refinery #6",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 472,
+          "ORGANICS": 270,
+          "EQUIPMENT": 351
+        },
+        "max_stock": {
+          "ORE": 653,
+          "ORGANICS": 829,
+          "EQUIPMENT": 670
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "7": {
+      "id": 7,
+      "name": "Solar Expanse",
+      "security": "FEDERATION",
+      "warps": [
+        2,
+        4,
+        11,
+        13,
+        14,
+        19
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "8": {
+      "id": 8,
+      "name": "Silent Depths",
+      "security": "FEDERATION",
+      "warps": [
+        3,
+        6,
+        11,
+        12,
+        14,
+        15
+      ],
+      "port": {
+        "sector_id": 8,
+        "name": "Spica Exchange #8",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 174,
+          "ORGANICS": 210,
+          "EQUIPMENT": 433
+        },
+        "max_stock": {
+          "ORE": 756,
+          "ORGANICS": 729,
+          "EQUIPMENT": 717
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_8",
+          "sector_id": 8,
+          "name": "Aetheria Prime",
+          "owner_id": "ai_voss",
+          "population": 491,
+          "shields": 350,
+          "max_shields": 200,
+          "fighters": 50,
+          "citadel_level": 1,
+          "treasury": 575,
+          "ore_silo": 117,
+          "organics_silo": 40
+        }
+      ],
+      "captains": []
+    },
+    "9": {
+      "id": 9,
+      "name": "Pulsar Rift",
+      "security": "FEDERATION",
+      "warps": [
+        1,
+        5,
+        6,
+        30,
+        44
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "10": {
+      "id": 10,
+      "name": "Storm Nexus",
+      "security": "FEDERATION",
+      "warps": [
+        5,
+        12,
+        14,
+        17,
+        30,
+        32
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "11": {
+      "id": 11,
+      "name": "Silent Sanctum",
+      "security": "BORDERLAND",
+      "warps": [
+        7,
+        8,
+        13,
+        16,
+        29,
+        30
+      ],
+      "port": {
+        "sector_id": 11,
+        "name": "Vega Trade Station #11",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 435,
+          "ORGANICS": 498,
+          "EQUIPMENT": 191
+        },
+        "max_stock": {
+          "ORE": 717,
+          "ORGANICS": 918,
+          "EQUIPMENT": 1192
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "12": {
+      "id": 12,
+      "name": "Pulsar Sanctum",
+      "security": "BORDERLAND",
+      "warps": [
+        1,
+        4,
+        8,
+        10
+      ],
+      "port": {
+        "sector_id": 12,
+        "name": "Vega Trade Station #12",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 248,
+          "ORGANICS": 429,
+          "EQUIPMENT": 463
+        },
+        "max_stock": {
+          "ORE": 984,
+          "ORGANICS": 803,
+          "EQUIPMENT": 848
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "13": {
+      "id": 13,
+      "name": "Solar Rift",
+      "security": "BORDERLAND",
+      "warps": [
+        3,
+        4,
+        7,
+        11,
+        15,
+        16
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "14": {
+      "id": 14,
+      "name": "Abyssal Spire",
+      "security": "BORDERLAND",
+      "warps": [
+        7,
+        8,
+        10,
+        19
+      ],
+      "port": {
+        "sector_id": 14,
+        "name": "Arcturus Terminal #14",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 197,
+          "ORGANICS": 279,
+          "EQUIPMENT": 805
+        },
+        "max_stock": {
+          "ORE": 1179,
+          "ORGANICS": 955,
+          "EQUIPMENT": 1038
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "15": {
+      "id": 15,
+      "name": "Starlight Reach",
+      "security": "BORDERLAND",
+      "warps": [
+        8,
+        13,
+        16,
+        17
+      ],
+      "port": {
+        "sector_id": 15,
+        "name": "Arcturus Terminal #15",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 492,
+          "ORGANICS": 384,
+          "EQUIPMENT": 539
+        },
+        "max_stock": {
+          "ORE": 612,
+          "ORGANICS": 1030,
+          "EQUIPMENT": 708
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_15",
+          "sector_id": 15,
+          "name": "Gorgon's Rest",
+          "owner_id": null,
+          "population": 1379,
+          "shields": 135,
+          "max_shields": 200,
+          "fighters": 19,
+          "citadel_level": 0,
+          "treasury": 246,
+          "ore_silo": 48,
+          "organics_silo": 70
+        }
+      ],
+      "captains": []
+    },
+    "16": {
+      "id": 16,
+      "name": "Shadow Terminus",
+      "security": "BORDERLAND",
+      "warps": [
+        11,
+        13,
+        15,
+        21,
+        27
+      ],
+      "port": {
+        "sector_id": 16,
+        "name": "Deneb Synthetics #16",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 224,
+          "ORGANICS": 618,
+          "EQUIPMENT": 709
+        },
+        "max_stock": {
+          "ORE": 756,
+          "ORGANICS": 780,
+          "EQUIPMENT": 876
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "17": {
+      "id": 17,
+      "name": "Shattered Sector",
+      "security": "BORDERLAND",
+      "warps": [
+        10,
+        15,
+        20
+      ],
+      "port": null,
+      "planets": [
+        {
+          "id": "planet_17",
+          "sector_id": 17,
+          "name": "Xylar-IV",
+          "owner_id": null,
+          "population": 1440,
+          "shields": 53,
+          "max_shields": 200,
+          "fighters": 29,
+          "citadel_level": 0,
+          "treasury": 1151,
+          "ore_silo": 54,
+          "organics_silo": 23
+        }
+      ],
+      "captains": []
+    },
+    "18": {
+      "id": 18,
+      "name": "Crimson Haven",
+      "security": "BORDERLAND",
+      "warps": [
+        20,
+        22,
+        23,
+        30
+      ],
+      "port": {
+        "sector_id": 18,
+        "name": "Centauri Bio-Lab #18",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 213,
+          "ORGANICS": 456,
+          "EQUIPMENT": 628
+        },
+        "max_stock": {
+          "ORE": 874,
+          "ORGANICS": 851,
+          "EQUIPMENT": 885
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "19": {
+      "id": 19,
+      "name": "Shattered Passage",
+      "security": "BORDERLAND",
+      "warps": [
+        7,
+        14,
+        23,
+        28
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "20": {
+      "id": 20,
+      "name": "Radiant Void",
+      "security": "BORDERLAND",
+      "warps": [
+        17,
+        18,
+        21,
+        22,
+        24
+      ],
+      "port": {
+        "sector_id": 20,
+        "name": "Proxima Foundry #20",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 468,
+          "ORGANICS": 331,
+          "EQUIPMENT": 602
+        },
+        "max_stock": {
+          "ORE": 944,
+          "ORGANICS": 1106,
+          "EQUIPMENT": 786
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "21": {
+      "id": 21,
+      "name": "Void Belt",
+      "security": "BORDERLAND",
+      "warps": [
+        16,
+        20,
+        24,
+        25
+      ],
+      "port": {
+        "sector_id": 21,
+        "name": "Proxima Foundry #21",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 264,
+          "ORGANICS": 680,
+          "EQUIPMENT": 203
+        },
+        "max_stock": {
+          "ORE": 886,
+          "ORGANICS": 882,
+          "EQUIPMENT": 610
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_21",
+          "sector_id": 21,
+          "name": "Vanguard Rock",
+          "owner_id": null,
+          "population": 1324,
+          "shields": 121,
+          "max_shields": 200,
+          "fighters": 36,
+          "citadel_level": 0,
+          "treasury": 884,
+          "ore_silo": 65,
+          "organics_silo": 29
+        }
+      ],
+      "captains": []
+    },
+    "22": {
+      "id": 22,
+      "name": "Astral Nexus",
+      "security": "BORDERLAND",
+      "warps": [
+        18,
+        20,
+        34
+      ],
+      "port": {
+        "sector_id": 22,
+        "name": "Pollux Granary #22",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 779,
+          "ORGANICS": 282,
+          "EQUIPMENT": 819
+        },
+        "max_stock": {
+          "ORE": 1100,
+          "ORGANICS": 846,
+          "EQUIPMENT": 1087
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "23": {
+      "id": 23,
+      "name": "Starlight Expanse",
+      "security": "BORDERLAND",
+      "warps": [
+        18,
+        19,
+        24,
+        31
+      ],
+      "port": {
+        "sector_id": 23,
+        "name": "Altair Heavy Works #23",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 191,
+          "ORGANICS": 309,
+          "EQUIPMENT": 538
+        },
+        "max_stock": {
+          "ORE": 901,
+          "ORGANICS": 1014,
+          "EQUIPMENT": 849
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "24": {
+      "id": 24,
+      "name": "Abyssal Sanctum",
+      "security": "BORDERLAND",
+      "warps": [
+        20,
+        21,
+        23,
+        29
+      ],
+      "port": {
+        "sector_id": 24,
+        "name": "Spica Exchange #24",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 645,
+          "ORGANICS": 707,
+          "EQUIPMENT": 303
+        },
+        "max_stock": {
+          "ORE": 952,
+          "ORGANICS": 1163,
+          "EQUIPMENT": 960
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "25": {
+      "id": 25,
+      "name": "Void Void",
+      "security": "BORDERLAND",
+      "warps": [
+        21,
+        26,
+        27,
+        28
+      ],
+      "port": {
+        "sector_id": 25,
+        "name": "Proxima Foundry #25",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 157,
+          "ORGANICS": 506,
+          "EQUIPMENT": 266
+        },
+        "max_stock": {
+          "ORE": 723,
+          "ORGANICS": 923,
+          "EQUIPMENT": 1148
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "26": {
+      "id": 26,
+      "name": "Radiant Sanctum",
+      "security": "BORDERLAND",
+      "warps": [
+        25,
+        27,
+        29,
+        31,
+        34
+      ],
+      "port": {
+        "sector_id": 26,
+        "name": "Centauri Bio-Lab #26",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 816,
+          "ORGANICS": 481,
+          "EQUIPMENT": 194
+        },
+        "max_stock": {
+          "ORE": 1137,
+          "ORGANICS": 889,
+          "EQUIPMENT": 798
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "27": {
+      "id": 27,
+      "name": "Obsidian Nexus",
+      "security": "BORDERLAND",
+      "warps": [
+        16,
+        25,
+        26,
+        29,
+        36,
+        38
+      ],
+      "port": {
+        "sector_id": 27,
+        "name": "Vega Trade Station #27",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 235,
+          "ORGANICS": 449,
+          "EQUIPMENT": 219
+        },
+        "max_stock": {
+          "ORE": 1146,
+          "ORGANICS": 880,
+          "EQUIPMENT": 655
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "28": {
+      "id": 28,
+      "name": "Astral Spire",
+      "security": "BORDERLAND",
+      "warps": [
+        19,
+        25,
+        33
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "29": {
+      "id": 29,
+      "name": "Pulsar Depths",
+      "security": "BORDERLAND",
+      "warps": [
+        11,
+        24,
+        26,
+        27
+      ],
+      "port": {
+        "sector_id": 29,
+        "name": "Pollux Granary #29",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 217,
+          "ORGANICS": 421,
+          "EQUIPMENT": 640
+        },
+        "max_stock": {
+          "ORE": 1102,
+          "ORGANICS": 612,
+          "EQUIPMENT": 891
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_29",
+          "sector_id": 29,
+          "name": "Hyperion Core",
+          "owner_id": null,
+          "population": 1181,
+          "shields": 72,
+          "max_shields": 200,
+          "fighters": 14,
+          "citadel_level": 0,
+          "treasury": 589,
+          "ore_silo": 88,
+          "organics_silo": 49
+        }
+      ],
+      "captains": []
+    },
+    "30": {
+      "id": 30,
+      "name": "Nebular Rift",
+      "security": "BORDERLAND",
+      "warps": [
+        1,
+        9,
+        10,
+        11,
+        18,
+        31,
+        82,
+        92,
+        98
+      ],
+      "port": {
+        "sector_id": 30,
+        "name": "Pollux Granary #30",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 161,
+          "ORGANICS": 578,
+          "EQUIPMENT": 191
+        },
+        "max_stock": {
+          "ORE": 652,
+          "ORGANICS": 1089,
+          "EQUIPMENT": 666
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_30",
+          "sector_id": 30,
+          "name": "Avalon IV",
+          "owner_id": null,
+          "population": 1155,
+          "shields": 87,
+          "max_shields": 200,
+          "fighters": 13,
+          "citadel_level": 0,
+          "treasury": 614,
+          "ore_silo": 22,
+          "organics_silo": 61
+        }
+      ],
+      "captains": []
+    },
+    "31": {
+      "id": 31,
+      "name": "Obsidian Depths",
+      "security": "BORDERLAND",
+      "warps": [
+        23,
+        26,
+        30,
+        33
+      ],
+      "port": {
+        "sector_id": 31,
+        "name": "Centauri Bio-Lab #31",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 401,
+          "ORGANICS": 236,
+          "EQUIPMENT": 482
+        },
+        "max_stock": {
+          "ORE": 654,
+          "ORGANICS": 752,
+          "EQUIPMENT": 911
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "32": {
+      "id": 32,
+      "name": "Echo Passage",
+      "security": "BORDERLAND",
+      "warps": [
+        10,
+        36,
+        37,
+        38,
+        41
+      ],
+      "port": {
+        "sector_id": 32,
+        "name": "Altair Heavy Works #32",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 640,
+          "ORGANICS": 263,
+          "EQUIPMENT": 640
+        },
+        "max_stock": {
+          "ORE": 831,
+          "ORGANICS": 989,
+          "EQUIPMENT": 1053
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "33": {
+      "id": 33,
+      "name": "Quantum Sector",
+      "security": "BORDERLAND",
+      "warps": [
+        28,
+        31,
+        35,
+        40,
+        43
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "34": {
+      "id": 34,
+      "name": "Abyssal Belt",
+      "security": "BORDERLAND",
+      "warps": [
+        22,
+        26,
+        36,
+        37,
+        39
+      ],
+      "port": {
+        "sector_id": 34,
+        "name": "Centauri Bio-Lab #34",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 421,
+          "ORGANICS": 189,
+          "EQUIPMENT": 417
+        },
+        "max_stock": {
+          "ORE": 701,
+          "ORGANICS": 816,
+          "EQUIPMENT": 683
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": [
+        "ai_voss"
+      ]
+    },
+    "35": {
+      "id": 35,
+      "name": "Shadow Belt",
+      "security": "BORDERLAND",
+      "warps": [
+        33,
+        37,
+        38,
+        39,
+        43,
+        46
+      ],
+      "port": {
+        "sector_id": 35,
+        "name": "Centauri Bio-Lab #35",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 174,
+          "ORGANICS": 379,
+          "EQUIPMENT": 450
+        },
+        "max_stock": {
+          "ORE": 602,
+          "ORGANICS": 1061,
+          "EQUIPMENT": 898
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "36": {
+      "id": 36,
+      "name": "Astral Haven",
+      "security": "BORDERLAND",
+      "warps": [
+        27,
+        32,
+        34
+      ],
+      "port": {
+        "sector_id": 36,
+        "name": "Tartarus Deep Mine #36",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 195,
+          "ORGANICS": 512,
+          "EQUIPMENT": 228
+        },
+        "max_stock": {
+          "ORE": 1064,
+          "ORGANICS": 839,
+          "EQUIPMENT": 802
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "37": {
+      "id": 37,
+      "name": "Starlight Depths",
+      "security": "BORDERLAND",
+      "warps": [
+        32,
+        34,
+        35,
+        38,
+        64
+      ],
+      "port": {
+        "sector_id": 37,
+        "name": "Fomalhaut Harbor #37",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 494,
+          "ORGANICS": 115,
+          "EQUIPMENT": 503
+        },
+        "max_stock": {
+          "ORE": 872,
+          "ORGANICS": 673,
+          "EQUIPMENT": 769
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "38": {
+      "id": 38,
+      "name": "Ancient Corridor",
+      "security": "BORDERLAND",
+      "warps": [
+        27,
+        32,
+        35,
+        37,
+        44
+      ],
+      "port": null,
+      "planets": [
+        {
+          "id": "planet_38",
+          "sector_id": 38,
+          "name": "Ceti Alpha",
+          "owner_id": null,
+          "population": 467,
+          "shields": 84,
+          "max_shields": 200,
+          "fighters": 24,
+          "citadel_level": 0,
+          "treasury": 877,
+          "ore_silo": 74,
+          "organics_silo": 82
+        }
+      ],
+      "captains": []
+    },
+    "39": {
+      "id": 39,
+      "name": "Vortex Rift",
+      "security": "BORDERLAND",
+      "warps": [
+        34,
+        35,
+        40,
+        41,
+        42,
+        44
+      ],
+      "port": {
+        "sector_id": 39,
+        "name": "Cygnus Outpost #39",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 218,
+          "ORGANICS": 767,
+          "EQUIPMENT": 372
+        },
+        "max_stock": {
+          "ORE": 727,
+          "ORGANICS": 911,
+          "EQUIPMENT": 1012
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "40": {
+      "id": 40,
+      "name": "Shadow Lagoon",
+      "security": "BORDERLAND",
+      "warps": [
+        33,
+        39,
+        41,
+        46,
+        47,
+        52
+      ],
+      "port": {
+        "sector_id": 40,
+        "name": "Cygnus Outpost #40",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 356,
+          "ORGANICS": 844,
+          "EQUIPMENT": 273
+        },
+        "max_stock": {
+          "ORE": 682,
+          "ORGANICS": 1042,
+          "EQUIPMENT": 930
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "41": {
+      "id": 41,
+      "name": "Quantum Sector",
+      "security": "BORDERLAND",
+      "warps": [
+        32,
+        39,
+        40,
+        42,
+        44
+      ],
+      "port": {
+        "sector_id": 41,
+        "name": "Pollux Granary #41",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 188,
+          "ORGANICS": 688,
+          "EQUIPMENT": 140
+        },
+        "max_stock": {
+          "ORE": 1189,
+          "ORGANICS": 875,
+          "EQUIPMENT": 641
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_41",
+          "sector_id": 41,
+          "name": "Tartarus Prime",
+          "owner_id": null,
+          "population": 1006,
+          "shields": 105,
+          "max_shields": 200,
+          "fighters": 13,
+          "citadel_level": 0,
+          "treasury": 490,
+          "ore_silo": 95,
+          "organics_silo": 82
+        }
+      ],
+      "captains": []
+    },
+    "42": {
+      "id": 42,
+      "name": "Vortex Rift",
+      "security": "BORDERLAND",
+      "warps": [
+        39,
+        41,
+        43,
+        46,
+        47
+      ],
+      "port": {
+        "sector_id": 42,
+        "name": "Pollux Granary #42",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 519,
+          "ORGANICS": 382,
+          "EQUIPMENT": 211
+        },
+        "max_stock": {
+          "ORE": 884,
+          "ORGANICS": 1199,
+          "EQUIPMENT": 1103
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "43": {
+      "id": 43,
+      "name": "Shattered Expanse",
+      "security": "BORDERLAND",
+      "warps": [
+        33,
+        35,
+        42,
+        45,
+        52,
+        53
+      ],
+      "port": {
+        "sector_id": 43,
+        "name": "Aldebaran Complex #43",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 430,
+          "ORGANICS": 245,
+          "EQUIPMENT": 313
+        },
+        "max_stock": {
+          "ORE": 707,
+          "ORGANICS": 937,
+          "EQUIPMENT": 1107
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "44": {
+      "id": 44,
+      "name": "Echo Expanse",
+      "security": "BORDERLAND",
+      "warps": [
+        9,
+        38,
+        39,
+        41,
+        46,
+        71
+      ],
+      "port": null,
+      "planets": [
+        {
+          "id": "planet_44",
+          "sector_id": 44,
+          "name": "Genesis Prime",
+          "owner_id": null,
+          "population": 521,
+          "shields": 94,
+          "max_shields": 200,
+          "fighters": 37,
+          "citadel_level": 0,
+          "treasury": 769,
+          "ore_silo": 67,
+          "organics_silo": 34
+        }
+      ],
+      "captains": []
+    },
+    "45": {
+      "id": 45,
+      "name": "Shattered Void",
+      "security": "BORDERLAND",
+      "warps": [
+        43,
+        48,
+        51,
+        55,
+        57
+      ],
+      "port": {
+        "sector_id": 45,
+        "name": "Castor Ordnance #45",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 558,
+          "ORGANICS": 168,
+          "EQUIPMENT": 352
+        },
+        "max_stock": {
+          "ORE": 922,
+          "ORGANICS": 931,
+          "EQUIPMENT": 1013
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "46": {
+      "id": 46,
+      "name": "Starlight Depths",
+      "security": "BORDERLAND",
+      "warps": [
+        35,
+        40,
+        42,
+        44,
+        47,
+        49
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "47": {
+      "id": 47,
+      "name": "Pulsar Spire",
+      "security": "BORDERLAND",
+      "warps": [
+        40,
+        42,
+        46,
+        54,
+        57,
+        59
+      ],
+      "port": {
+        "sector_id": 47,
+        "name": "Fomalhaut Harbor #47",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 351,
+          "ORGANICS": 405,
+          "EQUIPMENT": 693
+        },
+        "max_stock": {
+          "ORE": 1073,
+          "ORGANICS": 655,
+          "EQUIPMENT": 1130
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_47",
+          "sector_id": 47,
+          "name": "Sanctuary",
+          "owner_id": null,
+          "population": 1018,
+          "shields": 50,
+          "max_shields": 200,
+          "fighters": 15,
+          "citadel_level": 0,
+          "treasury": 1090,
+          "ore_silo": 38,
+          "organics_silo": 92
+        }
+      ],
+      "captains": []
+    },
+    "48": {
+      "id": 48,
+      "name": "Shattered Haven",
+      "security": "BORDERLAND",
+      "warps": [
+        45,
+        50,
+        54,
+        57
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "49": {
+      "id": 49,
+      "name": "Iron Void",
+      "security": "BORDERLAND",
+      "warps": [
+        46,
+        51,
+        54
+      ],
+      "port": {
+        "sector_id": 49,
+        "name": "Pollux Granary #49",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 499,
+          "ORGANICS": 241,
+          "EQUIPMENT": 626
+        },
+        "max_stock": {
+          "ORE": 808,
+          "ORGANICS": 1162,
+          "EQUIPMENT": 894
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "50": {
+      "id": 50,
+      "name": "Abyssal Gateway",
+      "security": "BORDERLAND",
+      "warps": [
+        48,
+        51,
+        53,
+        59,
+        61
+      ],
+      "port": {
+        "sector_id": 50,
+        "name": "Deneb Synthetics #50",
+        "port_class": "8 (BBB)",
+        "stock": {
+          "ORE": 287,
+          "ORGANICS": 193,
+          "EQUIPMENT": 181
+        },
+        "max_stock": {
+          "ORE": 845,
+          "ORGANICS": 762,
+          "EQUIPMENT": 1164
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "51": {
+      "id": 51,
+      "name": "Starlight Gateway",
+      "security": "BORDERLAND",
+      "warps": [
+        45,
+        49,
+        50,
+        56,
+        60
+      ],
+      "port": {
+        "sector_id": 51,
+        "name": "Castor Ordnance #51",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 205,
+          "ORGANICS": 432,
+          "EQUIPMENT": 315
+        },
+        "max_stock": {
+          "ORE": 716,
+          "ORGANICS": 720,
+          "EQUIPMENT": 1110
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "52": {
+      "id": 52,
+      "name": "Echo Sanctum",
+      "security": "BORDERLAND",
+      "warps": [
+        40,
+        43,
+        53,
+        58,
+        61,
+        64
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "53": {
+      "id": 53,
+      "name": "Vortex Sector",
+      "security": "BORDERLAND",
+      "warps": [
+        43,
+        50,
+        52,
+        54,
+        55
+      ],
+      "port": {
+        "sector_id": 53,
+        "name": "Proxima Foundry #53",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 641,
+          "ORGANICS": 762,
+          "EQUIPMENT": 210
+        },
+        "max_stock": {
+          "ORE": 1083,
+          "ORGANICS": 1067,
+          "EQUIPMENT": 748
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "54": {
+      "id": 54,
+      "name": "Infinite Terminus",
+      "security": "BORDERLAND",
+      "warps": [
+        47,
+        48,
+        49,
+        53,
+        58,
+        71
+      ],
+      "port": null,
+      "planets": [
+        {
+          "id": "planet_54",
+          "sector_id": 54,
+          "name": "Iron Bastion",
+          "owner_id": null,
+          "population": 669,
+          "shields": 84,
+          "max_shields": 200,
+          "fighters": 32,
+          "citadel_level": 0,
+          "treasury": 980,
+          "ore_silo": 59,
+          "organics_silo": 63
+        }
+      ],
+      "captains": []
+    },
+    "55": {
+      "id": 55,
+      "name": "Infinite Void",
+      "security": "BORDERLAND",
+      "warps": [
+        45,
+        53,
+        58,
+        64,
+        65
+      ],
+      "port": {
+        "sector_id": 55,
+        "name": "Helios Refinery #55",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 170,
+          "ORGANICS": 634,
+          "EQUIPMENT": 669
+        },
+        "max_stock": {
+          "ORE": 671,
+          "ORGANICS": 1024,
+          "EQUIPMENT": 1119
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "56": {
+      "id": 56,
+      "name": "Astral Rift",
+      "security": "BORDERLAND",
+      "warps": [
+        51,
+        60,
+        67,
+        68
+      ],
+      "port": {
+        "sector_id": 56,
+        "name": "Arcturus Terminal #56",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 408,
+          "ORGANICS": 566,
+          "EQUIPMENT": 399
+        },
+        "max_stock": {
+          "ORE": 1193,
+          "ORGANICS": 752,
+          "EQUIPMENT": 1151
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_56",
+          "sector_id": 56,
+          "name": "Dread Hollow",
+          "owner_id": null,
+          "population": 1386,
+          "shields": 77,
+          "max_shields": 200,
+          "fighters": 22,
+          "citadel_level": 0,
+          "treasury": 629,
+          "ore_silo": 78,
+          "organics_silo": 63
+        }
+      ],
+      "captains": []
+    },
+    "57": {
+      "id": 57,
+      "name": "Crimson Shoals",
+      "security": "BORDERLAND",
+      "warps": [
+        45,
+        47,
+        48,
+        59,
+        61,
+        67
+      ],
+      "port": {
+        "sector_id": 57,
+        "name": "Altair Heavy Works #57",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 676,
+          "ORGANICS": 341,
+          "EQUIPMENT": 478
+        },
+        "max_stock": {
+          "ORE": 986,
+          "ORGANICS": 929,
+          "EQUIPMENT": 793
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "58": {
+      "id": 58,
+      "name": "Iron Depths",
+      "security": "BORDERLAND",
+      "warps": [
+        52,
+        54,
+        55,
+        68
+      ],
+      "port": {
+        "sector_id": 58,
+        "name": "Orion Free Haven #58",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 175,
+          "ORGANICS": 658,
+          "EQUIPMENT": 642
+        },
+        "max_stock": {
+          "ORE": 1020,
+          "ORGANICS": 925,
+          "EQUIPMENT": 990
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "59": {
+      "id": 59,
+      "name": "Nebular Passage",
+      "security": "BORDERLAND",
+      "warps": [
+        47,
+        50,
+        57,
+        66
+      ],
+      "port": {
+        "sector_id": 59,
+        "name": "Spica Exchange #59",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 326,
+          "ORGANICS": 207,
+          "EQUIPMENT": 584
+        },
+        "max_stock": {
+          "ORE": 1114,
+          "ORGANICS": 702,
+          "EQUIPMENT": 702
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "60": {
+      "id": 60,
+      "name": "Crimson Corridor",
+      "security": "BORDERLAND",
+      "warps": [
+        51,
+        56,
+        62,
+        69
+      ],
+      "port": {
+        "sector_id": 60,
+        "name": "Aldebaran Complex #60",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 132,
+          "ORGANICS": 297,
+          "EQUIPMENT": 744
+        },
+        "max_stock": {
+          "ORE": 758,
+          "ORGANICS": 1080,
+          "EQUIPMENT": 946
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "61": {
+      "id": 61,
+      "name": "Solar Nexus",
+      "security": "ANARCHY",
+      "warps": [
+        50,
+        52,
+        57,
+        66,
+        71
+      ],
+      "port": {
+        "sector_id": 61,
+        "name": "Rigel Agri-Hub #61",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 345,
+          "ORGANICS": 735,
+          "EQUIPMENT": 771
+        },
+        "max_stock": {
+          "ORE": 1146,
+          "ORGANICS": 924,
+          "EQUIPMENT": 1099
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "62": {
+      "id": 62,
+      "name": "Radiant Void",
+      "security": "ANARCHY",
+      "warps": [
+        60,
+        65,
+        70,
+        71,
+        74
+      ],
+      "port": {
+        "sector_id": 62,
+        "name": "Tartarus Deep Mine #62",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 192,
+          "ORGANICS": 533,
+          "EQUIPMENT": 247
+        },
+        "max_stock": {
+          "ORE": 894,
+          "ORGANICS": 692,
+          "EQUIPMENT": 700
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": [
+        "ai_malakor"
+      ]
+    },
+    "63": {
+      "id": 63,
+      "name": "Quantum Nexus",
+      "security": "ANARCHY",
+      "warps": [
+        64,
+        65,
+        66,
+        69,
+        75
+      ],
+      "port": {
+        "sector_id": 63,
+        "name": "Arcturus Terminal #63",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 324,
+          "ORGANICS": 322,
+          "EQUIPMENT": 445
+        },
+        "max_stock": {
+          "ORE": 629,
+          "ORGANICS": 932,
+          "EQUIPMENT": 657
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_63",
+          "sector_id": 63,
+          "name": "Nemesis Citadel",
+          "owner_id": null,
+          "population": 459,
+          "shields": 90,
+          "max_shields": 200,
+          "fighters": 28,
+          "citadel_level": 0,
+          "treasury": 639,
+          "ore_silo": 93,
+          "organics_silo": 71
+        }
+      ],
+      "captains": []
+    },
+    "64": {
+      "id": 64,
+      "name": "Abyssal Shoals",
+      "security": "ANARCHY",
+      "warps": [
+        37,
+        52,
+        55,
+        63,
+        80
+      ],
+      "port": {
+        "sector_id": 64,
+        "name": "Aegis Munitions #64",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 361,
+          "ORGANICS": 268,
+          "EQUIPMENT": 467
+        },
+        "max_stock": {
+          "ORE": 1143,
+          "ORGANICS": 1179,
+          "EQUIPMENT": 774
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": [
+        "ai_ironclaw"
+      ]
+    },
+    "65": {
+      "id": 65,
+      "name": "Starlight Sanctum",
+      "security": "ANARCHY",
+      "warps": [
+        55,
+        62,
+        63,
+        66,
+        71
+      ],
+      "port": {
+        "sector_id": 65,
+        "name": "Cygnus Outpost #65",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 634,
+          "ORGANICS": 252,
+          "EQUIPMENT": 243
+        },
+        "max_stock": {
+          "ORE": 846,
+          "ORGANICS": 1197,
+          "EQUIPMENT": 837
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "66": {
+      "id": 66,
+      "name": "Silent Passage",
+      "security": "ANARCHY",
+      "warps": [
+        59,
+        61,
+        63,
+        65,
+        70
+      ],
+      "port": {
+        "sector_id": 66,
+        "name": "Arcturus Terminal #66",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 646,
+          "ORGANICS": 253,
+          "EQUIPMENT": 529
+        },
+        "max_stock": {
+          "ORE": 1076,
+          "ORGANICS": 1159,
+          "EQUIPMENT": 675
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_66",
+          "sector_id": 66,
+          "name": "Oblivion-3",
+          "owner_id": null,
+          "population": 823,
+          "shields": 87,
+          "max_shields": 200,
+          "fighters": 20,
+          "citadel_level": 0,
+          "treasury": 322,
+          "ore_silo": 20,
+          "organics_silo": 83
+        }
+      ],
+      "captains": []
+    },
+    "67": {
+      "id": 67,
+      "name": "Vortex Sector",
+      "security": "ANARCHY",
+      "warps": [
+        56,
+        57,
+        68,
+        69,
+        70,
+        77,
+        82
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "68": {
+      "id": 68,
+      "name": "Shattered Passage",
+      "security": "ANARCHY",
+      "warps": [
+        56,
+        58,
+        67,
+        73,
+        74,
+        78
+      ],
+      "port": {
+        "sector_id": 68,
+        "name": "Pollux Granary #68",
+        "port_class": "8 (BBB)",
+        "stock": {
+          "ORE": 244,
+          "ORGANICS": 186,
+          "EQUIPMENT": 346
+        },
+        "max_stock": {
+          "ORE": 856,
+          "ORGANICS": 909,
+          "EQUIPMENT": 993
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "69": {
+      "id": 69,
+      "name": "Obsidian Terminus",
+      "security": "ANARCHY",
+      "warps": [
+        60,
+        63,
+        67
+      ],
+      "port": {
+        "sector_id": 69,
+        "name": "Aldebaran Complex #69",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 729,
+          "ORGANICS": 294,
+          "EQUIPMENT": 140
+        },
+        "max_stock": {
+          "ORE": 967,
+          "ORGANICS": 902,
+          "EQUIPMENT": 902
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "70": {
+      "id": 70,
+      "name": "Shadow Lagoon",
+      "security": "ANARCHY",
+      "warps": [
+        62,
+        66,
+        67,
+        72,
+        76
+      ],
+      "port": {
+        "sector_id": 70,
+        "name": "Proxima Foundry #70",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 546,
+          "ORGANICS": 548,
+          "EQUIPMENT": 200
+        },
+        "max_stock": {
+          "ORE": 650,
+          "ORGANICS": 893,
+          "EQUIPMENT": 960
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "71": {
+      "id": 71,
+      "name": "Silent Sector",
+      "security": "ANARCHY",
+      "warps": [
+        44,
+        54,
+        61,
+        62,
+        65,
+        72
+      ],
+      "port": {
+        "sector_id": 71,
+        "name": "Altair Heavy Works #71",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 412,
+          "ORGANICS": 175,
+          "EQUIPMENT": 519
+        },
+        "max_stock": {
+          "ORE": 740,
+          "ORGANICS": 640,
+          "EQUIPMENT": 1051
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "72": {
+      "id": 72,
+      "name": "Storm Corridor",
+      "security": "ANARCHY",
+      "warps": [
+        70,
+        71,
+        76,
+        77,
+        79,
+        84
+      ],
+      "port": {
+        "sector_id": 72,
+        "name": "Deneb Synthetics #72",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 218,
+          "ORGANICS": 242,
+          "EQUIPMENT": 459
+        },
+        "max_stock": {
+          "ORE": 902,
+          "ORGANICS": 1025,
+          "EQUIPMENT": 805
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "73": {
+      "id": 73,
+      "name": "Storm Passage",
+      "security": "ANARCHY",
+      "warps": [
+        68,
+        74,
+        77,
+        80,
+        83
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "74": {
+      "id": 74,
+      "name": "Obsidian Shoals",
+      "security": "ANARCHY",
+      "warps": [
+        62,
+        68,
+        73,
+        77,
+        78
+      ],
+      "port": {
+        "sector_id": 74,
+        "name": "Betelgeuse Silo #74",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 509,
+          "ORGANICS": 634,
+          "EQUIPMENT": 306
+        },
+        "max_stock": {
+          "ORE": 879,
+          "ORGANICS": 863,
+          "EQUIPMENT": 902
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "75": {
+      "id": 75,
+      "name": "Ancient Haven",
+      "security": "ANARCHY",
+      "warps": [
+        63,
+        79,
+        80,
+        81,
+        84,
+        92
+      ],
+      "port": null,
+      "planets": [
+        {
+          "id": "planet_75",
+          "sector_id": 75,
+          "name": "Dread Hollow",
+          "owner_id": "ai_malakor",
+          "population": 428,
+          "shields": 200,
+          "max_shields": 200,
+          "fighters": 60,
+          "citadel_level": 1,
+          "treasury": 694,
+          "ore_silo": 63,
+          "organics_silo": 49
+        }
+      ],
+      "captains": []
+    },
+    "76": {
+      "id": 76,
+      "name": "Crimson Belt",
+      "security": "ANARCHY",
+      "warps": [
+        70,
+        72,
+        79,
+        88
+      ],
+      "port": {
+        "sector_id": 76,
+        "name": "Aegis Munitions #76",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 277,
+          "ORGANICS": 377,
+          "EQUIPMENT": 713
+        },
+        "max_stock": {
+          "ORE": 831,
+          "ORGANICS": 1006,
+          "EQUIPMENT": 1170
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "77": {
+      "id": 77,
+      "name": "Shadow Sanctum",
+      "security": "ANARCHY",
+      "warps": [
+        67,
+        72,
+        73,
+        74,
+        85,
+        87
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "78": {
+      "id": 78,
+      "name": "Storm Reach",
+      "security": "ANARCHY",
+      "warps": [
+        68,
+        74,
+        80,
+        84,
+        86,
+        90
+      ],
+      "port": {
+        "sector_id": 78,
+        "name": "Arcturus Terminal #78",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 667,
+          "ORGANICS": 689,
+          "EQUIPMENT": 338
+        },
+        "max_stock": {
+          "ORE": 1065,
+          "ORGANICS": 868,
+          "EQUIPMENT": 990
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_78",
+          "sector_id": 78,
+          "name": "Kepler Redoubt",
+          "owner_id": null,
+          "population": 1205,
+          "shields": 103,
+          "max_shields": 200,
+          "fighters": 18,
+          "citadel_level": 0,
+          "treasury": 420,
+          "ore_silo": 85,
+          "organics_silo": 34
+        }
+      ],
+      "captains": []
+    },
+    "79": {
+      "id": 79,
+      "name": "Ancient Crossing",
+      "security": "ANARCHY",
+      "warps": [
+        72,
+        75,
+        76,
+        80,
+        81,
+        91
+      ],
+      "port": {
+        "sector_id": 79,
+        "name": "Aegis Munitions #79",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 216,
+          "ORGANICS": 732,
+          "EQUIPMENT": 268
+        },
+        "max_stock": {
+          "ORE": 625,
+          "ORGANICS": 935,
+          "EQUIPMENT": 826
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "80": {
+      "id": 80,
+      "name": "Iron Reach",
+      "security": "ANARCHY",
+      "warps": [
+        64,
+        73,
+        75,
+        78,
+        79,
+        84
+      ],
+      "port": {
+        "sector_id": 80,
+        "name": "Rigel Agri-Hub #80",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 741,
+          "ORGANICS": 547,
+          "EQUIPMENT": 122
+        },
+        "max_stock": {
+          "ORE": 909,
+          "ORGANICS": 1018,
+          "EQUIPMENT": 743
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "81": {
+      "id": 81,
+      "name": "Void Belt",
+      "security": "ANARCHY",
+      "warps": [
+        75,
+        79,
+        87,
+        93
+      ],
+      "port": {
+        "sector_id": 81,
+        "name": "Arcturus Terminal #81",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 434,
+          "ORGANICS": 616,
+          "EQUIPMENT": 265
+        },
+        "max_stock": {
+          "ORE": 699,
+          "ORGANICS": 1150,
+          "EQUIPMENT": 997
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "82": {
+      "id": 82,
+      "name": "Obsidian Rift",
+      "security": "ANARCHY",
+      "warps": [
+        30,
+        67,
+        83,
+        85,
+        86,
+        96
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "83": {
+      "id": 83,
+      "name": "Nebular Rift",
+      "security": "ANARCHY",
+      "warps": [
+        73,
+        82,
+        84,
+        85,
+        89
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "84": {
+      "id": 84,
+      "name": "Infinite Depths",
+      "security": "ANARCHY",
+      "warps": [
+        72,
+        75,
+        78,
+        80,
+        83
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "85": {
+      "id": 85,
+      "name": "Radiant Cluster",
+      "security": "ANARCHY",
+      "warps": [
+        77,
+        82,
+        83
+      ],
+      "port": {
+        "sector_id": 85,
+        "name": "Rigel Agri-Hub #85",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 553,
+          "ORGANICS": 210,
+          "EQUIPMENT": 615
+        },
+        "max_stock": {
+          "ORE": 758,
+          "ORGANICS": 701,
+          "EQUIPMENT": 1017
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "86": {
+      "id": 86,
+      "name": "Radiant Sanctum",
+      "security": "ANARCHY",
+      "warps": [
+        78,
+        82,
+        88
+      ],
+      "port": null,
+      "planets": [
+        {
+          "id": "planet_86",
+          "sector_id": 86,
+          "name": "Oasis Sector",
+          "owner_id": null,
+          "population": 1113,
+          "shields": 144,
+          "max_shields": 200,
+          "fighters": 11,
+          "citadel_level": 0,
+          "treasury": 646,
+          "ore_silo": 22,
+          "organics_silo": 78
+        }
+      ],
+      "captains": []
+    },
+    "87": {
+      "id": 87,
+      "name": "Crimson Gateway",
+      "security": "ANARCHY",
+      "warps": [
+        77,
+        81,
+        88,
+        92,
+        93
+      ],
+      "port": {
+        "sector_id": 87,
+        "name": "Arcturus Terminal #87",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 563,
+          "ORGANICS": 260,
+          "EQUIPMENT": 285
+        },
+        "max_stock": {
+          "ORE": 841,
+          "ORGANICS": 701,
+          "EQUIPMENT": 976
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_87",
+          "sector_id": 87,
+          "name": "Nova Terra",
+          "owner_id": null,
+          "population": 870,
+          "shields": 123,
+          "max_shields": 200,
+          "fighters": 17,
+          "citadel_level": 0,
+          "treasury": 1026,
+          "ore_silo": 74,
+          "organics_silo": 91
+        }
+      ],
+      "captains": []
+    },
+    "88": {
+      "id": 88,
+      "name": "Iron Sanctum",
+      "security": "ANARCHY",
+      "warps": [
+        76,
+        86,
+        87,
+        90,
+        97,
+        100
+      ],
+      "port": {
+        "sector_id": 88,
+        "name": "Betelgeuse Silo #88",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 214,
+          "ORGANICS": 419,
+          "EQUIPMENT": 105
+        },
+        "max_stock": {
+          "ORE": 725,
+          "ORGANICS": 693,
+          "EQUIPMENT": 621
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "89": {
+      "id": 89,
+      "name": "Shadow Sector",
+      "security": "ANARCHY",
+      "warps": [
+        83,
+        91,
+        92,
+        94,
+        95
+      ],
+      "port": {
+        "sector_id": 89,
+        "name": "Proxima Foundry #89",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 281,
+          "ORGANICS": 221,
+          "EQUIPMENT": 665
+        },
+        "max_stock": {
+          "ORE": 1178,
+          "ORGANICS": 670,
+          "EQUIPMENT": 812
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "90": {
+      "id": 90,
+      "name": "Storm Nexus",
+      "security": "ANARCHY",
+      "warps": [
+        78,
+        88,
+        91,
+        94
+      ],
+      "port": null,
+      "planets": [],
+      "captains": []
+    },
+    "91": {
+      "id": 91,
+      "name": "Solar Haven",
+      "security": "ANARCHY",
+      "warps": [
+        79,
+        89,
+        90,
+        95,
+        99
+      ],
+      "port": {
+        "sector_id": 91,
+        "name": "Sirius Hyper-Tech #91",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 160,
+          "ORGANICS": 432,
+          "EQUIPMENT": 676
+        },
+        "max_stock": {
+          "ORE": 602,
+          "ORGANICS": 748,
+          "EQUIPMENT": 1153
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "92": {
+      "id": 92,
+      "name": "Vortex Haven",
+      "security": "ANARCHY",
+      "warps": [
+        30,
+        75,
+        87,
+        89,
+        93,
+        94
+      ],
+      "port": {
+        "sector_id": 92,
+        "name": "Sirius Hyper-Tech #92",
+        "port_class": "6 (BSS)",
+        "stock": {
+          "ORE": 113,
+          "ORGANICS": 585,
+          "EQUIPMENT": 456
+        },
+        "max_stock": {
+          "ORE": 734,
+          "ORGANICS": 966,
+          "EQUIPMENT": 931
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "93": {
+      "id": 93,
+      "name": "Obsidian Void",
+      "security": "ANARCHY",
+      "warps": [
+        81,
+        87,
+        92,
+        95,
+        96,
+        97
+      ],
+      "port": {
+        "sector_id": 93,
+        "name": "Arcturus Terminal #93",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 212,
+          "ORGANICS": 200,
+          "EQUIPMENT": 874
+        },
+        "max_stock": {
+          "ORE": 1031,
+          "ORGANICS": 665,
+          "EQUIPMENT": 1059
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "94": {
+      "id": 94,
+      "name": "Astral Lagoon",
+      "security": "ANARCHY",
+      "warps": [
+        89,
+        90,
+        92,
+        97,
+        99
+      ],
+      "port": {
+        "sector_id": 94,
+        "name": "Helios Refinery #94",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 280,
+          "ORGANICS": 209,
+          "EQUIPMENT": 642
+        },
+        "max_stock": {
+          "ORE": 1115,
+          "ORGANICS": 644,
+          "EQUIPMENT": 908
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_94",
+          "sector_id": 94,
+          "name": "Krynn V",
+          "owner_id": null,
+          "population": 622,
+          "shields": 97,
+          "max_shields": 200,
+          "fighters": 19,
+          "citadel_level": 0,
+          "treasury": 938,
+          "ore_silo": 61,
+          "organics_silo": 92
+        }
+      ],
+      "captains": []
+    },
+    "95": {
+      "id": 95,
+      "name": "Storm Lagoon",
+      "security": "ANARCHY",
+      "warps": [
+        89,
+        91,
+        93,
+        96,
+        99,
+        100
+      ],
+      "port": {
+        "sector_id": 95,
+        "name": "Aegis Munitions #95",
+        "port_class": "4 (SSB)",
+        "stock": {
+          "ORE": 672,
+          "ORGANICS": 570,
+          "EQUIPMENT": 195
+        },
+        "max_stock": {
+          "ORE": 1011,
+          "ORGANICS": 710,
+          "EQUIPMENT": 1054
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "96": {
+      "id": 96,
+      "name": "Void Rift",
+      "security": "ANARCHY",
+      "warps": [
+        82,
+        93,
+        95,
+        98,
+        100
+      ],
+      "port": {
+        "sector_id": 96,
+        "name": "Fomalhaut Harbor #96",
+        "port_class": "1 (BBS)",
+        "stock": {
+          "ORE": 179,
+          "ORGANICS": 439,
+          "EQUIPMENT": 614
+        },
+        "max_stock": {
+          "ORE": 729,
+          "ORGANICS": 1199,
+          "EQUIPMENT": 932
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "97": {
+      "id": 97,
+      "name": "Echo Depths",
+      "security": "ANARCHY",
+      "warps": [
+        88,
+        93,
+        94,
+        98,
+        100
+      ],
+      "port": {
+        "sector_id": 97,
+        "name": "Antares Depository #97",
+        "port_class": "3 (SBB)",
+        "stock": {
+          "ORE": 548,
+          "ORGANICS": 254,
+          "EQUIPMENT": 284
+        },
+        "max_stock": {
+          "ORE": 1040,
+          "ORGANICS": 717,
+          "EQUIPMENT": 1164
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "98": {
+      "id": 98,
+      "name": "Shattered Reach",
+      "security": "ANARCHY",
+      "warps": [
+        30,
+        96,
+        97,
+        99
+      ],
+      "port": {
+        "sector_id": 98,
+        "name": "Betelgeuse Silo #98",
+        "port_class": "2 (BSB)",
+        "stock": {
+          "ORE": 333,
+          "ORGANICS": 682,
+          "EQUIPMENT": 201
+        },
+        "max_stock": {
+          "ORE": 947,
+          "ORGANICS": 1064,
+          "EQUIPMENT": 1025
+        },
+        "buys": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        },
+        "sells": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        }
+      },
+      "planets": [
+        {
+          "id": "planet_98",
+          "sector_id": 98,
+          "name": "Aetheria Prime",
+          "owner_id": null,
+          "population": 1120,
+          "shields": 58,
+          "max_shields": 200,
+          "fighters": 14,
+          "citadel_level": 0,
+          "treasury": 958,
+          "ore_silo": 23,
+          "organics_silo": 31
+        }
+      ],
+      "captains": []
+    },
+    "99": {
+      "id": 99,
+      "name": "Infinite Sanctum",
+      "security": "ANARCHY",
+      "warps": [
+        91,
+        94,
+        95,
+        98
+      ],
+      "port": {
+        "sector_id": 99,
+        "name": "Aegis Munitions #99",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 550,
+          "ORGANICS": 196,
+          "EQUIPMENT": 384
+        },
+        "max_stock": {
+          "ORE": 983,
+          "ORGANICS": 1085,
+          "EQUIPMENT": 693
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    },
+    "100": {
+      "id": 100,
+      "name": "Echo Spire",
+      "security": "ANARCHY",
+      "warps": [
+        88,
+        95,
+        96,
+        97
+      ],
+      "port": {
+        "sector_id": 100,
+        "name": "Deneb Synthetics #100",
+        "port_class": "5 (SBS)",
+        "stock": {
+          "ORE": 537,
+          "ORGANICS": 205,
+          "EQUIPMENT": 827
+        },
+        "max_stock": {
+          "ORE": 981,
+          "ORGANICS": 1169,
+          "EQUIPMENT": 1200
+        },
+        "buys": {
+          "ORE": false,
+          "ORGANICS": true,
+          "EQUIPMENT": false
+        },
+        "sells": {
+          "ORE": true,
+          "ORGANICS": false,
+          "EQUIPMENT": true
+        }
+      },
+      "planets": [],
+      "captains": []
+    }
+  },
+  "captains": {
+    "ai_vane": {
+      "id": "ai_vane",
+      "name": "Capt. Jack Vane",
+      "is_ai": true,
+      "personality": "trader",
+      "ship": {
+        "ship_type": "Merchant Cruiser",
+        "cargo": {
+          "ore": 50,
+          "organics": 0,
+          "equipment": 0,
+          "capacity": 50,
+          "used": 50,
+          "available": 0
+        },
+        "shields": 150,
+        "max_shields": 150,
+        "fighters": 20
+      },
+      "credits": 1720,
+      "sector_id": 4,
+      "turns_left": 500,
+      "home_sector": 4,
+      "score": 1000
+    },
+    "ai_malakor": {
+      "id": "ai_malakor",
+      "name": "Warlord Malakor",
+      "is_ai": true,
+      "personality": "pirate",
+      "ship": {
+        "ship_type": "Star Frigate",
+        "cargo": {
+          "ore": 0,
+          "organics": 0,
+          "equipment": 0,
+          "capacity": 70,
+          "used": 0,
+          "available": 70
+        },
+        "shields": 350,
+        "max_shields": 350,
+        "fighters": 80
+      },
+      "credits": 4000,
+      "sector_id": 62,
+      "turns_left": 500,
+      "home_sector": 78,
+      "score": 1000
+    },
+    "ai_voss": {
+      "id": "ai_voss",
+      "name": "Director Cynthia Voss",
+      "is_ai": true,
+      "personality": "industrialist",
+      "ship": {
+        "ship_type": "Merchant Cruiser",
+        "cargo": {
+          "ore": 0,
+          "organics": 20,
+          "equipment": 0,
+          "capacity": 80,
+          "used": 20,
+          "available": 60
+        },
+        "shields": 250,
+        "max_shields": 250,
+        "fighters": 35
+      },
+      "credits": 6000,
+      "sector_id": 34,
+      "turns_left": 500,
+      "home_sector": 18,
+      "score": 1000
+    },
+    "ai_ironclaw": {
+      "id": "ai_ironclaw",
+      "name": "Ironclaw Rake",
+      "is_ai": true,
+      "personality": "mercenary",
+      "ship": {
+        "ship_type": "Star Frigate",
+        "cargo": {
+          "ore": 0,
+          "organics": 0,
+          "equipment": 0,
+          "capacity": 40,
+          "used": 0,
+          "available": 40
+        },
+        "shields": 400,
+        "max_shields": 400,
+        "fighters": 95
+      },
+      "credits": 3000,
+      "sector_id": 64,
+      "turns_left": 500,
+      "home_sector": 45,
+      "score": 1000
+    },
+    "player_1": {
+      "id": "player_1",
+      "name": "Captain Solo",
+      "is_ai": false,
+      "personality": null,
+      "ship": {
+        "ship_type": "Scout Ship",
+        "cargo": {
+          "ore": 5,
+          "organics": 0,
+          "equipment": 0,
+          "capacity": 30,
+          "used": 5,
+          "available": 25
+        },
+        "shields": 100,
+        "max_shields": 100,
+        "fighters": 15
+      },
+      "credits": 1395,
+      "sector_id": 2,
+      "turns_left": 198,
+      "home_sector": 1,
+      "score": 0
+    }
+  },
+  "radio": [
+    {
+      "sender": "FED-NAV",
+      "text": "Welcome to the Frontier. Sol Federation Central Stardock operational.",
+      "channel": "SYSTEM",
+      "sector_id": 1,
+      "timestamp": 1790583873.8941565
+    },
+    {
+      "sender": "Capt. Jack Vane",
+      "text": "Prices on Equipment in Sector 4 are surging. Haulers, take note.",
+      "channel": "COMM-1",
+      "sector_id": 4,
+      "timestamp": 1790583873.89447
+    },
+    {
+      "sender": "Director Cynthia Voss",
+      "text": "Voss Heavy Industries has completed another shield matrix expansion.",
+      "channel": "COMM-1",
+      "sector_id": 18,
+      "timestamp": 1790583873.8944955
+    },
+    {
+      "sender": "Warlord Malakor",
+      "text": "Federal patrol pigs can't reach this far out. Fresh plunder for the incinerator!",
+      "channel": "COMM-1",
+      "sector_id": 74,
+      "timestamp": 1790583873.8949046
+    },
+    {
+      "sender": "Director Cynthia Voss",
+      "text": "Voss Heavy Industries has completed another shield matrix expansion.",
+      "channel": "COMM-1",
+      "sector_id": 22,
+      "timestamp": 1790583873.8949108
+    }
+  ],
+  "logs": [
+    "Warp drive engaged. Navigated from Sector 1 to Sector 2.",
+    "Purchased 5 units of ORE for 105 Cr (21 Cr/ea). New stock: 821."
+  ]
+}

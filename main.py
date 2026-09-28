@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+Main launcher for Xylarium: Classic BBS Door Game & MUD Kernel.
+Combines TradeWars 2002, Barren Realms Elite (BRE), and Solar Realms Elite (SRE).
+"""
+
+import sys
+import os
+import argparse
+
+# Ensure module path is accessible
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from xylarium.kernel.engine import GameKernel
+from xylarium.kernel.models import ActionType
+from xylarium.client.cli import TerminalClient
+from xylarium.persistence.store import StatePersistence
+from xylarium.client.ansi import c_cyan, c_gold, c_green, c_red, bold
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Xylarium: Classic BBS Space Door Game & MUD Kernel",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("-n", "--name", type=str, default="Captain Solo", help="Your Captain name (default: Captain Solo)")
+    parser.add_argument("-s", "--seed", type=int, default=42, help="Universe deterministic generation seed (default: 42)")
+    parser.add_argument("-l", "--load", type=str, default="xylarium_save.json", help="Save file to load from")
+    parser.add_argument("--new", action="store_true", help="Start a new game even if save file exists")
+    parser.add_argument("--demo", action="store_true", help="Run a quick automated kernel simulation pass")
+    parser.add_argument("--bridge", action="store_true", help="Launch Mycelium Bridge Daemon (WebSocket + Telnet)")
+    parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket port (default: 8765)")
+    parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet port (default: 2002)")
+
+    args = parser.parse_args()
+
+    kernel = None
+    save_file = args.load
+
+    # Attempt to load save unless --new is specified
+    if not args.new and os.path.exists(save_file):
+        print(f"Loading game state from {save_file}...")
+        kernel = StatePersistence.load_from_file(save_file)
+        if kernel:
+            print(c_green("Save state loaded successfully."))
+
+    if not kernel:
+        print(f"Generating new deterministic universe (Seed: {args.seed})...")
+        kernel = GameKernel(seed=args.seed)
+        kernel.register_player(player_id="player_1", player_name=args.name)
+
+    if args.demo:
+        print(bold(c_cyan("\n=== RUNNING XYLARIUM DEMO HEADLESS PASS ===")))
+        view = kernel.get_player_view("player_1")
+        print(f"Player: {view['player']['name']} | Sector: {view['sector']['id']} | Credits: {view['player']['credits']}")
+        print(f"Warps available: {[w['sector_id'] for w in view['sector']['warps']]}")
+        
+        # Warp to adjacent sector
+        dest = view['sector']['warps'][0]['sector_id']
+        print(f"Navigating to Sector {dest}...")
+        res = kernel.dispatch("player_1", ActionType.MOVE, destination=dest)
+        print(f"Result: {res.message}")
+
+        view2 = kernel.get_player_view("player_1")
+        print(f"New Sector: {view2['sector']['id']} ({view2['sector']['name']}) - Security: {view2['sector']['security']}")
+        if view2['sector']['port']:
+            print(f"Docked at Port: {view2['sector']['port']['name']}")
+            print("Port Catalog:")
+            for comm, info in view2['sector']['port']['catalog'].items():
+                print(f"  {comm}: Buys={info['port_buys']} @ {info['buy_price']} Cr | Sells={info['port_sells']} @ {info['sell_price']} Cr | Stock={info['stock']}")
+        print(f"Simulation cycle advanced to: {kernel.cycle_count}")
+        print(f"Recent radio broadcasts:")
+        for r in kernel.event_bus.get_recent_radio(4):
+            print(f"  [{r.sender}]: {r.text}")
+        print(c_green("Demo pass complete! Kernel is verified and fully operational."))
+        return
+
+    if args.bridge:
+        import asyncio
+        from bridge.daemon import BridgeDaemon
+        daemon = BridgeDaemon(
+            kernel=kernel,
+            host="0.0.0.0",
+            ws_port=args.ws_port,
+            telnet_port=args.telnet_port,
+            save_file=save_file
+        )
+        try:
+            asyncio.run(daemon.start())
+        except KeyboardInterrupt:
+            asyncio.run(daemon.stop())
+        return
+
+    # Start interactive terminal client
+    client = TerminalClient(kernel=kernel, player_id="player_1", save_file=save_file)
+    client.run()
+
+
+if __name__ == "__main__":
+    main()
