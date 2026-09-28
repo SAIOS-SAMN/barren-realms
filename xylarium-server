@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""
+xylarium-server: Authoritative BBS MUD Universe Daemon
+"""
+import argparse
+import sys
+import os
+
+# Ensure barren-realms root is in path
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+from bridge.daemon import run_daemon
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Xylarium Authoritative Server Daemon")
+    parser.add_argument("--host", default="127.0.0.1", help="Bind IP address (default: 127.0.0.1)")
+    parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket Gateway Port (default: 8765)")
+    parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet Door Port (default: 2002)")
+    parser.add_argument("--save-file", default="xylarium_save.json", help="State persistence file")
+    args = parser.parse_args()
+
+    print(f"Starting Xylarium Authoritative Daemon on {args.host} (WS: {args.ws_port}, Telnet: {args.telnet_port})...")
+    run_daemon(host=args.host, ws_port=args.ws_port, telnet_port=args.telnet_port, save_file=args.save_file)
+
+
+if __name__ == "__main__":
+    main()

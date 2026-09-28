@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""
+xylarium-client: Unified Human & AI Client Binary
+"""
+import argparse
+import asyncio
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+from xylarium.client.ai_agent import AIAgentClient
+from xylarium.client.cli import run_interactive_cli
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Xylarium Unified Client")
+    parser.add_argument("--ai", action="store_true", help="Run as autonomous AI agent")
+    parser.add_argument("--personality", default="trader", choices=["trader", "pirate", "industrialist", "mercenary"], help="AI personality archetype")
+    parser.add_argument("--name", default="Captain Solo", help="Captain or Agent name")
+    parser.add_argument("--server", default="ws://127.0.0.1:8765/ws", help="WebSocket server URI")
+    parser.add_argument("--tick-rate", type=float, default=2.0, help="AI decision loop tick interval (seconds)")
+    parser.add_argument("--headless", action="store_true", help="Suppress visual output (AI logs only)")
+    args = parser.parse_args()
+
+    if args.ai:
+        agent_name = args.name if args.name != "Captain Solo" else f"Agent_{args.personality.capitalize()}"
+        print(f"Launching AI Agent Client: {agent_name} [{args.personality.upper()}] connecting to {args.server}...")
+        agent = AIAgentClient(
+            uri=args.server,
+            name=agent_name,
+            personality=args.personality,
+            tick_rate=args.tick_rate,
+            headless=args.headless
+        )
+        try:
+            asyncio.run(agent.run())
+        except KeyboardInterrupt:
+            print(f"\n[{agent_name}] Shutting down AI agent.")
+    else:
+        print(f"Launching Human Terminal Client for {args.name}...")
+        run_interactive_cli(player_name=args.name)
+
+
+if __name__ == "__main__":
+    main()

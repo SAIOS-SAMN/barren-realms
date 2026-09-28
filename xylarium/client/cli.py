@@ -405,3 +405,16 @@ class TerminalClient:
             print(c_red("Warning: Could not write save state."))
         print(bold(c_gold("Thank you for playing Xylarium: The Barren Realms! Transmission terminated.")))
         self.running = False
+
+
+def run_interactive_cli(player_name: str = "Captain Solo", save_file: str = "xylarium_save.json", seed: int = 42) -> None:
+    """Bootstraps universe or loads save, and launches interactive terminal client."""
+    kernel = None
+    if os.path.exists(save_file):
+        kernel = StatePersistence.load_from_file(save_file)
+    if not kernel:
+        kernel = GameKernel(seed=seed)
+        kernel.register_player("player_1", player_name)
+    client = TerminalClient(kernel=kernel, player_id="player_1", save_file=save_file)
+    client.run()
+

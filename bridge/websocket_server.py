@@ -211,9 +211,19 @@ class WebSocketGateway:
 
         if action == "REGISTER":
             name = payload.get("name", "Remote Captain")
-            p_id = payload.get("player_id", f"remote_{len(self.kernel.captains) + 1}")
+            sanitized_id = name.lower().replace(" ", "_").replace(".", "")
+            p_id = payload.get("player_id", f"remote_{sanitized_id}")
             client.player_id = p_id
-            self.kernel.register_player(p_id, name)
+            captain = self.kernel.get_player(p_id)
+            if not captain:
+                captain = self.kernel.register_player(p_id, name)
+            pers = payload.get("personality")
+            if pers:
+                try:
+                    from xylarium.kernel.models import AIPersonality
+                    captain.personality = AIPersonality(pers.lower())
+                except Exception:
+                    pass
             view = self.kernel.get_player_view(p_id)
             await client.send_json({
                 "status": "ok",
@@ -236,18 +246,41 @@ class WebSocketGateway:
 
         elif action == "DISPATCH":
             p_id = payload.get("player_id", client.player_id)
-            cmd_str = payload.get("command", "").upper()
+            cmd_str = payload.get("command", "").strip().upper()
             params = payload.get("params", {})
 
             if not p_id:
                 await client.send_json({"status": "error", "message": "Must specify player_id."})
                 return
 
-            try:
-                cmd_type = ActionType(cmd_str)
-            except ValueError:
-                await client.send_json({"status": "error", "message": f"Unknown action: '{cmd_str}'."})
-                return
+            cmd_type = None
+            if cmd_str.startswith("M ") or cmd_str.startswith("MOVE "):
+                parts = cmd_str.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    cmd_type = ActionType.MOVE
+                    params = {"destination": int(parts[1])}
+            elif cmd_str in ["P", "PLANET"]:
+                view = self.kernel.get_player_view(p_id)
+                planets = view.get("sector", {}).get("planets", [])
+                if planets:
+                    p = planets[0]
+                    if p.get("owner_id") is None:
+                        cmd_type = ActionType.PLANET_CLAIM
+                        params = {"planet_id": p["id"]}
+                    elif p.get("owner_id") == p_id:
+                        cmd_type = ActionType.PLANET_UPGRADE_CITADEL
+                        params = {"planet_id": p["id"]}
+                    else:
+                        cmd_type = ActionType.ATTACK_PLANET
+                        params = {"planet_id": p["id"]}
+                else:
+                    cmd_type = ActionType.SCAN
+            else:
+                try:
+                    cmd_type = ActionType(cmd_str)
+                except ValueError:
+                    await client.send_json({"status": "error", "message": f"Unknown action: '{cmd_str}'."})
+                    return
 
             res = self.kernel.dispatch(p_id, cmd_type, **params)
             new_view = self.kernel.get_player_view(p_id)

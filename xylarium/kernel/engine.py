@@ -607,6 +607,9 @@ class GameKernel:
 
         return {
             "player": captain.to_dict(),
+            "credits": captain.credits,
+            "turns": captain.turns_left,
+            "adjacent_sectors": list(sector.warps),
             "sector": {
                 "id": sector.id,
                 "name": sector.name,

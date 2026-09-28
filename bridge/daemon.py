@@ -82,31 +82,46 @@ class BridgeDaemon:
         self._shutdown_event.set()
 
 
-def run_daemon():
-    parser = argparse.ArgumentParser(description="Xylarium Mycelium Bridge Daemon")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Binding host address (default: 0.0.0.0)")
-    parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket port (default: 8765)")
-    parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet port (default: 2002)")
-    parser.add_argument("--seed", type=int, default=42, help="Universe seed (default: 42)")
-    parser.add_argument("--save", type=str, default="xylarium_save.json", help="Save file path")
+def run_daemon(
+    host: Optional[str] = None,
+    ws_port: Optional[int] = None,
+    telnet_port: Optional[int] = None,
+    save_file: Optional[str] = None,
+    seed: int = 42
+):
+    if host is None or ws_port is None or telnet_port is None:
+        parser = argparse.ArgumentParser(description="Xylarium Mycelium Bridge Daemon")
+        parser.add_argument("--host", type=str, default="0.0.0.0", help="Binding host address (default: 0.0.0.0)")
+        parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket port (default: 8765)")
+        parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet port (default: 2002)")
+        parser.add_argument("--seed", type=int, default=42, help="Universe seed (default: 42)")
+        parser.add_argument("--save", type=str, default="xylarium_save.json", help="Save file path")
 
-    args = parser.parse_args()
+        args = parser.parse_args()
+        host = args.host
+        ws_port = args.ws_port
+        telnet_port = args.telnet_port
+        save_file = args.save
+        seed = args.seed
+    else:
+        if save_file is None:
+            save_file = "xylarium_save.json"
 
     kernel = None
-    if os.path.exists(args.save):
-        print(f"Loading universe from {args.save}...")
-        kernel = StatePersistence.load_from_file(args.save)
+    if os.path.exists(save_file):
+        print(f"Loading universe from {save_file}...")
+        kernel = StatePersistence.load_from_file(save_file)
 
     if not kernel:
-        print(f"Bootstrapping new universe (Seed: {args.seed})...")
-        kernel = GameKernel(seed=args.seed)
+        print(f"Bootstrapping new universe (Seed: {seed})...")
+        kernel = GameKernel(seed=seed)
 
     daemon = BridgeDaemon(
         kernel=kernel,
-        host=args.host,
-        ws_port=args.ws_port,
-        telnet_port=args.telnet_port,
-        save_file=args.save
+        host=host,
+        ws_port=ws_port,
+        telnet_port=telnet_port,
+        save_file=save_file
     )
 
     loop = asyncio.new_event_loop()
