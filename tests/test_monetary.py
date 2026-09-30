@@ -48,6 +48,34 @@ class TestQuantityEquation(unittest.TestCase):
         mp.update(k)
         self.assertGreater(mp.factor("FRN"), 1.0)             # withdraw more than the season's tax
 
+    def test_a_persistent_outside_drain_is_offset_not_left_as_a_gap(self):
+        from xylarium.kernel import ledger
+        random.seed(67)
+        k = GameKernel(seed=42)
+        mp = k.monetary_policy
+        cur = "VOID"
+        m0 = float(money_supply(k)[cur]["total"])
+        mp.targets[cur] = m0
+        mp.output0[cur] = 400.0
+        mp.output_seasons[cur] = [100.0] * 4
+        mp.last_supply[cur] = m0
+        drain = int(m0 * 0.01)                                 # someone burns 1% of the money every season
+        ports = [s.port for s in k.sectors.values() if s.port is not None and s.port.currency == cur]
+        taken = 0
+        for _ in range(16):
+            left = drain
+            for port in sorted(ports, key=lambda p: -p.treasury):
+                take = min(left, port.treasury)
+                port.treasury -= take                          # an outside sink the colony circuit doesn't see
+                ledger.burn("test_drain", take, cur)
+                taken += take
+                left -= take
+            mp.output_q[cur] = 100.0
+            mp.update(k)
+        m = money_supply(k)[cur]["total"]
+        self.assertEqual(taken, drain * 16)
+        self.assertAlmostEqual(m / m0, 1.0, delta=0.015)      # without feed-forward it would sit ~4% low
+
 
 if __name__ == "__main__":
     unittest.main()

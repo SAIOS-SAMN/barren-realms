@@ -49,6 +49,23 @@ RELIC_FORMS = ["field lattice core", "navigation prism", "coherence engine", "bi
                "phonon memory stack", "gravitic keel shard", "cipher loom", "fusion reliquary"]
 
 
+def bury(planet: Any, new: Dict[str, Any]) -> Dict[str, Any]:
+    """New ruins are laid over any older ones: an older hoard stays in the ground (nothing is thrown away)."""
+    old = getattr(planet, "ruins", None)
+    if not old or not old.get("hoard"):
+        return new
+    if not new.get("hoard"):
+        new["hoard"], new["hoard_currency"] = old["hoard"], old.get("hoard_currency")
+    elif (old.get("hoard_currency") or "SOL") == (new.get("hoard_currency") or "SOL"):
+        new["hoard"] += old["hoard"]
+    else:
+        from xylarium.kernel import fx
+        out, _ = fx.ACTIVE_FX.convert(old.get("hoard_currency") or "SOL", new.get("hoard_currency") or "SOL", old["hoard"])
+        new["hoard"] += out
+    new["strata"] = list(new.get("strata", [])) + list(old.get("strata", []))
+    return new
+
+
 def _new_ruins(culture: str, clade: str, metabolism: str, era: str, tech_level: int, elements: List[str],
                cause: str, cycle: int, strata: int, hoard_currency: Optional[str], hoard: int,
                rng: random.Random) -> Dict[str, Any]:
@@ -90,13 +107,14 @@ class ArchaeologyManager:
             return None
         rng = random.Random(zlib.crc32(f"{planet.id}:{getattr(kernel, 'cycle_count', 0)}".encode()))
         cycle = getattr(kernel, "cycle_count", 0)
-        planet.ruins = _new_ruins(
+        planet.ruins = bury(planet, _new_ruins(
             civ.name, getattr(civ, "clade", "unknown"), getattr(civ, "metabolism", "biotic"), "RECENT",
             int(getattr(civ, "tech_level", 3)), list(getattr(civ, "discovered_elements", [])),
-            "famine", cycle, rng.randint(1, 2), planet.currency, planet.treasury, rng,
-        )
-        # The vault is buried with the city: same money, now underground
+            "famine", cycle, rng.randint(1, 2), planet.currency, planet.treasury + planet.household_purse, rng,
+        ))
+        # The vault and the households' savings are buried with the city: same money, now underground
         planet.treasury = 0
+        planet.household_purse = 0
         planet.population = 0
         planet.civilization = None
         planet.owner_id = None
@@ -183,7 +201,7 @@ class ArchaeologyManager:
         if shore:
             r["stability"] = min(1.0, r["stability"] + 0.35)
 
-        rng = random.Random()
+        rng = random.Random(random.getrandbits(32))   # drawn from the seeded stream: reproducible
         stratum = r["strata"][r["dug_depth"]]
         logs: List[str] = []
         # Cave-in risk grows as the site destabilizes

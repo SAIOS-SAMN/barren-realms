@@ -263,6 +263,13 @@ class SurfaceGrid:
 _GRID_CACHE: Dict[str, Tuple[Dict[str, Any], "SurfaceGrid"]] = {}
 
 
+def _pay_builders(planet: Any, amount: int) -> None:
+    """A colony governor's district is built by the region's contractors: its cost reaches them."""
+    from xylarium.kernel.colony import ColonyManager
+    from xylarium.kernel import ledger
+    ColonyManager._pay_local(planet, ledger.active_kernel(), amount)
+
+
 class SurfaceManager:
     """
     Orchestrates planetary surface construction, demolition, troop recruitment,
@@ -346,11 +353,15 @@ class SurfaceManager:
                 action_type=ActionType.SURFACE_BUILD_DISTRICT,
             )
 
-        # Deduct costs
+        # Deduct costs: the builders are the region's contractors (paid, not vanished)
+        from xylarium.kernel.colony import ColonyManager
+        from xylarium.kernel import ledger
         if captain.credits >= cost_cr:
             captain.credits -= cost_cr
+            ColonyManager._pay_contractor_sol(planet, cost_cr)
         else:
             planet.treasury -= cost_cr
+            ColonyManager._pay_local(planet, ledger.active_kernel(), cost_cr)
 
         if planet.ore_silo >= cost_ore:
             planet.ore_silo -= cost_ore
@@ -410,6 +421,14 @@ class SurfaceManager:
         tile.district = DistrictType.EMPTY
         planet.surface_grid = grid.to_dict()
 
+        # The salvaged fittings are bought by the region's contractors (out of their own treasury)
+        from xylarium.kernel.colony import ColonyManager
+        from xylarium.kernel import ledger
+        from xylarium.kernel.market import ledger_debit_port_sol, ledger_sol_of
+        buyer = ColonyManager._contractor_port(planet, ledger.active_kernel())
+        salvage_cr = min(salvage_cr, max(0, ledger_sol_of(buyer))) if buyer is not None else 0
+        if buyer is not None:
+            ledger_debit_port_sol(buyer, salvage_cr)
         captain.credits += salvage_cr
         planet.ore_silo += salvage_ore
 
@@ -662,6 +681,7 @@ class SurfaceManager:
                         ideal_tiles = [t for t in empty_tiles if t.terrain in [TerrainType.GLACIAL_LAKE, TerrainType.HYDROCARBON_BASIN]]
                         chosen_tile = ideal_tiles[0] if ideal_tiles else empty_tiles[0]
                         planet.treasury -= cost_cr
+                        _pay_builders(planet, cost_cr)
                         if planet.ore_silo >= cost_ore:
                             planet.ore_silo -= cost_ore
                     elif has_ore_deficit and planet.treasury >= cost_cr:
@@ -669,6 +689,7 @@ class SurfaceManager:
                         ideal_tiles = [t for t in empty_tiles if t.terrain in [TerrainType.MOUNTAINS, TerrainType.MINERAL_RIDGE]]
                         chosen_tile = ideal_tiles[0] if ideal_tiles else empty_tiles[0]
                         planet.treasury -= cost_cr
+                        _pay_builders(planet, cost_cr)
 
                     if target_district:
                         chosen_tile.district = target_district

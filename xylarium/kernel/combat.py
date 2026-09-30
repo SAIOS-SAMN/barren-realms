@@ -69,7 +69,11 @@ def _eject_to_sol(captain: Captain, kernel: Optional[Any], credit_loss_frac: flo
     captain.ship.fighters = RESPAWN_KIT["fighters"]
     captain.ship.cargo = _starter_cargo(captain)
     if credit_loss_frac > 0:
-        captain.credits -= int(max(0, captain.credits) * credit_loss_frac)
+        lost = int(max(0, captain.credits) * credit_loss_frac)
+        captain.credits -= lost
+        # The wreck's strongbox is recovered by the Federal salvage service (nothing is thrown away)
+        from xylarium.kernel import ledger
+        ledger.pay_service(lost, institution="wreck_salvage")
 
     fed = getattr(kernel, "federal_reserve", None) if kernel is not None else None
     payout = fed.pay_hull_claim(captain, kernel.cycle_count) if fed else 0

@@ -86,7 +86,6 @@ from xylarium.config import (
     CAPTAIN_RATION_INTERVAL,
     CAPTAIN_RATIONS,
     CLADE_DEFAULT_SPECIES,
-    AI_FX_REPATRIATE_THRESHOLD,
     HUNGER_SHIELD_DRAIN,
     BLACK_MARKET_REFIT_MARKUP,
     XP_NEW_SECTOR,
@@ -107,6 +106,7 @@ from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
 from xylarium.kernel import demography as demography_mod
 from xylarium.kernel import physics as physics_mod
 from xylarium.kernel import fibres as fibres_mod
+from xylarium.kernel import credit as credit_mod
 
 
 class GameKernel:
@@ -148,6 +148,7 @@ class GameKernel:
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
         self.research_manager.seed_initial_anomalies(self)
+        ledger_mod.endow_exchange_depth(self)  # exchanges as deep as the economies they serve
         self.monetary_policy.update(self)  # genesis reading sets each currency's supply target
 
     def activate(self) -> None:
@@ -2627,9 +2628,6 @@ class GameKernel:
         if self.cycle_count % MAINTENANCE_INTERVAL_CYCLES == 0:
             self.process_turn_maintenance()
             self.federal_reserve.collect_premiums(self)
-            for cap in self.captains.values():
-                if cap.is_ai and cap.fx_wallet:
-                    self.fx_market.repatriate(cap, AI_FX_REPATRIATE_THRESHOLD)
 
         # Null space: belts regenerate, debris disperses
         NullSpaceManager.tick(self)
@@ -2652,6 +2650,9 @@ class GameKernel:
             alignment_mod.quarterly(self)
             NativeManager.tick(self)
             self._tick_sieges()
+            # Credit: interest, margin calls, defaults; hoarded corporate cash levied back to home worlds
+            for log in credit_mod.quarter(self):
+                self.action_logs.append(log)
             # The fibres close their season: lane development, economies of scale, fibre distances
             fibres_mod.season(self)
             # Newly charted systems (ghost sectors, frontier clusters) get exact physics

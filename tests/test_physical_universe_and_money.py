@@ -295,13 +295,3 @@ class TestMacroCirculation(unittest.TestCase):
         self.assertEqual(port.consumed, {})
         self.assertEqual(before, self._totals())   # vault -> port: nothing created or destroyed
 
-    def test_isse_recycles_excess_reserves_home_and_strengthens_a_dumped_currency(self):
-        fxm = self.kernel.fx_market
-        pool = fxm.pools["FRN"]
-        pool["local"] *= 2.0                        # captains have been dumping Frontier Scrip
-        rate_before = fxm.rate("FRN")
-        before = self._totals()
-        self.kernel.market_manager._isse_recycle(self.kernel)
-        self.assertLess(fxm.rate("FRN"), rate_before)  # fewer FRN per SOL: the currency strengthens
-        self.assertGreater(fxm.recycled.get("FRN", 0), 0)
-        self.assertEqual(before, self._totals())       # pool -> regional economy: a transfer

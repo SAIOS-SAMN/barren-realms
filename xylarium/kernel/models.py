@@ -721,6 +721,7 @@ class Captain:
     research_progress: int = 0
     vc_active_syndicate: Optional[str] = None
     vc_debt: int = 0
+    margin_loans: Dict[str, int] = field(default_factory=dict)   # ticker -> SOL owed to that company's margin desk
     vc_royalty_pct: float = 0.0
     vc_principal_paid: int = 0
     cartography_fragments: List[Dict[str, Any]] = field(default_factory=list)
@@ -1035,6 +1036,7 @@ class Captain:
             "research_progress": self.research_progress,
             "vc_active_syndicate": self.vc_active_syndicate,
             "vc_debt": self.vc_debt,
+            "margin_loans": dict(self.margin_loans),
             "vc_royalty_pct": self.vc_royalty_pct,
             "vc_principal_paid": self.vc_principal_paid,
             "cartography_fragments": [dict(f) for f in self.cartography_fragments],
@@ -1125,6 +1127,7 @@ class Captain:
             research_progress=data.get("research_progress", 0),
             vc_active_syndicate=data.get("vc_active_syndicate"),
             vc_debt=data.get("vc_debt", 0),
+            margin_loans={k: int(v) for k, v in data.get("margin_loans", {}).items()},
             vc_royalty_pct=data.get("vc_royalty_pct", 0.0),
             vc_principal_paid=data.get("vc_principal_paid", 0),
             cartography_fragments=list(data.get("cartography_fragments", [])),

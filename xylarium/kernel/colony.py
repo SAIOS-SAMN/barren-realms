@@ -720,6 +720,8 @@ class ColonyManager:
             planet.morale = max(10, planet.morale - UPKEEP_ARREARS_MORALE_PENALTY)
             ledger.mint("colony_tax", tax_yield, planet.currency)
             ledger.burn("public_services", tax_yield, planet.currency)
+        if ledger.ACTIVE_POLICY is not None:
+            ledger.ACTIVE_POLICY.record_services(planet.currency, services)
 
         # 3. Mining yields
         ore_mined = max(1, int(planet.population * 0.02))

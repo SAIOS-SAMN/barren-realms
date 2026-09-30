@@ -128,6 +128,7 @@ def quarter(kernel: Any) -> List[str]:
             if log:
                 logs.append(log)
     households(kernel)
+    exports(kernel)
     log = frontier(kernel)
     if log:
         logs.append(log)
@@ -453,6 +454,56 @@ def _save(planet: Any) -> None:
     if planet.household_purse > cap:
         planet.treasury += planet.household_purse - cap
         planet.household_purse = cap
+
+
+# ---------------------------------------------------------------------- exports
+def exports(kernel: Any) -> None:
+    """
+    A world sells what it produces beyond its own needs: its farms' and mines' surplus goes to the region's
+    starports that buy it, and the producers (households) are paid. Nothing rots in a full silo, the region
+    earns from its output, and captains who buy those goods bring money back into the region.
+    """
+    from xylarium.kernel.economy import EconomyManager
+    from xylarium.config import CITADEL_UPKEEP, PORT_OPEX_FLOOR, PORT_START_TREASURY
+    from xylarium.kernel import biosphere
+    st = stats(kernel)
+    season_cycles = _quarter_len()
+    for sec in kernel.sectors.values():
+        for planet in sec.planets:
+            if planet.population <= 0 or getattr(planet, "natives", None):
+                continue
+            ports = _markets(kernel, planet)
+            if not ports:
+                continue
+            # keep two seasons of food and of upkeep ore, and enough ore for the council's next works
+            keep = {"ORGANICS": 2 * season_cycles * biosphere.consumption(planet),
+                    "ORE": 2 * season_cycles * CITADEL_UPKEEP.get(planet.citadel_level, {"ore": 0})["ore"] + 500}
+            silos = {"ORGANICS": "organics_silo", "ORE": "ore_silo"}
+            for comm, attr in silos.items():
+                surplus = getattr(planet, attr) - keep[comm]
+                if surplus <= 0:
+                    continue
+                buyers = [p for p in ports if p.buys.get(comm)]
+                for port in sorted(buyers, key=lambda p: -EconomyManager.get_unit_prices(p, comm)[0]):
+                    if surplus <= 0:
+                        break
+                    price, _ = EconomyManager.get_unit_prices(port, comm)
+                    base = PORT_START_TREASURY * PRICE_LEVEL.get(port.currency, 1.0)
+                    budget = int(port.treasury - base * PORT_OPEX_FLOOR)
+                    room = port.max_stock.get(comm, 1000) - port.stock.get(comm, 0)
+                    if price <= 0 or budget <= 0 or room <= 0:
+                        continue
+                    units = min(surplus, room, budget // price)
+                    if units <= 0:
+                        continue
+                    bill = units * price
+                    port.treasury -= bill
+                    planet.household_purse += bill
+                    port.stock[comm] = port.stock.get(comm, 0) + units
+                    setattr(planet, attr, getattr(planet, attr) - units)
+                    surplus -= units
+                    ex = st.setdefault("exports", {})
+                    ex[planet.currency] = ex.get(planet.currency, 0) + bill
 
 
 # ---------------------------------------------------------------------- player command

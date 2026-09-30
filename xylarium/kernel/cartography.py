@@ -318,6 +318,12 @@ class CartographyPuzzle:
         return p
 
 
+def _pay_forger(cost: int, captain: Any) -> None:
+    """The synthesizer's materials and the forger's fee go to the port where the chart was made."""
+    from xylarium.kernel import ledger
+    ledger.pay_service(cost, captain.sector_id)
+
+
 class CartographyManager:
     """Manages starmap puzzle state, fragment drops, decryption, toll gates, survey probes, and secret unlocks."""
 
@@ -692,6 +698,8 @@ class CartographyManager:
             )
 
         captain.credits -= price
+        from xylarium.kernel import ledger as _ledger
+        _ledger.pay_service(price, captain.sector_id)          # the data broker's cut stays in port
         # Pick template based on active puzzle
         unsolved_puzzles = [p.puzzle_id for p in self.puzzles.values() if p.status != "DECRYPTED"]
         target_p = unsolved_puzzles[0] if unsolved_puzzles else "UNIVERSAL"
@@ -732,7 +740,7 @@ class CartographyManager:
                 message="Deep-space salvage search requires 1 turn.",
             )
 
-        rng = random.Random()
+        rng = random.Random(random.getrandbits(32))   # drawn from the seeded stream: reproducible
         # 75% chance to find a fragment
         if rng.random() < 0.75:
             unsolved_puzzles = [p.puzzle_id for p in self.puzzles.values() if p.status != "DECRYPTED"]
@@ -941,6 +949,8 @@ class CartographyManager:
             )
 
         captain.credits -= cost
+        from xylarium.kernel import ledger as _ledger
+        _ledger.pay_service(cost, captain.sector_id)           # the orbital yard that builds the gate
         gate_id = f"TOLL-{self.gate_counter}"
         self.gate_counter += 1
 
@@ -1094,6 +1104,7 @@ class CartographyManager:
                 log_msg = f"[PRECURSOR CHIMERA] {captain.name} grafted {hybrid_node_id} via Cartography Lab!"
                 if kernel and hasattr(kernel, "action_logs"):
                     kernel.action_logs.append(log_msg)
+                _pay_forger(cost, captain)
                 return ActionResult(
                     success=True,
                     action=ActionType.CARTOGRAPHY_FORGE_CHIT,
@@ -1117,6 +1128,7 @@ class CartographyManager:
             log_msg = f"[CARTOGRAPHY LAB] Forged spoofed Federal Transponder Chit from {corrupted_frag.get('name', 'nav fragment')}! Core automated defense turrets bypassed."
             if kernel and hasattr(kernel, "action_logs"):
                 kernel.action_logs.append(log_msg)
+            _pay_forger(cost, captain)
             return ActionResult(
                 success=True,
                 action=ActionType.CARTOGRAPHY_FORGE_CHIT,
@@ -1153,6 +1165,7 @@ class CartographyManager:
                     sector_id=ambush_sec
                 )
 
+            _pay_forger(cost, captain)
             return ActionResult(
                 success=True,
                 action=ActionType.CARTOGRAPHY_FORGE_CHIT,
@@ -1182,6 +1195,7 @@ class CartographyManager:
             if kernel and hasattr(kernel, "action_logs"):
                 kernel.action_logs.append(log_msg)
 
+            _pay_forger(cost, captain)
             return ActionResult(
                 success=True,
                 action=ActionType.CARTOGRAPHY_FORGE_CHIT,
@@ -1232,6 +1246,8 @@ class CartographyManager:
             )
 
         captain.credits -= cost
+        from xylarium.kernel import ledger as _ledger
+        _ledger.pay_service(cost, 1)                           # Sol Stardock builds the probe
         probe_id = f"PROBE-{self.probe_counter}"
         self.probe_counter += 1
 
@@ -1285,7 +1301,7 @@ class CartographyManager:
             target_sec = kernel.sectors.get(next_sec_id)
             is_anarchy_or_frontier = (target_sec and target_sec.security == SecurityLevel.ANARCHY) or next_sec_id >= 60
 
-            rng = random.Random()
+            rng = random.Random(random.getrandbits(32))   # drawn from the seeded stream: reproducible
             if is_anarchy_or_frontier and rng.random() < 0.35:
                 owner = kernel.captains.get(probe.owner_id)
                 unsolved = [p.puzzle_id for p in self.puzzles.values() if p.status != "DECRYPTED"]

@@ -206,16 +206,32 @@ class FXMarket:
         credit(captain, cur, self.swap_sol_to(cur, sol_in))
         return captain.fx_wallet.get(cur, 0) >= needed
 
-    def repatriate(self, captain: Any, threshold_sol: float) -> int:
-        """Converts foreign balances worth more than ``threshold_sol`` back into SOL."""
+    def repatriate(self, captain: Any, threshold_sol: float, keep: Optional[set] = None) -> int:
+        """Converts foreign balances worth more than ``threshold_sol`` back into SOL - except the money of the
+        region the captain is working in (``keep``): a trader holds the local money while trading locally."""
         total = 0
         for cur, amt in list(captain.fx_wallet.items()):
+            if keep and cur in keep:
+                continue
             if cur in self.pools and amt > 0 and self.to_sol_value(cur, amt) > threshold_sol:
                 debit(captain, cur, amt)
                 sol = self.swap_to_sol(cur, amt)
                 captain.credits += sol
                 total += sol
         return total
+
+    @staticmethod
+    def working_currencies(kernel: Any, captain: Any) -> set:
+        """The money a captain keeps: its region's (where it is), and its faction's own."""
+        keep = set()
+        sec = kernel.sectors.get(captain.sector_id) if kernel is not None else None
+        if sec is not None:
+            keep.add(sec.port.currency if sec.port is not None else currency_for_security(sec.security))
+        fid = getattr(captain, "faction_id", None)
+        factions = getattr(kernel, "factions", None)
+        if fid and factions is not None and fid in factions.factions:
+            keep.add(factions.factions[fid].currency)
+        return keep
 
     # ------------------------------------------------------------------ persistence
     def pool_holdings(self) -> Dict[str, int]:

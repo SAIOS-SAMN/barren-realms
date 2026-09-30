@@ -499,14 +499,14 @@ class NativeManager:
     @staticmethod
     def collapse(kernel: Any, planet: Planet, cause: str) -> None:
         """A native society shatters; its world becomes ruins (no money: they had none)."""
-        from xylarium.kernel.archaeology import _new_ruins
+        from xylarium.kernel.archaeology import _new_ruins, bury
         natives = planet.natives
         if not natives:
             return
         rng = random.Random(zlib.crc32(f"{planet.id}:{getattr(kernel, 'cycle_count', 0)}".encode()))
-        planet.ruins = _new_ruins(natives["name"], natives["species"], natives["metabolism"], "RECENT",
-                                  natives["stage"] + 1, [], "native collapse", kernel.cycle_count,
-                                  rng.randint(1, 3), None, 0, rng)
+        planet.ruins = bury(planet, _new_ruins(natives["name"], natives["species"], natives["metabolism"], "RECENT",
+                                               natives["stage"] + 1, [], "native collapse", kernel.cycle_count,
+                                               rng.randint(1, 3), None, 0, rng))
         planet.natives = None
         if planet.faction_id == "ZEALOT" and planet.population <= 0:
             planet.faction_id = None

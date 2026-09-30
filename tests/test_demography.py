@@ -141,6 +141,21 @@ class TestHouseholdsAndFrontier(unittest.TestCase):
         self.assertLess(sum(p.stock.get("ORGANICS", 0) for p in ports), stock)
         self.assertEqual(before, totals(self.kernel))
 
+    def test_worlds_sell_their_surplus_to_regional_ports(self):
+        w = civ_world(self.kernel)
+        ports = [p for p in demography._markets(self.kernel, w) if p.buys.get("ORE")]
+        if not ports:
+            self.skipTest("no ore-buying port in reach on this seed")
+        for p in ports:
+            p.treasury += 200_000
+            p.stock["ORE"] = 0
+        w.ore_silo, purse = 5000, w.household_purse
+        before = totals(self.kernel)
+        demography.exports(self.kernel)
+        self.assertLess(w.ore_silo, 5000)
+        self.assertGreater(w.household_purse, purse)                 # producers are paid
+        self.assertEqual(before, totals(self.kernel))
+
     def test_settler_pressure_opens_a_new_cluster(self):
         rm = self.kernel.research_manager
         rm.minted_clusters = [1, 2, 3] if 3 in rm.minted_clusters else rm.minted_clusters

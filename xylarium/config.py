@@ -1407,8 +1407,6 @@ BLACK_MARKET_HULL_MARKUP = 1.35        # Deep Void harbors sell hulls to captain
 PORT_RETAIL_MARKUP = 1.15              # Regional households pay the port's buying price plus this markup
 PORT_RETAIL_RADIUS = 3                 # Populated worlds within this many warps (same currency) buy from a port
 PORT_RETAIL_VAULT_SHARE = 0.05         # ...each spending at most this share of its vault per fiscal quarter
-ISSE_RECYCLE_BAND = 1.10               # Pool reserves beyond this multiple of their genesis level are excess...
-ISSE_RECYCLE_RATE = 0.25               # ...and this share of the excess returns to its home economy each quarter
 
 # =============================================================================
 # [13] FEDERATIONS, CENTRAL BANKS, CLEARING UNION, MULTIPLE ISSEs, SETTLEMENT CHAIN

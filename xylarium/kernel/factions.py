@@ -576,9 +576,11 @@ class FactionManager:
                 fortress.element_reserves[k] -= v
         has_hauler = any(kernel.captains[c].ship.ship_type == "Bulk Goliath" for c in live)
         hull = "Gothic Battle-Cruiser" if has_hauler else "Bulk Goliath"
-        float_sol = self._to_sol(kernel, self._pay_from_vault(kernel, f, IMPERIUM_CREW_FLOAT))
+        crew_float = self._pay_from_vault(kernel, f, IMPERIUM_CREW_FLOAT)   # paid in the realm's own money
         cap = self._spawn_ship(kernel, f, hull, IMPERIAL_CAPTAIN_NAMES, AIPersonality.IMPERIAL, "IMPERIAL",
-                               "human-imperial", fortress.sector_id, float_sol)
+                               "human-imperial", fortress.sector_id, crew_float.pop("SOL", 0))
+        for cur, amt in crew_float.items():
+            cap.fx_wallet[cur] = cap.fx_wallet.get(cur, 0) + amt
         f.bump("warships")
         from xylarium.kernel import chronicle
         chronicle.decree(kernel, f, f"The Commissioning of {cap.name}",
@@ -679,11 +681,19 @@ class FactionManager:
                     sol = amt if cur == "SOL" else fxm.swap_to_sol(cur, amt)
                     yard.treasury += sol if yard.currency == "SOL" else fxm.swap_sol_to(yard.currency, sol)
         else:
+            # No yard: the capital's own works build it - every coin of the cost reaches the capital's treasury
+            fxm = kernel.fx_market
             for cur, amt in cost.items():
-                capital.treasury += amt if cur == capital.currency else 0
-        float_sol = self._to_sol(kernel, self._pay_from_vault(kernel, f, 1500))
+                if cur == capital.currency:
+                    capital.treasury += amt
+                else:
+                    sol = amt if cur == "SOL" else fxm.swap_to_sol(cur, amt)
+                    capital.treasury += sol if capital.currency == "SOL" else fxm.swap_sol_to(capital.currency, sol)
+        crew_float = self._pay_from_vault(kernel, f, 1500)                  # paid in the faith's own money
         cap = self._spawn_ship(kernel, f, "Fanatic Boarding Vessel", CRUSADER_NAMES, AIPersonality.CRUSADER, "BIOTIC",
-                               "ardent-bimaniform", capital.sector_id, float_sol)
+                               "ardent-bimaniform", capital.sector_id, crew_float.pop("SOL", 0))
+        for cur, amt in crew_float.items():
+            cap.fx_wallet[cur] = cap.fx_wallet.get(cur, 0) + amt
         cap.troops = 200
         f.bump("crusaders")
         from xylarium.kernel import chronicle

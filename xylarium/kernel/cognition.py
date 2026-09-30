@@ -1878,10 +1878,11 @@ class CognitiveOrgan:
         global _ACTIVE_KERNEL
         _ACTIVE_KERNEL = kernel
 
-        # Treasury: bring material foreign-currency earnings home (a captain's own mind does this, not a script)
+        # Treasury: a mind brings home the money of regions it has left; the money of the region it is working
+        # in stays in hand to be spent there (the captain's own decision, not a script's sweep)
         fxm = getattr(kernel, "fx_market", None)
         if fxm is not None and captain.fx_wallet:
-            fxm.repatriate(captain, AI_FX_REPATRIATE_THRESHOLD)
+            fxm.repatriate(captain, AI_FX_REPATRIATE_THRESHOLD, fxm.working_currencies(kernel, captain))
 
         # 0. CRYSTALLIZATION: when the cochain has pitched far enough and the invariants hold,
         # the lineage ascends. Checked periodically (evaluation prices the whole balance sheet).
@@ -2095,12 +2096,15 @@ class CognitiveOrgan:
         elif act == ActionType.STOCK_SELL:
             return kernel.dispatch(captain.id, act, ticker=params.get("ticker"), amount=params.get("shares", 10))
         elif act == ActionType.STOCK_BUY:
-            return kernel.dispatch(
-                captain.id,
-                act,
-                ticker=params.get("ticker"),
-                amount=params.get("shares", 10),
-            )
+            shares = params.get("shares", 10)
+            ticker = params.get("ticker")
+            comp = kernel.market_manager.companies.get(ticker) if ticker else None
+            if comp is not None and comp.share_price > 0:
+                # A bold mind borrows against the shares it buys (credit.py): leverage by temperament
+                from xylarium.kernel import credit
+                loan = credit.lend(kernel, captain, ticker, shares * comp.share_price)
+                shares += loan // comp.share_price
+            return kernel.dispatch(captain.id, act, ticker=ticker, amount=shares)
         elif act == ActionType.CARTOGRAPHY_SCAN:
             return kernel.dispatch(captain.id, act, puzzle_id=params.get("puzzle_id"))
         elif act == ActionType.CARTOGRAPHY_ROTATE:

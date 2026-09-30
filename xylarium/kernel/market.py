@@ -326,6 +326,40 @@ class FreightContract:
         )
 
 
+def ledger_pay(amount: int, sector_id: Optional[int] = None, institution: Optional[str] = None) -> None:
+    from xylarium.kernel import ledger
+    ledger.pay_service(amount, sector_id, institution)
+
+
+def kernel_sector_port(sector_id: int) -> Any:
+    from xylarium.kernel import ledger
+    k = ledger.active_kernel()
+    sec = k.sectors.get(sector_id) if k is not None else None
+    return sec.port if sec is not None else None
+
+
+def ledger_sol_of(port: Any) -> int:
+    from xylarium.kernel import fx
+    if port.currency == "SOL" or fx.ACTIVE_FX is None:
+        return int(port.treasury)
+    return int(fx.ACTIVE_FX.to_sol_value(port.currency, port.treasury))
+
+
+def ledger_debit_port_sol(port: Any, sol: int) -> None:
+    """Take ``sol`` of value from a port's treasury (a regional port sells local money at the exchange)."""
+    from xylarium.kernel import fx
+    if sol <= 0:
+        return
+    if port.currency == "SOL" or fx.ACTIVE_FX is None:
+        port.treasury -= sol
+        return
+    local = min(port.treasury, int(sol * fx.ACTIVE_FX.rate(port.currency) * 1.02) + 1)
+    port.treasury -= local
+    got = fx.ACTIVE_FX.swap_to_sol(port.currency, local)
+    if got > sol:                                            # any excess SOL comes back as local money
+        port.treasury += fx.ACTIVE_FX.swap_sol_to(port.currency, got - sol)
+
+
 class MarketManager:
     """
     Authoritative manager for corporate enterprises, the stock exchange,
@@ -814,60 +848,6 @@ class MarketManager:
             # What the region actually pays this port is its creditworthiness (smoothed)
             port.regional_income = round(0.7 * port.regional_income + 0.3 * income, 2)
 
-    @classmethod
-    def _isse_recycle(cls, kernel: Any) -> None:
-        """
-        The ISSE is a market maker, not a vault: reserves a pool holds beyond its genesis depth are
-        returned to their home economy each quarter - frontier money to its region's worlds and ports
-        (which strengthens a currency that captains have been dumping), SOL to the Federation's ports.
-        """
-        from xylarium.config import FX_POOL_SEED, ISSE_RECYCLE_BAND, ISSE_RECYCLE_RATE
-        fxm = getattr(kernel, "fx_market", None)
-        if fxm is None:
-            return
-        stats = getattr(fxm, "recycled", None)
-        if stats is None:
-            stats = fxm.recycled = {}
-        for cur, pool in fxm.pools.items():
-            sol0, loc0 = FX_POOL_SEED.get(cur, (pool["sol"], pool["local"]))
-            for side, genesis, currency in (("local", loc0, cur), ("sol", sol0, "SOL")):
-                excess = pool[side] - genesis * ISSE_RECYCLE_BAND
-                if excess <= 0:
-                    continue
-                amount = int(excess * ISSE_RECYCLE_RATE)
-                if amount <= 0:
-                    continue
-                recipients = cls._home_economy(kernel, currency)
-                if not recipients:
-                    continue
-                pool[side] -= amount
-                weights = [w for _, w in recipients]
-                total_w = sum(weights) or 1
-                paid = 0
-                for (target, w) in recipients:
-                    share = int(amount * w / total_w)
-                    target.treasury += share
-                    paid += share
-                recipients[0][0].treasury += amount - paid   # rounding remainder
-                stats[currency] = stats.get(currency, 0) + amount
-
-    @staticmethod
-    def _home_economy(kernel: Any, currency: str) -> List[Tuple[Any, float]]:
-        """Where recycled reserves land: short-of-capital ports first, then populated worlds, of that money."""
-        from xylarium.config import PORT_START_TREASURY
-        out: List[Tuple[Any, float]] = []
-        level = PRICE_LEVEL.get(currency, 1.0)
-        for sec in kernel.sectors.values():
-            port = sec.port
-            if port is not None and port.currency == currency:
-                need = PORT_START_TREASURY * level - port.treasury
-                if need > 0:
-                    out.append((port, need))
-            for p in sec.planets:
-                if p.population > 0 and p.currency == currency:
-                    out.append((p, p.population * 0.05 * level))
-        return out
-
     @staticmethod
     def _port_operating_costs(kernel: Any) -> None:
         """
@@ -914,6 +894,9 @@ class MarketManager:
         from xylarium.kernel.fx import ACTIVE_FX
         for comp in self.companies.values():
             budget = int(max(0, comp.treasury - COMPANY_OPEX_RESERVE) * COMPANY_OPEX_RATE)
+            budget = min(comp.treasury, max(budget, int(getattr(comp, "home_revenue_q", 0))))
+            comp.home_revenue_q = 0
+            comp.last_outflow_q = max(0, budget)
             if budget <= 0:
                 continue
             sec = kernel.sectors.get(comp.sector_id)
@@ -1224,6 +1207,7 @@ class MarketManager:
             return False, f"IPO listing fee is {listing_fee:,} Cr. You have {captain.credits:,} Cr.", {}
 
         captain.credits -= listing_fee
+        ledger_pay(listing_fee, captain.sector_id)                 # the exchange's listing desk
         initial_price = 25
         raised_capital = initial_price * 4000  # 100,000 Cr valuation, 100k capital
 
@@ -1645,6 +1629,7 @@ class MarketManager:
             return False, f"Filing SEC proxy materials and shareholder solicitation requires {filing_cost:,} Cr. You have {captain.credits:,} Cr.", {}
 
         captain.credits -= filing_cost
+        ledger_pay(filing_cost, captain.sector_id)                 # proxy agents and printers
 
         # Calculate voting blocks
         challenger_votes = owned_shares
@@ -1837,6 +1822,9 @@ class MarketManager:
             return False, f"Unknown board mandate: '{mandate}'. Valid: SPECIAL_DIVIDEND, CHANGE_INDUSTRY, CORPORATE_EMBARGO, STRIP_ASSETS.", {}
 
     def short_sell(self, captain: Any, ticker: str, amount: int, kernel: Any = None) -> Tuple[bool, str, Dict[str, Any]]:
+        if kernel is None:
+            from xylarium.kernel import ledger
+            kernel = ledger.active_kernel()
         """
         Executes a short sale on the ISSE: borrows shares from the market float,
         requires 50% margin collateral, immediately sells shares at market price,
@@ -1872,9 +1860,17 @@ class MarketManager:
                 f"Insufficient margin collateral! Shorting {amount:,} shares of {ticker} requires {margin_collateral:,} Cr "
                 f"({int(margin_rate * 100)}% margin). You have {captain.credits:,} Cr."
             ), {}
+        # The market maker for a company's shares is its own treasury: it pays for the borrowed shares it takes
+        if company.treasury < total_value:
+            return False, (f"No buyer: {ticker}'s market maker cannot take {amount:,} shares "
+                           f"({total_value:,} Cr) today."), {}
 
-        # Deduct margin collateral and credit sale proceeds (net change: + total_value - margin_collateral)
+        # Collateral is escrowed at the Federal margin desk; the proceeds come from the market maker
         captain.credits -= margin_collateral
+        fed = getattr(kernel, "federal_reserve", None)
+        if fed is not None:
+            fed.receive(margin_collateral, "margin_escrow")
+        company.treasury -= total_value
         captain.credits += total_value
 
         # Record or update short position
@@ -1927,6 +1923,9 @@ class MarketManager:
         }
 
     def cover_short(self, captain: Any, ticker: str, amount: Optional[int] = None, kernel: Any = None) -> Tuple[bool, str, Dict[str, Any]]:
+        if kernel is None:
+            from xylarium.kernel import ledger
+            kernel = ledger.active_kernel()
         """
         Covers (buys back) an open short position on the ISSE, releases proportional
         margin collateral, settles profit/loss, and exerts upward price pressure.
@@ -1947,6 +1946,9 @@ class MarketManager:
 
         buyback_cost = amount * company.share_price
         collat_released = int(pos["collateral"] * (amount / total_open))
+        fed = getattr(kernel, "federal_reserve", None)
+        if fed is not None:
+            collat_released = min(collat_released, fed.treasury)   # the margin desk holds the escrow
 
         # Check if captain can afford to buy back (with collateral refund factored in)
         if captain.credits + collat_released < buyback_cost:
@@ -1956,8 +1958,13 @@ class MarketManager:
                 f"With collateral refund ({collat_released:,} Cr), you still need {deficit:,} more Credits."
             ), {}
 
+        # Collateral comes back from the margin desk; the buyback pays the market maker
+        if fed is not None:
+            fed.treasury -= collat_released
+            fed.stats["margin_released"] += collat_released
         captain.credits += collat_released
         captain.credits -= buyback_cost
+        company.treasury += buyback_cost
 
         # P&L calculation
         entry_price = pos["entry_price"]
@@ -2080,6 +2087,7 @@ class MarketManager:
             return False, f"Recruiting a Sales Executive requires {cost:,} Credits. You have {captain.credits:,} Cr.", {}
 
         captain.credits -= cost
+        ledger_pay(cost, captain.sector_id)                        # the executive's signing bonus and agency
         exec_id = f"EXEC-{self.next_exec_id}"
         self.next_exec_id += 1
 
@@ -2192,6 +2200,7 @@ class MarketManager:
                 return False, f"Positive PR blitz requires {cost:,} Credits. You have {captain.credits:,} Cr.", {}
 
             captain.credits -= cost
+            ledger_pay(cost, comp.sector_id)                           # the PR firms of the HQ system
             comp.consumer_trust = min(100, comp.consumer_trust + 20)
             price_bump = random.randint(3, 5)
             comp.share_price += price_bump
@@ -2235,6 +2244,7 @@ class MarketManager:
                 return False, f"Smear campaign requires {cost:,} Credits. You have {captain.credits:,} Cr.", {}
 
             captain.credits -= cost
+            ledger_pay(cost, comp.sector_id)
             rival = self.companies[target_ticker]
 
             # Damage rival
@@ -2297,6 +2307,7 @@ class MarketManager:
             return False, f"Insufficient credits! Contribution requires {amount:,} Cr. You have {captain.credits:,} Cr.", {}
 
         captain.credits -= amount
+        ledger_pay(amount, institution="lobbying")                # the Trade Council's pool sits with the Fed
         entity_id = corporate_ticker.upper().strip() if corporate_ticker else captain.id
         self.trade_council.lobbying_funds[entity_id] = self.trade_council.lobbying_funds.get(entity_id, 0) + amount
         total_influence = self.trade_council.lobbying_funds[entity_id]
@@ -2759,6 +2770,7 @@ class MarketManager:
                 return False, "Origin and Destination sectors must be different.", {}
 
         captain.credits -= cost
+        ledger_pay(cost, 1)                                        # Sol Stardock's yards build the hull
         hid = f"HAUL-{self.next_hauler_id}"
         self.next_hauler_id += 1
 
@@ -2877,6 +2889,13 @@ class MarketManager:
             max_f = getattr(captain.ship, "max_fighters", SHIP_CATALOG.get(getattr(captain.ship, "ship_type", ""), {}).get("max_fighters", 100))
             captain.ship.fighters = min(max_f, captain.ship.fighters + hauler.escort_fighters)
 
+        # The Stardock buys the hull back out of its own treasury (it cannot pay what it does not have)
+        yard = kernel_sector_port(1)
+        if yard is not None:
+            refund = min(refund, max(0, ledger_sol_of(yard)))
+            ledger_debit_port_sol(yard, refund)
+        else:
+            refund = 0
         captain.credits += refund
         del self.trade_haulers[hauler_id]
 
@@ -2941,6 +2960,7 @@ class MarketManager:
                 if owner:
                     if owner.credits >= 500:
                         owner.credits -= 500
+                        ledger_pay(500, getattr(hauler, "current_sector", None))   # the yard that did the overhaul
                         logs.append(f"MAINTENANCE OVERHAUL: Deducted 500 Cr for scheduled maintenance on {hauler.name}.")
                     else:
                         hauler.status = "IDLE"
@@ -3168,6 +3188,10 @@ class MarketManager:
                     comp.treasury += sales
                 comp.quarterly_revenue += sales
                 div_pool = int(sales * comp.dividend_rate)
+                # What the home region paid, less the owners' dividend, is spent back there next season
+                # (wages and inputs): a firm is a pass-through for its region's operating income
+                comp.home_revenue_q = max(0, sales - div_pool)
+                comp.last_outflow_q = getattr(comp, "last_outflow_q", 0) + div_pool
                 comp.last_dividend = round(div_pool / max(1, comp.total_shares))
                 comp.quarterly_revenue = 0  # Reset for next quarter
 
@@ -3237,6 +3261,7 @@ class MarketManager:
 
                 # Deduct commission cost plus the enforcer's operating float (a transfer, not new money)
                 comp.treasury -= CORPORATE_ENFORCER_COST + 5000
+                ledger_pay(CORPORATE_ENFORCER_COST, comp.sector_id)   # the yard that builds the enforcer
                 comp.last_enforcer_cycle = kernel.cycle_count
 
                 sec_id = comp.sector_id if comp.sector_id in kernel.sectors else 1

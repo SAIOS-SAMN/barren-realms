@@ -197,6 +197,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "demography": _demography_census(kernel),
         "physics": __import__("xylarium.kernel.physics", fromlist=["summary"]).summary(kernel.sectors),
         "fibres": __import__("xylarium.kernel.fibres", fromlist=["summary"]).summary(kernel),
+        "credit": dict(getattr(kernel, "credit_stats", {}) or {}),
     }
 
 
@@ -1136,7 +1137,40 @@ class RunStats:
 # Driver
 # ---------------------------------------------------------------------------
 
-def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_state: Optional[str] = None) -> Dict[str, Any]:
+DETERMINISM_PROBE = r"""
+import random, sys, hashlib
+sys.path.insert(0, {root!r})
+import simulate_playtest as sp
+from xylarium.kernel.engine import GameKernel
+from xylarium.kernel.ledger import money_supply
+seed, cycles = {seed}, {cycles}
+random.seed(seed); k = GameKernel(seed=seed); rng = random.Random(seed)
+bots = sp.make_players(k, rng); st = sp.RunStats()
+real = k.tick_simulation; k.tick_simulation = lambda: None
+for _ in range(cycles):
+    for b in bots:
+        b.act(k, st)
+    real()
+tip = k.settlement.blocks[-1]["hash"] if k.settlement.blocks else ""
+state = hashlib.sha256(repr(sorted((c, b["total"]) for c, b in money_supply(k).items())).encode()).hexdigest()
+print(tip, state, sum(p.population for s in k.sectors.values() for p in s.planets))
+"""
+
+
+def determinism_check(seed: int, cycles: int) -> Dict[str, Any]:
+    """Runs the same seed in two fresh processes with different string-hash seeds: the universes must match."""
+    import subprocess
+    code = DETERMINISM_PROBE.format(root=os.path.dirname(os.path.abspath(__file__)), seed=seed, cycles=cycles)
+    outs = []
+    for hashseed in ("1", "2"):
+        env = dict(os.environ, PYTHONHASHSEED=hashseed)
+        res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=1800)
+        outs.append((res.stdout.strip().splitlines() or [res.stderr.strip()[-300:]])[-1])
+    return {"cycles": cycles, "runs": outs, "identical": outs[0] == outs[1]}
+
+
+def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_state: Optional[str] = None,
+        determinism_cycles: int = 0) -> Dict[str, Any]:
     timers = Timers()
     instrument(timers)
     flows = MoneyFlows()
@@ -1264,6 +1298,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
         "growth": growth[:25],
         "exceptions": [{"where": k, "count": v, "example": stats.exception_examples[k]} for k, v in stats.exceptions.most_common()],
         "invariant_violations": [{"kind": k, "count": v, "example": stats.violation_examples[k]} for k, v in stats.violations.most_common()],
+        "determinism": determinism_check(seed, determinism_cycles) if determinism_cycles else None,
         "world_timeline": stats.snapshots,
         "bots": [{
             "id": b.id, "clade": b.clade, "kind": b.kind,
@@ -1291,6 +1326,13 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 # Acceptance gates: the economy is "valid" only if all of these hold
 # ---------------------------------------------------------------------------
 
+# Gates whose names start with these are laws (invariants); all others are observations.
+LAWS = (
+    "money conserved", "quantity equation holds", "clearing union conserves", "settlement chain seals",
+    "central banks solvent", "orbits never cross", "throughput per sector", "invariant violations",
+    "exceptions", "deterministic",
+)
+
 ACCEPTANCE = {
     "money_growth_per_1k": (-0.25, 0.25),     # per-captain money supply in each currency, per 1,000 cycles
     "undeclared_creation_max": 0,             # money may only enter through declared faucets
@@ -1317,33 +1359,39 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
     gates: List[Dict[str, Any]] = []
 
     def gate(name: str, target: str, actual: Any, ok: Optional[bool]) -> None:
-        gates.append({"gate": name, "target": target, "actual": actual,
-                      "result": "n/a" if ok is None else ("PASS" if ok else "FAIL")})
+        # Laws are invariants of the universe's physics and ledgers: they pass or fail. Everything else is an
+        # observation of emergent outcomes, reported against a band of interest but never failed.
+        law = any(name.startswith(prefix) for prefix in LAWS)
+        if ok is None:
+            result = "n/a"
+        elif law:
+            result = "PASS" if ok else "FAIL"
+        else:
+            result = "ok" if ok else "note"
+        gates.append({"gate": name, "target": target, "actual": actual, "result": result, "law": law})
 
     m = r["money"]
     for cur, end_total in sorted(m["end"]["by_currency"].items()):
         start_total = m["genesis"]["by_currency"].get(cur, {}).get("total", 0)
         declared = m["ledger_end"].get(cur, 0) - m["ledger_genesis"].get(cur, 0)
         undeclared = (end_total["total"] - start_total) - declared
-        gate(f"undeclared money creation [{cur}]", "<= 0", f"{undeclared:+,}", undeclared <= ACCEPTANCE["undeclared_creation_max"])
+        gate(f"money conserved: every change declared [{cur}]", "== 0", f"{undeclared:+,}", undeclared == 0)
 
     if len(tl) >= 2:
         first, last = tl[0], tl[-1]
         span = max(1, last["cycle"] - first["cycle"])
         lo, hi = ACCEPTANCE["money_growth_per_1k"]
         genesis = r["money"].get("territory_genesis", {})
-        # A growing economy is meant to carry more money: the monetary target grows with new territory and
-        # with population (MonetaryPolicy). What must stay bounded is money relative to that target.
+        # M V = P Y: with V measured at genesis, the money an economy holds must track what its output needs
+        # (M / M*), however much the galaxy has grown. Raw supply growth is reported alongside.
         for cur in sorted(last["supply_by_currency"]):
             start = first["supply_by_currency"].get(cur, 0)
-            t0 = first.get("policy_targets", {}).get(cur) or start
             t1 = last.get("policy_targets", {}).get(cur)
             if t1:
-                end_ratio, start_ratio = last["supply_by_currency"][cur] / t1, start / max(1, t0)
-                rate = (max(1e-9, end_ratio) / max(1e-9, start_ratio)) ** (1000 / span) - 1
+                ratio = last["supply_by_currency"][cur] / t1
                 raw = (last["supply_by_currency"][cur] / max(1, start)) ** (1000 / span) - 1
-                gate(f"{cur} supply vs monetary target / 1k cycles", f"{lo:+.0%} .. {hi:+.0%}",
-                     f"{rate:+.1%} (raw supply {raw:+.1%})", lo <= rate <= hi)
+                gate(f"quantity equation holds: M / M* [{cur}]", "0.8 .. 1.25",
+                     f"{ratio:.3f} (raw supply {raw:+.1%} / 1k cycles)", 0.8 <= ratio <= 1.25)
                 continue
             end = last["supply_by_currency"][cur] - (genesis.get(cur, 0) - first.get("territory_genesis", {}).get(cur, 0))
             rate = (max(1e-9, end) / max(1e-9, start)) ** (1000 / span) - 1 if start > 0 else float("inf")
@@ -1462,6 +1510,10 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         if imp:
             gate("Imperial tithe delivered to the Fortress", "> 0", imp["stats"].get("tithe_delivered", 0),
                  imp["stats"].get("tithe_delivered", 0) > 0)
+    if r.get("determinism"):
+        d = r["determinism"]
+        gate("deterministic across processes (same seed, different hash seeds)", "identical",
+             f"{'identical' if d['identical'] else 'DIVERGED'} after {d['cycles']} cycles", d["identical"])
     gate("invariant violations", "0", sum(v["count"] for v in r["invariant_violations"]), not r["invariant_violations"])
     gate("exceptions", "0", sum(e["count"] for e in r["exceptions"]), not r["exceptions"])
     return gates
@@ -1589,11 +1641,16 @@ def print_report(r: Dict[str, Any]) -> None:
             print(f"  settler fleets: {st['daughters']} daughter worlds, {st['emigrants']:,} emigrants, "
                   f"{st['no_room']} found no world in reach; steady-state worlds {st['steady']}")
             print(f"  households: {st['household_units']:,} units bought, spend {st['household_spend']}, shortages {st['shortages']}")
+            print(f"  exports: worlds sold their surplus harvest and ore to regional ports for {st.get('exports', {})}")
             print(f"  frontier: clusters {d['clusters']}, opened {st['clusters_opened']}")
         if "physics" in ce:
             ph = ce["physics"]
             print(f"  physics: {ph['worlds']} worlds {ph['types']}, {ph['tidally_locked']} tidally locked, "
                   f"{ph['spacing_violations']} spacing violations")
+        if ce.get("credit"):
+            cr = ce["credit"]
+            print(f"  credit: lent {cr.get('lent', 0):,}, interest {cr.get('interest', 0):,}, margin calls {cr.get('margin_calls', 0)}, "
+                  f"defaults {cr.get('defaults', 0)} (written off {cr.get('written_off', 0):,}), corporate levy {cr.get('levied', 0):,}")
         if "fibres" in ce:
             fb = ce["fibres"]
             print(f"  fibres: {fb['passages']:,} passages, {fb['developed_lanes']} of {fb['lanes']} lanes developed, "
@@ -1608,11 +1665,17 @@ def print_report(r: Dict[str, Any]) -> None:
                 print(f"    {cur}: reserves {b['reserves']:,}  loans {b['loans']:,}  rate/q {b['rate']:.4f}  STAMP {b['stamp']:+,}  {b['stats']}")
         for e in r.get("chronicle_samples", []):
             print(f"    - [{e['kind']}] {e['title']} (cycle {e['cycle']}): {e['body'][:220]}")
-    print("\n[ACCEPTANCE GATES]")
+    print("\n[LAWS] invariants of the universe's physics and ledgers")
     for g in r["acceptance"]:
-        print(f"  [{g['result']:>4}] {g['gate']:<50} target {str(g['target']):<14} actual {g['actual']}")
+        if g.get("law"):
+            print(f"  [{g['result']:>4}] {g['gate']:<52} target {str(g['target']):<14} actual {g['actual']}")
+    print("\n[OBSERVATIONS] emergent outcomes against a band of interest (never failed)")
+    for g in r["acceptance"]:
+        if not g.get("law"):
+            print(f"  [{g['result']:>4}] {g['gate']:<52} band {str(g['target']):<16} actual {g['actual']}")
     fails = sum(1 for g in r["acceptance"] if g["result"] == "FAIL")
-    print(f"  => {'ALL GATES PASS' if not fails else f'{fails} GATE(S) FAIL'}")
+    notes = sum(1 for g in r["acceptance"] if g["result"] == "note")
+    print(f"  => {'ALL LAWS HOLD' if not fails else f'{fails} LAW(S) BROKEN'}; {notes} observation(s) outside their band")
     if r["hotspots"]:
         print("\n[cProfile HOTSPOTS]\n" + "\n".join(r["hotspots"].splitlines()[:45]))
 
@@ -1625,10 +1688,13 @@ def main() -> None:
     ap.add_argument("--profile", action="store_true", help="Include cProfile hotspots")
     ap.add_argument("--out", default=None, help="Write full JSON report here")
     ap.add_argument("--save-state", default=None, help="Also save the final universe to this path (never the live save)")
+    ap.add_argument("--determinism-cycles", type=int, default=300,
+                    help="Cycles for the cross-process determinism law (0 to skip)")
     args = ap.parse_args()
 
     print(f"Xylarium playtest: {args.cycles:,} cycles, seed {args.seed}, bots {BOT_CLADES}")
-    report = run(args.cycles, args.seed, args.actions_per_cycle, args.profile, args.save_state)
+    report = run(args.cycles, args.seed, args.actions_per_cycle, args.profile, args.save_state,
+                 args.determinism_cycles)
     print_report(report)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:

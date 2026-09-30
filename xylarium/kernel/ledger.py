@@ -132,6 +132,56 @@ def supply_in_sol(kernel: Any, supply: Optional[Dict[str, Dict[str, int]]] = Non
     return total
 
 
+def expected_output(kernel: Any) -> Dict[str, float]:
+    """Each region's annual real output at genesis, from its worlds' physics (harvest + ore, base prices, local)."""
+    from xylarium.config import COMMODITY_CONFIG, PRICE_LEVEL
+    from xylarium.kernel import biosphere
+    org, ore = COMMODITY_CONFIG["ORGANICS"]["base_price"], COMMODITY_CONFIG["ORE"]["base_price"]
+    out: Dict[str, float] = {}
+    for sec in kernel.sectors.values():
+        for p in sec.planets:
+            if p.population <= 0 or getattr(p, "natives", None):
+                continue
+            k = biosphere.carrying_capacity(kernel, p)
+            per_cycle = min(p.population * 5 // 4, k) / 1000.0 * org + max(1, int(p.population * 0.02)) * ore
+            out[p.currency] = out.get(p.currency, 0.0) + per_cycle * 100 * PRICE_LEVEL.get(p.currency, 1.0)
+    return out
+
+
+def endow_exchange_depth(kernel: Any) -> None:
+    """
+    Genesis: the federation exchanges hold liquidity in proportion to the real economies they serve. The ISSE's
+    SOL is shared among the regional pools by each region's output (in SOL value); each pool's local side is set
+    at the currency's defined price level. The SOL is conserved; the local liquidity is a declared endowment.
+    """
+    from xylarium.config import PRICE_LEVEL
+    fxm = getattr(kernel, "fx_market", None)
+    if fxm is None or not fxm.pools:
+        return
+    y = expected_output(kernel)
+    y_sol = {cur: y.get(cur, 0.0) / PRICE_LEVEL.get(cur, 1.0) for cur in fxm.pools}
+    mean = sum(y_sol.values()) / len(y_sol) if y_sol else 0.0
+    weights = {cur: max(v, mean / 4) for cur, v in y_sol.items()}      # even a quiet region needs a market
+    total_w = sum(weights.values()) or 1.0
+    sol_total = sum(p["sol"] for p in fxm.pools.values())
+    assigned = 0
+    curs = sorted(fxm.pools)
+    for i, cur in enumerate(curs):
+        pool = fxm.pools[cur]
+        sol = int(sol_total * weights[cur] / total_w) if i < len(curs) - 1 else int(sol_total - assigned)
+        assigned += sol
+        local = int(sol * PRICE_LEVEL.get(cur, 1.0))
+        d_local = local - int(pool["local"])
+        pool["sol"], pool["local"] = sol, local
+        if d_local > 0:
+            mint("exchange_endowment", d_local, cur)
+        elif d_local < 0:
+            burn("exchange_endowment", -d_local, cur)
+    d_sol = int(sol_total) - assigned
+    if d_sol:
+        (burn if d_sol > 0 else mint)("exchange_endowment", abs(d_sol), "SOL")
+
+
 class MonetaryPolicy:
     """
     Regional monetary authorities, one per currency, keep the quantity equation M V = P Y.
@@ -158,6 +208,9 @@ class MonetaryPolicy:
         self.earnings_q: Dict[str, float] = {}   # colony earnings minted this season
         self.gov_q: Dict[str, float] = {}        # of which the governments' share
         self.transfers: Dict[str, int] = {}      # cumulative fiscal transfers (reporting)
+        self.services_q: Dict[str, float] = {}   # services actually withdrawn this season
+        self.transfer_q: Dict[str, float] = {}   # transfer made at the start of this season
+        self.last_supply: Dict[str, float] = {}  # supply at the last season's close
 
     def factor(self, currency: str) -> float:
         return self.factors.get(currency, 1.0)
@@ -168,6 +221,9 @@ class MonetaryPolicy:
     def record_earnings(self, currency: str, total: float, government: float) -> None:
         self.earnings_q[currency] = self.earnings_q.get(currency, 0.0) + total
         self.gov_q[currency] = self.gov_q.get(currency, 0.0) + government
+
+    def record_services(self, currency: str, amount: float) -> None:
+        self.services_q[currency] = self.services_q.get(currency, 0.0) + amount
 
     def annual_output(self, currency: str) -> float:
         seasons = self.output_seasons.get(currency, [])
@@ -193,9 +249,17 @@ class MonetaryPolicy:
                 self.output0[cur] = self.annual_output(cur)  # first full year: V is measured
             target = self.target(cur, m)
             self.current[cur] = round(target)
-            gap = (target - m) / 4.0                        # a quarter of the gap per season
             earned, gov = self.earnings_q.get(cur, 0.0), self.gov_q.get(cur, 0.0)
-            withdraw = earned - gap                         # what services must burn for net injection = gap
+            # Everything else that moved this money last season (faction spending, tithes, other declared
+            # burns and mints) is measured, not guessed: the season's change minus the colony circuit's own
+            last_m = self.last_supply.get(cur)
+            colony_net = earned - self.services_q.get(cur, 0.0) + self.transfer_q.get(cur, 0.0)
+            other = (m - last_m) - colony_net if last_m is not None else 0.0
+            self.last_supply[cur] = m
+            gap = (target - m) / 4.0                        # a quarter of the gap per season
+            needed = gap - other                            # the colony circuit must also offset the rest
+            withdraw = earned - needed                      # what services must burn for that net injection
+            self.transfer_q[cur] = 0.0
             if withdraw >= 0:
                 self.factors[cur] = round(withdraw / gov, 4) if gov > 0 else 1.0
             else:
@@ -203,7 +267,7 @@ class MonetaryPolicy:
                 self._transfer(kernel, cur, int(-withdraw))
             self.history.setdefault(cur, []).append(round(self.factors[cur], 3))
             self.history[cur] = self.history[cur][-40:]
-        self.output_q, self.earnings_q, self.gov_q = {}, {}, {}
+        self.output_q, self.earnings_q, self.gov_q, self.services_q = {}, {}, {}, {}
 
     def _transfer(self, kernel: Any, cur: str, amount: int) -> None:
         """Fiscal transfer: new money reaches households by population (declared mint)."""
@@ -220,12 +284,15 @@ class MonetaryPolicy:
         if paid:
             mint("fiscal_transfer", paid, cur)
             self.transfers[cur] = self.transfers.get(cur, 0) + paid
+            self.transfer_q[cur] = self.transfer_q.get(cur, 0.0) + paid
 
     def to_dict(self) -> Dict[str, Any]:
         return {"targets": dict(self.targets), "output0": dict(self.output0), "factors": dict(self.factors),
                 "history": dict(self.history), "output_q": dict(self.output_q),
                 "output_seasons": {k: list(v) for k, v in self.output_seasons.items()},
-                "earnings_q": dict(self.earnings_q), "gov_q": dict(self.gov_q), "transfers": dict(self.transfers)}
+                "earnings_q": dict(self.earnings_q), "gov_q": dict(self.gov_q), "transfers": dict(self.transfers),
+                "services_q": dict(self.services_q), "transfer_q": dict(self.transfer_q),
+                "last_supply": dict(self.last_supply)}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MonetaryPolicy":
@@ -239,6 +306,9 @@ class MonetaryPolicy:
         mp.earnings_q = {k: float(v) for k, v in data.get("earnings_q", {}).items()}
         mp.gov_q = {k: float(v) for k, v in data.get("gov_q", {}).items()}
         mp.transfers = {k: int(v) for k, v in data.get("transfers", {}).items()}
+        mp.services_q = {k: float(v) for k, v in data.get("services_q", {}).items()}
+        mp.transfer_q = {k: float(v) for k, v in data.get("transfer_q", {}).items()}
+        mp.last_supply = {k: float(v) for k, v in data.get("last_supply", {}).items()}
         return mp
 
 
@@ -253,6 +323,31 @@ def set_active_kernel(kernel: Any) -> None:
 
 def active_kernel() -> Any:
     return ACTIVE_KERNEL
+
+
+def pay_service(amount_sol: int, sector_id: Optional[int] = None, institution: Optional[str] = None) -> None:
+    """
+    Nothing is thrown away: SOL a captain or company spends on a service reaches whoever provides it - the
+    starport of the sector where it was bought (cleared into local money), Sol Stardock when bought where
+    there is none, or - for institutions (``institution`` given: lobbying, jump gates, salvage) - the
+    Federal Reserve's treasury.
+    """
+    kernel = ACTIVE_KERNEL
+    if amount_sol <= 0 or kernel is None:
+        return
+    if institution is not None and getattr(kernel, "federal_reserve", None) is not None:
+        kernel.federal_reserve.receive(int(amount_sol), institution)
+        return
+    sec = kernel.sectors.get(sector_id) if sector_id is not None else None
+    port = sec.port if (sec is not None and sec.port is not None) else kernel.sectors[1].port
+    if port is None:
+        kernel.federal_reserve.receive(int(amount_sol), "services")
+        return
+    from xylarium.kernel import fx
+    if port.currency != "SOL" and fx.ACTIVE_FX is not None:
+        port.treasury += fx.ACTIVE_FX.swap_sol_to(port.currency, int(amount_sol))
+    else:
+        port.treasury += int(amount_sol)
 
 
 def set_active_policy(policy: Optional[MonetaryPolicy]) -> None:

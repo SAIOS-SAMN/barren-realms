@@ -317,6 +317,8 @@ class ResearchManager:
                     message=f"Decoding {anom.name} requires {cost_cr:,} Cr in computational sensor scans. You have {captain.credits:,} Cr.",
                 )
             captain.credits -= cost_cr
+            from xylarium.kernel import ledger as _ledger
+            _ledger.pay_service(cost_cr, captain.sector_id)   # the survey crews and instruments
             solved = True
 
         if solved:
@@ -549,6 +551,8 @@ class ResearchManager:
 
         old_sec = captain.sector_id
         captain.credits -= cost_cr
+        from xylarium.kernel import ledger as _ledger
+        _ledger.pay_service(cost_cr, institution="jump_gates")   # the gate authority
         if captain.id in kernel.sectors[old_sec].captains:
             kernel.sectors[old_sec].captains.remove(captain.id)
 

@@ -17,7 +17,6 @@ from xylarium.config import (
     CLEAVE_MIN_PARENT_CREDITS,
     CLEAVE_COOLDOWN_CYCLES,
     AI_CASH_RESERVE,
-    AI_FX_REPATRIATE_THRESHOLD,
     AI_CRITICAL_SHIELDS,
     AI_CRITICAL_FIGHTERS,
 )
@@ -135,10 +134,6 @@ class AIManager:
         if captain.faction_id and getattr(kernel, "factions", None) is not None:
             if kernel.factions.execute_faction_ai(kernel, captain):
                 return
-
-        # 0. Treasury management: bring material foreign-currency earnings home to SOL
-        if captain.fx_wallet and getattr(kernel, "fx_market", None) is not None:
-            kernel.fx_market.repatriate(captain, AI_FX_REPATRIATE_THRESHOLD)
 
         # 1. Self-maintenance & re-arming heuristic (P6)
         if cls._handle_ai_maintenance(kernel, captain, current_sector):
