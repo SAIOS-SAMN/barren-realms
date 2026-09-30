@@ -62,7 +62,7 @@ class SettlementChain:
                 if p.treasury or getattr(p, "household_purse", 0):
                     accounts[f"planet:{p.id}"] = [p.currency, p.treasury, getattr(p, "household_purse", 0)]
         for t, comp in kernel.market_manager.companies.items():
-            accounts[f"company:{t}"] = comp.treasury
+            accounts[f"company:{t}"] = [comp.treasury, getattr(comp, "home_currency", ""), getattr(comp, "home_cash", 0)]
         accounts["federal_reserve"] = kernel.federal_reserve.total_holdings
         banking = getattr(kernel, "banking", None)
         if banking is not None:

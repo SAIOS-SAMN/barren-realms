@@ -199,6 +199,10 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "fibres": __import__("xylarium.kernel.fibres", fromlist=["summary"]).summary(kernel),
         "credit": dict(getattr(kernel, "credit_stats", {}) or {}),
         "geology": __import__("xylarium.kernel.geology", fromlist=["horizons"]).horizons(kernel),
+        "propulsion": dict(getattr(kernel, "propulsion_stats", {}) or {}),
+        "industry": {"fabricated": {c: v for (k, c), v in kernel.matter.sources.items() if k == "fabrication"},
+                     "recycled_ore": kernel.matter.sources.get(("recycling", "ORE"), 0),
+                     "sector_gas": sum(getattr(s, "gas", 0) for s in kernel.sectors.values())},
     }
 
 
@@ -1687,6 +1691,11 @@ def print_report(r: Dict[str, Any]) -> None:
             g = ce["geology"]
             print(f"  geology: mined crusts {g['crust_remaining_mean']} remaining on average (lowest {g['crust_remaining_min']}), "
                   f"renewal / extraction {g['renewal_to_extraction']}, {g['stats']}")
+        if ce.get("propulsion"):
+            pr, ind = ce["propulsion"], ce.get("industry", {})
+            print(f"  propulsion: {pr.get('burned', 0):,} reaction mass burned, {pr.get('bunkered', 0):,} bunkered at ports, "
+                  f"{pr.get('coasted', 0):,} jumps coasted dry; drifting gas {ind.get('sector_gas', 0):,}")
+            print(f"  industry: fabricated {ind.get('fabricated', {})}, recycled to ore {ind.get('recycled_ore', 0):,}")
         if "fibres" in ce:
             fb = ce["fibres"]
             print(f"  fibres: {fb['passages']:,} passages, {fb['developed_lanes']} of {fb['lanes']} lanes developed, "

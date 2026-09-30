@@ -90,6 +90,10 @@ class NullSpaceManager:
         if total <= 0:
             return ActionResult(success=False, action=ActionType.MINE_ASTEROIDS,
                                 message="Ore holds are full. Return to port or deliver your work order.")
+        from xylarium.kernel import propulsion
+        scooped = propulsion.scoop(sector, captain)            # drifting exhaust gathered with the rock
+        if scooped:
+            mined["H"] = mined.get("H", 0)                       # (a transfer from the sector's gas)
         belt["reserve"] -= total
         # Mining is a conversion: belt rock becomes the elements the lasers pulled out of it
         matter.sink("mined", "BELT_ROCK", total)
@@ -119,6 +123,9 @@ class NullSpaceManager:
         for elem, qty in cargo.elements.items():
             if qty > 0:
                 spill[elem] = qty
+        if getattr(captain.ship, "fuel", 0) > 0:
+            spill["H"] = spill.get("H", 0) + captain.ship.fuel      # the bunker drifts with the wreck
+            captain.ship.fuel = 0
         cargo.ore = cargo.organics = cargo.equipment = 0
         cargo.elements = {}
         cargo.bonded = {}
@@ -149,6 +156,14 @@ class NullSpaceManager:
             matter.sink("vaporized", core, getattr(cargo, core.lower()) - spill.get(core, 0))
         for elem, qty in cargo.elements.items():
             matter.sink("vaporized", elem, qty - spill.get(elem, 0))
+        # The drive bunker ruptures: a share drifts as gas-laden debris, the rest burns in the explosion
+        fuel = getattr(captain.ship, "fuel", 0)
+        if fuel > 0:
+            kept = int(fuel * DEBRIS_CARGO_SHARE)
+            if kept:
+                spill["H"] = spill.get("H", 0) + kept
+            matter.sink("vaporized", "H", fuel - kept)
+            captain.ship.fuel = 0
         # The hull itself becomes scrap metal (hull mass is not in the census until it breaks apart)
         hull_value = SHIP_CATALOG.get(captain.ship.ship_type, {}).get("price", 0)
         scrap = max(2, int(hull_value / 1000 * HULL_SCRAP_PER_1000_CR))

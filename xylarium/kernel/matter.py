@@ -97,6 +97,7 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
             out[k]["total"] += q
 
     for cap in kernel.captains.values():
+        add("H", "bunkers", getattr(cap.ship, "fuel", 0))
         cg = cap.ship.cargo
         add("ORE", "holds", cg.ore)
         add("ORGANICS", "holds", cg.organics)
@@ -119,6 +120,7 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
                     add(comm, "tithes", n)
         for b in getattr(sec, "belts", []):
             add("BELT_ROCK", "belts", b.get("reserve", 0))
+        add("H", "sector_gas", getattr(sec, "gas", 0))
         for d in getattr(sec, "debris", []):
             for comm, n in d.get("cargo", {}).items():
                 add(comm, "debris", n)
@@ -189,6 +191,12 @@ def commission(captain: Any, kind: str = "commissioning") -> None:
         source(kind, comm, q)
     for el, q in cg.elements.items():
         source(kind, el, q)
+    # a new hull leaves the yard with its drive bunker full
+    from xylarium.kernel.propulsion import bunker_capacity
+    top = bunker_capacity(captain.ship) - getattr(captain.ship, "fuel", 0)
+    if top > 0:
+        captain.ship.fuel = getattr(captain.ship, "fuel", 0) + top
+        source(kind, "H", top)
 
 
 # ---------------------------------------------------------------------- audit mode

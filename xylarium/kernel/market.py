@@ -146,6 +146,8 @@ class Company:
     available_shares: int = 4000
     initial_shares: int = 0   # founding share count (caps secondary offerings); 0 = use total at first issue
     treasury: int = 5000
+    home_cash: int = 0         # operating books in the home world's money (colony sales in, wages/inputs/dividends out)
+    home_currency: str = ""    # that money (set from the home world)
     quarterly_revenue: int = 0
     last_dividend: int = 0
     dividend_rate: float = 0.08  # 8% of quarterly profits paid to shareholders
@@ -198,6 +200,8 @@ class Company:
             "available_shares": self.available_shares,
             "initial_shares": self.initial_shares,
             "treasury": self.treasury,
+            "home_cash": self.home_cash,
+            "home_currency": self.home_currency,
             "quarterly_revenue": self.quarterly_revenue,
             "last_dividend": self.last_dividend,
             "dividend_rate": self.dividend_rate,
@@ -232,6 +236,8 @@ class Company:
             available_shares=data.get("available_shares", 4000),
             initial_shares=data.get("initial_shares", 0),
             treasury=data.get("treasury", 5000),
+            home_cash=int(data.get("home_cash", 0)),
+            home_currency=data.get("home_currency", ""),
             quarterly_revenue=data.get("quarterly_revenue", 0),
             last_dividend=data.get("last_dividend", 0),
             dividend_rate=data.get("dividend_rate", 0.08),
@@ -893,11 +899,21 @@ class MarketManager:
         """
         from xylarium.kernel.economy import EconomyManager
         from xylarium.kernel.fx import ACTIVE_FX
+        from xylarium.kernel.colony import ColonyManager
         for comp in self.companies.values():
+            # Operating books in the home money: last season's takings are spent at the home region's starport
+            home = kernel.get_planet(comp.planet_id) if getattr(comp, "planet_id", None) else None
+            if comp.home_cash > 0 and home is not None:
+                home_port = ColonyManager._contractor_port(home, kernel)
+                if home_port is not None and home_port.currency == comp.home_currency:
+                    spend = comp.home_cash
+                    comp.home_cash = 0
+                    home_port.treasury += spend
+                    comp.last_outflow_q = int(ACTIVE_FX.to_sol_value(comp.home_currency, spend)) if (
+                        ACTIVE_FX and comp.home_currency != "SOL") else spend
+                    self._consume_inputs(home_port, spend)
             budget = int(max(0, comp.treasury - COMPANY_OPEX_RESERVE) * COMPANY_OPEX_RATE)
-            budget = min(comp.treasury, max(budget, int(getattr(comp, "home_revenue_q", 0))))
-            comp.home_revenue_q = 0
-            comp.last_outflow_q = max(0, budget)
+            comp.last_outflow_q = getattr(comp, "last_outflow_q", 0) + max(0, budget)
             if budget <= 0:
                 continue
             sec = kernel.sectors.get(comp.sector_id)
@@ -907,13 +923,18 @@ class MarketManager:
             comp.treasury -= budget
             local = ACTIVE_FX.swap_sol_to(port.currency, budget) if (port.currency != "SOL" and ACTIVE_FX) else budget
             port.treasury += local
-            for comm in ("EQUIPMENT", "ORE"):
-                _, unit = EconomyManager.get_unit_prices(port, comm)
-                if unit > 0:
-                    used = min(port.stock.get(comm, 0), (local // 2) // unit)
-                    port.stock[comm] = port.stock.get(comm, 0) - used
-                    from xylarium.kernel import matter
-                    matter.sink("company_inputs", comm, used)   # the firm's inputs, used up in its work
+            self._consume_inputs(port, local)
+
+    @staticmethod
+    def _consume_inputs(port: Any, local: int) -> None:
+        """What a firm's spending buys at a starport is used up in its work (equipment, ore)."""
+        from xylarium.kernel.economy import EconomyManager
+        for comm in ("EQUIPMENT", "ORE"):
+            _, unit = EconomyManager.get_unit_prices(port, comm)
+            if unit > 0:
+                used = min(port.stock.get(comm, 0), (local // 2) // unit)
+                port.stock[comm] = port.stock.get(comm, 0) - used
+                matter.sink("company_inputs", comm, used)
 
     @staticmethod
     def _local_price_level(currency: str) -> float:
@@ -3208,25 +3229,35 @@ class MarketManager:
                 # (a transfer from the colony vault). quarterly_revenue stays a reporting figure.
                 home = kernel.get_planet(comp.planet_id) if getattr(comp, "planet_id", None) else None
                 sales = 0
+                local = 0
                 if home is not None and home.treasury > 0:
                     local = min(int(home.treasury * COMPANY_COLONY_SALES_RATE),
                                 int(COMPANY_COLONY_SALES_CAP * self._local_price_level(home.currency)))
                     home.treasury -= local
-                    # Listed companies report in SOL: colony spending clears through the ISSE FX desk
+                    # A firm keeps its operating books in the money it earns: no conversion
+                    comp.home_currency = home.currency
+                    comp.home_cash += local
                     from xylarium.kernel.fx import ACTIVE_FX
-                    if home.currency != "SOL" and ACTIVE_FX is not None:
-                        sales = ACTIVE_FX.swap_to_sol(home.currency, local)
-                    else:
-                        sales = local
-                    comp.treasury += sales
+                    sales = int(ACTIVE_FX.to_sol_value(home.currency, local)) if (ACTIVE_FX and home.currency != "SOL") else local
                 comp.quarterly_revenue += sales
-                div_pool = int(sales * comp.dividend_rate)
-                # What the home region paid, less the owners' dividend, is spent back there next season
-                # (wages and inputs): a firm is a pass-through for its region's operating income
-                comp.home_revenue_q = max(0, sales - div_pool)
-                comp.last_outflow_q = getattr(comp, "last_outflow_q", 0) + div_pool
-                comp.last_dividend = round(div_pool / max(1, comp.total_shares))
+                div_local = int(local * comp.dividend_rate)
+                comp.last_outflow_q = getattr(comp, "last_outflow_q", 0) + int(sales * comp.dividend_rate)
+                comp.last_dividend = round(int(sales * comp.dividend_rate) / max(1, comp.total_shares))
                 comp.quarterly_revenue = 0  # Reset for next quarter
+                # Dividends are paid in the home money, pro rata, into the shareholders' wallets
+                if div_local > 0 and comp.home_currency:
+                    from xylarium.kernel.fx import credit as fx_credit
+                    for cap in kernel.captains.values():
+                        shares = getattr(cap, "portfolio", {}).get(ticker, 0)
+                        if shares <= 0:
+                            continue
+                        payout = min(div_local * shares // max(1, comp.total_shares), comp.home_cash)
+                        if payout <= 0:
+                            break
+                        comp.home_cash -= payout
+                        fx_credit(cap, comp.home_currency, payout)
+                        dividends_paid += int(ACTIVE_FX.to_sol_value(comp.home_currency, payout)) if (ACTIVE_FX and comp.home_currency != "SOL") else payout
+                div_pool = 0
 
                 # Disburse the dividend pool pro rata to captains holding shares, out of the company treasury
                 if div_pool > 0:

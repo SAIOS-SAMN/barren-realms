@@ -365,9 +365,9 @@ class SurfaceManager:
             ColonyManager._pay_local(planet, ledger.active_kernel(), cost_cr)
 
         if planet.ore_silo >= cost_ore:
-            planet.ore_silo -= cost_ore
+            matter.consume(planet, "ore_silo", "ORE", cost_ore, "construction")
         else:
-            captain.ship.cargo.ore -= cost_ore
+            matter.consume(captain.ship.cargo, "ore", "ORE", cost_ore, "construction")
 
         # Build
         tile.district = district
@@ -431,7 +431,7 @@ class SurfaceManager:
         if buyer is not None:
             ledger_debit_port_sol(buyer, salvage_cr)
         captain.credits += salvage_cr
-        planet.ore_silo += salvage_ore
+        matter.produce(planet, "ore_silo", "ORE", salvage_ore, "demolition_salvage")
 
         return ActionResult(
             success=True,
@@ -484,9 +484,9 @@ class SurfaceManager:
 
         captain.credits -= cost_cr
         if planet.ore_silo >= cost_ore:
-            planet.ore_silo -= cost_ore
+            matter.consume(planet, "ore_silo", "ORE", cost_ore, "troop_armor")
         else:
-            captain.ship.cargo.ore -= cost_ore
+            matter.consume(captain.ship.cargo, "ore", "ORE", cost_ore, "troop_armor")
 
         captain.troops += divisions
 
@@ -688,7 +688,7 @@ class SurfaceManager:
                         planet.treasury -= cost_cr
                         _pay_builders(planet, cost_cr)
                         if planet.ore_silo >= cost_ore:
-                            planet.ore_silo -= cost_ore
+                            matter.consume(planet, "ore_silo", "ORE", cost_ore, "construction")
                     elif has_ore_deficit and planet.treasury >= cost_cr:
                         target_district = DistrictType.MANTLE_BORE
                         ideal_tiles = [t for t in empty_tiles if t.terrain in [TerrainType.MOUNTAINS, TerrainType.MINERAL_RIDGE]]

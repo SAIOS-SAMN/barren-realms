@@ -97,6 +97,8 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     mm = kernel.market_manager
     for comp in mm.companies.values():
         add("SOL", "company_treasuries", getattr(comp, "treasury", 0))
+        if getattr(comp, "home_cash", 0):
+            add(comp.home_currency or "SOL", "company_treasuries", comp.home_cash)
     for c in mm.contracts.values():
         if c.status in ("OPEN", "IN_TRANSIT") and getattr(c, "escrow_amount", 0):
             add(getattr(c, "currency", "SOL"), "contract_escrow", c.escrow_amount)

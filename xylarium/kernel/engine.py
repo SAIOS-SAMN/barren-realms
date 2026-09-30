@@ -110,6 +110,7 @@ from xylarium.kernel import fibres as fibres_mod
 from xylarium.kernel import credit as credit_mod
 from xylarium.kernel import matter as matter_mod
 from xylarium.kernel import geology as geology_mod
+from xylarium.kernel import propulsion as propulsion_mod
 
 
 class GameKernel:
@@ -152,6 +153,8 @@ class GameKernel:
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
         self.research_manager.seed_initial_anomalies(self)
+        for cap in self.captains.values():     # the genesis fleets leave port fuelled
+            cap.ship.fuel = propulsion_mod.bunker_capacity(cap.ship)
         ledger_mod.endow_exchange_depth(self)  # exchanges as deep as the economies they serve
         geology_mod.survey(self)               # every world's crust is counted from the start
         self.monetary_policy.update(self)  # genesis reading sets each currency's supply target
@@ -726,6 +729,11 @@ class GameKernel:
         # Crew pay accrued at sea is spent ashore: settled into the docking port's treasury
         if captain.wages_due > 0:
             self._settle_wages(captain)
+        # ...and the drive bunker is topped up with the port's hydrogen
+        if not captain.faction_id or True:
+            dock = self.sectors.get(captain.sector_id)
+            if dock is not None and dock.port is not None and captain.ship.fuel < propulsion_mod.bunker_capacity(captain.ship):
+                propulsion_mod.bunker(self, captain, dock)
 
         # A hungry crew eats the moment rations come aboard rather than waiting for the next meal bell
         if result.success and captain.hunger > 0:
@@ -791,6 +799,8 @@ class GameKernel:
         # The fibre remembers the passage (traffic, and the goods' value on the lane's flow ledger)
         lane_cost = fibres_mod.cost(self, current_sector.id, destination)
         fibres_mod.record(self, captain, current_sector.id, destination)
+        # The drive burns reaction mass for the hull and its cargo; exhaust drifts where it was burned
+        coast_turns = propulsion_mod.jump(self, captain, current_sector)
 
         msg = f"Warp drive engaged. Navigated from Sector {current_sector.id} to Sector {destination}."
         logs = [msg]
@@ -860,8 +870,8 @@ class GameKernel:
             success=True,
             action=ActionType.MOVE,
             message=msg,
-            turns_spent=SHIP_CATALOG.get(captain.ship.ship_type, {}).get("move_turns", 1),
-            data={"new_sector": destination, "lane_cost": lane_cost},
+            turns_spent=SHIP_CATALOG.get(captain.ship.ship_type, {}).get("move_turns", 1) + coast_turns,
+            data={"new_sector": destination, "lane_cost": lane_cost, "coasted": bool(coast_turns)},
             logs=logs
         )
 
@@ -2255,12 +2265,15 @@ class GameKernel:
                 )
             captain.credits -= cost
             self._stardock_revenue(sector, cost)
+            iron_frame = propulsion_mod.refit(self, sector, captain.ship.ship_type, ship_name)
             captain.ship.ship_type = ship_name
-            captain.ship.cargo.capacity = cfg["holds"]
+            captain.ship.cargo.capacity = int(cfg["holds"] * (0.8 if iron_frame else 1.0))
             captain.ship.max_shields = cfg["max_shields"]
             captain.ship.shields = cfg["max_shields"]
             ExperienceManager.award(captain, "industry", XP_INDUSTRY_HULL_UPGRADE, self, key=f"hull:{ship_name}")
-            msg = f"COMMISSIONED NEW FLAGSHIP: {ship_name}! Holds: {cfg['holds']}, Shields: {cfg['max_shields']}."
+            msg = f"COMMISSIONED NEW FLAGSHIP: {ship_name}! Holds: {captain.ship.cargo.capacity}, Shields: {cfg['max_shields']}."
+            if iron_frame:
+                msg += " (Iron-frame build: the yard was short of titanium and steel - heavier, less hold space.)"
             return ActionResult(
                 success=True,
                 action=ActionType.SHIPYARD_PURCHASE,

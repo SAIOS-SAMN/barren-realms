@@ -862,12 +862,14 @@ class CartographyManager:
             if avail <= 0 and hasattr(captain.ship.cargo, "equipment") and matched_p_key == "U" and captain.ship.cargo.unbonded("EQUIPMENT") >= needed:
                 to_inject = min(amount, needed, captain.ship.cargo.unbonded("EQUIPMENT"))
                 captain.ship.cargo.equipment -= to_inject
+                matter.sink("catalysis", "EQUIPMENT", to_inject)
                 puzzle.applied_reagents[matched_p_key] = puzzle.applied_reagents.get(matched_p_key, 0) + to_inject
                 injected_any = True
                 injected_summary.append(f"{to_inject}x {matched_p_key} (from Tech Equipment)")
             elif avail > 0:
                 to_inject = min(amount, needed, avail)
                 cargo_elems[cargo_key] -= to_inject
+                matter.sink("catalysis", cargo_key, to_inject)
                 puzzle.applied_reagents[matched_p_key] = puzzle.applied_reagents.get(matched_p_key, 0) + to_inject
                 injected_any = True
                 injected_summary.append(f"{to_inject}x {matched_p_key}")

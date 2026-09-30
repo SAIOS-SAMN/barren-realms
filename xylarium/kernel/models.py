@@ -519,6 +519,7 @@ class Ship:
     shields: int
     max_shields: int
     fighters: int
+    fuel: int = 0            # hydrogen reaction mass in the drive bunker (not in the cargo holds)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -527,6 +528,7 @@ class Ship:
             "shields": self.shields,
             "max_shields": self.max_shields,
             "fighters": self.fighters,
+            "fuel": self.fuel,
         }
 
     @classmethod
@@ -534,6 +536,7 @@ class Ship:
         return cls(
             ship_type=data["ship_type"],
             cargo=CargoHold.from_dict(data["cargo"]),
+            fuel=int(data.get("fuel", 0)),
             shields=data["shields"],
             max_shields=data["max_shields"],
             fighters=data["fighters"],
@@ -1207,6 +1210,7 @@ class Sector:
     belts: List[Dict[str, Any]] = field(default_factory=list)    # asteroid belts (null space)
     debris: List[Dict[str, Any]] = field(default_factory=list)   # salvage fields from destroyed hulls
     sentries: Dict[str, int] = field(default_factory=dict)       # owner_id -> deployed sentry fighters
+    gas: int = 0                                                 # drive exhaust (hydrogen) drifting here: scoopable
 
     @property
     def is_null_space(self) -> bool:
@@ -1238,6 +1242,7 @@ class Sector:
             "belts": [dict(b, composition=dict(b.get("composition", {}))) for b in self.belts],
             "debris": [dict(d, cargo=dict(d.get("cargo", {}))) for d in self.debris],
             "sentries": dict(self.sentries),
+            "gas": self.gas,
         }
 
     @classmethod
@@ -1262,6 +1267,7 @@ class Sector:
             belts=[dict(b, composition=dict(b.get("composition", {}))) for b in data.get("belts", [])],
             debris=[dict(d, cargo=dict(d.get("cargo", {}))) for d in data.get("debris", [])],
             sentries={k: int(v) for k, v in data.get("sentries", {}).items()},
+            gas=int(data.get("gas", 0)),
         )
 
 
