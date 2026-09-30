@@ -36,7 +36,6 @@ from xylarium.kernel.subsystem import Subsystem, register
 
 register(Subsystem(
     name="realms",                 # its key in kernel.state
-    order=SEASON_ORDER["realms"],  # where it runs in the seasonal sequence
     state=lambda: {...},           # a fresh, JSON-shaped state record
     season=quarter,                # optional: kernel -> list of log lines, once per fiscal quarter
     genesis=genesis,               # optional: kernel -> None, once when the universe is made
@@ -44,9 +43,11 @@ register(Subsystem(
 ))
 ```
 
-The engine runs every registered `season` hook in `order`; the store saves and loads every subsystem's state;
-the harness reads every `summary`. A new subsystem is wired by registering it, not by editing the engine, the
-store and the harness.
+The fiscal quarter's order is one list, `subsystem.SEASON`; a seasonal hook must have a place in it. The engine
+runs the season with `subsystem.run_season` and genesis hooks with `subsystem.run_genesis`; the store saves
+`kernel.state` whole and calls every `restore` hook after a load; the harness reads `subsystem.summaries`. A new
+subsystem is wired by registering it, not by editing the engine, the store and the harness. Registration uses the
+name `register_subsystem` where a module has its own `register` (the workbench does).
 
 ### S2. Subsystem state lives in `kernel.state` (`xylarium/kernel/state.py`)
 
@@ -78,8 +79,10 @@ and `hulls.catalog(kernel)` (stock hulls plus the kernel's designs), never by wr
 
 ### S6. Player actions register their handlers (`xylarium/kernel/actions.py`)
 
-Each `ActionType` maps to one handler through a registry, with its turn cost declared beside it. The engine's
-`dispatch` looks the handler up; it does not grow a branch per command.
+Each `ActionType` maps to one handler through `actions.REGISTRY` (`@action(ActionType.X, turns=N)`), with its
+turn cost declared beside it. What a command *means* once done - deeds, filings at law, chronicle entries - is
+registered in `deeds.py` (`@before` reads the facts needed to judge it, `@after` applies its consequences). The
+engine's `dispatch` looks both up; it does not grow a branch per command.
 
 ### S7. The architecture is tested (`tests/test_architecture.py`)
 
@@ -88,7 +91,8 @@ The suite fails on:
 - lazy kernel state (`getattr(kernel, "...", None)` followed by assignment) outside `state.py`;
 - a write into `SHIP_CATALOG` or any other config table;
 - a seasonal hook called from the engine that is not registered;
-- `engine.py` growing beyond its line budget.
+- `engine.py` growing beyond its line budget (2,800 lines);
+- a per-command branch chain in the engine.
 
 ## 3. Definition of done
 
@@ -102,8 +106,9 @@ A change is done when:
    `xylarium_save.json` is never committed.
 
 A refactor (no intended change to the game) additionally proves it changed nothing: a fixed-seed run produces the
-same fingerprint before and after (captains, worlds, ports, money, matter, claims, chronicle). This is a tool for
-restructuring only; ordinary prototype work is judged by the laws.
+same fingerprint before and after (`tools/fingerprint.py <seed> <cycles> <out.json>` on seeds 7 and 1337: captains,
+worlds, ports, money, matter, claims, chronicle). This is a tool for restructuring only; ordinary prototype work is
+judged by the laws.
 
 ## 4. Style
 

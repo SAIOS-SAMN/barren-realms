@@ -450,6 +450,8 @@ class ResearchManager:
         # Sort warps
         for s_id in new_sector_ids:
             kernel.sectors[s_id].warps = sorted(list(set(kernel.sectors[s_id].warps)))
+        from xylarium.kernel import topology
+        topology.changed(kernel)
 
         # Lay out star systems and null space exactly like the core galaxy
         from xylarium.kernel.universe import furnish_sectors

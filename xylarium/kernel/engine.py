@@ -121,6 +121,7 @@ from xylarium.kernel import government as government_mod
 from xylarium.kernel import shipdesign as shipdesign_mod
 from xylarium.kernel import realms as realms_mod
 from xylarium.kernel import actions as actions_mod
+from xylarium.kernel import deeds as deeds_mod
 from xylarium.kernel import subsystem
 from xylarium.kernel.subsystem import Subsystem
 
@@ -385,7 +386,7 @@ class GameKernel:
         refusal = alignment_mod.vow_forbids(captain, action, kwargs, self)
         if refusal:
             return ActionResult(success=False, action=action, message=refusal)
-        pre = self._moral_prestate(captain, current_sector, action, kwargs)
+        pre = deeds_mod.prestate(self, captain, current_sector, action, kwargs)
 
         # Dispatch to the registered command (actions.py)
         registered = actions_mod.entry(action)
@@ -436,7 +437,7 @@ class GameKernel:
 
         # Deeds have moral weight; milestones write history
         if result.success:
-            self._moral_consequences(captain, current_sector, action, kwargs, result, pre)
+            deeds_mod.consequences(self, captain, current_sector, action, kwargs, result, pre)
 
         if result.logs:
             for log in result.logs:
@@ -1566,111 +1567,6 @@ class GameKernel:
         }
 
     # ------------------------------------------------------------------ alignment & chronicles
-    def _moral_prestate(self, captain: Captain, sector: Sector, action: ActionType, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Facts needed to judge a deed after it happens (the target's standing, a planet's owner, an artifact)."""
-        pre: Dict[str, Any] = {}
-        if action in (ActionType.ATTACK_SHIP, ActionType.TACTICAL_COMBAT):
-            target = self.captains.get(kwargs.get("target_id"))
-            if target is not None:
-                pre["target"] = target
-                pre["target_wanted"] = target.bounty > 0 or getattr(target.personality, "value", "") in ("pirate", "crusader")
-                pre["target_hull"] = target.ship.ship_type
-                pre["target_sector"] = target.sector_id
-                pre["target_credits"] = target.credits
-        elif action == ActionType.ATTACK_PLANET:
-            planet = self._find_planet(sector, kwargs.get("planet_id"))
-            if planet is not None:
-                pre["planet"] = planet
-                pre["owner"] = planet.owner_id
-        elif action == ActionType.SELL_ARTIFACT:
-            art = next((a for a in captain.artifacts if a.get("id") == kwargs.get("artifact_id")), None)
-            pre["provenance"] = art.get("provenance") if art else None
-        elif action == ActionType.SCAN_SPACE:
-            pre["belts_known"] = len(captain.scanned_belts)
-        pre["hull"] = captain.ship.ship_type
-        pre["sector_id"] = captain.sector_id
-        return pre
-
-    def _moral_consequences(self, captain: Captain, sector: Sector, action: ActionType, kwargs: Dict[str, Any],
-                            result: ActionResult, pre: Dict[str, Any]) -> None:
-        deed = alignment_mod.deed
-        if action == ActionType.MOVE:
-            chronicle_mod.note_jump(self, captain)
-        elif action == ActionType.TRADE:
-            deed(self, captain, "fair_trade")
-        elif action == ActionType.FREIGHT_DELIVER:
-            kind = "extraction_delivered" if "EXTRACTION" in (result.message or "").upper() else "freight_delivered"
-            deed(self, captain, kind)
-            chronicle_mod.note_freight(self, captain)
-        elif action == ActionType.IDEOLOGY_AID_DISPATCH:
-            deed(self, captain, "famine_aid")
-        elif action in (ActionType.STUDY_ARTIFACT, ActionType.ANOMALY_INVESTIGATE, ActionType.CARTOGRAPHY_SOLVE):
-            deed(self, captain, "knowledge")
-            if action == ActionType.ANOMALY_INVESTIGATE and random.random() < 0.3:
-                chronicle_mod.log_discovery(self, captain, "a cosmic anomaly's secrets")
-        elif action == ActionType.SCAN_SPACE:
-            if len(captain.scanned_belts) > pre.get("belts_known", 0):
-                deed(self, captain, "belt_charted")
-        elif action == ActionType.EXCAVATE:
-            finds = result.data.get("finds") or []
-            if finds:
-                looted = any(f.get("provenance") == "unlicensed" for f in finds)
-                deed(self, captain, "looted_dig" if looted else "licensed_dig")
-                relic = next((f for f in finds if f.get("kind") == "TECH_RELIC"), None)
-                if relic and random.random() < 0.5:
-                    chronicle_mod.log_discovery(self, captain, f"the {relic.get('name', 'relic')}")
-        elif action == ActionType.SELL_ARTIFACT:
-            if pre.get("provenance") == "unlicensed":
-                deed(self, captain, "black_market_sale")
-        elif action == ActionType.BANK_TRANSACTION and str(kwargs.get("sub_action", "")).lower() == "repay":
-            deed(self, captain, "loan_repaid")
-        elif action in (ActionType.ATTACK_SHIP, ActionType.TACTICAL_COMBAT) and "target" in pre:
-            if pre.get("target_wanted"):
-                deed(self, captain, "justice")
-            elif captain.faction_id is None:
-                deed(self, captain, "piracy")
-                if any("[HOSTILE ACT]" in l for l in (result.logs or [])):
-                    deed(self, captain, "hostile_act")
-                # Piracy is a case at law where it happened: the harm is what the victim lost
-                victim = pre["target"]
-                harm = max(500, pre.get("target_credits", 0) - victim.credits)
-                law_mod.file(self, "piracy", captain, sector, harm, {"kind": "captain", "id": victim.id})
-            target = pre["target"]
-            if target.ship.ship_type != pre.get("target_hull") or target.sector_id != pre.get("target_sector"):
-                if target.sector_id == 1 and pre.get("target_sector") != 1:
-                    chronicle_mod.log_loss(self, target, captain.name, pre.get("target_sector", 1), pre.get("target_hull", "ship"))
-                    if target.faction_id:
-                        target.alignment_record["retire"] = True  # faction warships are lost, not respawned
-        elif action == ActionType.ATTACK_PLANET and "planet" in pre:
-            planet = pre["planet"]
-            if planet.owner_id == captain.id and pre.get("owner") != captain.id:
-                deed(self, captain, "conquest")
-                chronicle_mod.annals_conquest(self, planet, str(pre.get("owner")), captain)
-                planet.siege = None
-            else:
-                deed(self, captain, "bombardment")
-                siege = planet.siege or {"start": self.cycle_count, "assaults": 0, "attackers": []}
-                siege["assaults"] += 1
-                siege["last"] = self.cycle_count
-                if captain.name not in siege["attackers"]:
-                    siege["attackers"].append(captain.name)
-                planet.siege = siege
-        elif action == ActionType.PLANET_CLAIM:
-            planet = next((p for p in sector.planets if p.owner_id == captain.id), None)
-            if planet is not None:
-                chronicle_mod.annals_colony_founded(self, planet, captain)
-                lineage_mod.on_colony_founded(self, captain, planet)
-        elif action == ActionType.PHYLOGENY_ASCEND:
-            node = self.phylogeny_manager.get_node(captain.phylogeny_node_id) if captain.phylogeny_node_id else None
-            if node is not None:
-                chronicle_mod.log_ascension(self, captain, node.name, node.tier)
-        elif action == ActionType.COVERT_OP:
-            deed(self, captain, "piracy", scale=0.5)
-        heresy = self.factions.heresy_check(self, captain, action, kwargs, result)
-        if heresy:
-            result.logs = (result.logs or []) + [heresy]
-            result.message += " " + heresy
-
     def _handle_library(self, captain: Captain, sector: Sector, kwargs: Dict[str, Any]) -> ActionResult:
         """The Galactic Library console: browse the chronicles of captains, worlds, peoples and powers."""
         if sector.port is None and not any(p.population > 0 for p in sector.planets):

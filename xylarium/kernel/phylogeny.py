@@ -1169,6 +1169,8 @@ class PhylogenyManager:
                 deep_secs = [s.id for s in kernel.sectors.values() if s.id not in sec.warps and s.id != sec.id]
                 new_warp = random.choice(deep_secs) if deep_secs else 99
                 sec.warps.append(new_warp)
+                from xylarium.kernel import topology
+                topology.changed(kernel)
                 collapsed = 0
                 for planet in getattr(sec, "planets", []):
                     if getattr(planet, "owner_id", None) != captain.id and getattr(planet, "shields", 0) > 0:

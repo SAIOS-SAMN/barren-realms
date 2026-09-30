@@ -6,6 +6,7 @@ and permanent unlocking of Ghost Sectors and Smuggler Shortcuts.
 
 import random
 from typing import Dict, List, Optional, Any, Tuple
+from xylarium.kernel import topology
 from xylarium.kernel import matter
 from xylarium.kernel.models import (
     ActionType,
@@ -580,6 +581,7 @@ class CartographyManager:
                 if 105 not in kernel.sectors[65].warps:
                     kernel.sectors[65].warps.append(105)
                     kernel.sectors[65].warps.sort()
+                topology.changed(kernel)
 
             unlock_message = (
                 "★ CARTOGRAPHIC BREAKTHROUGH: Black-Market Nexus Discovered! "
@@ -642,6 +644,7 @@ class CartographyManager:
                 if 106 not in kernel.sectors[92].warps:
                     kernel.sectors[92].warps.append(106)
                     kernel.sectors[92].warps.sort()
+                topology.changed(kernel)
 
             unlock_message = (
                 "★ CARTOGRAPHIC BREAKTHROUGH: Precursor Salvage Vault Discovered! "
@@ -659,6 +662,7 @@ class CartographyManager:
                 if 10 not in kernel.sectors[70].warps:
                     kernel.sectors[70].warps.append(10)
                     kernel.sectors[70].warps.sort()
+                topology.changed(kernel)
 
             unlock_message = (
                 "★ CARTOGRAPHIC BREAKTHROUGH: Smuggler Shortcut Established! "

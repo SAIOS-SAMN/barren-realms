@@ -43,6 +43,7 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from xylarium.kernel import hulls
 from xylarium.kernel.engine import GameKernel
+from xylarium.kernel import subsystem
 from xylarium.kernel.models import ActionType
 from xylarium.persistence.store import StatePersistence
 from xylarium.config import CAPTAIN_RATIONS, COLONY_KIT_CREDITS, COLONY_KIT_EQUIPMENT, PRICE_LEVEL
@@ -197,16 +198,10 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "chronicle_kinds": dict(kernel.chronicle.counts),
         "demography": _demography_census(kernel),
         "physics": __import__("xylarium.kernel.physics", fromlist=["summary"]).summary(kernel.sectors),
-        "fibres": __import__("xylarium.kernel.fibres", fromlist=["summary"]).summary(kernel),
-        "credit": dict(__import__("xylarium.kernel.credit", fromlist=["_stats"])._stats(kernel)),
-        "geology": __import__("xylarium.kernel.geology", fromlist=["horizons"]).horizons(kernel),
-        "propulsion": dict(__import__("xylarium.kernel.propulsion", fromlist=["_stats"])._stats(kernel)),
-        "law": __import__("xylarium.kernel.law", fromlist=["summary"]).summary(kernel),
-        "crime": dict(__import__("xylarium.kernel.crime", fromlist=["stats"]).stats(kernel)),
+        # every registered subsystem's summary (credit, geology, propulsion, law, crime, fibres, fertility, luxury,
+        # tourism, realms, government, workbench, ...) - a new subsystem appears here by registering one
+        **{k: (dict(v) if isinstance(v, dict) else v) for k, v in subsystem.summaries(kernel).items()},
         "society": _society_census(kernel),
-        "government": __import__("xylarium.kernel.government", fromlist=["summary"]).summary(kernel),
-        "workbench": __import__("xylarium.kernel.shipdesign", fromlist=["summary"]).summary(kernel),
-        "realms": __import__("xylarium.kernel.realms", fromlist=["summary"]).summary(kernel),
         "industry": {"fabricated": {c: v for (k, c), v in kernel.matter.sources.items() if k == "fabrication"},
                      "recycled_ore": kernel.matter.sources.get(("recycling", "ORE"), 0),
                      "sector_gas": sum(getattr(s, "gas", 0) for s in kernel.sectors.values())},
@@ -215,7 +210,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
 
 def _society_census(kernel: GameKernel) -> Dict[str, Any]:
     """Fertility, luxury and tourism, and the output (GDP) they are measured against."""
-    from xylarium.kernel import fertility, luxury, tourism, ledger
+    from xylarium.kernel import ledger
     from xylarium.kernel.fx import ACTIVE_FX
     pol = ledger.ACTIVE_POLICY
     # GDP by the income approach: what the worlds' households and governments earned - colony earnings, export
@@ -226,8 +221,9 @@ def _society_census(kernel: GameKernel) -> Dict[str, Any]:
     worlds = [p for s in kernel.sectors.values() for p in s.planets if p.population > 0 and not p.natives]
     total = sum(p.population for p in worlds)
     daughters = sum(p.population for p in worlds if p.metropole_id)
-    return {"fertility": fertility.summary(kernel), "luxury": luxury.summary(kernel),
-            "tourism": tourism.summary(kernel), "gdp_sol": round(gdp),
+    sums = subsystem.summaries(kernel)
+    return {"fertility": sums["fertility"], "luxury": sums["luxury"],
+            "tourism": sums["tourism"], "gdp_sol": round(gdp),
             "daughter_share": round(daughters / total, 4) if total else 0.0}
 
 
