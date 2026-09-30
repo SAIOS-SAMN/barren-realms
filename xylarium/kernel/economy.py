@@ -175,6 +175,12 @@ class EconomyManager:
             buy_price = max(1, min(sell_price - 1, int(round(buy_price * factor))))
         # Balance sheet: cash-rich ports bid up for goods, cash-poor ports bid down
         buy_price = max(1, min(sell_price - 1, int(round(buy_price * cls.liquidity_factor(port)))))
+        if matched_comm.startswith("LUX_"):
+            from xylarium.kernel import luxury
+            prem = luxury.council_bid_multiplier(port, matched_comm)
+            if prem > 1.0:
+                buy_price = int(round(buy_price * prem))
+                sell_price = max(sell_price, buy_price + 2)
         return (buy_price, sell_price)
 
     @staticmethod
@@ -596,6 +602,11 @@ class EconomyManager:
                     port.consumed[comm] = port.consumed.get(comm, 0) + (curr_s - new_s)
                     port.stock[comm] = new_s
                     matter.sink("regional_industry", comm, curr_s - new_s)
+        from xylarium.kernel import luxury
+        for comm in luxury.LUXURY_TYPES:
+            room = luxury.port_room(port, comm)
+            port.buys[comm] = (room > 0)
+            port.sells[comm] = (port.stock.get(comm, 0) > 0)
         cls._recycle_slag(port)
 
     @staticmethod

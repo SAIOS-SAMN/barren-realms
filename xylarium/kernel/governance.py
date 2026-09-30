@@ -118,7 +118,9 @@ class SenateManager:
         current_cycle: int = 0,
         next_election_cycle: int = SENATE_ELECTION_INTERVAL,
     ):
-        self.federal_treasury: int = federal_treasury
+        # The federal treasury is the Federation's vault (counted money, government.py) once bound to a kernel
+        self.kernel: Any = None
+        self._treasury: int = federal_treasury
         self.current_cycle: int = current_cycle
         self.next_election_cycle: int = next_election_cycle
 
@@ -166,6 +168,38 @@ class SenateManager:
             o.value: {} for o in SenateOffice
         }
         self.active_edicts: List[ActiveEdict] = active_edicts if active_edicts is not None else []
+
+    def bind(self, kernel: Any, genesis: bool = False) -> None:
+        """Back the federal treasury with the Federation's vault. At genesis the founding treasury is placed there
+        (genesis stock, before the money baseline); a loaded game's vault is already restored with the factions."""
+        self.kernel = kernel
+        fed = kernel.factions.factions.get("FEDERATION") if (kernel is not None and hasattr(kernel, "factions")) else None
+        if fed is not None and genesis:
+            fed.vault["SOL"] = fed.vault.get("SOL", 0) + self._treasury
+
+    def _fed(self) -> Any:
+        k = self.kernel
+        return k.factions.factions.get("FEDERATION") if k is not None and hasattr(k, "factions") else None
+
+    @property
+    def federal_treasury(self) -> int:
+        fed = self._fed()
+        return int(fed.vault.get("SOL", 0)) if fed is not None else self._treasury
+
+    @federal_treasury.setter
+    def federal_treasury(self, value: int) -> None:
+        fed = self._fed()
+        if fed is not None:
+            fed.vault["SOL"] = int(value)
+        else:
+            self._treasury = int(value)
+
+    def _pay_planet(self, planet: Any, sol: int) -> None:
+        """A SOL payout to a world lands in its own money (cleared through the exchanges)."""
+        cur = getattr(planet, "currency", "SOL")
+        if cur != "SOL" and self.kernel is not None:
+            sol = self.kernel.fx_market.swap_sol_to(cur, sol)
+        planet.treasury += sol
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -331,7 +365,8 @@ class SenateManager:
             for c in captains:
                 c.credits += payout
             for p in planets:
-                p.treasury += payout
+                self._pay_planet(p, payout)
+            self.federal_treasury -= pool - payout * num_targets     # the rounding stays in the treasury
 
             active = ActiveEdict(
                 edict=edict,

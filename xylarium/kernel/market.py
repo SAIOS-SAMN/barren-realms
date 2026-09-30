@@ -333,6 +333,9 @@ class FreightContract:
         )
 
 
+_STOCK_KEY = {k.upper(): k for k in COMMODITY_CONFIG}       # warehouse keys are the commodity table's spelling
+
+
 def ledger_pay(amount: int, sector_id: Optional[int] = None, institution: Optional[str] = None) -> None:
     from xylarium.kernel import ledger
     ledger.pay_service(amount, sector_id, institution)
@@ -628,8 +631,10 @@ class MarketManager:
                 comm = random.choice(commodities)
 
             # The goods are bought where they are: an origin port (not the destination's) that stocks them
+            key = _STOCK_KEY.get(comm.upper(), comm)
+
             def stocked(p: Any) -> int:
-                return max((v for k, v in p.stock.items() if k.upper() == comm.upper()), default=0)
+                return p.stock.get(key, 0)
             sources = [p for p in ports if p.sector_id != dest_sector and stocked(p) >= 10]
             if not sources:
                 continue
@@ -877,6 +882,12 @@ class MarketManager:
             if cost <= 0:
                 continue
             port.treasury -= cost
+            # The starport is government property: a share of its seasonal surplus is paid to its government
+            # as dues (a syndicate free port in the Deep Void keeps it all for its region)
+            from xylarium.kernel import government
+            dues = int(cost * government.PORT_DUES_SHARE)
+            if government.pay_government(kernel, sec, port.currency, dues, "starport_dues") != "none":
+                cost -= dues
             region = [p for p in MarketManager._regional_worlds(kernel, sec.id, port.currency, PORT_RETAIL_RADIUS)] or \
                      [p for p in sec.planets if p.population > 0 and p.currency == port.currency]
             if not region:
@@ -3315,14 +3326,15 @@ class MarketManager:
         - When an ISSE corporation's liquid treasury >= 50,000 Cr, commissions a corporate enforcer / patrol ship.
         - When pirate threat spikes or uncollected bounties mount, Sol Federation commissions independent Bounty Hunters.
         """
-        if not kernel or len(kernel.captains) >= MAX_AI_CAPTAINS:
+        from xylarium.kernel import populace
+        if not kernel or not populace.room_for_captain(kernel):
             return []
 
         spawned_names = []
 
         # 1. Corporate Enforcers
         for comp in self.companies.values():
-            if len(kernel.captains) >= MAX_AI_CAPTAINS:
+            if not populace.room_for_captain(kernel):
                 break
 
             if comp.treasury >= CORPORATE_ENFORCER_TREASURY:

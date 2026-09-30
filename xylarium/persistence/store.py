@@ -53,6 +53,11 @@ class StatePersistence:
                 "luxury_stats": getattr(kernel, "luxury_stats", None),
                 "tourism_stats": getattr(kernel, "tourism_stats", None),
                 "charters": getattr(kernel, "charters", None),
+                "offices": getattr(kernel, "offices", None),
+                "government_stats": getattr(kernel, "government_stats", None),
+                "ship_designs": getattr(kernel, "ship_designs", None),
+                "design_stats": getattr(kernel, "design_stats", None),
+                "base_systems": getattr(kernel, "_base_systems", None),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -156,8 +161,10 @@ class StatePersistence:
 
             if data.get("governance"):
                 kernel.governance_manager = SenateManager.from_dict(data["governance"])
+                kernel.governance_manager.bind(kernel)
             else:
                 kernel.governance_manager = SenateManager()
+                kernel.governance_manager.bind(kernel)
 
             kernel.surface_manager = SurfaceManager()
             # Stateless DAG singleton; per-captain phylogeny state is persisted on each Captain
@@ -196,9 +203,14 @@ class StatePersistence:
                 kernel.docket = data["docket"]
             if data.get("crime_stats"):
                 kernel.crime_stats = data["crime_stats"]
-            for key in ("fertility_stats", "luxury_stats", "tourism_stats", "charters"):
+            for key in ("fertility_stats", "luxury_stats", "tourism_stats", "charters", "offices", "government_stats",
+                        "ship_designs", "design_stats"):
                 if data.get(key):
                     setattr(kernel, key, data[key])
+            from xylarium.kernel import shipdesign
+            shipdesign.restore(kernel)
+            if data.get("base_systems"):
+                kernel._base_systems = data["base_systems"]
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))

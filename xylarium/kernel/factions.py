@@ -358,6 +358,38 @@ class FactionManager:
                 p.currency = faction.currency
                 p.treasury = int(rng.randint(3000, 9000) * level)
                 faction.worlds.append(p.id)
+            if key == "IMPERIUM":
+                # The heartland is settled: every habitable free world of the Imperium's systems holds a colony
+                from xylarium.config import DAUGHTER_MIN_HABITABILITY
+                for sid in systems:
+                    for w in kernel.sectors[sid].planets:
+                        if w.civilization is not None or w.owner_id or w.population > 0 or w.faction_id:
+                            continue
+                        outpost = habitability("biotic", w.planet_type) < DAUGHTER_MIN_HABITABILITY
+                        if outpost and w.planet_type in ("GAS_GIANT", "ROGUE"):
+                            continue
+                        # hostile worlds are held as domed outposts: their people live in enclosed habitats
+                        world_specs.append((w, rng.randint(800, 2000) if outpost else rng.randint(1500, 5000), 1))
+                        if outpost:
+                            w.habitats = 2
+                        civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
+                        civ.faction_id, civ.alignment, civ.dogma = key, faction.alignment, faction.dogma
+                        civ.home_type, civ.light_optimum = "TERRESTRIAL", "1/1"   # Terran-born, wherever they live
+                        w.civilization, w.faction_id = civ, key
+                        w.name = f"{names[len(world_specs) % len(names)]} {'Outpost' if outpost else 'Colony'}"
+                        w.population = world_specs[-1][1]
+                        w.citadel_level = 1
+                        w.habitability = habitability("biotic", w.planet_type)
+                        w.shields = w.max_shields = 400
+                        w.fighters, w.garrison_troops, w.morale = 60, 150, 85
+                        w.ore_silo, w.organics_silo = rng.randint(100, 300), rng.randint(200, 500)
+                        w.element_reserves.update({"Fe": rng.randint(30, 90), "Ti": rng.randint(10, 40)})
+                        from xylarium.kernel.natives import release_tribute
+                        release_tribute(w, inherit=True)
+                        w.natives, w.ruins = None, None
+                        w.currency = faction.currency
+                        w.treasury = int(rng.randint(1500, 4000) * level)
+                        faction.worlds.append(w.id)
             faction.capital_planet = world_specs[0][0].id
             if key == "IMPERIUM" and len(world_specs) > 1:
                 faction.fortress_planet = world_specs[1][0].id
@@ -567,7 +599,7 @@ class FactionManager:
 
     def _commission_imperial(self, kernel: Any, f: Faction, fortress: Planet) -> List[str]:
         live = [c for c in f.fleet if c in kernel.captains]
-        if len(live) >= IMPERIUM_FLEET_MAX or sum(1 for c in kernel.captains.values() if c.is_ai) >= MAX_AI_CAPTAINS:
+        if len(live) >= IMPERIUM_FLEET_MAX or not __import__("xylarium.kernel.populace", fromlist=["room_for_ai"]).room_for_ai(kernel):
             return []
         stock = {"Fe": fortress.element_reserves.get("Fe", 0), "Ti": fortress.element_reserves.get("Ti", 0),
                  "ORE": fortress.ore_silo}
@@ -669,7 +701,7 @@ class FactionManager:
         worlds = self.worlds(kernel, "ZEALOT")
         if not worlds or len(live) >= ZEALOT_FLEET_MAX:
             return []
-        if sum(1 for c in kernel.captains.values() if c.is_ai) >= MAX_AI_CAPTAINS:
+        if not __import__("xylarium.kernel.populace", fromlist=["room_for_ai"]).room_for_ai(kernel):
             return []
         if self.vault_sol(kernel, f) < ZEALOT_CRUSADER_COST * 1.3:
             return []

@@ -5,9 +5,9 @@ Resorts
   * Pleasure Domes ([RC] RESORT_DOME surface districts): a colony council raises one on an open tile when its
     people are provided for and it can pay the region's contractors; more as its beds fill. A dome drinks
     water each season (pools, gardens, spas) and closes while dry. Receipts go to the world's vault.
-  * Orbital leisure stations: a starport that has carried tourists for several seasons builds one from its own
-    treasury, paying the region's households as builders and consuming hull metal; receipts go to the port
-    (and on to the region through its payroll).
+  * Commercial orbital stations (private property - the starport is the government's, government.py): an investor
+    builds one at a world whose beds turn travellers away, paying the region's builders and the hull metal; its
+    receipts go to the owner, less the commercial tax to the system's government.
 
 Tier 1 - mass tourism (an abstracted flow along the lanes)
   Households of spacefaring worlds spend part of what is left after the basket and luxuries on travel. They
@@ -150,35 +150,64 @@ def _water_resorts(kernel: Any, planet: Any) -> None:
         planet.society["resort_dry"] = True
 
 
-def _build_station(kernel: Any, sec: Any, st: Dict[str, Any]) -> Optional[str]:
+def station(planet: Any) -> Optional[Dict[str, Any]]:
+    return planet.society.get("station")
+
+
+def station_cost(planet: Any) -> int:
+    return int(ORBITAL_STATION_COST * PRICE_LEVEL.get(planet.currency, 1.0))
+
+
+def build_station(kernel: Any, investor: Any, planet: Any) -> str:
+    """A private orbital station at a world: the investor pays the region's builders (a transfer) and the hull
+    metal comes out of the system starport's warehouse (a declared sink); the station is the investor's."""
+    if station(planet) is not None:
+        raise ValueError(f"{planet.name} already has an orbital station.")
+    if planet.population <= 0 or getattr(planet, "natives", None):
+        raise ValueError("Stations are built over peopled worlds (their guests need somewhere to go).")
+    sec = kernel.sectors[planet.sector_id]
     port = sec.port
-    lz = port.leisure
-    if lz.get("berths", 0) > 0 or lz.get("flow_seasons", 0) < ORBITAL_STATION_MIN_FLOW:
-        return None
-    from xylarium.config import PORT_START_TREASURY, PORT_OPEX_FLOOR
-    level = PRICE_LEVEL.get(port.currency, 1.0)
-    cost = int(ORBITAL_STATION_COST * level)
-    floor = int(PORT_START_TREASURY * level * PORT_OPEX_FLOOR)
-    if port.treasury < cost + floor:
-        return None
-    if any(port.stock.get(m, 0) < q for m, q in STATION_METAL.items()):
-        return None
-    builders = [p for p in sec.planets if p.population > 0 and not getattr(p, "natives", None)]
-    if not builders:
-        return None
-    # The region's households build it (wages are a transfer); the hull metal comes from the port's warehouse
-    port.treasury -= cost
-    share = cost // len(builders)
-    for i, p in enumerate(builders):
-        pay = share + (cost - share * len(builders) if i == 0 else 0)
-        p.household_purse += _convert(kernel, port.currency, p.currency, pay)
+    if port is None or any(port.stock.get(m, 0) < q for m, q in STATION_METAL.items()):
+        raise ValueError("The system's yards lack the hull metal (Fe, Ti) for a station.")
+    from xylarium.kernel import fx
+    cost_local = station_cost(planet)
+    cost_sol = int(_sol(planet.currency, cost_local)) + 1
+    if investor.credits < cost_sol:
+        raise ValueError(f"A station at {planet.name} costs {cost_sol:,} Cr.")
+    investor.credits -= cost_sol
+    # the region's builders are paid (households of the world; the port's contractors take the rest)
+    local = _convert(kernel, "SOL", planet.currency, cost_sol)
+    planet.household_purse += local // 2
+    port.treasury += _convert(kernel, planet.currency, port.currency, local - local // 2)
     for m, q in STATION_METAL.items():
         port.stock[m] -= q
         matter.sink("construction", m, q)
-    lz["berths"] = ORBITAL_BERTHS_PER_STATION
-    lz["built_cycle"] = kernel.cycle_count
-    st["stations_built"] += 1
-    return f"[TOURISM] {port.name} opened an orbital leisure station ({ORBITAL_BERTHS_PER_STATION:,} berths)."
+    planet.society["station"] = {"owner": investor.id, "berths": ORBITAL_BERTHS_PER_STATION,
+                                 "built": kernel.cycle_count, "receipts": 0, "booked": 0}
+    stats(kernel)["stations_built"] += 1
+    _ = fx
+    return f"{investor.name} opened a commercial orbital station over {planet.name} ({ORBITAL_BERTHS_PER_STATION:,} berths)."
+
+
+def _invest(kernel: Any, st: Dict[str, Any]) -> Optional[str]:
+    """Where travellers were turned away last season, an investor with patient capital builds a station."""
+    from xylarium.kernel.cognition import temperament
+    wanted = [p for s in kernel.sectors.values() for p in s.planets
+              if p.society.get("turned_away", 0) > ORBITAL_BERTHS_PER_STATION // 4 and station(p) is None
+              and p.population > 0 and not getattr(p, "natives", None)]
+    if not wanted:
+        return None
+    site = max(wanted, key=lambda p: p.society.get("turned_away", 0))
+    cost_sol = _sol(site.currency, station_cost(site))
+    investors = [c for c in kernel.captains.values() if c.is_ai and not c.faction_id and c.credits >= 4 * cost_sol
+                 and temperament(c, kernel).get("horizon", 1.0) >= 1.0]
+    if not investors:
+        return None
+    who = max(investors, key=lambda c: c.credits * temperament(c, kernel).get("horizon", 1.0))
+    try:
+        return "[TOURISM] " + build_station(kernel, who, site)
+    except ValueError:
+        return None
 
 
 # ---------------------------------------------------------------------- tier 1: mass tourism
@@ -220,13 +249,33 @@ def destinations(kernel: Any, planet: Any) -> List[Tuple[float, str, Any, int]]:
             novelty = (1.5 if biosphere.metabolism_of(kernel, w) != home else 0.5) * (
                 1.2 if w.planet_type != planet.planet_type else 1.0)
             out.append((cap * novelty * safety * near * cheapness(w.currency), "resort", w, hops))
-        port = sec.port
-        if port is not None and port.leisure.get("berths", 0) > 0 and sid != planet.sector_id:
-            cap = port.leisure["berths"] - port.leisure.get("booked", 0)
+        for w in sec.planets:
+            stn = station(w)
+            if stn is None or w is planet:
+                continue
+            cap = stn["berths"] - stn.get("booked", 0)
             if cap > 0:
-                out.append((cap * safety * near * cheapness(port.currency), "station", port, hops))
+                out.append((cap * safety * near * cheapness(w.currency), "station", w, hops))
     out.sort(key=lambda d: -d[0])
     return out[:3]
+
+
+def site_for(kernel: Any, planet: Any) -> Optional[Any]:
+    """Where this world's travellers would most like to go if there were beds: a peopled world in reach, novel
+    and safe and near - the investor's signal when demand goes unmet."""
+    from xylarium.kernel import biosphere, law
+    home = biosphere.metabolism_of(kernel, planet)
+    best, score = None, 0.0
+    for sid, hops in _hops(kernel, planet.sector_id, TOURISM_RADIUS).items():
+        sec = kernel.sectors[sid]
+        for w in sec.planets:
+            if w is planet or w.population <= 0 or getattr(w, "natives", None) or sec.port is None:
+                continue
+            sc = (1.5 if biosphere.metabolism_of(kernel, w) != home else 0.5) * (
+                1.2 if w.planet_type != planet.planet_type else 1.0) * (0.5 + 0.5 * law.presence(kernel, sec)) / (1 + hops)
+            if sc > score:
+                best, score = w, sc
+    return best
 
 
 def _travel(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
@@ -235,22 +284,30 @@ def _travel(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
     budget = int(planet.household_purse * TOURISM_PURSE_SHARE)
     if budget <= 0:
         return
-    dests = destinations(kernel, planet)
-    if not dests:
-        return
     origin_sec = kernel.sectors[planet.sector_id]
     port = origin_sec.port
     if port is None:
         return
     level = PRICE_LEVEL.get(planet.currency, 1.0)
     per_head = max(1, int(TOURIST_SPEND_PER_HEAD * level))
+    dests = destinations(kernel, planet)
+    wanted_trips = budget // per_head
+    placed = sum(max(0, (beds(d[2]) - d[2].society.get("booked", 0)) if d[1] == "resort"
+                     else station(d[2])["berths"] - station(d[2]).get("booked", 0)) for d in dests)
+    if wanted_trips > placed:
+        site = site_for(kernel, planet)
+        if site is not None:
+            site.society["turned_away"] = site.society.get("turned_away", 0) + wanted_trips - placed
+    if not dests:
+        return
     total_attr = sum(d[0] for d in dests)
     from xylarium.kernel import fibres
     for attr, kind, place, hops in dests:
         spend = int(budget * attr / total_attr)
         trips = spend // per_head
-        booked = place.society.get("booked", 0) if kind == "resort" else place.leisure.get("booked", 0)
-        cap = (beds(place) if kind == "resort" else place.leisure["berths"]) - booked
+        stn = station(place) if kind == "station" else None
+        booked = place.society.get("booked", 0) if kind == "resort" else stn.get("booked", 0)
+        cap = (beds(place) if kind == "resort" else stn["berths"]) - booked
         trips = min(trips, cap)
         if trips <= 0:
             continue
@@ -276,11 +333,22 @@ def _travel(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
             place.society["booked"] = booked + trips
             place.society["receipts"] = place.society.get("receipts", 0) + stay
         else:
-            place.treasury += _convert(kernel, planet.currency, place.currency, stay)
-            place.leisure["booked"] = booked + trips
-        port.leisure["traffic"] = port.leisure.get("traffic", 0) + trips
-        if kind == "station":
-            place.leisure["traffic"] = place.leisure.get("traffic", 0) + trips
+            # a commercial station: the owner's receipts, less the commercial tax to the system's government
+            local = _convert(kernel, planet.currency, place.currency, stay)
+            from xylarium.kernel import government
+            tax = int(local * government.COMMERCIAL_TAX)
+            if government.pay_government(kernel, kernel.sectors[place.sector_id], place.currency, tax,
+                                         "commercial_tax") == "none":
+                tax = 0
+            owner = kernel.captains.get(stn["owner"])
+            if owner is not None:
+                from xylarium.kernel.fx import credit
+                credit(owner, place.currency, local - tax)
+            else:
+                place.treasury += local - tax                      # an heirless station's takings go to the world
+            stn["booked"] = booked + trips
+            stn["receipts"] = stn.get("receipts", 0) + local - tax
+            st["station_receipts_sol"] = st.get("station_receipts_sol", 0.0) + _sol(place.currency, local - tax)
         dest_sid = place.sector_id
         path = kernel.find_path(planet.sector_id, dest_sid) if dest_sid != planet.sector_id else []
         spend_sol = _sol(planet.currency, bill)
@@ -319,7 +387,9 @@ def _post_charter(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
         return
     planet.household_purse -= escrow
     cid = f"VIP-{planet.id[-6:]}-{kernel.cycle_count}"
+    from xylarium.kernel import biosphere
     book[cid] = {"id": cid, "origin_planet": planet.id, "origin_sector": planet.sector_id,
+                 "guests": biosphere.metabolism_of(kernel, planet),
                  "dest_sector": place.sector_id, "dest_name": getattr(place, "name", "?"), "party": party,
                  "escrow": escrow, "currency": planet.currency, "status": "OPEN", "captain": None,
                  "posted": kernel.cycle_count}
@@ -359,14 +429,22 @@ def arrive(kernel: Any, captain: Any) -> Optional[str]:
         return None
     if captain.sector_id != c["dest_sector"]:
         return None
+    # The escrow is the full fare for a ship built for these guests; a hull without decks for their biology earns
+    # half of it, and the rest goes back to the guests' households
     from xylarium.kernel.fx import credit
-    credit(captain, c["currency"], c["escrow"])
+    from xylarium.kernel import shipdesign
+    fit = shipdesign.comfort_fit(captain.ship, c.get("guests", "biotic"))
+    pay = int(c["escrow"] * (0.5 + 0.5 * fit))
+    credit(captain, c["currency"], pay)
+    if c["escrow"] - pay > 0:
+        _refund(kernel, c, c["escrow"] - pay)
     st = stats(kernel)
     st["charters"]["flown"] += 1
-    st["charters"]["paid_sol"] += _sol(c["currency"], c["escrow"])
+    st["charters"]["paid_sol"] += _sol(c["currency"], pay)
+    st["charters"]["comfort_sum"] = st["charters"].get("comfort_sum", 0.0) + fit
     c["status"] = "DELIVERED"
     captain.charter = None
-    return f"[CHARTER] {captain.name} delivered {c['party']} VIPs to {c['dest_name']} for {c['escrow']:,} {c['currency']}."
+    return f"[CHARTER] {captain.name} delivered {c['party']} VIPs to {c['dest_name']} for {pay:,} {c['currency']} (comfort {fit:.0%})."
 
 
 def intercept(kernel: Any, pirate: Optional[Any], liner: Any) -> Optional[str]:
@@ -460,19 +538,18 @@ def quarter(kernel: Any) -> List[str]:
             if log:
                 logs.append(log)
             _water_resorts(kernel, p)
-        port = sec.port
-        if port is not None:
-            lz = port.leisure
-            if lz.get("traffic", 0) > 0:
-                lz["flow_seasons"] = lz.get("flow_seasons", 0) + 1
-            if lz.get("booked") and ledger.ACTIVE_POLICY is not None:
-                ledger.ACTIVE_POLICY.record_output(port.currency, lz["booked"] * TOURIST_SPEND_PER_HEAD
-                                                   * PRICE_LEVEL.get(port.currency, 1.0))
-            lz["traffic"] = 0
-            lz["booked"] = 0
-            log = _build_station(kernel, sec, st)
-            if log:
-                logs.append(log)
+            stn = station(p)
+            if stn is not None:
+                if stn.get("booked") and ledger.ACTIVE_POLICY is not None:
+                    ledger.ACTIVE_POLICY.record_output(p.currency, stn["booked"] * TOURIST_SPEND_PER_HEAD
+                                                       * PRICE_LEVEL.get(p.currency, 1.0))
+                stn["booked"] = 0
+    log = _invest(kernel, st)
+    if log:
+        logs.append(log)
+    for sec in kernel.sectors.values():
+        for p in sec.planets:
+            p.society.pop("turned_away", None)
     for sec in kernel.sectors.values():
         for p in sec.planets:
             _travel(kernel, p, st)
@@ -484,6 +561,6 @@ def quarter(kernel: Any) -> List[str]:
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     domes = sum(resorts(p) for s in kernel.sectors.values() for p in s.planets)
-    stations = sum(1 for s in kernel.sectors.values() if s.port is not None and s.port.leisure.get("berths"))
+    stations = sum(1 for s in kernel.sectors.values() for p in s.planets if station(p) is not None)
     open_ch = sum(1 for c in charters(kernel).values() if c["status"] in ("OPEN", "IN_TRANSIT"))
     return {**st, "domes": domes, "stations": stations, "charters_open": open_ch}

@@ -28,6 +28,9 @@ from xylarium.config import (
     COLONY_LEVY_SHARE,
     COLONY_LEVY_INTERVAL,
     COLONY_KIT_ORGANICS,
+    DIASPORA_HOUSING_THRESHOLD,
+    DIASPORA_CROWDED_CYCLES,
+    DIASPORA_TAX_SHARE,
     COLONY_CLAIM_TIER_UNSETTLED,
     COLONY_CLAIM_TIER_ESTABLISHED,
     COLONY_CLAIM_ESTABLISHED_MIN_CR,
@@ -659,6 +662,15 @@ class ColonyManager:
                 if ArchaeologyManager.check_collapse(planet, True, kernel):
                     return {"planet_id": planet.id, "collapsed": True}
 
+        # 1b. Housing crowding & diaspora threshold tracking
+        from xylarium.kernel import demography
+        h_cap = demography.housing_cap(planet, kernel)
+        food_stable = (not famine and planet.organics_silo >= required_food)
+        if h_cap > 0 and planet.population >= int(h_cap * DIASPORA_HOUSING_THRESHOLD) and food_stable:
+            planet.crowded_cycles = getattr(planet, "crowded_cycles", 0) + 1
+        else:
+            planet.crowded_cycles = 0
+
         # 2. Colony budget. Gross tax is collected every cycle (scaled by the currency's price level,
         # morale, and vault headroom); citadel upkeep and public services are paid out of gross tax
         # first and savings second. Only the net surplus reaches the vault; a deficit drains it.
@@ -681,8 +693,15 @@ class ColonyManager:
             ledger.mint("colony_tax", household_income, planet.currency)
             planet.household_purse += household_income
         tax_yield = int(earnings * (1.0 - share) * headroom)
+        diaspora_cut = 0
+        if getattr(planet, "crowded_cycles", 0) > DIASPORA_CROWDED_CYCLES and tax_yield > 0:
+            diaspora_cut = int(tax_yield * DIASPORA_TAX_SHARE)
+            if diaspora_cut > 0:
+                ledger.mint("colony_tax", diaspora_cut, planet.currency)
+                planet.diaspora_escrow = getattr(planet, "diaspora_escrow", 0) + diaspora_cut
+                tax_yield -= diaspora_cut
         if ledger.ACTIVE_POLICY is not None:
-            ledger.ACTIVE_POLICY.record_earnings(planet.currency, household_income + tax_yield,
+            ledger.ACTIVE_POLICY.record_earnings(planet.currency, household_income + diaspora_cut + tax_yield,
                                                  earnings * (1.0 - share))   # the base services are measured on
         upkeep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])
         upkeep_credits = int(upkeep["credits"] * level)
@@ -803,7 +822,8 @@ class ColonyManager:
         When a colony hits Citadel Tier >= 2, population >= 10,000, and treasury >= 15,000 Cr,
         the civic council commissions an indigenous starship matching their clade taxon.
         """
-        if not kernel or len(kernel.captains) >= MAX_AI_CAPTAINS:
+        from xylarium.kernel import populace
+        if not kernel or not populace.room_for_captain(kernel):
             return None
 
         if planet.citadel_level < PLANETARY_SPACEFLIGHT_CITADEL_TIER:

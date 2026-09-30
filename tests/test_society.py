@@ -142,6 +142,34 @@ class TestLuxury(unittest.TestCase):
         self.assertEqual(m0, money(self.k))
         self.assertEqual(undeclared(self.k, t0, n0), {})
 
+    def test_council_bidding_premium_and_transit_cryo_containment(self):
+        port = self.k.sectors[1].port
+        # Under 3 unmet quarters: multiplier is 1.0
+        self.assertEqual(luxury.council_bid_multiplier(port, "LUX_EPHEMERA", self.k), 1.0)
+        p = self.k.sectors[1].planets[0]
+        p.society["luxury_unmet_quarters"] = {"LUX_EPHEMERA": 3}
+        mult_3 = luxury.council_bid_multiplier(port, "LUX_EPHEMERA", self.k)
+        self.assertGreater(mult_3, 1.0)
+        p.society["luxury_unmet_quarters"] = {"LUX_EPHEMERA": 6}
+        mult_6 = luxury.council_bid_multiplier(port, "LUX_EPHEMERA", self.k)
+        self.assertGreater(mult_6, mult_3)
+        # Transit cryo containment
+        cap = list(self.k.captains.values())[0]
+        cap.ship.cargo.elements["LUX_EPHEMERA"] = 1000
+        cap.ship.has_cryo_containment = False
+        t0, n0 = matter.totals(self.k), self.k.matter.net()
+        luxury.quarter(self.k)
+        rot_standard = 1000 - cap.ship.cargo.elements["LUX_EPHEMERA"]
+        self.assertEqual(undeclared(self.k, t0, n0), {})
+        # With cryo containment:
+        cap.ship.cargo.elements["LUX_EPHEMERA"] = 1000
+        cap.ship.has_cryo_containment = True
+        t0, n0 = matter.totals(self.k), self.k.matter.net()
+        luxury.quarter(self.k)
+        rot_cryo = 1000 - cap.ship.cargo.elements["LUX_EPHEMERA"]
+        self.assertLess(rot_cryo, rot_standard)
+        self.assertEqual(undeclared(self.k, t0, n0), {})
+
 
 class TestTourism(unittest.TestCase):
     def setUp(self):

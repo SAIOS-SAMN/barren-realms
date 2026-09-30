@@ -184,6 +184,23 @@ class TestHouseholdsAndFrontier(unittest.TestCase):
         lw = loaded.get_planet(w.id)
         self.assertEqual((lw.growth_policy, lw.habitats, lw.household_purse), ("steady", 2, 1234))
 
+    def test_diaspora_threshold_diverts_tax_and_funds_settlers(self):
+        from xylarium.kernel.colony import ColonyManager
+        w = civ_world(self.kernel)
+        w.population = int(demography.housing_cap(w) * 0.96)
+        w.crowded_cycles = 51
+        w.organics_silo = 50000
+        w.treasury = 500
+        w.diaspora_escrow = 0
+        ColonyManager.tick_colony(w, self.kernel)
+        self.assertGreater(w.diaspora_escrow, 0)
+        # Fund settler ship from escrow
+        w.diaspora_escrow = 20_000
+        before_settle = totals(self.kernel)
+        log = demography.send_settlers(self.kernel, w)
+        self.assertIsNotNone(log)
+        self.assertEqual(before_settle, totals(self.kernel))
+
 
 if __name__ == "__main__":
     unittest.main()

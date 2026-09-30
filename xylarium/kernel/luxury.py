@@ -17,6 +17,7 @@ Xylarium luxury: what a provided-for people makes for pleasure, and what it crav
   * Surplus luxuries above the world's reserve are exported to the region's ports (demography.exports).
 """
 
+import math
 import zlib
 from typing import Any, Dict, List, Optional
 
@@ -127,6 +128,50 @@ def signature(kernel: Any, planet: Any) -> Optional[Dict[str, str]]:
     return soc["luxury"]
 
 
+# ---------------------------------------------------------------------- the order book
+LUX_STOCK_SEASONS = 2          # a port keeps two seasons of what its households buy
+LUX_STOCK_MIN = 20             # ...and a shelf's worth to find out whether anyone will
+
+
+def port_target(port: Any, t: str, kernel: Any = None) -> int:
+    """A shopkeeper stocks for its customers: a season of what its catchment's households would want, or two
+    seasons of what it actually sold (to households and to captains), whichever is more."""
+    sales = float((port.leisure.get("lux_sales") or {}).get(t, 0.0))
+    catchment = int((port.leisure.get("lux_catchment") or {}).get(t, 0))
+    target = max(LUX_STOCK_MIN, catchment, int(LUX_STOCK_SEASONS * sales))
+    mult = council_bid_multiplier(port, t, kernel)
+    if mult > 1.0:
+        target = max(target, int(40 * mult))
+    return target
+
+
+def port_room(port: Any, t: str, kernel: Any = None) -> int:
+    return max(0, port_target(port, t, kernel) - port.stock.get(t, 0))
+
+
+def record_sale(port: Any, t: str, units: int) -> None:
+    q = port.leisure.setdefault("lux_q", {})
+    q[t] = q.get(t, 0) + units
+
+
+def _close_sales(port: Any) -> None:
+    """Each season a port's luxury sales become its smoothed demand (what it will stock next season)."""
+    q = port.leisure.pop("lux_q", {}) or {}
+    sales = port.leisure.setdefault("lux_sales", {})
+    for t in LUXURY_TYPES:
+        sales[t] = round(0.5 * float(sales.get(t, 0.0)) + 0.5 * q.get(t, 0), 2)
+
+
+def orders(kernel: Any, planet: Any, t: str) -> int:
+    """What a world's workshops can sell next season: room on its region's shelves plus its own households' use,
+    less what it already holds. Luxuries are crafted to order - perishable ones especially."""
+    from xylarium.kernel import demography
+    shelves = sum(port_room(p, t, kernel) for p in demography._markets(kernel, planet))
+    comfort = float(planet.society.get("basket_fill", 0.0))
+    own = int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * 0.5 * comfort)
+    return max(0, shelves + own - planet.element_reserves.get(t, 0))
+
+
 def provided_for(kernel: Any, planet: Any) -> bool:
     from xylarium.kernel import fertility
     return planet.society.get("basket_fill", 0.0) >= 0.8 and not fertility.stressed(kernel, planet)
@@ -196,12 +241,12 @@ def craft(kernel: Any, planet: Any) -> int:
     sig = signature(kernel, planet)
     if sig is None:
         return 0
-    from xylarium.kernel.demography import ELEMENT_RESERVE_KEPT
-    if planet.element_reserves.get(sig["type"], 0) > 2 * ELEMENT_RESERVE_KEPT:
-        return 0                     # last season's work is still unsold: the workshops rest
+    wanted = orders(kernel, planet, sig["type"])
+    if wanted <= 0:
+        return 0                     # nothing on order: the workshops rest
     from xylarium.kernel.fertility import tax_factor
     tier = max(1, planet.citadel_level)
-    units = int(planet.population / 1000.0 * LUXURY_CRAFT_PER_THOUSAND * tier * tax_factor(planet))
+    units = min(wanted, int(planet.population / 1000.0 * LUXURY_CRAFT_PER_THOUSAND * tier * tax_factor(planet)))
     comm = sig["input"]
     units = min(units, max(0, held(planet, comm) - _reserve(kernel, planet, comm)))
     if units <= 0:
@@ -236,10 +281,12 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
     own = sig["type"] if sig else None
     budget = int(planet.household_purse * LUXURY_PURSE_SHARE)
     want_total = met_total = 0
+    unmet = planet.society.setdefault("luxury_unmet_quarters", {})
     for t in LUXURY_TYPES:
         scarcity = 0.5 if t == own else 1.0                  # nobody craves what they make
         want = int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * comfort * scarcity * luxury_factor(planet))
         if want <= 0:
+            unmet[t] = 0
             continue
         want_total += want
         if t == own:
@@ -249,6 +296,10 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
                 matter.sink("households_luxury", t, use)
                 st["own_use"] += use
                 met_total += use
+            if use < want:
+                unmet[t] = unmet.get(t, 0) + 1
+            else:
+                unmet[t] = 0
             continue
         need = want
         for port in sorted(ports, key=lambda p: -p.stock.get(t, 0)):
@@ -257,16 +308,18 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
             have = port.stock.get(t, 0)
             if have <= 0:
                 continue
-            _, price = EconomyManager.get_unit_prices(port, t)
-            if price <= 0:
+            _, full_price = EconomyManager.get_unit_prices(port, t)
+            if full_price <= 0:
                 continue
-            units = min(need, have, budget // price)
+            price = min(full_price, int(round(COMMODITY_CONFIG[t]["base_price"] * 1.25 * PRICE_LEVEL.get(port.currency, 1.0))))
+            units = min(need, have, budget // max(1, price))
             if units <= 0:
                 continue
             bill = units * price
             planet.household_purse -= bill
             port.treasury += bill
             port.stock[t] = have - units
+            record_sale(port, t, units)
             matter.sink("households_luxury", t, units)
             port.regional_income = round(port.regional_income + 0.3 * bill, 2)
             budget -= bill
@@ -276,6 +329,42 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
             st["spend"][planet.currency] = st["spend"].get(planet.currency, 0) + bill
             st["spend_sol"] += fx.ACTIVE_FX.to_sol_value(planet.currency, bill) if (
                 fx.ACTIVE_FX is not None and planet.currency != "SOL") else bill
+        if need > 0 and budget > 0:
+            from xylarium.kernel import demography
+            ext_ports = [kernel.sectors[sid].port for sid in demography._reach(kernel, planet.sector_id, 5)
+                         if kernel.sectors[sid].port is not None and kernel.sectors[sid].port.currency == planet.currency
+                         and kernel.sectors[sid].port not in ports]
+            for port in sorted(ext_ports, key=lambda p: -p.stock.get(t, 0)):
+                if need <= 0 or budget <= 0:
+                    break
+                have = port.stock.get(t, 0)
+                if have <= 0:
+                    continue
+                _, full_price = EconomyManager.get_unit_prices(port, t)
+                if full_price <= 0:
+                    continue
+                price = min(full_price, int(round(COMMODITY_CONFIG[t]["base_price"] * 1.5 * PRICE_LEVEL.get(port.currency, 1.0))))
+                units = min(need, have, budget // max(1, price))
+                if units <= 0:
+                    continue
+                bill = units * price
+                planet.household_purse -= bill
+                port.treasury += bill
+                port.stock[t] = have - units
+                record_sale(port, t, units)
+                matter.sink("households_luxury", t, units)
+                port.regional_income = round(port.regional_income + 0.3 * bill, 2)
+                budget -= bill
+                need -= units
+                met_total += units
+                st["bought"][t] = st["bought"].get(t, 0) + units
+                st["spend"][planet.currency] = st["spend"].get(planet.currency, 0) + bill
+                st["spend_sol"] += fx.ACTIVE_FX.to_sol_value(planet.currency, bill) if (
+                    fx.ACTIVE_FX is not None and planet.currency != "SOL") else bill
+        if need > 0:
+            unmet[t] = unmet.get(t, 0) + 1
+        else:
+            unmet[t] = 0
     st["want"] += want_total
     st["met"] += met_total
     access = met_total / want_total if want_total else 0.0
@@ -284,10 +373,69 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
         planet.morale = min(100, planet.morale + 1)
 
 
+# ---------------------------------------------------------------------- dynamic council bidding
+def council_bid_multiplier(port: Any, t: str, kernel: Any = None) -> float:
+    """When a luxury want remains unsatisfied for >= 3 consecutive quarters, the planetary council
+    increases purchase price premium logarithmically, creating margin spreads that divert free AI traders
+    toward luxury fulfillment."""
+    if kernel is None:
+        from xylarium.kernel import ledger
+        kernel = ledger.active_kernel()
+    if kernel is None:
+        return 1.0
+    max_unmet = 0
+    sec = kernel.sectors.get(port.sector_id)
+    if sec:
+        for p in sec.planets:
+            if p.population > 0 and not getattr(p, "natives", None):
+                u = (p.society.get("luxury_unmet_quarters") or {}).get(t, 0)
+                if u > max_unmet:
+                    max_unmet = u
+    # Check nearby planets in regional catchment (within 3 warps)
+    for sid in getattr(kernel.sectors.get(port.sector_id), "warps", []):
+        s = kernel.sectors.get(sid)
+        if s:
+            for p in s.planets:
+                if p.population > 0 and not getattr(p, "natives", None):
+                    u = (p.society.get("luxury_unmet_quarters") or {}).get(t, 0)
+                    if u > max_unmet:
+                        max_unmet = u
+    if max_unmet < 3:
+        return 1.0
+    return min(3.0, 1.0 + math.log(1.0 + (max_unmet - 2) * 0.8))
+
+
 # ---------------------------------------------------------------------- the quarter
+def _catchments(kernel: Any) -> None:
+    """Each port's households' wants for each luxury (full wants: they buy what they don't make)."""
+    from xylarium.kernel import demography
+    want: Dict[int, Dict[str, int]] = {}
+    for sec in kernel.sectors.values():
+        for p in sec.planets:
+            if p.population <= 0 or getattr(p, "natives", None):
+                continue
+            comfort = float(p.society.get("basket_fill", 0.0))
+            n = int(p.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * comfort)
+            if n <= 0:
+                continue
+            markets = demography._markets(kernel, p)
+            if not markets:
+                continue
+            share = max(1, int(math.ceil(n / len(markets))))
+            for port in markets:
+                w = want.setdefault(port.sector_id, {})
+                for t in LUXURY_TYPES:
+                    w[t] = w.get(t, 0) + share
+    for sec in kernel.sectors.values():
+        if sec.port is not None:
+            sec.port.leisure["lux_catchment"] = want.get(sec.id, {})
+
+
 def quarter(kernel: Any) -> List[str]:
     """Crafting on every provided-for world, and perishable ephemera spoil wherever they are stored."""
     st = stats(kernel)
+    _catchments(kernel)
+    # 1. On planets:
     for sec in kernel.sectors.values():
         for planet in sec.planets:
             craft(kernel, planet)
@@ -297,14 +445,38 @@ def quarter(kernel: Any) -> List[str]:
                 planet.element_reserves["LUX_EPHEMERA"] = have - rot
                 matter.sink("spoiled", "LUX_EPHEMERA", rot)
                 st["spoiled"] += rot
+        # 2. In ports:
         port = sec.port
         if port is not None:
+            _close_sales(port)
             have = port.stock.get("LUX_EPHEMERA", 0)
-            rot = int(have * EPHEMERA_SPOILAGE)
+            has_market = bool((port.leisure.get("lux_catchment") or {}).get("LUX_EPHEMERA", 0))
+            spoil_rate = EPHEMERA_SPOILAGE if has_market else min(0.10, EPHEMERA_SPOILAGE * 2)
+            rot = int(have * spoil_rate)
             if rot > 0:
                 port.stock["LUX_EPHEMERA"] = have - rot
                 matter.sink("spoiled", "LUX_EPHEMERA", rot)
                 st["spoiled"] += rot
+    # 3. In transit (ships):
+    for captain in kernel.captains.values():
+        ship = getattr(captain, "ship", None)
+        if ship is None or not getattr(ship, "cargo", None):
+            continue
+        have = ship.cargo.elements.get("LUX_EPHEMERA", 0)
+        if have <= 0:
+            continue
+        has_cryo = (
+            getattr(ship, "has_cryo_containment", False)
+            or getattr(ship, "stasis_pod", False)
+            or getattr(ship, "hull_class", "") == "CRYO_TANKER"
+            or getattr(ship, "ship_type", "") == "CRYO_TANKER"
+        )
+        mult = 0.20 if has_cryo else 1.0
+        rot = int(have * EPHEMERA_SPOILAGE * mult)
+        if rot > 0:
+            ship.cargo.elements["LUX_EPHEMERA"] = have - rot
+            matter.sink("spoiled", "LUX_EPHEMERA", rot)
+            st["spoiled"] += rot
     return []
 
 

@@ -87,6 +87,8 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     for s in kernel.sectors.values():
         for p in s.planets:
             add(getattr(p, "currency", "SOL"), "planet_vaults", p.treasury)
+            if getattr(p, "diaspora_escrow", 0):
+                add(getattr(p, "currency", "SOL"), "diaspora_escrow", p.diaspora_escrow)
             if getattr(p, "household_purse", 0):
                 add(getattr(p, "currency", "SOL"), "households", p.household_purse)
             ruins = getattr(p, "ruins", None)

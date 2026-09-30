@@ -1479,10 +1479,14 @@ DAUGHTER_EMIGRANT_SHARE = 0.10               # Share of the parent world that em
 DAUGHTER_EMIGRANTS_MAX = 20_000
 DAUGHTER_EMIGRANTS_MIN = 500
 DAUGHTER_SETTLER_COST = 6000                 # SOL-value (x local price level) for the settler fleet, paid to the contractor
-DAUGHTER_RADIUS_BY_TIER = {2: 3, 3: 6}       # How far a world's settler fleets can reach
+DAUGHTER_RADIUS_BY_TIER = {2: 3, 3: 6, 4: 10, 5: 12}       # How far a world's settler fleets can reach
 DAUGHTER_MIN_HABITABILITY = 0.3
 DAUGHTER_FOUNDING_TIER = 1                   # Settler fleets raise a redoubt: daughters start with tier-1 agriculture
 DAUGHTER_COOLDOWN_QUARTERS = 8
+DIASPORA_HOUSING_THRESHOLD = 0.95       # Homeworld crowding threshold triggering diaspora diversion
+DIASPORA_CROWDED_CYCLES = 50            # Cycles at crowding threshold before tax diversion begins
+DIASPORA_TAX_SHARE = 0.20               # Share of government tax diverted to expeditionary colony escrow
+STASIS_POD_COST = 5000                  # Cost to install Stasis Pod cryogenic containment module
 # Frontier: the charted galaxy grows when its peoples run out of room (space : people : resources in balance)
 FRONTIER_FREE_WORLDS_RATIO = 0.35            # Open a cluster when free habitable worlds < 35% of populated worlds...
 FRONTIER_PRESSURE_QUARTERS = 12              # ...or when this many settler fleets found no world in reach
@@ -1566,7 +1570,7 @@ LUXURY_AFFINITY = {"biotic": "LUX_EPHEMERA", "mineral": "LUX_RESONANT", "plasmic
 LUXURY_CRAFT_PER_THOUSAND = 0.4        # Luxury units a thousand provided-for people craft per quarter (x tech tier)
 LUXURY_WANT_PER_THOUSAND = 0.12        # Units of each luxury a thousand people want per quarter (at full comfort)
 LUXURY_PURSE_SHARE = 0.5               # Share of the purse left after the basket that households spend on luxury
-EPHEMERA_SPOILAGE = 0.10               # Perishable imports: share of every stock that spoils each quarter
+EPHEMERA_SPOILAGE = 0.02               # Perishable imports: share of every stock that spoils each quarter (base shelf-life dampener)
 # Tourism: two tiers. Mass tourism is a flow along the lanes (households of spacefaring worlds spend part of
 # their surplus at resorts in reach); VIP charters are physical passengers carried by captains' hulls.
 TOURISM_PURSE_SHARE = 0.3              # Share of the post-luxury household surplus spent travelling
@@ -1593,15 +1597,58 @@ CHARTER_RANSOM_SHARE = 0.6             # A pirate who takes a liner holds its VI
 # lighter giant (shallower well) yields more. A share is helium-3.
 SKIM_ENERGY_PER_SEASON = 3000
 SKIM_HE3_SHARE = 20                    # one unit of He-3 per this many of hydrogen
-# The drive ladder: nobody sensible runs their fleets forever on a scarce fuel.
-DRIVES = {
-    "H": {"name": "Hydrogen fusion torch", "fuel": "H", "burn_div": 1, "bunker_div": 1},
-    "HE3": {"name": "Helium-3 fusion drive", "fuel": "He-3", "burn_div": 4, "bunker_div": 4,
-            "part": "M3_ENGINE_MANIFOLD", "min_tier": 2},
-    "WARP": {"name": "Warp stabilizer drive", "fuel": None, "part": "M4_WARP_CORE", "min_tier": 3, "core_life": 400},
+# Fuel cells: a drive is built for a reaction mass. Efficiency is its relative exhaust velocity (hydrogen torch
+# = 1): reaction mass burned per jump falls as 1/v_e, and tanks are sized so every cell gets the same range per
+# hold of hull. Which cell a people builds is chosen algorithmically (propulsion.choose_fuel): what is abundant
+# in reach x efficiency, against what its tradition burns, weighted by how clear-sighted (aligned) it is.
+FUEL_CELLS = {
+    "H": {"name": "Hydrogen fusion torch", "v_e": 1.0, "min_tier": 1},
+    "C": {"name": "Hydrocarbon fuel cell", "v_e": 0.5, "min_tier": 1, "part": "EQUIPMENT"},
+    "H2O": {"name": "Nuclear-thermal steam drive", "v_e": 0.8, "min_tier": 2, "part": "M3_ENGINE_MANIFOLD"},
+    "He-3": {"name": "Helium-3 fusion drive", "v_e": 4.0, "min_tier": 2, "part": "M3_ENGINE_MANIFOLD"},
+    "Xe": {"name": "Xenon ion drive", "v_e": 6.0, "min_tier": 2, "part": "M1_SUPERCONDUCTOR", "extra_turns": 1},
+    "U": {"name": "Fission pulse drive", "v_e": 10.0, "min_tier": 3, "part": "M3_ENGINE_MANIFOLD"},
+    "WARP": {"name": "Warp stabilizer drive", "v_e": None, "min_tier": 3, "part": "M4_WARP_CORE", "core_life": 400},
 }
+# What each biology's engineering tradition burns (before it looks at what is abundant)
+FUEL_TRADITION = {"biotic": "C", "mineral": "U", "plasmic": "H", "cryogenic": "H2O", "umbral": "Xe"}
+FUEL_REACH = 3                         # warps within which a people reckons what is abundant
 DRIVE_INSTALL_FEE = 2000               # SOL-value paid to the yard on top of the part
 # Readiness: a world's defence grid and fighters run on fusion. With too little hydrogen in reach it broadcasts
 # a DEGRADED beacon and fights at reduced strength.
 DEFENSE_H_PER_FIGHTER = 2
 DEGRADED_READINESS = 0.5
+
+# --- [18] The workbench: ship design from frames and modules (shipdesign.py) ---
+# A design is a frame (volume budget, structural mass) filled with modules. Volume must fit, the reactors must
+# power what draws power, and everything has mass: mass is what the drive must move (propulsion.burn_for).
+# Materials are drawn from the building yard's warehouse. A design registers into the hull catalogue.
+SHIP_FRAMES = {
+    "corvette": {"volume": 60, "mass": 30, "price": 2000, "min_tier": 1, "Fe": 20, "Ti": 6},
+    "frigate": {"volume": 120, "mass": 60, "price": 6000, "min_tier": 2, "Fe": 40, "Ti": 14},
+    "cruiser": {"volume": 240, "mass": 110, "price": 16000, "min_tier": 2, "Fe": 80, "Ti": 30},
+    "capital": {"volume": 480, "mass": 200, "price": 40000, "min_tier": 3, "Fe": 150, "Ti": 60},
+    "leviathan": {"volume": 900, "mass": 350, "price": 90000, "min_tier": 4, "Fe": 280, "Ti": 110},
+}
+# per unit of the module: volume, mass, power (+ generates / - draws), price (SOL), materials, and what it gives
+SHIP_MODULES = {
+    "hold": {"volume": 1, "mass": 0.3, "power": 0, "price": 40, "Fe": 0.2, "gives": {"holds": 1}},
+    "tank": {"volume": 1, "mass": 0.3, "power": 0, "price": 50, "Fe": 0.2, "gives": {"tank": 2}},
+    "drive": {"volume": 4, "mass": 3, "power": -2, "price": 400, "Ti": 1, "gives": {"thrust": 1}},
+    "reactor": {"volume": 3, "mass": 2, "power": 10, "price": 500, "Ti": 1, "Si": 0.5, "gives": {}},
+    "shield": {"volume": 2, "mass": 1, "power": -2, "price": 300, "Si": 0.5, "gives": {"max_shields": 25}},
+    "armor": {"volume": 1, "mass": 2, "power": 0, "price": 120, "Fe": 1, "gives": {"max_shields": 8}},
+    "fighter_bay": {"volume": 3, "mass": 2, "power": -1, "price": 350, "Fe": 0.5, "gives": {"max_fighters": 5}},
+    "mining_laser": {"volume": 3, "mass": 2, "power": -3, "price": 450, "Si": 0.5, "gives": {"mining": 4}},
+    "berth": {"volume": 2, "mass": 1, "power": -0.5, "price": 250, "Fe": 0.2, "gives": {"berths": 1}},
+    # leisure decks: comfort only for guests of the biology they are built for; each draws on a consumable
+    "water_spa": {"volume": 4, "mass": 3, "power": -1, "price": 600, "gives": {"comfort": 1}, "for": ["biotic"]},
+    "cryo_lounge": {"volume": 4, "mass": 3, "power": -2, "price": 700, "gives": {"comfort": 1}, "for": ["cryogenic"]},
+    "plasma_bath": {"volume": 4, "mass": 2, "power": -3, "price": 900, "gives": {"comfort": 1}, "for": ["plasmic"]},
+    "mineral_grotto": {"volume": 4, "mass": 5, "power": -1, "price": 500, "gives": {"comfort": 1}, "for": ["mineral"]},
+    "void_gallery": {"volume": 4, "mass": 2, "power": -1, "price": 800, "gives": {"comfort": 1}, "for": ["umbral"]},
+}
+DRIVE_MASS_PER_THRUST = 60             # tonnes of design mass one drive module moves at full pace (less: sluggish, 2 turns a jump)
+DESIGN_ROYALTY_MAX = 0.2               # designers may ask up to a fifth of the build price
+DESIGN_FEE = 500                       # SOL registry fee paid to the yard (the draughting office)
+COMFORT_PER_BERTH_FULL = 0.25          # amenity units per berth at which guests of that biology are fully content

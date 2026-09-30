@@ -1093,7 +1093,7 @@ class SeatGrow:
     nothing worth doing it explores toward unknown or stale markets.
     """
 
-    TRADE_GOODS = ("ORE", "ORGANICS", "EQUIPMENT", "H")
+    TRADE_GOODS = ("ORE", "ORGANICS", "EQUIPMENT", "H", "LUX_STIMULANT", "LUX_RESONANT", "LUX_EPHEMERA", "LUX_CURIO")
     RISK_DISCOUNT = {"FEDERATION": 1.0, "BORDERLAND": 0.85, "ANARCHY": 0.6}
 
     @staticmethod
@@ -1407,14 +1407,19 @@ class SeatGrow:
                 if units <= 0:
                     continue
                 risk = cls.RISK_DISCOUNT.get(kernel.sectors[sid].security.value, 0.6)
-                value = margin * units * risk / (dist[sid] + 2)
+                if comm.startswith("LUX_"):
+                    value = margin * units * risk * 3.0 / (dist[sid] + 2)
+                    res_mag = float(margin * units * 3.0)
+                else:
+                    value = margin * units * risk / (dist[sid] + 2)
+                    res_mag = float(margin * units)
                 profit = margin * units * risk
                 xp = min(XP_TRADE_MAX, math.sqrt(max(0.0, profit) / XP_TRADE_PROFIT_SCALE))
                 plan = {"kind": "haul", "commodity": comm, "dest": sid, "since": cycle, "unit_cost_sol": cost_sol,
                         "xp_per_turn": xp / (dist[sid] + 2), "risk": risk}
                 deed = CognitiveDeed(
                     seat="GROW", action_type=ActionType.TRADE, deed_name="LOAD_ARBITRAGE_CARGO",
-                    target_coordinate=comm, residual_magnitude=float(margin * units),
+                    target_coordinate=comm, residual_magnitude=res_mag,
                     parameters={"trade_type": "BUY", "commodity": comm, "amount": int(units)}, ration_cost=1,
                 )
                 opts.append((value, plan, deed))

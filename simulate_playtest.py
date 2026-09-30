@@ -203,6 +203,8 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "law": __import__("xylarium.kernel.law", fromlist=["summary"]).summary(kernel),
         "crime": dict(getattr(kernel, "crime_stats", {}) or {}),
         "society": _society_census(kernel),
+        "government": __import__("xylarium.kernel.government", fromlist=["summary"]).summary(kernel),
+        "workbench": __import__("xylarium.kernel.shipdesign", fromlist=["summary"]).summary(kernel),
         "industry": {"fabricated": {c: v for (k, c), v in kernel.matter.sources.items() if k == "fabrication"},
                      "recycled_ore": kernel.matter.sources.get(("recycling", "ORE"), 0),
                      "sector_gas": sum(getattr(s, "gas", 0) for s in kernel.sectors.values())},
@@ -1824,13 +1826,26 @@ def print_report(r: Dict[str, Any]) -> None:
             print(f"  VIP charters: posted {ch['posted']}, flown {ch['flown']} (paid {ch['paid_sol']:,.0f} SOL), ransomed "
                   f"{ch['ransomed']} ({ch['ransom_sol']:,.0f} SOL), expired {ch['expired']}; daughter-world share "
                   f"{so['daughter_share']:.1%}; income (GDP) {so['gdp_sol']:,} SOL")
+        if ce.get("workbench"):
+            wb = ce["workbench"]
+            print(f"  workbench: {wb['designs']} designs ({wb['ai_designs']} by AI draughtsmen), cells {wb['by_drive']}, "
+                  f"flying {wb['flying']}, royalties {wb['royalties']:,}")
+            if wb["examples"]:
+                print(f"    e.g. {'; '.join(wb['examples'])}")
+        if ce.get("government"):
+            gv = ce["government"]
+            print(f"  government: starports run by {gv['port_owners']}; treasuries (SOL) {gv['vaults_sol']}; "
+                  f"office holders {gv['holders']}")
+            print(f"    revenue {gv['revenue']}; civilizations' port & station revenue {gv['civ_revenue']:,}")
+            print(f"    spent {gv['spent']}; stipends {gv['stipends']:,}")
         if ce.get("propulsion"):
             pr, ind = ce["propulsion"], ce.get("industry", {})
             print(f"  propulsion: {pr.get('burned', 0):,} reaction mass burned, {pr.get('bunkered', 0):,} bunkered at ports, "
                   f"{pr.get('coasted', 0):,} jumps coasted dry; drifting gas {ind.get('sector_gas', 0):,}")
             print(f"  wells & drives: skimmed {pr.get('skimmed_h', 0):,} H and {pr.get('skimmed_he3', 0):,} He-3 from gas "
-                  f"giants; refits He-3 {pr.get('refits_he3', 0)}, warp {pr.get('refits_warp', 0)} ({pr.get('warp_jumps', 0):,} "
-                  f"warp jumps, {pr.get('cores_burned_out', 0)} cores burned out); degraded worlds {pr.get('degraded_worlds', 0)}")
+                  f"giants; refits {pr.get('refits', {})} ({pr.get('warp_jumps', 0):,} warp jumps, "
+                  f"{pr.get('cores_burned_out', 0)} cores burned out); burned by fuel {pr.get('burned_by_fuel', {})}")
+            print(f"  peoples' fuel cells {pr.get('civ_fuels', {})}; degraded worlds {pr.get('degraded_worlds', 0)}")
             print(f"  industry: fabricated {ind.get('fabricated', {})}, recycled to ore {ind.get('recycled_ore', 0):,}")
         if "fibres" in ce:
             fb = ce["fibres"]

@@ -497,6 +497,11 @@ class ResearchManager:
         kernel.sectors[anom_sec_a].anomalies.append(anom_a_id)
 
         self.minted_clusters.append(cluster_index)
+        # The frontier is peopled: its most advanced natives already sail its lanes
+        from xylarium.kernel import populace
+        for log in populace.seed_cluster(kernel, new_sector_ids):
+            if hasattr(kernel, "action_logs"):
+                kernel.action_logs.append(log)
         msg = f"OBSERVATION LAW ENCLOSED: Explorer has crossed the charted frontier! Minted new star cluster '{cluster_name}' (Sectors {start_id:03d}-{end_id:03d}) with {len(new_sector_ids)} sectors."
         if kernel.event_bus:
             kernel.event_bus.broadcast_radio(

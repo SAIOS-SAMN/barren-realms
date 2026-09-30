@@ -60,6 +60,8 @@ def presence(kernel: Any, sector: Any) -> float:
     x += sum(0.5 for cid in getattr(sector, "captains", []) if cid in fleet)
     if sector.id == 1:
         x += 3.0                          # Sol's turrets
+    from xylarium.kernel import government
+    x += government.security_presence(kernel, sector)     # what its government's security budget pays for
     return x / (1.0 + x)
 
 

@@ -111,11 +111,13 @@ class ArchaeologyManager:
         planet.ruins = bury(planet, _new_ruins(
             civ.name, getattr(civ, "clade", "unknown"), getattr(civ, "metabolism", "biotic"), "RECENT",
             int(getattr(civ, "tech_level", 3)), list(getattr(civ, "discovered_elements", [])),
-            "famine", cycle, rng.randint(1, 2), planet.currency, planet.treasury + planet.household_purse, rng,
+            "famine", cycle, rng.randint(1, 2), planet.currency,
+            planet.treasury + planet.household_purse + getattr(planet, "diaspora_escrow", 0), rng,
         ))
-        # The vault and the households' savings are buried with the city: same money, now underground
+        # The vault, diaspora escrow and households' savings are buried with the city: same money, now underground
         planet.treasury = 0
         planet.household_purse = 0
+        planet.diaspora_escrow = 0
         planet.population = 0
         planet.civilization = None
         planet.owner_id = None

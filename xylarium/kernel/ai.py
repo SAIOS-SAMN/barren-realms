@@ -359,7 +359,8 @@ class AIManager:
         """
         if not captain.is_ai or captain.faction_id:
             return None
-        if len(kernel.captains) >= MAX_AI_CAPTAINS:
+        from xylarium.kernel import populace
+        if not populace.room_for_captain(kernel):
             return None
 
         grown_count = len(getattr(captain, "grown_basis", []))

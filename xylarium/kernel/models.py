@@ -149,6 +149,10 @@ class ActionType(str, Enum):
     SHORE_LEAVE = "SHORE_LEAVE"
     POPULATION_POLICY = "POPULATION_POLICY"
     DRIVE_REFIT = "DRIVE_REFIT"
+    BUDGET_SET = "BUDGET_SET"
+    GOVERNMENT_GRANT = "GOVERNMENT_GRANT"
+    STATION_BUILD = "STATION_BUILD"
+    SHIP_DESIGN = "SHIP_DESIGN"
     EXCAVATE = "EXCAVATE"
     SELL_ARTIFACT = "SELL_ARTIFACT"
     STUDY_ARTIFACT = "STUDY_ARTIFACT"
@@ -409,6 +413,8 @@ class Planet:
     last_daughter_quarter: int = -10 ** 6    # Last fiscal quarter a settler fleet sailed from here
     metropole_id: Optional[str] = None       # The world whose settlers founded this one
     society: Dict[str, Any] = field(default_factory=dict)   # fertility, natal policy, luxury, stresses (fertility.py)
+    diaspora_escrow: int = 0                 # Escrow fund dedicated to commissioning expeditionary colony ship
+    crowded_cycles: int = 0                  # Consecutive cycles crowded at >= 95% housing cap with food stable
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -460,6 +466,8 @@ class Planet:
             "last_daughter_quarter": self.last_daughter_quarter,
             "metropole_id": self.metropole_id,
             "society": _deep_copy(self.society),
+            "diaspora_escrow": self.diaspora_escrow,
+            "crowded_cycles": self.crowded_cycles,
         }
 
     @classmethod
@@ -516,6 +524,8 @@ class Planet:
             last_daughter_quarter=int(data.get("last_daughter_quarter", -10 ** 6)),
             metropole_id=data.get("metropole_id"),
             society=_deep_copy(data.get("society")) or {},
+            diaspora_escrow=int(data.get("diaspora_escrow", 0)),
+            crowded_cycles=int(data.get("crowded_cycles", 0)),
         )
 
 
@@ -529,6 +539,7 @@ class Ship:
     fuel: int = 0            # reaction mass in the drive bunker (not in the cargo holds): H, or He-3 for a He-3 drive
     drive: str = "H"         # "H" fusion torch, "HE3" fusion drive, "WARP" stabilizer (propulsion.py)
     core_wear: int = 0       # jumps on the installed warp core
+    has_cryo_containment: bool = False  # Stasis Pod cryogenic containment reducing transit spoilage by 80%
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -540,6 +551,7 @@ class Ship:
             "fuel": self.fuel,
             "drive": self.drive,
             "core_wear": self.core_wear,
+            "has_cryo_containment": self.has_cryo_containment,
         }
 
     @classmethod
@@ -553,6 +565,7 @@ class Ship:
             shields=data["shields"],
             max_shields=data["max_shields"],
             fighters=data["fighters"],
+            has_cryo_containment=bool(data.get("has_cryo_containment", False)),
         )
 
 

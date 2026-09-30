@@ -116,6 +116,8 @@ from xylarium.kernel import crime as crime_mod
 from xylarium.kernel import fertility as fertility_mod
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
+from xylarium.kernel import government as government_mod
+from xylarium.kernel import shipdesign as shipdesign_mod
 
 
 class GameKernel:
@@ -213,6 +215,8 @@ class GameKernel:
 
         # The great powers: the Aurelian Imperium and the Choir of the Pyre take their seats
         self.factions.found_great_powers(self, seed)
+        self.governance_manager.bind(self, genesis=True)          # the federal treasury is the Federation's vault
+        government_mod.assign_ports(self)                          # every starport is bound to its system
         self._seed_alignments(seed)
         self.banking.found(self)   # founding reserves (genesis, before the money baseline)
         lineage_mod.npc_tick(self)  # the founding houses of the galaxy
@@ -325,6 +329,11 @@ class GameKernel:
             lineage_mod.found(self, player, background)
         # New charters come with the first maintenance interval of hull cover
         player.insurance_paid_through = self.cycle_count + MAINTENANCE_INTERVAL_CYCLES
+        # Each human beyond the galaxy's base company is owed room to explore (populace.py)
+        if not player.is_ai:
+            from xylarium.kernel import populace
+            for log in populace.on_player_joined(self):
+                self.action_logs.append(log)
         return player
 
     def get_player(self, player_id: str) -> Optional[Captain]:
@@ -701,6 +710,19 @@ class GameKernel:
             result = self._handle_shore_leave(captain, current_sector, kwargs)
         elif action == ActionType.POPULATION_POLICY:
             result = self._handle_population_policy(captain, kwargs)
+        elif action in (ActionType.BUDGET_SET, ActionType.GOVERNMENT_GRANT, ActionType.STATION_BUILD):
+            result = self._handle_polity(captain, current_sector, action, kwargs)
+        elif action == ActionType.SHIP_DESIGN:
+            try:
+                spec = shipdesign_mod.register(self, captain, kwargs.get("name", ""), kwargs.get("frame", ""),
+                                               dict(kwargs.get("modules") or {}), kwargs.get("drive"),
+                                               float(kwargs.get("royalty", 0.05)), kwargs.get("description", ""))
+                msg = (f"Design registered: {spec['name']} - {spec['frame']}, {spec['drive']} cell, holds {spec['holds']}, "
+                       f"shields {spec['max_shields']}, berths {spec['berths']}, mass {spec['mass']}, "
+                       f"{spec['price']:,} Cr to build (royalty {spec['royalty']:.0%}).")
+                result = ActionResult(success=True, action=ActionType.SHIP_DESIGN, message=msg, data=spec)
+            except ValueError as e:
+                result = ActionResult(success=False, action=ActionType.SHIP_DESIGN, message=str(e))
         elif action == ActionType.DRIVE_REFIT:
             try:
                 msg = propulsion_mod.refit_drive(self, captain, current_sector, str(kwargs.get("drive", "")).upper())
@@ -747,6 +769,9 @@ class GameKernel:
                 refit_log = propulsion_mod.consider_refit(self, captain, dock)
                 if refit_log:
                     self.action_logs.append(f"[DRIVE] {captain.name}: {refit_log}")
+                design_log = shipdesign_mod.consider(self, captain, dock)
+                if design_log:
+                    self.action_logs.append(f"[WORKBENCH] {design_log}")
                 if captain.ship.fuel < propulsion_mod.bunker_capacity(captain.ship):
                     propulsion_mod.bunker(self, captain, dock)
 
@@ -987,6 +1012,8 @@ class GameKernel:
         basis_before = captain.ship.cargo.cost_basis.get(commodity.lower(), 0.0)  # SOL per unit
         if trade_type == "BUY":
             res = EconomyManager.execute_buy(captain, sector.port, commodity, amount)
+            if res.success and commodity.startswith("LUX_"):
+                luxury_mod.record_sale(sector.port, commodity, captain.ship.cargo.held(commodity) - held_before)
         elif trade_type == "SELL":
             res = EconomyManager.execute_sell(captain, sector.port, commodity, amount)
             if res.success:
@@ -2124,6 +2151,28 @@ class GameKernel:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message=str(e))
         return ActionResult(success=True, action=ActionType.POPULATION_POLICY, message=msg, logs=[msg])
 
+    def _handle_polity(self, captain: Captain, sector: Sector, action: ActionType, kwargs: Dict[str, Any]) -> ActionResult:
+        """Budget offices (set shares or hand back to the steward), directed grants, and private stations."""
+        try:
+            if action == ActionType.BUDGET_SET:
+                shares = {k: kwargs[k] for k in government_mod.CATEGORIES if k in kwargs}
+                msg = government_mod.set_budget(self, captain, kwargs.get("government", ""), shares or None,
+                                                auto=bool(kwargs.get("auto")))
+            elif action == ActionType.GOVERNMENT_GRANT:
+                planet = self.get_planet(kwargs.get("planet_id", ""))
+                if planet is None:
+                    raise ValueError("No such world.")
+                msg = government_mod.direct_grant(self, captain, kwargs.get("government", ""), planet,
+                                                  int(kwargs.get("amount", 0)))
+            else:
+                planet = self.get_planet(kwargs.get("planet_id", ""))
+                if planet is None or planet.sector_id != sector.id:
+                    raise ValueError("Build a station over a world in the system you are in.")
+                msg = tourism_mod.build_station(self, captain, planet)
+        except ValueError as e:
+            return ActionResult(success=False, action=action, message=str(e))
+        return ActionResult(success=True, action=action, message=msg, logs=[msg], turns_spent=1)
+
     def _handle_shore_leave(self, captain: Captain, sector: Sector, kwargs: Dict[str, Any]) -> ActionResult:
         """The crew goes ashore: taverns, markets, repairs to morale. Money flows into the port."""
         if sector.port is None or self.turret_blocks(captain, sector):
@@ -2264,6 +2313,22 @@ class GameKernel:
             return ActionResult(success=True, action=ActionType.SHIPYARD_PURCHASE,
                                 message=f"A backup clone is grown in the Sol vats ({lin['clones']}/{LINEAGE_MAX_CLONES}).")
 
+        elif item in ("stasis_pod", "cryo_hold"):
+            from xylarium.config import STASIS_POD_COST
+            if getattr(captain.ship, "has_cryo_containment", False):
+                return ActionResult(success=False, action=ActionType.SHIPYARD_PURCHASE,
+                                    message="Stasis Pod cryogenic containment is already installed.")
+            cost = int(round(STASIS_POD_COST * markup))
+            if captain.credits < cost:
+                return ActionResult(success=False, action=ActionType.SHIPYARD_PURCHASE,
+                                    message=f"Installing a Stasis Pod module costs {cost:,} Cr. You have {captain.credits:,} Cr.")
+            captain.credits -= cost
+            self._stardock_revenue(sector, cost)
+            captain.ship.has_cryo_containment = True
+            msg = f"Stasis Pod cryogenic containment module installed for {cost:,} Cr (reduces transit spoilage by 80%)."
+            return ActionResult(success=True, action=ActionType.SHIPYARD_PURCHASE,
+                                message=msg, turns_spent=0, logs=[msg])
+
         elif item == "upgrade_ship":
             ship_name = kwargs.get("ship_name")
             if ship_name not in SHIP_CATALOG:
@@ -2295,8 +2360,16 @@ class GameKernel:
                     message=f"{ship_name} costs {cost:,} Cr at the {venue}. You have {captain.credits:,} Cr.",
                 )
             captain.credits -= cost
-            self._stardock_revenue(sector, cost)
+            royalty = shipdesign_mod.royalty_on_build(self, captain, ship_name, cost)   # the designer's share
+            self._stardock_revenue(sector, cost - royalty)
             iron_frame = propulsion_mod.refit(self, sector, captain.ship.ship_type, ship_name)
+            if cfg.get("drive") and cfg.get("designer"):
+                # a drawn design comes with the fuel cell it was drawn for; the old bunker goes back to the yard
+                old = propulsion_mod.fuel_of(captain.ship)
+                if old and captain.ship.fuel > 0:
+                    sector.port.stock[old] = sector.port.stock.get(old, 0) + captain.ship.fuel
+                captain.ship.fuel = 0
+                captain.ship.drive, captain.ship.core_wear = cfg["drive"], 0
             captain.ship.ship_type = ship_name
             captain.ship.cargo.capacity = int(cfg["holds"] * (0.8 if iron_frame else 1.0))
             captain.ship.max_shields = cfg["max_shields"]
@@ -2729,7 +2802,7 @@ class GameKernel:
                 self.action_logs.append(log)
             # Each people reads its circumstances (fertility and natal cards), provided-for worlds craft their
             # luxuries, and households travel to the resorts they cannot find at home
-            for mod in (fertility_mod, luxury_mod, tourism_mod):
+            for mod in (fertility_mod, luxury_mod, tourism_mod, government_mod):
                 for log in mod.quarter(self):
                     self.action_logs.append(log)
 

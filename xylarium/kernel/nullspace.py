@@ -61,6 +61,9 @@ class NullSpaceManager:
     # ------------------------------------------------------------------ mining
     @staticmethod
     def mining_yield(captain: Captain) -> int:
+        cfg = SHIP_CATALOG.get(captain.ship.ship_type, {})
+        if cfg.get("designer"):
+            return MINING_YIELD_DEFAULT + int(cfg.get("mining", 0))       # a drawn design mines with its lasers
         return MINING_YIELD.get(captain.ship.ship_type, MINING_YIELD_DEFAULT)
 
     @classmethod

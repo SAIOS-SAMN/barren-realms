@@ -36,6 +36,7 @@ from xylarium.config import (
     DAUGHTER_SETTLER_COST,
     DEMOGRAPHY_COUNCIL_RESERVE,
     DEMOGRAPHY_PRESSURE,
+    DIASPORA_CROWDED_CYCLES,
     FRONTIER_FREE_WORLDS_RATIO,
     FRONTIER_MAX_CLUSTERS,
     FRONTIER_MIN_INTERVAL,
@@ -49,6 +50,7 @@ from xylarium.config import (
     HOUSEHOLD_RADIUS,
     HOUSEHOLD_SHORTAGE_MORALE,
     HOUSEHOLD_PURSE_PER_CAPITA,
+    LUXURY_WANT_PER_THOUSAND,
     PRICE_LEVEL,
     STEADY_STATE_MORALE,
     STEADY_STATE_SHARE,
@@ -146,10 +148,16 @@ def quarter(kernel: Any) -> List[str]:
     return logs
 
 
-def _pay_contractor(kernel: Any, planet: Any, amount: int) -> None:
+def _pay_contractor(kernel: Any, planet: Any, amount: int, from_escrow: bool = False) -> None:
     from xylarium.kernel.colony import ColonyManager
     from xylarium.kernel import ledger
-    planet.treasury -= amount
+    if from_escrow:
+        paid_escrow = min(amount, getattr(planet, "diaspora_escrow", 0))
+        paid_treasury = amount - paid_escrow
+        planet.diaspora_escrow = getattr(planet, "diaspora_escrow", 0) - paid_escrow
+        planet.treasury -= paid_treasury
+    else:
+        planet.treasury -= amount
     port = ColonyManager._contractor_port(planet, kernel)
     if port is not None:
         port.treasury += amount
@@ -164,10 +172,16 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
     reserve = int(DEMOGRAPHY_COUNCIL_RESERVE * level)
     cap = housing_cap(planet)
     policy = getattr(planet, "growth_policy", None)
+    is_diaspora = getattr(planet, "crowded_cycles", 0) > DIASPORA_CROWDED_CYCLES
 
     if policy == "steady":
         planet.morale = min(100, planet.morale + STEADY_STATE_MORALE)
         _stewardship(kernel, planet)
+        if not is_diaspora:
+            return None
+        log = send_settlers(kernel, planet)
+        if log:
+            return log
         return None
     settled = equilibrium(planet, kernel)
     if planet.population < settled * SETTLE_PRESSURE:
@@ -176,14 +190,15 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
     # 0. Past the inflection of its growth (P = half its equilibrium: each newcomer now adds less than the
     #    last), a people with a yard that builds settler ships chooses what it will become - the stars, or
     #    enough. Expansionists sail while they keep building at home.
-    if planet.citadel_level >= DAUGHTER_CITADEL_TIER:
+    if planet.citadel_level >= DAUGHTER_CITADEL_TIER or is_diaspora:
         if policy is None:
             policy = planet.growth_policy = choose_policy(kernel, planet)
             if policy == "steady":
                 st["steady"] += 1
                 _covenant(kernel, planet)
-                return f"[DEMOGRAPHY] {planet.name} adopted population controls: it will live within its world."
-        if policy == "expand":
+                if not is_diaspora:
+                    return f"[DEMOGRAPHY] {planet.name} adopted population controls: it will live within its world."
+        if policy == "expand" or is_diaspora:
             log = send_settlers(kernel, planet)
             if log:
                 return log
@@ -301,37 +316,51 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     from xylarium.kernel.universe import habitability
     st = stats(kernel)
     quarter_now = kernel.cycle_count // max(1, _quarter_len())
-    if quarter_now - getattr(planet, "last_daughter_quarter", -10 ** 6) < DAUGHTER_COOLDOWN_QUARTERS:
+    is_diaspora = getattr(planet, "crowded_cycles", 0) > DIASPORA_CROWDED_CYCLES
+    cooldown = 4 if is_diaspora else DAUGHTER_COOLDOWN_QUARTERS
+    if quarter_now - getattr(planet, "last_daughter_quarter", -10 ** 6) < cooldown:
         return None
     level = PRICE_LEVEL.get(planet.currency, 1.0)
     cost = int(DAUGHTER_SETTLER_COST * level)
-    if planet.treasury < cost + int(DEMOGRAPHY_COUNCIL_RESERVE * level):
+    reserve = int(DEMOGRAPHY_COUNCIL_RESERVE * level)
+    escrow = getattr(planet, "diaspora_escrow", 0)
+    if escrow >= cost:
+        pass
+    elif escrow + max(0, planet.treasury - reserve) >= cost:
+        pass
+    else:
         return None
     emigrants = min(DAUGHTER_EMIGRANTS_MAX, int(planet.population * DAUGHTER_EMIGRANT_SHARE))
     if emigrants < DAUGHTER_EMIGRANTS_MIN:
         return None
     from xylarium.kernel import biosphere
     metab = metabolism_of(kernel, planet)
-    radius = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 0)
-    # Settlers look for the world that will feed them best: its carrying capacity at a settler's redoubt
+    radius = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 6 if planet.citadel_level >= 3 else 3)
     best = None
-    for sid in _reach(kernel, planet.sector_id, radius):
-        for cand in kernel.sectors[sid].planets:
-            if not free_world(cand) or habitability(metab, cand.planet_type) < DAUGHTER_MIN_HABITABILITY:
-                continue
-            k = biosphere.carrying_capacity(kernel, cand, citadel=DAUGHTER_FOUNDING_TIER, habitats=0, metabolism=metab)
-            if k >= 2 * DAUGHTER_EMIGRANTS_MIN and (best is None or k > best[1]):
-                best = (cand, k)
-    planet.last_daughter_quarter = quarter_now
+    search_radii = [radius, 6, 10, 16, 25] if is_diaspora else [radius]
+    for r in search_radii:
+        ring_cands = []
+        for sid in _reach(kernel, planet.sector_id, r):
+            for cand in kernel.sectors[sid].planets:
+                if not free_world(cand) or habitability(metab, cand.planet_type) < DAUGHTER_MIN_HABITABILITY:
+                    continue
+                k = biosphere.carrying_capacity(kernel, cand, citadel=DAUGHTER_FOUNDING_TIER, habitats=0, metabolism=metab)
+                if k >= 2 * DAUGHTER_EMIGRANTS_MIN:
+                    ring_cands.append((cand, k))
+        if ring_cands:
+            best = max(ring_cands, key=lambda pair: pair[1])
+            break
     if best is None:
         st["no_room"] += 1
         frontier_state(kernel)["pressure"] += 1
         return None
+    planet.last_daughter_quarter = quarter_now
     daughter, k_daughter = best
     hab = habitability(metab, daughter.planet_type)
     emigrants = min(emigrants, k_daughter // 2)       # a new world is settled at half what it can feed
-    _pay_contractor(kernel, planet, cost)
+    _pay_contractor(kernel, planet, cost, from_escrow=True)
     planet.population -= emigrants
+    planet.crowded_cycles = 0
     daughter.population = emigrants
     daughter.habitability = hab
     daughter.owner_id = planet.owner_id
@@ -513,9 +542,13 @@ def exports(kernel: Any) -> None:
             silos = {"ORGANICS": "organics_silo", "ORE": "ore_silo"}
             # refined element reserves beyond what the world's own works use are for sale too
             for elem, have in list(planet.element_reserves.items()):
-                if have > ELEMENT_RESERVE_KEPT:
+                kept = ELEMENT_RESERVE_KEPT
+                if elem.startswith("LUX_"):
+                    # luxuries are crafted to order: the world keeps a season of its own use and ships the rest
+                    kept = int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * 0.5)
+                if have > kept:
                     silos[elem] = None
-                    keep[elem] = ELEMENT_RESERVE_KEPT
+                    keep[elem] = kept
             for comm, attr in silos.items():
                 held = getattr(planet, attr) if attr else planet.element_reserves.get(comm, 0)
                 surplus = held - keep[comm]
@@ -529,6 +562,9 @@ def exports(kernel: Any) -> None:
                     base = PORT_START_TREASURY * PRICE_LEVEL.get(port.currency, 1.0)
                     budget = int(port.treasury - base * PORT_OPEX_FLOOR)
                     room = port.max_stock.get(comm, 1000) - port.stock.get(comm, 0)
+                    if comm.startswith("LUX_"):
+                        from xylarium.kernel import luxury
+                        room = luxury.port_room(port, comm)          # ports stock luxuries to what they sell
                     if price <= 0 or budget <= 0 or room <= 0:
                         continue
                     units = min(surplus, room, budget // price)
