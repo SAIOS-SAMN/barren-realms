@@ -11,6 +11,17 @@
 
 ---
 
+## 📚 Documentation
+
+* **[docs/GAME.md](docs/GAME.md)** - the game as it is today: careers, the universe, peoples, money, polity, ships,
+  the AI, the laws of the universe and the commands. (The sections below describe the original prototype and are
+  kept for history.)
+* **[docs/STANDARDS.md](docs/STANDARDS.md)** - engineering standards: the principles every change models, the
+  architecture rules (subsystems, state, topology, caching, immutable config, action registry) and the definition
+  of done.
+
+---
+
 ## 📂 Directory Structure
 
 ```
