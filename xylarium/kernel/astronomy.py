@@ -95,7 +95,7 @@ class AstronomyManager:
         for p in planets:
             sec = sectors.get(p.sector_id) if sectors else None
             if sec is not None and getattr(p, "body", None):
-                p.orbital_angle = float(physics.orbital_phase(sec, p, self.cycle_count)) * 360.0
+                p.orbital_angle = physics.orbital_angle(sec, p, self.cycle_count)
                 continue
             period = max(1, p.orbital_period)
             p.orbital_angle = (p.orbital_angle + 360.0 / period) % 360.0

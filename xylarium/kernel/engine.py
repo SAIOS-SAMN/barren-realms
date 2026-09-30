@@ -106,6 +106,7 @@ from xylarium.config import (
 from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
 from xylarium.kernel import demography as demography_mod
 from xylarium.kernel import physics as physics_mod
+from xylarium.kernel import fibres as fibres_mod
 
 
 class GameKernel:
@@ -706,7 +707,10 @@ class GameKernel:
             captain.turns_left = max(0, captain.turns_left - result.turns_spent)
             if not captain.faction_id:
                 from xylarium.config import CREW_WAGE_ARREARS_CAP
-                captain.wages_due = min(CREW_WAGE_ARREARS_CAP, captain.wages_due + self.crew_wage(captain) * result.turns_spent)
+                # Along a developed fibre the passage is quicker and cheaper for the crew (economies of scale)
+                lane = (result.data or {}).get("lane_cost", 1.0) if action == ActionType.MOVE else 1.0
+                wage = int(round(self.crew_wage(captain) * result.turns_spent * lane))
+                captain.wages_due = min(CREW_WAGE_ARREARS_CAP, captain.wages_due + wage)
             # Advance world simulation tick for player actions
             if not captain.is_ai:
                 self.tick_simulation()
@@ -776,6 +780,9 @@ class GameKernel:
         dest_sector = self.sectors[destination]
         if captain.id not in dest_sector.captains:
             dest_sector.captains.append(captain.id)
+        # The fibre remembers the passage (traffic, and the goods' value on the lane's flow ledger)
+        lane_cost = fibres_mod.cost(self, current_sector.id, destination)
+        fibres_mod.record(self, captain, current_sector.id, destination)
 
         msg = f"Warp drive engaged. Navigated from Sector {current_sector.id} to Sector {destination}."
         logs = [msg]
@@ -846,7 +853,7 @@ class GameKernel:
             action=ActionType.MOVE,
             message=msg,
             turns_spent=SHIP_CATALOG.get(captain.ship.ship_type, {}).get("move_turns", 1),
-            data={"new_sector": destination},
+            data={"new_sector": destination, "lane_cost": lane_cost},
             logs=logs
         )
 
@@ -2645,6 +2652,8 @@ class GameKernel:
             alignment_mod.quarterly(self)
             NativeManager.tick(self)
             self._tick_sieges()
+            # The fibres close their season: lane development, economies of scale, fibre distances
+            fibres_mod.season(self)
             # Newly charted systems (ghost sectors, frontier clusters) get exact physics
             for sec in self.sectors.values():
                 physics_mod.ensure_system(sec)

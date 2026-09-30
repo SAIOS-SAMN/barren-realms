@@ -264,12 +264,37 @@ def year_cycles(sector: Any, planet: Any) -> F:
     return period_years(star(sector), b["q"]) * CYCLES_PER_STANDARD_YEAR
 
 
-def orbital_phase(sector: Any, planet: Any, cycle: int) -> F:
-    """Exact fraction of the local year completed at ``cycle`` (0 <= phase < 1)."""
+def _orbit_ints(sector: Any, planet: Any) -> Tuple[int, int, int, int]:
+    """(a, b, n, d) with phase0 = a/b and the year = n/d cycles, cached per body (integer arithmetic)."""
+    raw = getattr(planet, "body", None)
+    key = (id(raw), str(raw), getattr(sector, "id", None))
+    cache = getattr(planet, "_orbit_cache", None)
+    if cache is not None and cache[0] == key:
+        return cache[1]
     b = body(planet)
     t = year_cycles(sector, planet)
-    x = b.get("phase0", F(0)) + F(cycle) / t
-    return x - (x.numerator // x.denominator)
+    p0 = b.get("phase0", F(0))
+    ints = (p0.numerator, p0.denominator, t.numerator, t.denominator)
+    try:
+        planet._orbit_cache = (key, ints)
+    except AttributeError:
+        pass
+    return ints
+
+
+def orbital_phase(sector: Any, planet: Any, cycle: int) -> F:
+    """Exact fraction of the local year completed at ``cycle`` (0 <= phase < 1)."""
+    a, b, n, d = _orbit_ints(sector, planet)
+    # a/b + cycle * d/n, reduced mod 1, in integers
+    den = b * n
+    return F((a * n + cycle * d * b) % den, den)
+
+
+def orbital_angle(sector: Any, planet: Any, cycle: int) -> float:
+    """The display angle (degrees) at ``cycle``: exact phase, converted to a float only at the boundary."""
+    a, b, n, d = _orbit_ints(sector, planet)
+    den = b * n
+    return 360.0 * ((a * n + cycle * d * b) % den) / den
 
 
 def local_calendar(sector: Any, planet: Any, cycle: int) -> Dict[str, Any]:

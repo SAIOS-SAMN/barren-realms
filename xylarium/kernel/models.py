@@ -314,7 +314,7 @@ class Port:
     # Ports are real balance sheets: they pay for what they buy out of this treasury
     treasury: int = 0
     currency: str = "SOL"         # Settlement currency of the port's region
-    remoteness: int = 0           # Warp hops from Sol; drives the regional price gradient
+    remoteness: float = 0         # Fibre distance from Sol (developed lanes count less); drives the price gradient
     faction_id: Optional[str] = None  # Great power operating this starport (Imperial ports gouge xenos)
     consumed: Dict[str, int] = field(default_factory=dict)  # goods consumed this quarter (sold on to the region)
     regional_income: float = 0.0          # smoothed quarterly retail revenue from the region's households
@@ -347,7 +347,7 @@ class Port:
             sells=dict(data["sells"]),
             treasury=int(data.get("treasury", 0)),
             currency=data.get("currency", "SOL"),
-            remoteness=int(data.get("remoteness", 0)),
+            remoteness=float(data.get("remoteness", 0)),
             faction_id=data.get("faction_id"),
             regional_income=float(data.get("regional_income", 0.0)),
         )

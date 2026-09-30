@@ -112,9 +112,12 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
     return {"area": area, "chemistry": chemistry, "light": fit, "season": season(planet)}
 
 
-def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: Optional[int] = None,
-                      metabolism: Optional[str] = None) -> int:
-    """K: how many people this world can feed at its technology."""
+MICRO = 1_000_000          # growth and food rates are carried as integer millionths (exact, bounded)
+
+
+def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: Optional[int] = None,
+             metabolism: Optional[str] = None) -> Dict[str, int]:
+    """K and the world's growth rate (per cycle, in millionths), cached until the world or its people change."""
     kernel = _kernel(kernel)
     tier = planet.citadel_level if citadel is None else citadel
     habs = getattr(planet, "habitats", 0) if habitats is None else habitats
@@ -128,22 +131,31 @@ def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, h
     ld = land(kernel, planet, metabolism)
     natural = ld["area"] * ld["chemistry"] * ld["light"] * ld["season"]
     k = int(PEOPLE_PER_EARTH_AREA * _TECH.get(tier, _TECH[max(_TECH)]) * (natural + _HAB_AREA * habs))
-    try:
-        planet._k_cache = (key, k)
-    except AttributeError:
-        pass
-    return k
+    food = _CROP * ld["light"] * ld["season"]
+    rate = min(_BIRTH, food) if k > 0 else F(0)
+    prof = {"k": k, "food_rate_micro": int(food * MICRO), "rate_micro_per_cycle": int(rate * MICRO / _YEAR)}
+    if citadel is None and habitats is None and metabolism is None:
+        try:
+            planet._k_cache = (key, prof)
+        except AttributeError:
+            pass
+    return prof
+
+
+def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: Optional[int] = None,
+                      metabolism: Optional[str] = None) -> int:
+    """K: how many people this world can feed at its technology."""
+    return _profile(kernel, planet, citadel, habitats, metabolism)["k"]
 
 
 def food_rate(kernel: Any, planet: Any) -> F:
     """Per standard year: how fast this world's farms can add food (the crops' own threshold)."""
-    ld = land(kernel, planet)
-    return _CROP * ld["light"] * ld["season"]
+    return F(_profile(kernel, planet)["food_rate_micro"], MICRO)
 
 
 def growth_rate(kernel: Any, planet: Any) -> F:
-    """A people multiplies no faster than its farms can feed the newcomers."""
-    return min(_BIRTH, food_rate(kernel, planet)) if carrying_capacity(kernel, planet) > 0 else F(0)
+    """A people multiplies no faster than its farms can feed the newcomers (per standard year)."""
+    return F(_profile(kernel, planet)["rate_micro_per_cycle"] * _YEAR, MICRO)
 
 
 def harvest(kernel: Any, planet: Any, k: int) -> int:
@@ -160,13 +172,13 @@ def consumption(planet: Any) -> int:
 
 
 def births(kernel: Any, planet: Any, ceiling: int) -> int:
-    """Logistic growth toward ``ceiling`` this cycle, with the fractional remainder carried exactly."""
+    """Logistic growth toward ``ceiling`` this cycle; the fraction of a person is carried (in millionths)."""
     p = planet.population
     if p <= 0 or ceiling <= 0:
         return 0
-    r = growth_rate(kernel, planet) / _YEAR
-    carry = F(getattr(planet, "growth_carry", None) or 0)
-    exact = r * p * (ceiling - p) / ceiling + carry
-    whole = int(exact) if exact >= 0 else -int(-exact)
-    planet.growth_carry = str(exact - whole)
+    r = _profile(kernel, planet)["rate_micro_per_cycle"]
+    carry = int(getattr(planet, "growth_carry", None) or 0)
+    micro = r * p * (ceiling - p) // ceiling + carry          # floor division: exact in millionths
+    whole = micro // MICRO if micro >= 0 else -((-micro) // MICRO)
+    planet.growth_carry = str(micro - whole * MICRO)
     return whole

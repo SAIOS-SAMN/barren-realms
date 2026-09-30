@@ -196,6 +196,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "chronicle_kinds": dict(kernel.chronicle.counts),
         "demography": _demography_census(kernel),
         "physics": __import__("xylarium.kernel.physics", fromlist=["summary"]).summary(kernel.sectors),
+        "fibres": __import__("xylarium.kernel.fibres", fromlist=["summary"]).summary(kernel),
     }
 
 
@@ -1593,6 +1594,11 @@ def print_report(r: Dict[str, Any]) -> None:
             ph = ce["physics"]
             print(f"  physics: {ph['worlds']} worlds {ph['types']}, {ph['tidally_locked']} tidally locked, "
                   f"{ph['spacing_violations']} spacing violations")
+        if "fibres" in ce:
+            fb = ce["fibres"]
+            print(f"  fibres: {fb['passages']:,} passages, {fb['developed_lanes']} of {fb['lanes']} lanes developed, "
+                  f"top 10% of lanes carry {fb['trunk_share']:.0%} of development, trunks {fb['trunks']}, "
+                  f"cheapest transit x{fb['cheapest_cost']}")
         bk = ce.get("banking", {})
         if bk:
             print(f"  clearing union: STAMP imbalance {bk['clearing_imbalance']}, settlement chain {bk['chain_blocks']} blocks "

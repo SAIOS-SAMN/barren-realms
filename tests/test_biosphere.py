@@ -67,8 +67,8 @@ class TestBiosphere(unittest.TestCase):
         w.population = 1000
         w.growth_carry = None
         total = sum(biosphere.births(self.kernel, w, k) for _ in range(100))
-        carry = F(w.growth_carry)
-        self.assertTrue(0 <= carry < 1)
+        carry = int(w.growth_carry)
+        self.assertTrue(0 <= carry < biosphere.MICRO)
         self.assertGreater(total, 0)
 
     def test_every_founding_people_can_feed_itself_on_its_homeworld(self):

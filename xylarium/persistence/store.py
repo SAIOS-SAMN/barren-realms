@@ -42,6 +42,7 @@ class StatePersistence:
                 "native_stats": dict(getattr(kernel, "native_stats", {})),
                 "demography": getattr(kernel, "demography", None),
                 "frontier": getattr(kernel, "frontier", None),
+                "fibres": getattr(kernel, "fibres", None),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -171,6 +172,8 @@ class StatePersistence:
                 kernel.demography = data["demography"]
             if data.get("frontier"):
                 kernel.frontier = data["frontier"]
+            if data.get("fibres"):
+                kernel.fibres = data["fibres"]
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))
