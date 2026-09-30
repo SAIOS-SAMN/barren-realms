@@ -75,6 +75,33 @@ def _shift(value: float, delta: float) -> float:
     return max(-1.0, min(1.0, value + delta * factor))
 
 
+def anchor(kernel: Any, captain: Any) -> Optional[float]:
+    """
+    Ideological anchor: members of outlaw houses and the Choir of the Pyre's faithful never rise above
+    this alignment, whatever survival forces them to do - so the galaxy always keeps its Dark.
+    (Player lineages are never anchored: a player's soul is their own.)
+    """
+    from xylarium.config import IDEOLOGICAL_ANCHOR
+    if not getattr(captain, "is_ai", False):
+        return None
+    if getattr(captain, "faction_id", None) == "ZEALOT":
+        return IDEOLOGICAL_ANCHOR
+    houses = getattr(kernel, "npc_lineages", {}) if kernel is not None else {}
+    house = houses.get(getattr(captain, "house_id", None) or "")
+    if (house and house.get("creed") == "outlaw") or getattr(getattr(captain, "personality", None), "value", "") == "pirate":
+        return IDEOLOGICAL_ANCHOR
+    return None
+
+
+def _apply_anchor(kernel: Any, captain: Any) -> None:
+    ceiling = anchor(kernel, captain)
+    if ceiling is not None and captain.cosmic_alignment > ceiling:
+        captain.cosmic_alignment = ceiling
+        rec = captain.alignment_record
+        if rec.get("baseline", ceiling) > ceiling:
+            rec["baseline"] = ceiling
+
+
 def deed(kernel: Any, captain: Any, key: str, scale: float = 1.0, note: Optional[str] = None) -> float:
     """Applies an aligned deed to a captain. Returns the new alignment."""
     if captain is None or key not in ALIGNMENT_DEEDS:
@@ -85,6 +112,7 @@ def deed(kernel: Any, captain: Any, key: str, scale: float = 1.0, note: Optional
     old = captain.cosmic_alignment
     old_band = band(old)
     captain.cosmic_alignment = round(_shift(old, delta), 5)
+    _apply_anchor(kernel, captain)
     rec = captain.alignment_record
     deeds = rec.setdefault("deeds", {})
     deeds[key] = deeds.get(key, 0) + 1
@@ -188,6 +216,7 @@ def quarterly(kernel: Any) -> None:
             value = value + ALIGNMENT_RELAXATION * (base - value)
         rec["baseline"] = round(base + ALIGNMENT_CHARACTER_SHIFT * (value - base), 5)
         cap.cosmic_alignment = round(max(-1.0, min(1.0, value)), 5)
+        _apply_anchor(kernel, cap)
         value = cap.cosmic_alignment
         if rec.get("dark_q", 0) == 0 and -ALIGNMENT_VOW < value < REDEMPTION_CEILING:
             cap.cosmic_alignment = round(min(REDEMPTION_CEILING, value + ALIGNMENT_SYNTROPIC_DRIFT), 5)

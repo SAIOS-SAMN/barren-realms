@@ -1427,3 +1427,6 @@ CROSS_POOL_SEED_SOL_VALUE = 120_000        # SOL-equivalent depth per side of ea
 SETTLEMENT_RECEIPTS_KEPT_BLOCKS = 40       # Settlement blocks whose receipt bodies are kept (headers are kept forever)
 CREDIT_INCOME_QUARTERS = 4                 # A port may owe at most this many quarters of its regional income
 CREDIT_DARK_PRUDENCE = 1.5                 # Dark governors lend this multiple past prudence (and eat the write-offs)
+CENTRAL_BANK_RESERVE_CEILING = 0.30         # Reserves above this share of the currency's money supply are idle...
+CENTRAL_BANK_OMO_RATE = 0.25                # ...and this share of the idle excess funds regional public works each quarter
+IDEOLOGICAL_ANCHOR = -0.2                   # Outlaw houses and the Pyre's faithful never rise above this alignment

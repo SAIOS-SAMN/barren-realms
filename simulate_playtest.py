@@ -1041,6 +1041,9 @@ class RunStats:
         everyone = [max(0, net_worth_sol(kernel, c)) for c in private]
         money = money_supply(kernel)
         ports = [s.port for s in kernel.sectors.values() if s.port is not None]
+        from xylarium.config import PORT_RETAIL_RADIUS
+        econ_ports = [s.port for s in kernel.sectors.values() if s.port is not None and
+                      kernel.market_manager._regional_worlds(kernel, s.id, s.port.currency, PORT_RETAIL_RADIUS)]
         belts = [b for s in kernel.sectors.values() for b in s.belts]
         # Repeated failures of one deed by one captain within this 100-cycle window
         window_fails = {k: v for k, v in ACTIVITY.items() if k.startswith("deed_fail::")}
@@ -1089,6 +1092,9 @@ class RunStats:
             "policy": dict(kernel.monetary_policy.factors),
             "ports": len(ports),
             "ports_illiquid": sum(1 for p in ports if p.treasury < 1000 * PRICE_LEVEL.get(p.currency, 1.0)),
+            # Ports with an economic loop: populated worlds of their money within retail range
+            "ports_economic": len(econ_ports),
+            "ports_economic_illiquid": sum(1 for p in econ_ports if p.treasury < 1000 * PRICE_LEVEL.get(p.currency, 1.0)),
             "ports_illiquid_by_currency": dict(Counter(p.currency for p in ports if p.treasury < 1000 * PRICE_LEVEL.get(p.currency, 1.0))),
             "ports_by_currency": dict(Counter(p.currency for p in ports)),
             "belt_reserve_pct": round(sum(b["reserve"] for b in belts) / max(1, sum(b["max_reserve"] for b in belts)), 3),
@@ -1310,9 +1316,11 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         for cur, rate_now in last["fx_rates"].items():
             drift = rate_now / PRICE_LEVEL.get(cur, 1.0)
             gate(f"{cur} FX rate vs genesis level", f"{flo}x .. {fhi}x", f"{drift:.2f}x", flo <= drift <= fhi)
-        illiquid = last["ports_illiquid"] / max(1, last["ports"])
-        gate("illiquid starports", f"<= {ACCEPTANCE['illiquid_ports_share_max']:.0%}", f"{illiquid:.0%}",
-             illiquid <= ACCEPTANCE["illiquid_ports_share_max"])
+        # Only ports with an economic loop count: an outpost in an empty cluster may go dry when traffic does
+        illiquid = last["ports_economic_illiquid"] / max(1, last["ports_economic"])
+        gate("illiquid starports (with a regional economy)", f"<= {ACCEPTANCE['illiquid_ports_share_max']:.0%}",
+             f"{illiquid:.0%} ({last['ports_economic_illiquid']}/{last['ports_economic']}; all ports "
+             f"{last['ports_illiquid']}/{last['ports']})", illiquid <= ACCEPTANCE["illiquid_ports_share_max"])
 
         g = last["captain_gini"]
         lo, hi = ACCEPTANCE["captain_gini"]

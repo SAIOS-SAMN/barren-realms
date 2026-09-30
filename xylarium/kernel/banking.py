@@ -63,6 +63,8 @@ from xylarium.config import (
     CREDIT_WRITE_OFF_MULTIPLE,
     CREDIT_INCOME_QUARTERS,
     CREDIT_DARK_PRUDENCE,
+    CENTRAL_BANK_RESERVE_CEILING,
+    CENTRAL_BANK_OMO_RATE,
 )
 
 FEDERATIONS = {
@@ -269,6 +271,35 @@ class BankingSystem:
                     bank.bump("lent", lend)
                     receipts.add(kernel, "loan_advance", bank.name, port.name, lend, bank.currency, key)
 
+    # ------------------------------------------------------------------ public works
+    def _public_works(self, kernel: Any, bank: CentralBank, supply_total: int, receipts: Any) -> None:
+        """
+        Open market operations: reserves beyond the ceiling are idle money. The bank spends a share of
+        the excess on public works across its federation's populated worlds (vaults, pro rata population),
+        returning trapped liquidity to circulation. A transfer - nothing is minted.
+        """
+        if bank.currency == "SOL":
+            return  # the Federal Reserve's treasury also underwrites insurance, bounties and relief
+        ceiling = int(supply_total * CENTRAL_BANK_RESERVE_CEILING)
+        excess = self.reserves(kernel, bank) - max(ceiling, self.reserve_floor(bank))
+        if excess <= 0:
+            return
+        spend = int(excess * CENTRAL_BANK_OMO_RATE)
+        worlds = [p for s in kernel.sectors.values() for p in s.planets
+                  if p.population > 0 and p.currency == bank.currency]
+        if spend <= 0 or not worlds:
+            return
+        pop = sum(p.population for p in worlds) or 1
+        paid = 0
+        for p in worlds:
+            share = int(spend * p.population / pop)
+            p.treasury += share
+            paid += share
+        self._adjust(kernel, bank, -paid)
+        bank.bump("public_works", paid)
+        receipts.add(kernel, "public_works", bank.name, f"{bank.federation} worlds", paid, bank.currency,
+                     f"reserves above {CENTRAL_BANK_RESERVE_CEILING:.0%} of supply")
+
     # ------------------------------------------------------------------ council
     def _council(self, kernel: Any) -> Optional[str]:
         """Each era the governors review the clearing rules; the union's mood follows their alignment."""
@@ -300,11 +331,14 @@ class BankingSystem:
 
     # ------------------------------------------------------------------ quarter
     def quarter(self, kernel: Any) -> List[str]:
+        from xylarium.kernel.ledger import money_supply
         receipts = kernel.settlement
         logs: List[str] = []
+        supply = money_supply(kernel)
         for bank in self.banks.values():
             self._intervene(kernel, bank, receipts)
             self._credit(kernel, bank, receipts)
+            self._public_works(kernel, bank, supply.get(bank.currency, {}).get("total", 0), receipts)
         note = self._council(kernel)
         if note:
             logs.append(note)

@@ -134,3 +134,33 @@ class TestGalacticIsseAndSettlement(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPublicWorksAndAnchor(unittest.TestCase):
+    def setUp(self):
+        random.seed(41)
+        self.kernel = GameKernel(seed=42)
+
+    def test_idle_reserves_fund_public_works_without_minting(self):
+        bs = self.kernel.banking
+        bank = bs.banks["VOID"]
+        bank.reserves = 5_000_000
+        worlds = [p for s in self.kernel.sectors.values() for p in s.planets if p.population > 0 and p.currency == "VOID"]
+        vaults = sum(p.treasury for p in worlds)
+        before = totals(self.kernel)
+        bs._public_works(self.kernel, bank, money_supply(self.kernel)["VOID"]["total"], self.kernel.settlement)
+        self.assertLess(bank.reserves, 5_000_000)
+        self.assertGreater(sum(p.treasury for p in worlds), vaults)
+        self.assertEqual(before, totals(self.kernel))
+
+    def test_outlaw_houses_are_anchored_in_the_dark_but_players_are_free(self):
+        from xylarium.kernel import alignment
+        malakor = self.kernel.captains["ai_malakor"]
+        malakor.cosmic_alignment = -0.3
+        for _ in range(50):
+            alignment.deed(self.kernel, malakor, "famine_aid")
+        self.assertLessEqual(malakor.cosmic_alignment, -0.2)
+        player = self.kernel.register_player("free", "Free Soul", clade="ANARCHY")
+        for _ in range(50):
+            alignment.deed(self.kernel, player, "famine_aid")
+        self.assertGreater(player.cosmic_alignment, 0.0)
