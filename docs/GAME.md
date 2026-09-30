@@ -12,7 +12,10 @@ This document describes the game as it is. `docs/STANDARDS.md` describes how it 
 
 ## 1. Ways to play
 
-There is no single way to win; there are careers, and a player can mix them.
+There is no single way to win; there are careers, and a player can mix them. Type `?` (the **ADVISOR**) at any
+prompt to see what is worth doing where you stand - trade runs from this port, contracts and VIP charters you can
+sign here, what your fuel cell reckoning prefers, your worlds' alarms, who governs this system - and take any of
+it by number. The main prompt shows its best opportunity as a hint line every turn.
 
 | Career | What you do | Where to start |
 |---|---|---|
@@ -22,7 +25,7 @@ There is no single way to win; there are careers, and a player can mix them.
 | **Colonist / Governor** | Claim worlds, raise citadels, set population and natal policy, grow a house into a realm | `PLANET_CLAIM`, `POPULATION_POLICY` |
 | **Politician** | Campaign for the Senate, lobby the Compact, hold a budget office, set budgets and direct grants | `SENATE_*`, `LOBBY_CONTRIBUTE`, `BUDGET_SET` |
 | **Shipwright** | Design ships on the workbench and earn royalties whenever others build them | `SHIP_DESIGN` |
-| **Tourism magnate** | Build commercial orbital stations; fly VIP charters in liners designed for their guests | `STATION_BUILD` |
+| **Tourism magnate** | Build commercial orbital stations; fly VIP charters in liners designed for their guests | `STATION_BUILD`, `CHARTER_ACCEPT` |
 | **Explorer / Scholar** | Chart the frontier, solve cartographic puzzles, investigate anomalies, excavate ruins, meet natives | `SCAN_SPACE`, `CARTOGRAPHY_*`, `EXCAVATE`, `NATIVE_INTERACT` |
 | **Warlord / Outlaw** | Piracy, covert operations, planetary assault - at the risk of the law, bounties and your own hull | `ATTACK_*`, `COVERT_OP` |
 
@@ -78,7 +81,10 @@ players play **natal cards**: the Edict of Propagation, the Ascetic Mandate, and
 ### Demography (`demography.py`)
 Crowded worlds build: citadels (which are also the yards that build settler ships) and sub-surface habitats.
 Past the inflection of its growth, a people with yards chooses: **expand** (settler fleets found daughter worlds)
-or **enough** (population controls, stewardship, the Covenant of Enough). Households buy a basket of goods from the
+or **enough** (population controls, stewardship, the Covenant of Enough). A settler fleet's reach is its yards'
+range times the square root of its fuel cell's exhaust velocity; a fleet that finds no world to feed it in the
+open raises domes (enclosed habitats - bigger yards carry bigger kits) on any solid world. Worlds crowded for
+long divert part of their tax to a diaspora escrow that funds expeditions. Households buy a basket of goods from the
 regional starports and export their surplus harvest and ore.
 
 ### Luxury and tourism (`luxury.py`, `tourism.py`)
@@ -221,8 +227,9 @@ python3 simulate_playtest.py --cycles 10000 --seed 7
 python3 -m unittest discover -s tests
 ```
 
-`XYL_MATTER_AUDIT=1` (optionally `XYL_AUDIT_FROM=<cycle>`) makes the harness name the exact action that leaks
-matter.
+`XYL_AUDIT=1` (optionally `XYL_AUDIT_FROM=<cycle>`) makes the harness name the exact action, AI turn or seasonal
+hook that creates or destroys undeclared money or matter. Three of the harness's autopilot captains play careers on
+top of making a living (a politician, a shipwright and a tourism magnate), so those paths are played every run.
 
 ---
 
@@ -237,7 +244,7 @@ the Telnet and WebSocket bridges and the AI all use it. The main groups:
 - **Worlds:** `PLANET_CLAIM`, `PLANET_INVEST`, `PLANET_TAX`, `PLANET_BUILD_SHIELD`, `PLANET_RECRUIT_FIGHTERS`,
   `PLANET_UPGRADE_CITADEL`, `PLANET_CARGO_TRANSFER`, `PLANET_ELEMENT_TRANSFER`, `PLANET_CIVIC_CONTRIBUTE`,
   `SET_TARIFF`, `POPULATION_POLICY` (with `natal=`), `SURFACE_BUILD_DISTRICT`, `SURFACE_DEMOLISH_DISTRICT`,
-  `STATION_BUILD`
+  `STATION_BUILD`, `CHARTER_ACCEPT`
 - **Industry and space:** `MINE_ASTEROIDS`, `SALVAGE_DEBRIS`, `DEPLOY_SENTRIES`, `RECALL_SENTRIES`,
   `HAULER_COMMISSION`, `HAULER_ASSIGN_ROUTE`, `HAULER_DECOMMISSION`, `ALCHEMY_TRANSMUTE`
 - **Markets and companies:** `STOCK_BUY`, `STOCK_SELL`, `STOCK_SHORT`, `STOCK_COVER`, `COMPANY_IPO`,
@@ -252,5 +259,8 @@ the Telnet and WebSocket bridges and the AI all use it. The main groups:
 - **Self and lineage:** `RANK_PROMOTE`, `PHYLOGENY_ASCEND`, `CANOPY_OVERRIDE`, `COGNITIVE_AUTOMATE`,
   `RETIRE_LINEAGE`, `LIBRARY_BROWSE`, `CHRONICLE_WRITE`, `RADIO_BROADCAST`, `EMPIRE_OVERVIEW`
 
-The terminal client does not yet have screens for the newest systems (budgets, workbench, stations, natal policy,
-drive refits, realms); they are available through `dispatch` and the bridges.
+The terminal client's screens for the newer systems (`xylarium/client/screens.py`): `?`/`ADVISOR`, `REALMS`
+(government, budget offices, realms and their claims; set budgets and direct grants), `WORKBENCH` (frames and
+modules, draft by role for a guest biology or lay out by hand, register, build), `DRIVE` (fuel cells, what is
+abundant here, what your people's tradition burns, refit), `STATION` / `CHARTER` (stations over this system's
+worlds, VIP charters posted here), and `POPULATION` (growth policy and natal cards, with each world's fertility).

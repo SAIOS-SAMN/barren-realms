@@ -792,3 +792,17 @@ def _retire_lineage(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str,
     else:
         result = ActionResult(success=True, action=action, message=lineage_mod.extinction(k, captain, "retired"))
     return result
+
+
+@action(ActionType.CHARTER_ACCEPT, turns=0)
+def _charter_accept(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    """Sign on to a VIP charter posted at this system (the party must fit your berths); fly them to be paid."""
+    from xylarium.kernel import tourism
+    cid = tourism.accept(k, captain, current_sector)
+    if cid is None:
+        return ActionResult(success=False, action=action,
+                            message="No charter here fits your berths (or you already carry guests).")
+    c = tourism.charters(k)[cid]
+    return ActionResult(success=True, action=action,
+                        message=f"CHARTER {cid}: {c['party']} VIPs aboard, bound for {c['dest_name']} "
+                                f"(Sector {c['dest_sector']}). The fare is paid on arrival.")

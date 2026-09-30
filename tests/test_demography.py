@@ -219,3 +219,31 @@ class TestSettlerReach(unittest.TestCase):
         self.assertEqual(demography.settler_reach(k, w), 2 * torch)     # sqrt(v_e = 4)
         w.citadel_level = 3
         self.assertGreater(demography.settler_reach(k, w), 2 * torch)
+
+
+class TestDomedSettlement(unittest.TestCase):
+    def test_a_fleet_with_yards_domes_a_hostile_world_and_pays_for_it(self):
+        from xylarium.kernel import matter
+        from xylarium.kernel.ledger import money_supply
+        random.seed(173)
+        k = GameKernel(seed=7)
+        k.activate()
+        home = next(p for p in k.sectors[1].planets if p.population > 0)        # biotic Terra
+        for s in k.sectors.values():                                            # nothing green left to settle
+            for p in s.planets:
+                if demography.free_world(p) and p.planet_type in ("TERRESTRIAL", "OCEANIC"):
+                    p.planet_type = "BARREN"
+        home.citadel_level, home.population = 3, 200_000
+        home.treasury, home.ore_silo = 500_000, 5_000
+        home.last_daughter_quarter = -10 ** 6
+        m0 = {c: b["total"] for c, b in money_supply(k).items()}
+        t0, n0 = matter.totals(k), k.matter.net()
+        log = demography.send_settlers(k, home)
+        self.assertIsNotNone(log)
+        daughter = next(p for s in k.sectors.values() for p in s.planets if p.metropole_id == home.id)
+        self.assertGreaterEqual(daughter.habitats, 1)                           # they live under a dome
+        self.assertEqual(demography.stats(k)["domed_daughters"], 1)
+        self.assertEqual(m0, {c: b["total"] for c, b in money_supply(k).items()})
+        t1, n1 = matter.totals(k), k.matter.net()
+        self.assertEqual({c: d for c in set(t0) | set(t1) | set(n1)
+                          if (d := (t1.get(c, 0) - t0.get(c, 0)) - (n1.get(c, 0) - n0.get(c, 0)))}, {})

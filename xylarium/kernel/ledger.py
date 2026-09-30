@@ -10,7 +10,7 @@ that the money supply never grows by more than the declared mints.
 """
 
 from collections import Counter
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class MoneyLedger:

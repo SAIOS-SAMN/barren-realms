@@ -260,6 +260,17 @@ def consider(kernel: Any, captain: Any, sector: Any) -> Optional[str]:
         return None
     from xylarium.kernel.cognition import temperament
     t = temperament(captain, kernel)
+    # a captain who drew a liner builds it once it can afford it twice over: guests pay full fare only for decks
+    # drawn for them (tourism.arrive), and an ordinary hull earns half
+    liner = next((d for d in designs(kernel).values() if d["designer"] == captain.id and d["berths"] > 0), None)
+    if liner is not None and captain.ship.ship_type != liner["name"] and captain.credits >= 2 * liner["price"] \
+            and kernel.cycle_count - int(t.get("liner_try", -10 ** 9)) >= 100:
+        t["liner_try"] = kernel.cycle_count        # once in a while - and never again from inside its own purchase
+        from xylarium.kernel.models import ActionType
+        res = kernel.dispatch(captain.id, ActionType.SHIPYARD_PURCHASE, item="upgrade_ship", ship_name=liner["name"])
+        if getattr(res, "success", False):
+            _stats(kernel)["liners_built"] = _stats(kernel).get("liners_built", 0) + 1
+            return f"{captain.name} commissioned its liner {liner['name']}."
     if kernel.cycle_count - int(t.get("drafted", -10 ** 9)) < 1500 or captain.credits < 30_000:
         return None
     t["drafted"] = kernel.cycle_count

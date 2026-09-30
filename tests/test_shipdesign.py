@@ -94,3 +94,37 @@ class TestWorkbench(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLinerOwners(unittest.TestCase):
+    def test_a_failed_liner_purchase_never_loops_back_into_itself(self):
+        random.seed(191)
+        k = GameKernel(seed=7)
+        k.activate()
+        k.tick_simulation = lambda: None
+        cap = k.register_player("owner", "Owner")
+        cap.is_ai, cap.rank_tier, cap.credits = True, 2, 10 ** 7
+        spec = shipdesign.register(k, cap, "Grand Tour", "leviathan",
+                                   shipdesign.draft("leviathan", "liner", "biotic", "H"), "H")
+        self.assertGreater(spec["berths"], 0)
+        # the leviathan needs rank tier 4: every purchase attempt fails - and must not recurse
+        k.dispatch("owner", ActionType.REST)
+        k.dispatch("owner", ActionType.REST)
+        self.assertNotEqual(cap.ship.ship_type, "Grand Tour")
+
+
+class TestRefitKeepsCargo(unittest.TestCase):
+    def test_a_hull_that_cannot_hold_the_cargo_aboard_is_refused_before_payment(self):
+        random.seed(5)
+        k = GameKernel(seed=7)
+        k.activate()
+        cap = k.register_player("hauler", "Hauler")
+        cap.sector_id, cap.rank_tier, cap.credits = 1, 2, 10 ** 6
+        cap.ship.cargo.capacity = 10 ** 4
+        cap.ship.cargo.ore = 5000
+        before = cap.credits
+        res = k.dispatch("hauler", ActionType.SHIPYARD_PURCHASE, item="upgrade_ship", ship_name="Merchant Cruiser")
+        self.assertFalse(res.success)
+        self.assertIn("unload", res.message)
+        self.assertEqual(cap.credits, before)
+        self.assertLessEqual(cap.ship.cargo.holds_used, cap.ship.cargo.capacity)

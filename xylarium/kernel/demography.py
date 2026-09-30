@@ -333,27 +333,47 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     # expedition presses on to the full reach of its yards and drives before giving up
     search_radii = sorted({min(radius, DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 3)), radius}) \
         if is_diaspora else [radius]
+    # A fleet from a world with yards can carry a dome kit: an enclosed, lit habitat that feeds its people on any
+    # solid world whatever its light or chemistry (the habitat physics of biosphere.py). It costs a habitat's price
+    # and ore, and a world that can feed settlers in the open is always preferred - it feeds far more of them.
+    # bigger yards build bigger kits: a Stronghold's fleet carries one dome, each tier above one more
+    kit_domes = max(1, planet.citadel_level - DAUGHTER_CITADEL_TIER + 1)
+    dome_cost = int(HABITAT_COST * level)
+    can_dome = (planet.citadel_level >= DAUGHTER_CITADEL_TIER and planet.ore_silo >= HABITAT_ORE * kit_domes
+                and escrow + max(0, planet.treasury - reserve) >= cost + dome_cost * kit_domes)
     for r in search_radii:
         ring_cands = []
         for sid in topology.reach(kernel, planet.sector_id, r):
             for cand in kernel.sectors[sid].planets:
-                if not free_world(cand) or habitability(metab, cand.planet_type) < DAUGHTER_MIN_HABITABILITY:
+                if not free_world(cand):
                     continue
-                k = biosphere.carrying_capacity(kernel, cand, citadel=DAUGHTER_FOUNDING_TIER, habitats=0, metabolism=metab)
-                if k >= 2 * DAUGHTER_EMIGRANTS_MIN:
-                    ring_cands.append((cand, k))
+                if habitability(metab, cand.planet_type) >= DAUGHTER_MIN_HABITABILITY:
+                    k = biosphere.carrying_capacity(kernel, cand, citadel=DAUGHTER_FOUNDING_TIER, habitats=0,
+                                                    metabolism=metab)
+                    if k >= 2 * DAUGHTER_EMIGRANTS_MIN:
+                        ring_cands.append((cand, k, 0))
+                        continue
+                if can_dome and (cand.planet_type != "GAS_GIANT" or metab == "plasmic"):
+                    k = biosphere.carrying_capacity(kernel, cand, citadel=DAUGHTER_FOUNDING_TIER,
+                                                    habitats=kit_domes, metabolism=metab)
+                    if k >= 2 * DAUGHTER_EMIGRANTS_MIN:
+                        ring_cands.append((cand, k, kit_domes))
         if ring_cands:
-            best = max(ring_cands, key=lambda pair: pair[1])
+            best = max(ring_cands, key=lambda c: (c[1], -c[2]))
             break
     if best is None:
         st["no_room"] += 1
         frontier_state(kernel)["pressure"] += 1
         return None
     planet.last_daughter_quarter = quarter_now
-    daughter, k_daughter = best
+    daughter, k_daughter, domes = best
     hab = habitability(metab, daughter.planet_type)
     emigrants = min(emigrants, k_daughter // 2)       # a new world is settled at half what it can feed
-    _pay_contractor(kernel, planet, cost, from_escrow=True)
+    _pay_contractor(kernel, planet, cost + domes * dome_cost, from_escrow=True)
+    if domes:
+        matter.consume(planet, "ore_silo", "ORE", HABITAT_ORE * domes, "construction")
+        daughter.habitats = max(daughter.habitats, domes)
+        st["domed_daughters"] = st.get("domed_daughters", 0) + 1
     planet.population -= emigrants
     planet.crowded_cycles = 0
     daughter.population = emigrants

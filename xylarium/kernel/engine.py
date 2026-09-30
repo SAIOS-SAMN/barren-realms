@@ -1874,6 +1874,14 @@ class GameKernel:
                     message=f"Commissioning {ship_name} requires Rank Tier {min_rank} authorization. Your current rank is Tier {getattr(captain, 'rank_tier', 1)} ({getattr(captain, 'rank_title', 'Scrap-Apprentice')}).",
                 )
             cost = int(cfg["price"] * markup)
+            if captain.ship.cargo.holds_used > int(cfg["holds"] * 0.8):
+                # cargo does not vanish at a refit: the new hull (iron-framed at worst) must hold what is aboard
+                return ActionResult(
+                    success=False,
+                    action=ActionType.SHIPYARD_PURCHASE,
+                    message=f"{ship_name} holds {cfg['holds']} at most; unload your "
+                            f"{captain.ship.cargo.holds_used:g} holds of cargo first.",
+                )
             if captain.credits < cost:
                 return ActionResult(
                     success=False,

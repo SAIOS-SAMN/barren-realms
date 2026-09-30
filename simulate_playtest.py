@@ -964,9 +964,98 @@ class CognitionPlayer(BotPlayer):
             self.jobs_done += 1
 
 
+class PersonaPlayer(CognitionPlayer):
+    """
+    An autopilot captain with a career on top: it earns its living through the kernel's cognition like the
+    others, and every PERSONA_EVERY cycles plays its career through the same commands a human would type -
+    so the politician's, shipwright's and tourism magnate's paths are exercised under the laws.
+    """
+
+    kind = "persona"
+    PERSONA_EVERY = 50
+
+    def __init__(self, kernel: GameKernel, clade: str, rng: random.Random, persona: str):
+        super().__init__(kernel, clade, rng)
+        self.persona = persona
+        self.career = Counter()
+
+    def act(self, kernel: GameKernel, stats: "RunStats") -> None:
+        if kernel.cycle_count % self.PERSONA_EVERY == 0 and self.cap.turns_left > 0:
+            getattr(self, f"_{self.persona}")(kernel, stats)
+        super().act(kernel, stats)
+
+    def _record(self, what: str, res: Any) -> None:
+        if res is not None and res.success:
+            self.career[what] += 1
+
+    # the politician: runs for the Master of Coin, lobbies the Compact, governs by hand when it holds an office
+    def _politician(self, kernel: GameKernel, stats: "RunStats") -> None:
+        from xylarium.kernel import government
+        cap = self.cap
+        gm = kernel.governance_manager
+        if cap.credits > 8000 and cap.id not in (gm.candidates.get("MASTER_OF_COIN") or []):
+            self._record("campaigns", self._do(kernel, ActionType.SENATE_CAMPAIGN, stats, office="MASTER_OF_COIN"))
+        if cap.id in (gm.candidates.get("MASTER_OF_COIN") or []):
+            self._record("votes", self._do(kernel, ActionType.SENATE_VOTE, stats, office="MASTER_OF_COIN",
+                                           candidate_id=cap.id))
+        if cap.credits > 20000:
+            self._record("lobbying", self._do(kernel, ActionType.LOBBY_CONTRIBUTE, stats, amount=2000))
+        for fid, o in government.offices(kernel).items():
+            if o.get("holder") == cap.id:
+                self.career[f"held_{fid}"] += 1
+                if o.get("auto", True):
+                    self._record("budgets_set", self._do(kernel, ActionType.BUDGET_SET, stats, government=fid,
+                                                          grants=45, endowment=25, security=15, infrastructure=15))
+                mine = kernel.get_planets_owned_by(cap.id)
+                target = mine[0] if mine else next((p for p in kernel.sectors[cap.sector_id].planets
+                                                    if p.population > 0), None)
+                if target is not None:
+                    self._record("grants", self._do(kernel, ActionType.GOVERNMENT_GRANT, stats, government=fid,
+                                                     planet_id=target.id, amount=5000))
+
+    # the shipwright: draws a hauler for its trade once it has the rank and the capital, then builds it at a yard
+    def _shipwright(self, kernel: GameKernel, stats: "RunStats") -> None:
+        from xylarium.kernel import shipdesign, propulsion
+        from xylarium.config import SHIP_FRAMES
+        cap = self.cap
+        mine = [d for d in shipdesign.designs(kernel).values() if d["designer"] == cap.id]
+        if not mine and cap.rank_tier >= 2 and cap.credits > 20000:
+            frames = [f for f, spec in SHIP_FRAMES.items() if spec["min_tier"] <= cap.rank_tier]
+            frame = max(frames, key=lambda f: SHIP_FRAMES[f]["volume"])
+            drive = propulsion.choose_fuel(kernel, cap.sector_id, cap.metabolism or "mineral", cap.rank_tier,
+                                           cap.cosmic_alignment)
+            mods = shipdesign.draft(frame, "hauler", cap.metabolism or "mineral", drive)
+            self._record("designs", self._do(kernel, ActionType.SHIP_DESIGN, stats, name=f"{cap.name} Hauler",
+                                             frame=frame, modules=mods, drive=drive, royalty=0.08))
+        elif mine and cap.ship.ship_type != mine[0]["name"] and cap.credits > mine[0]["price"] * 1.5 \
+                and kernel.sectors[cap.sector_id].port is not None:
+            self._record("builds", self._do(kernel, ActionType.SHIPYARD_PURCHASE, stats, item="upgrade_ship",
+                                            ship_name=mine[0]["name"]))
+        for d in mine:
+            self.career["royalty_builds"] = max(self.career["royalty_builds"], d.get("built", 0))
+
+    # the tourism magnate: signs on to VIP charters it can carry, and builds stations where travellers are turned away
+    def _magnate(self, kernel: GameKernel, stats: "RunStats") -> None:
+        from xylarium.kernel import tourism
+        cap = self.cap
+        if not cap.charter:
+            self._record("charters", self._do(kernel, ActionType.CHARTER_ACCEPT, stats))
+        sec = kernel.sectors[cap.sector_id]
+        for p in sec.planets:
+            if tourism.station(p) is None and p.population > 0 and p.society.get("turned_away", 0) > 0 \
+                    and cap.credits > 3 * tourism.station_cost(p):
+                self._record("stations", self._do(kernel, ActionType.STATION_BUILD, stats, planet_id=p.id))
+                break
+
+
+PERSONAS = {"BIOTIC": "politician", "LITHIC": "shipwright", "PLASMIC": "magnate"}
+
+
 def make_players(kernel: GameKernel, rng: random.Random) -> List[BotPlayer]:
-    """One autopilot captain per lineage clade, plus one scripted baseline trader."""
-    players: List[BotPlayer] = [CognitionPlayer(kernel, clade, rng) for clade in BOT_CLADES]
+    """One autopilot captain per lineage clade (three of them with a career on top), plus one scripted baseline
+    trader."""
+    players: List[BotPlayer] = [PersonaPlayer(kernel, clade, rng, PERSONAS[clade]) if clade in PERSONAS
+                                else CognitionPlayer(kernel, clade, rng) for clade in BOT_CLADES]
     players.append(BotPlayer(kernel, "BIOTIC", rng, pid="bot_baseline", label="Scripted Baseline"))
     return players
 
@@ -1307,6 +1396,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
                 "cycles": f"{window_c0 + 1}-{cycle}",
                 "cycles_per_sec": round((cycle - window_c0) / max(1e-9, now - window_t0), 1),
                 "sectors": len(kernel.sectors),
+                "worlds": sum(1 for sec in kernel.sectors.values() for p in sec.planets if p.population > 0),
             })
             print(f"  cycle {cycle:>6}/{cycles}  {stats.window_rates[-1]['cycles_per_sec']:>7} cyc/s  "
                   f"captains={len(kernel.captains)}  exceptions={sum(stats.exceptions.values())}", flush=True)
@@ -1405,6 +1495,8 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
             "net_trade_cashflow": b.trade_profit,
             "freight_delivered": b.jobs_done,
             "cognition_successes": b.cognition_ok,
+            "persona": getattr(b, "persona", None),
+            "career": dict(getattr(b, "career", {}) or {}),
             "colonies_founded": b.colonies_founded,
             "final_net_worth": net_worth_sol(kernel, b.cap),
             "hungry_samples": b.hungry_samples,
@@ -1423,7 +1515,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 # Gates whose names start with these are laws (invariants); all others are observations.
 LAWS = (
     "money conserved", "matter conserved", "monetary churn", "docket balances", "quantity equation holds", "clearing union conserves", "settlement chain seals",
-    "central banks solvent", "orbits never cross", "throughput per sector", "invariant violations",
+    "central banks solvent", "orbits never cross", "throughput per unit", "invariant violations",
     "exceptions", "deterministic", "fertility collapses",
 )
 
@@ -1551,13 +1643,14 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
     floor = ACCEPTANCE["earliest_tier4_cycle_min"]
     gate("no bot reaches Tier 4 before cycle", f">= {floor}", min(tier4) if tier4 else "never", (min(tier4) >= floor) if tier4 else True)
 
-    # Throughput per unit of universe: the galaxy is allowed to grow (the frontier opens clusters); what must
-    # not happen is cost per sector creeping up (a leak). Sector-cycles per second, last window vs median.
-    windows = [w["cycles_per_sec"] * w.get("sectors", 1) for w in r["performance"]["windows"]]
+    # Throughput per unit of universe: the galaxy is allowed to grow (the frontier opens clusters, peoples settle new
+    # worlds); what must not happen is cost per unit creeping up (a leak). Units are sectors plus peopled worlds
+    # (each ticks a colony every cycle). Unit-cycles per second, last window vs median.
+    windows = [w["cycles_per_sec"] * (w.get("sectors", 1) + w.get("worlds", 0)) for w in r["performance"]["windows"]]
     if len(windows) >= 3:
         med = sorted(windows)[len(windows) // 2]
         ratio = windows[-1] / med if med else 0
-        gate("throughput per sector stable (last window / median)", f">= {ACCEPTANCE['throughput_last_vs_median_min']}",
+        gate("throughput per unit of universe stable (last window / median)", f">= {ACCEPTANCE['throughput_last_vs_median_min']}",
              round(ratio, 2), ratio >= ACCEPTANCE["throughput_last_vs_median_min"])
     solvent = sum(1 for b in r["bots"] if b.get("final_net_worth", 0) > 1000)
     need = int(round(ACCEPTANCE["solvent_players_share_min"] * len(r["bots"])))
@@ -1580,12 +1673,15 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
              per_1k >= ACCEPTANCE["chronicle_per_1k_min"])
         kinds = sum(1 for v in c1["chronicle_kinds"].values() if v > 0)
         gate("distinct chronicle kinds", f">= {ACCEPTANCE['chronicle_kinds_min']}", kinds, kinds >= ACCEPTANCE["chronicle_kinds_min"])
-        genesis_natives = r["cosmos_genesis"]["natives"]
         ns = c1["native_stats"]
         lost = ns.get("collapses", 0)
-        surviving = (genesis_natives - lost) / max(1, genesis_natives)
+        # every native people the galaxy has held (genesis and frontier clusters alike): still living, reached the
+        # stars, or collapsed - and the share not destroyed
+        ever = c1["natives"] + ns.get("first_flights", 0) + lost
+        surviving = 1.0 - lost / max(1, ever)
         gate("native societies not destroyed", f">= {ACCEPTANCE['natives_surviving_min']:.0%}",
-             f"{surviving:.0%} ({lost} collapsed, {ns.get('first_flights', 0)} reached the stars)",
+             f"{surviving:.0%} ({lost} collapsed, {ns.get('first_flights', 0)} reached the stars, "
+             f"{c1['natives']} living)",
              surviving >= ACCEPTANCE["natives_surviving_min"])
         advances = ns.get("advances", 0) + ns.get("first_flights", 0)
         gate("native societies develop (stage advances)", ">= 1 by 5,000 cycles", advances,
@@ -1745,6 +1841,8 @@ def print_report(r: Dict[str, Any]) -> None:
         dom = f.get("xp_domains", {})
         if dom:
             print("             experience by domain: " + ", ".join(f"{k} {v}" for k, v in sorted(dom.items(), key=lambda kv: -kv[1])))
+        if b.get("persona"):
+            print(f"             career ({b['persona']}): {b.get('career') or 'nothing yet'}")
         if b.get("colonies_founded"):
             print(f"             colonies founded: {b['colonies_founded']}")
         if b.get("hungry_samples"):

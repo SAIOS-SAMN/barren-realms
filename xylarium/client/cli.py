@@ -210,6 +210,13 @@ class TerminalClient:
         **{w: "ALIGN" for w in ["ALIGN", "ALIGNMENT", "KARMA", "CONSCIENCE"]},
         **{w: "DOCTRINE" for w in ["DOCTRINE", "POLICY", "DIRECTIVE", "DECK", "PRIME"]},
         **{w: "BANKS" for w in ["BANKS", "BANKING", "FEDERATIONS", "FEDS", "CLEARING", "CENTRAL"]},
+        # screens for the newer systems (client/screens.py)
+        **{w: "ADVISOR" for w in ["?", "ADVISOR", "ADVICE", "WHAT", "OPPORTUNITIES", "HINT"]},
+        **{w: "REALMS" for w in ["REALMS", "REALM", "POLITY", "GOVERNMENT", "BUDGET", "GRANT"]},
+        **{w: "WORKBENCH" for w in ["WORKBENCH", "DESIGN", "DRAFT", "BLUEPRINT"]},
+        **{w: "DRIVE" for w in ["DRIVE", "DRIVES", "REFIT", "FUEL"]},
+        **{w: "STATION" for w in ["STATION", "STATIONS", "RESORT", "TOURISM"]},
+        **{w: "CHARTER" for w in ["CHARTER", "CHARTERS", "VIP", "LINER"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -249,6 +256,14 @@ class TerminalClient:
         print(c_gray("  Archaeology: RUINS (survey) │ DIG │ SHORE (dig + shoring) │ ARTIFACTS │ PERMIT (at Sol)"))
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))
         print(c_gray("  Lineage: [E]mpire mode │ FLEET │ STOCK │ BANKS │ CLONE (Sol vats) │ RETIRE"))
+        print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
+        try:
+            from xylarium.kernel import advisor
+            tip = advisor.best(self.kernel, self.player_id)
+            if tip:
+                print(c_gold("  Hint: ") + c_white(tip["title"]) + c_gray(f"  (~{tip['value_sol']:,} SOL - type ? for more)"))
+        except Exception:
+            pass                                   # the hint line is a courtesy; it never blocks the prompt
         try:
             choice = input(f"{bold(c_white('Command [M/T/P/A/S/C/O/E/I/G/N/J/X/K/R/H/Q] > '))}").strip().upper()
         except (KeyboardInterrupt, EOFError):
@@ -296,6 +311,10 @@ class TerminalClient:
             return
         if choice == "PERMIT":
             self._print_result(self.kernel.dispatch(self.player_id, ActionType.BANK_TRANSACTION, sub_action="antiquities_permit"))
+            return
+        from xylarium.client import screens
+        if choice in screens.SCREENS:
+            screens.SCREENS[choice](self)
             return
         if choice == "ARTIFACTS":
             self._prompt_artifacts()
@@ -415,16 +434,28 @@ class TerminalClient:
         for i, p in enumerate(worlds, 1):
             print(f"  {i:>2}. {p.name[:22]:<22} {p.population:>9,} {demography.housing_cap(p):>10,}  "
                   f"{p.habitats:>3}   T{p.citadel_level}     {(p.growth_policy or 'undecided').upper()}")
-        print(c_gray("  Full worlds dig habitats, then (citadel T2+) EXPAND sends settler fleets to free worlds in reach,"
-                     " or STEADY adopts population controls (content people, the Light's regard)."))
+        print(c_gray("  Full worlds dig habitats, then (citadel T2+) EXPAND sends settler fleets to free worlds in reach"
+                     " (domes on hostile worlds), or STEADY adopts population controls (content people, the Light's regard)."))
+        print(c_gray("  Natal cards: NATAL PROPAGATION (x1.4 fertility, family subsidies, more food eaten) │ NATAL ASCETIC "
+                     "(replacement at most, +20% productivity) │ NATAL NONE"))
+        for p in worlds:
+            soc = p.society
+            fp = soc.get("fertility_parts") or {}
+            print(c_gray(f"     {p.name[:22]:<22} fertility {soc.get('fertility', 1.0):.2f} ({fp.get('strategy', '?')}-strategist)"
+                         f" natal {soc.get('natal') or '-'}  luxury wants met {soc.get('lux_access', 0):.0%}"))
         try:
-            raw = input(c_gold("World # and EXPAND/STEADY (Enter to exit) > ")).strip().split()
+            raw = input(c_gold("World # and EXPAND/STEADY or NATAL <card> (Enter to exit) > ")).strip().split()
         except (KeyboardInterrupt, EOFError):
             return
-        if len(raw) != 2 or not raw[0].isdigit() or not (1 <= int(raw[0]) <= len(worlds)):
+        if len(raw) < 2 or not raw[0].isdigit() or not (1 <= int(raw[0]) <= len(worlds)):
+            return
+        target = worlds[int(raw[0]) - 1].id
+        if raw[1].upper() == "NATAL" and len(raw) == 3:
+            self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
+                                                    planet_id=target, natal=raw[2]))
             return
         self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
-                                                planet_id=worlds[int(raw[0]) - 1].id, policy=raw[1]))
+                                                planet_id=target, policy=raw[1]))
 
     def _prompt_natives(self) -> None:
         """Dealings with non-spacefaring locals, under the doctrine in force here."""
