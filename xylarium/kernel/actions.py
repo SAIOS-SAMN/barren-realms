@@ -1,0 +1,794 @@
+"""
+Xylarium actions: every player command, registered with its handler and turn cost (docs/STANDARDS.md, S6).
+
+`GameKernel.dispatch` looks a command up here: it checks the captain's turns against the registered cost, runs the
+handler, and applies the consequences common to every action (turns, wages, docking, deeds, history). A new
+command is added by registering a handler here - not by growing the dispatcher.
+
+Handlers take (kernel, captain, the captain's current sector, the command's arguments, the action, the player id)
+and return an ActionResult.
+"""
+
+from typing import Any, Callable, Dict, NamedTuple, Optional
+
+from xylarium.config import TURN_COST_COVERT_OP, TURN_COST_MOVE, TURN_COST_PLANET_OP, TURN_COST_TRADE
+from xylarium.kernel import lineage as lineage_mod
+from xylarium.kernel import propulsion as propulsion_mod
+from xylarium.kernel import shipdesign as shipdesign_mod
+from xylarium.kernel.archaeology import ArchaeologyManager
+from xylarium.kernel.governance import SenateEdict, SenateOffice
+from xylarium.kernel.ideology import TreatyType
+from xylarium.kernel.models import ActionResult, ActionType
+from xylarium.kernel.natives import NativeManager
+from xylarium.kernel.nullspace import NullSpaceManager
+from xylarium.kernel.surface import DistrictType
+
+
+class Entry(NamedTuple):
+    handler: Callable[..., ActionResult]
+    turns: int
+
+
+REGISTRY: Dict[ActionType, Entry] = {}
+
+
+def action(kind: ActionType, turns: int = 0) -> Callable[[Callable[..., ActionResult]], Callable[..., ActionResult]]:
+    """Register a handler for a command, with the turns it costs."""
+    def deco(fn: Callable[..., ActionResult]) -> Callable[..., ActionResult]:
+        if kind in REGISTRY:
+            raise ValueError(f"{kind} is already registered")
+        REGISTRY[kind] = Entry(fn, int(turns))
+        return fn
+    return deco
+
+
+def entry(kind: ActionType) -> Optional[Entry]:
+    return REGISTRY.get(kind)
+
+
+def turn_cost(kind: ActionType) -> int:
+    e = REGISTRY.get(kind)
+    return e.turns if e is not None else 0
+
+
+# ---------------------------------------------------------------------- the commands
+
+@action(ActionType.MOVE, turns=TURN_COST_MOVE)
+def _move(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_move(captain, current_sector, kwargs.get("destination"))
+    return result
+
+
+@action(ActionType.TRADE, turns=TURN_COST_TRADE)
+def _trade(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_trade(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.PLANET_CLAIM, turns=TURN_COST_PLANET_OP)
+def _planet_claim(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_claim(captain, current_sector, kwargs.get("planet_id"))
+    return result
+
+
+@action(ActionType.PLANET_TAX, turns=0)
+def _planet_tax(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_tax(captain, current_sector, kwargs.get("planet_id"))
+    return result
+
+
+@action(ActionType.PLANET_INVEST, turns=TURN_COST_PLANET_OP)
+def _planet_invest(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_invest(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.PLANET_BUILD_SHIELD, turns=TURN_COST_PLANET_OP)
+def _planet_build_shield(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_shield(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.PLANET_RECRUIT_FIGHTERS, turns=TURN_COST_PLANET_OP)
+def _planet_recruit_fighters(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_fighters(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.PLANET_UPGRADE_CITADEL, turns=TURN_COST_PLANET_OP)
+def _planet_upgrade_citadel(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_citadel(captain, current_sector, kwargs.get("planet_id"))
+    return result
+
+
+@action(ActionType.PLANET_CARGO_TRANSFER, turns=0)
+def _planet_cargo_transfer(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_cargo(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.ATTACK_SHIP, turns=1)
+@action(ActionType.TACTICAL_COMBAT, turns=1)
+def _attack_ship(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_attack_ship(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.ATTACK_PLANET, turns=1)
+def _attack_planet(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_attack_planet(captain, current_sector, kwargs.get("planet_id"))
+    return result
+
+
+@action(ActionType.SHIPYARD_PURCHASE, turns=0)
+def _shipyard_purchase(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_shipyard(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.RADIO_BROADCAST, turns=0)
+def _radio_broadcast(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_radio(captain, kwargs.get("text", ""))
+    return result
+
+
+@action(ActionType.OPTIMIZE_ROUTES, turns=0)
+def _optimize_routes(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    mode = kwargs.get("mode", "circular")
+    routes_data = k.get_trade_routes(player_id, mode=mode, max_hops=kwargs.get("max_hops", 4))
+    result = ActionResult(
+        success=routes_data.get("success", False),
+        action=ActionType.OPTIMIZE_ROUTES,
+        message=f"Trade route optimization complete ({mode}).",
+        turns_spent=0,
+        data=routes_data
+    )
+    return result
+
+
+@action(ActionType.BANK_TRANSACTION, turns=0)
+def _bank_transaction(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_bank(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.REST, turns=0)
+def _rest(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_rest(captain, current_sector)
+    return result
+
+
+@action(ActionType.COVERT_OP, turns=TURN_COST_COVERT_OP)
+def _covert_op(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_covert_op(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.RECRUIT_OPERATIVES, turns=0)
+def _recruit_operatives(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_recruit_operatives(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.STATION_SECURITY, turns=0)
+def _station_security(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_station_security(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.PLANET_CIVIC_CONTRIBUTE, turns=TURN_COST_PLANET_OP)
+def _planet_civic_contribute(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_civic_contribute(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.PLANET_ELEMENT_TRANSFER, turns=0)
+def _planet_element_transfer(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_planet_element_transfer(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.STOCK_BUY, turns=0)
+def _stock_buy(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_stock_buy(captain, kwargs)
+    return result
+
+
+@action(ActionType.STOCK_SELL, turns=0)
+def _stock_sell(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_stock_sell(captain, kwargs)
+    return result
+
+
+@action(ActionType.COMPANY_IPO, turns=TURN_COST_PLANET_OP)
+def _company_ipo(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_company_ipo(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.FREIGHT_ACCEPT, turns=0)
+def _freight_accept(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_freight_accept(captain, kwargs)
+    return result
+
+
+@action(ActionType.FREIGHT_DELIVER, turns=0)
+def _freight_deliver(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_freight_deliver(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.CORPORATE_TAKEOVER, turns=0)
+def _corporate_takeover(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_corporate_takeover(captain, kwargs)
+    return result
+
+
+@action(ActionType.BOARD_VOTE, turns=0)
+def _board_vote(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_board_vote(captain, kwargs)
+    return result
+
+
+@action(ActionType.POISON_PILL, turns=0)
+def _poison_pill(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_poison_pill(captain, kwargs)
+    return result
+
+
+@action(ActionType.PROXY_FIGHT, turns=0)
+def _proxy_fight(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_proxy_fight(captain, kwargs)
+    return result
+
+
+@action(ActionType.STOCK_SHORT, turns=0)
+def _stock_short(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_stock_short(captain, kwargs)
+    return result
+
+
+@action(ActionType.STOCK_COVER, turns=0)
+def _stock_cover(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_stock_cover(captain, kwargs)
+    return result
+
+
+@action(ActionType.SET_TARIFF, turns=0)
+def _set_tariff(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_set_tariff(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.EXECUTIVE_HIRE, turns=0)
+def _executive_hire(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_executive_hire(captain, kwargs)
+    return result
+
+
+@action(ActionType.EXECUTIVE_MOVE, turns=0)
+def _executive_move(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_executive_move(captain, kwargs)
+    return result
+
+
+@action(ActionType.MARKETING_CAMPAIGN, turns=0)
+def _marketing_campaign(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_marketing_campaign(captain, kwargs)
+    return result
+
+
+@action(ActionType.LOBBY_CONTRIBUTE, turns=0)
+def _lobby_contribute(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_lobby_contribute(captain, kwargs)
+    return result
+
+
+@action(ActionType.COUNCIL_VOTE, turns=0)
+def _council_vote(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_council_vote(captain, kwargs)
+    return result
+
+
+@action(ActionType.HAULER_COMMISSION, turns=0)
+def _hauler_commission(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_hauler_commission(captain, kwargs)
+    return result
+
+
+@action(ActionType.HAULER_ASSIGN_ROUTE, turns=0)
+def _hauler_assign_route(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_hauler_assign_route(captain, kwargs)
+    return result
+
+
+@action(ActionType.HAULER_DECOMMISSION, turns=0)
+def _hauler_decommission(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_hauler_decommission(captain, kwargs)
+    return result
+
+
+@action(ActionType.VC_APPLY, turns=0)
+def _vc_apply(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_vc_apply(captain, kwargs)
+    return result
+
+
+@action(ActionType.VC_REPAY, turns=0)
+def _vc_repay(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_vc_repay(captain, kwargs)
+    return result
+
+
+@action(ActionType.FLEET_ASSIGN_ESCORT, turns=0)
+def _fleet_assign_escort(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_fleet_assign_escort(captain, kwargs)
+    return result
+
+
+@action(ActionType.FLEET_RECALL, turns=0)
+def _fleet_recall(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_fleet_recall(captain, kwargs)
+    return result
+
+
+@action(ActionType.EMPIRE_OVERVIEW, turns=0)
+def _empire_overview(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_empire_overview(captain)
+    return result
+
+
+@action(ActionType.RESEARCH_SELECT, turns=0)
+def _research_select(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_research_select(captain, kwargs)
+    return result
+
+
+@action(ActionType.ANOMALY_INVESTIGATE, turns=1)
+def _anomaly_investigate(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_anomaly_investigate(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.JUMP_WARP, turns=1)
+def _jump_warp(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_jump_warp(captain, kwargs)
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_SCAN, turns=0)
+def _cartography_scan(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.cartography_manager.scan_fragment(captain, kwargs.get("puzzle_id"), kernel=k)
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_ROTATE, turns=0)
+def _cartography_rotate(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.cartography_manager.rotate_node(
+        captain,
+        int(kwargs.get("row", 0)),
+        int(kwargs.get("col", 0)),
+        kwargs.get("puzzle_id"),
+        kernel=k,
+    )
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_BRIDGE, turns=0)
+def _cartography_bridge(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.cartography_manager.bridge_vector(
+        captain,
+        int(kwargs.get("r1", 0)),
+        int(kwargs.get("c1", 0)),
+        int(kwargs.get("r2", 0)),
+        int(kwargs.get("c2", 0)),
+        kwargs.get("puzzle_id"),
+        kernel=k,
+    )
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_SOLVE, turns=0)
+def _cartography_solve(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.cartography_manager.solve_puzzle(
+        captain,
+        kwargs.get("puzzle_id", k.cartography_manager.active_puzzle_id),
+        kernel=k,
+    )
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_BUY_CHIT, turns=0)
+def _cartography_buy_chit(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.cartography_manager.buy_broker_chit(captain, kernel=k)
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_SALVAGE, turns=0)
+def _cartography_salvage(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.cartography_manager.salvage_deep_space(captain, kernel=k)
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_SELECT, turns=0)
+def _cartography_select(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("puzzle_id", "PUZZLE-NEXUS")
+    if pid in k.cartography_manager.puzzles:
+        k.cartography_manager.active_puzzle_id = pid
+        captain.active_cartography_puzzle = pid
+        result = ActionResult(
+            success=True,
+            action=ActionType.CARTOGRAPHY_SELECT,
+            message=f"Active cartography matrix set to '{k.cartography_manager.puzzles[pid].name}'.",
+            data=k.cartography_manager.puzzles[pid].to_dict(),
+        )
+    else:
+        result = ActionResult(success=False, action=ActionType.CARTOGRAPHY_SELECT, message=f"Unknown puzzle ID: {pid}")
+    return result
+
+
+@action(ActionType.TOLL_GATE_DEPLOY, turns=0)
+def _toll_gate_deploy(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    s_id = kwargs.get("shortcut_id", "SMUGGLER_SHORTCUT")
+    fee = int(kwargs.get("toll_fee", 500))
+    result = k.cartography_manager.deploy_toll_gate(captain, shortcut_id=s_id, toll_fee=fee, kernel=k)
+    return result
+
+
+@action(ActionType.TOLL_GATE_SET_FEE, turns=0)
+def _toll_gate_set_fee(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    g_id = kwargs.get("gate_id", "")
+    fee = int(kwargs.get("toll_fee", 500))
+    result = k.cartography_manager.set_toll_fee(captain, gate_id=g_id, new_fee=fee)
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_FORGE_CHIT, turns=0)
+def _cartography_forge_chit(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    mode = kwargs.get("mode", "sell")
+    rival = kwargs.get("target_rival_id")
+    result = k.cartography_manager.forge_starmap_chit(captain, mode=mode, target_rival_id=rival, kernel=k)
+    return result
+
+
+@action(ActionType.CARTOGRAPHY_CATALYZE, turns=0)
+def _cartography_catalyze(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("puzzle_id")
+    elem = kwargs.get("element")
+    amt = int(kwargs.get("amount", 5))
+    result = k.cartography_manager.catalyze_puzzle(captain, puzzle_id=pid, element=elem, amount=amt, kernel=k)
+    return result
+
+
+@action(ActionType.SURVEY_PROBE_LAUNCH, turns=0)
+def _survey_probe_launch(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    t_sec = int(kwargs.get("target_sector", 61))
+    result = k.cartography_manager.launch_survey_probe(captain, target_sector=t_sec, kernel=k)
+    return result
+
+
+@action(ActionType.COGNITIVE_AUTOMATE, turns=1)
+def _cognitive_automate(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    from xylarium.kernel.cognition import CognitiveOrgan
+    turns_before = captain.turns_left
+    result = CognitiveOrgan.think(captain, k)
+    # Automation is never free: charge 1 turn unless the executed deed already spent turns
+    result.turns_spent = 0 if captain.turns_left < turns_before else 1
+    return result
+
+
+@action(ActionType.IDEOLOGY_TREATY_PROPOSE, turns=0)
+def _ideology_treaty_propose(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    t_type = kwargs.get("treaty_type", TreatyType.NON_AGGRESSION)
+    if isinstance(t_type, str):
+        t_type = TreatyType(t_type)
+    result = k.ideology_manager.propose_treaty(
+        proposer=captain,
+        target_id=kwargs.get("target_id", ""),
+        treaty_type=t_type,
+        duration=int(kwargs.get("duration", 100)),
+        captains=list(k.captains.values()),
+    )
+    return result
+
+
+@action(ActionType.IDEOLOGY_TREATY_SIGN, turns=0)
+def _ideology_treaty_sign(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.ideology_manager.sign_treaty(
+        signer=captain,
+        treaty_id=kwargs.get("treaty_id", ""),
+    )
+    return result
+
+
+@action(ActionType.IDEOLOGY_AID_DISPATCH, turns=TURN_COST_PLANET_OP)
+def _ideology_aid_dispatch(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p = k.get_planet(kwargs.get("planet_id"))
+    if not p and current_sector.planets:
+        p = current_sector.planets[0]
+    result = k.ideology_manager.dispatch_famine_aid(
+        captain=captain,
+        target_planet=p,
+        food_units=int(kwargs.get("food_units", 20)),
+    )
+    return result
+
+
+@action(ActionType.ALCHEMY_TRANSMUTE, turns=TURN_COST_PLANET_OP)
+def _alchemy_transmute(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k.alchemy_manager.transmute(
+        captain=captain,
+        recipe_id=kwargs.get("recipe_id", ""),
+        iterations=int(kwargs.get("iterations", 1)),
+    )
+    return result
+
+
+@action(ActionType.SENATE_CAMPAIGN, turns=0)
+def _senate_campaign(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    office = kwargs.get("office", SenateOffice.CHANCELLOR)
+    if isinstance(office, str):
+        office = SenateOffice(office)
+    result = k.governance_manager.register_candidate(
+        captain=captain,
+        office=office,
+    )
+    return result
+
+
+@action(ActionType.SENATE_VOTE, turns=0)
+def _senate_vote(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    office = kwargs.get("office", SenateOffice.CHANCELLOR)
+    if isinstance(office, str):
+        office = SenateOffice(office)
+    result = k.governance_manager.cast_vote(
+        voter=captain,
+        office=office,
+        candidate_id=kwargs.get("candidate_id", ""),
+        owned_planets=k.get_planets_owned_by(captain.id),
+    )
+    return result
+
+
+@action(ActionType.SENATE_ENACT_EDICT, turns=0)
+def _senate_enact_edict(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    office = kwargs.get("office", SenateOffice.CHANCELLOR)
+    if isinstance(office, str):
+        office = SenateOffice(office)
+    edict = kwargs.get("edict", SenateEdict.SOL_STIMULUS_REBATE)
+    if isinstance(edict, str):
+        edict = SenateEdict(edict)
+    result = k.governance_manager.enact_edict(
+        captain=captain,
+        office=office,
+        edict=edict,
+        captains=list(k.captains.values()),
+        planets=k.get_all_planets(),
+    )
+    return result
+
+
+@action(ActionType.SURFACE_BUILD_DISTRICT, turns=TURN_COST_PLANET_OP)
+def _surface_build_district(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p = k.get_planet(kwargs.get("planet_id"))
+    if not p and current_sector.planets:
+        p = current_sector.planets[0]
+    if not p:
+        result = ActionResult(success=False, action=action, message="No planet found in sector.")
+    else:
+        dist = kwargs.get("district", DistrictType.HABITATION_DOME)
+        if isinstance(dist, str):
+            dist = DistrictType(dist)
+        result = k.surface_manager.build_district(
+            captain=captain,
+            planet=p,
+            x=int(kwargs.get("x", 0)),
+            y=int(kwargs.get("y", 0)),
+            district=dist,
+        )
+    return result
+
+
+@action(ActionType.SURFACE_DEMOLISH_DISTRICT, turns=TURN_COST_PLANET_OP)
+def _surface_demolish_district(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p = k.get_planet(kwargs.get("planet_id"))
+    if not p and current_sector.planets:
+        p = current_sector.planets[0]
+    if not p:
+        result = ActionResult(success=False, action=action, message="No planet found in sector.")
+    else:
+        result = k.surface_manager.demolish_district(
+            captain=captain,
+            planet=p,
+            x=int(kwargs.get("x", 0)),
+            y=int(kwargs.get("y", 0)),
+        )
+    return result
+
+
+@action(ActionType.SURFACE_RECRUIT_TROOPS, turns=TURN_COST_PLANET_OP)
+def _surface_recruit_troops(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p = k.get_planet(kwargs.get("planet_id"))
+    if not p and current_sector.planets:
+        p = current_sector.planets[0]
+    if not p:
+        result = ActionResult(success=False, action=action, message="No planet found in sector.")
+    else:
+        result = k.surface_manager.recruit_troops(
+            captain=captain,
+            planet=p,
+            divisions=int(kwargs.get("divisions", 1)),
+        )
+    return result
+
+
+@action(ActionType.SURFACE_INVADE, turns=TURN_COST_PLANET_OP)
+def _surface_invade(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p = k.get_planet(kwargs.get("planet_id"))
+    if not p and current_sector.planets:
+        p = current_sector.planets[0]
+    if not p:
+        result = ActionResult(success=False, action=action, message="No target planet found to invade.")
+    else:
+        result = k.surface_manager.invade_planet(
+            attacker=captain,
+            target_planet=p,
+            divisions_to_commit=int(kwargs.get("divisions", 10)),
+        )
+    return result
+
+
+@action(ActionType.FX_EXCHANGE, turns=0)
+def _fx_exchange(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    ok, msg, out = k.fx_market.exchange(
+        captain, kwargs.get("from_currency", "SOL"), kwargs.get("to_currency", "FRN"), int(kwargs.get("amount", 0))
+    )
+    result = ActionResult(success=ok, action=action, message=msg, data={"received": out})
+    return result
+
+
+@action(ActionType.SCAN_SPACE, turns=1)
+def _scan_space(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = NullSpaceManager.scan(captain, current_sector, k)
+    return result
+
+
+@action(ActionType.MINE_ASTEROIDS, turns=1)
+def _mine_asteroids(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = NullSpaceManager.mine(captain, current_sector, kwargs.get("belt_id"), k)
+    return result
+
+
+@action(ActionType.SALVAGE_DEBRIS, turns=1)
+def _salvage_debris(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = NullSpaceManager.salvage(captain, current_sector, k)
+    return result
+
+
+@action(ActionType.DEPLOY_SENTRIES, turns=1)
+def _deploy_sentries(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = NullSpaceManager.deploy_sentries(captain, current_sector, kwargs.get("amount", 0))
+    return result
+
+
+@action(ActionType.RECALL_SENTRIES, turns=0)
+def _recall_sentries(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = NullSpaceManager.recall_sentries(captain, current_sector)
+    return result
+
+
+@action(ActionType.SURVEY_RUINS, turns=1)
+def _survey_ruins(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = ArchaeologyManager.survey(captain, current_sector, kwargs.get("planet_id"), k)
+    return result
+
+
+@action(ActionType.EXCAVATE, turns=1)
+def _excavate(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = ArchaeologyManager.excavate(captain, current_sector, kwargs.get("planet_id"),
+                                         bool(kwargs.get("shore", False)), k)
+    return result
+
+
+@action(ActionType.SELL_ARTIFACT, turns=0)
+def _sell_artifact(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = ArchaeologyManager.sell(captain, current_sector, kwargs.get("artifact_id"), k)
+    return result
+
+
+@action(ActionType.STUDY_ARTIFACT, turns=1)
+def _study_artifact(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = ArchaeologyManager.study(captain, kwargs.get("artifact_id"), k)
+    return result
+
+
+@action(ActionType.RANK_PROMOTE, turns=0)
+def _rank_promote(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_rank_promote(captain, kwargs)
+    return result
+
+
+@action(ActionType.PHYLOGENY_ASCEND, turns=0)
+def _phylogeny_ascend(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_phylogeny_ascend(captain, kwargs)
+    return result
+
+
+@action(ActionType.CANOPY_OVERRIDE, turns=0)
+def _canopy_override(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_canopy_override(captain, kwargs)
+    return result
+
+
+@action(ActionType.NATIVE_INTERACT, turns=1)
+def _native_interact(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = NativeManager.interact(k, captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.LIBRARY_BROWSE, turns=0)
+def _library_browse(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_library(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.CHRONICLE_WRITE, turns=0)
+def _chronicle_write(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_chronicle_write(captain, kwargs)
+    return result
+
+
+@action(ActionType.SHORE_LEAVE, turns=0)
+def _shore_leave(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_shore_leave(captain, current_sector, kwargs)
+    return result
+
+
+@action(ActionType.POPULATION_POLICY, turns=0)
+def _population_policy(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_population_policy(captain, kwargs)
+    return result
+
+
+@action(ActionType.BUDGET_SET, turns=0)
+@action(ActionType.GOVERNMENT_GRANT, turns=0)
+@action(ActionType.STATION_BUILD, turns=0)
+def _budget_set(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_polity(captain, current_sector, action, kwargs)
+    return result
+
+
+@action(ActionType.SHIP_DESIGN, turns=0)
+def _ship_design(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    try:
+        spec = shipdesign_mod.register(k, captain, kwargs.get("name", ""), kwargs.get("frame", ""),
+                                       dict(kwargs.get("modules") or {}), kwargs.get("drive"),
+                                       float(kwargs.get("royalty", 0.05)), kwargs.get("description", ""))
+        msg = (f"Design registered: {spec['name']} - {spec['frame']}, {spec['drive']} cell, holds {spec['holds']}, "
+               f"shields {spec['max_shields']}, berths {spec['berths']}, mass {spec['mass']}, "
+               f"{spec['price']:,} Cr to build (royalty {spec['royalty']:.0%}).")
+        result = ActionResult(success=True, action=ActionType.SHIP_DESIGN, message=msg, data=spec)
+    except ValueError as e:
+        result = ActionResult(success=False, action=ActionType.SHIP_DESIGN, message=str(e))
+    return result
+
+
+@action(ActionType.DRIVE_REFIT, turns=0)
+def _drive_refit(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    try:
+        msg = propulsion_mod.refit_drive(k, captain, current_sector, str(kwargs.get("drive", "")).upper())
+        result = ActionResult(success=True, action=ActionType.DRIVE_REFIT, message=msg, turns_spent=1)
+    except ValueError as e:
+        result = ActionResult(success=False, action=ActionType.DRIVE_REFIT, message=str(e))
+    return result
+
+
+@action(ActionType.RETIRE_LINEAGE, turns=0)
+def _retire_lineage(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    if lineage_mod.bound(k, captain.id) is None:
+        result = ActionResult(success=False, action=action, message="You lead no lineage to retire.")
+    elif not kwargs.get("confirm"):
+        result = ActionResult(success=False, action=action, message="Retirement ends your lineage. Confirm to proceed.")
+    else:
+        result = ActionResult(success=True, action=action, message=lineage_mod.extinction(k, captain, "retired"))
+    return result
