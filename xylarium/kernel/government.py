@@ -19,8 +19,9 @@ earning their owners' profit and paying commercial tax. So money runs through tw
   * The private engine. Investors build stations where travellers cannot find beds; receipts go to the owner, less
     the commercial tax. Owners compound their wealth; governments fund development from what they collect.
 
-Jurisdiction: a great power's territory; else a sovereign civilization seated in the system (it runs the
-system's starport, and its world's vault is its treasury); else the Federation (core) or the Frontier Compact
+Jurisdiction: a great power's territory; else the realm that claims the system (realms.py: its capital's government
+runs the starport, and the capital's vault is its treasury); else a sovereign civilization seated in the system;
+else the Federation (core) or the Frontier Compact
 (borderlands); in the Deep Void there is no government - the starport is a syndicate free port and keeps what
 it earns.
 
@@ -69,6 +70,13 @@ def _government_of(kernel: Any, sector: Any) -> Tuple[str, Any]:
     owner = fm.owner_of(sector.id)
     if owner in ("IMPERIUM", "ZEALOT") and owner in fm.factions:
         return "faction", fm.factions[owner]
+    # a realm's claim: its capital's government runs the system (realms.py)
+    from xylarium.kernel import realms
+    realm = realms.realm_of_sector(kernel, sector.id)
+    if realm is not None:
+        seat = realms.capital(kernel, realm)
+        if seat is not None:
+            return "civ", seat
     seat = sovereign_civ_world(sector)
     if seat is not None:
         return "civ", seat
@@ -86,13 +94,18 @@ def host_world(sector: Any) -> Optional[Any]:
 FOUNDING_PEOPLES = {"Terran Federation": "FEDERATION"}    # the peoples who are a government's own citizens
 
 
-def assign_ports(kernel: Any) -> None:
-    """Each starport is bound to its system: its host world and the government that runs it."""
+def enrol_founders(kernel: Any) -> None:
+    """The founding peoples are their governments' own citizens (not realms of their own)."""
     for sec in kernel.sectors.values():
         for p in sec.planets:
             civ = getattr(p, "civilization", None)
             if civ is not None and not civ.faction_id and civ.name in FOUNDING_PEOPLES:
                 civ.faction_id = FOUNDING_PEOPLES[civ.name]
+
+
+def assign_ports(kernel: Any) -> None:
+    """Each starport is bound to its system: its host world and the government that runs it."""
+    enrol_founders(kernel)
     for sec in kernel.sectors.values():
         port = sec.port
         if port is None:

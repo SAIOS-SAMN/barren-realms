@@ -58,6 +58,9 @@ class StatePersistence:
                 "ship_designs": getattr(kernel, "ship_designs", None),
                 "design_stats": getattr(kernel, "design_stats", None),
                 "base_systems": getattr(kernel, "_base_systems", None),
+                "realms": getattr(kernel, "realms", None),
+                "realm_claims": getattr(kernel, "realm_claims", None),
+                "realm_stats": getattr(kernel, "realm_stats", None),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -211,6 +214,10 @@ class StatePersistence:
             shipdesign.restore(kernel)
             if data.get("base_systems"):
                 kernel._base_systems = data["base_systems"]
+            if data.get("realms") is not None:
+                kernel.realms = data["realms"]
+                kernel.realm_claims = {int(k): v for k, v in (data.get("realm_claims") or {}).items()}
+                kernel.realm_stats = data.get("realm_stats") or kernel.realm_stats if hasattr(kernel, "realm_stats") else data.get("realm_stats")
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))

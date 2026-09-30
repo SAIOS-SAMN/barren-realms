@@ -205,6 +205,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "society": _society_census(kernel),
         "government": __import__("xylarium.kernel.government", fromlist=["summary"]).summary(kernel),
         "workbench": __import__("xylarium.kernel.shipdesign", fromlist=["summary"]).summary(kernel),
+        "realms": __import__("xylarium.kernel.realms", fromlist=["summary"]).summary(kernel),
         "industry": {"fabricated": {c: v for (k, c), v in kernel.matter.sources.items() if k == "fabrication"},
                      "recycled_ore": kernel.matter.sources.get(("recycling", "ORE"), 0),
                      "sector_gas": sum(getattr(s, "gas", 0) for s in kernel.sectors.values())},
@@ -1826,6 +1827,12 @@ def print_report(r: Dict[str, Any]) -> None:
             print(f"  VIP charters: posted {ch['posted']}, flown {ch['flown']} (paid {ch['paid_sol']:,.0f} SOL), ransomed "
                   f"{ch['ransomed']} ({ch['ransom_sol']:,.0f} SOL), expired {ch['expired']}; daughter-world share "
                   f"{so['daughter_share']:.1%}; income (GDP) {so['gdp_sol']:,} SOL")
+        if ce.get("realms"):
+            rl = ce["realms"]
+            print(f"  realms: {rl['realms']} ({rl['houses']} captains' houses) claiming {rl['claimed_systems']} systems, "
+                  f"{rl['contested']} contested; founded {rl['founded']}, seceded {rl['seceded']}, dissolved {rl['dissolved']}")
+            if rl["largest"]:
+                print(f"    largest: {'; '.join(rl['largest'])}")
         if ce.get("workbench"):
             wb = ce["workbench"]
             print(f"  workbench: {wb['designs']} designs ({wb['ai_designs']} by AI draughtsmen), cells {wb['by_drive']}, "

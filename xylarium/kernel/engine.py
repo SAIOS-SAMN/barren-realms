@@ -118,6 +118,7 @@ from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
 from xylarium.kernel import shipdesign as shipdesign_mod
+from xylarium.kernel import realms as realms_mod
 
 
 class GameKernel:
@@ -216,6 +217,8 @@ class GameKernel:
         # The great powers: the Aurelian Imperium and the Choir of the Pyre take their seats
         self.factions.found_great_powers(self, seed)
         self.governance_manager.bind(self, genesis=True)          # the federal treasury is the Federation's vault
+        government_mod.enrol_founders(self)
+        realms_mod.genesis(self)                                   # the baseline board's realms and their claims
         government_mod.assign_ports(self)                          # every starport is bound to its system
         self._seed_alignments(seed)
         self.banking.found(self)   # founding reserves (genesis, before the money baseline)
@@ -2802,7 +2805,7 @@ class GameKernel:
                 self.action_logs.append(log)
             # Each people reads its circumstances (fertility and natal cards), provided-for worlds craft their
             # luxuries, and households travel to the resorts they cannot find at home
-            for mod in (fertility_mod, luxury_mod, tourism_mod, government_mod):
+            for mod in (fertility_mod, luxury_mod, tourism_mod, realms_mod, government_mod):
                 for log in mod.quarter(self):
                     self.action_logs.append(log)
 
