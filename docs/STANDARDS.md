@@ -61,15 +61,20 @@ their own fields in their dataclasses; per-object records that belong to one sub
 
 All questions about the warp graph go through `topology`: `hops(kernel, origin, radius)` (jump distances within a
 radius, in breadth-first order), `reach(kernel, origin, radius)` (the same, as a list nearest first),
-`tree(kernel, origin, limit)` (distances and parents), `path(kernel, a, b)`. Do not write a breadth-first search in
-a subsystem. Anything that changes the warp graph calls `topology.changed(kernel)`.
+`tree(kernel, origin, limit)` (distances and parents), `first_hop(parent, a, b)`, `path(kernel, a, b)`,
+`nearest(kernel, origin, radius, want)` and `distances_to(kernel, goal)` (reverse distances). Every function accepts
+a kernel or a bare sector map. Do not write a breadth-first search in a subsystem; fibres' cost-weighted geodesics
+(`fibres.geodesic`) are the one other graph search. Anything that changes the warp graph calls
+`topology.changed(kernel)`.
 
 ### S4. One cache layer (`xylarium/kernel/cache.py`)
 
 Derived values that are expensive and reused are memoized with `cache.memo(kernel, bucket, key, compute,
-epoch=...)`. The epoch says when the value goes stale: `cache.season(kernel)`, `cache.cycle(kernel)`,
-`cache.graph(kernel)` (the topology version), or an explicit value computed from the inputs. Invalidation is the
-epoch changing - never a scattered `kernel._x_cache = None`. Cached values are never saved.
+epoch=..., max_age=...)`: a bucket goes stale when its epoch changes (`cache.season(kernel)`, `cache.graph(kernel)`
+- the topology version - or any value derived from the inputs, such as a claims version) or when it is older than
+`max_age` cycles. `cache.stamped(kernel, bucket, key, stamp, compute)` keeps one entry per key, recomputed when its
+inputs' stamp changes. Invalidation is always one of these - never a scattered `kernel._x_cache = None`. Caches
+live in `kernel.caches` and are never saved.
 
 ### S5. Configuration is immutable (`xylarium/kernel/hulls.py`)
 
