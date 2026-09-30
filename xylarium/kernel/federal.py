@@ -14,6 +14,7 @@ A single public account that makes the money loop closed instead of minted:
   * Restitution payments land in the reserve.
 """
 
+from xylarium.kernel import hulls
 from collections import Counter
 from typing import Any, Dict, List, Tuple
 
@@ -49,7 +50,7 @@ class FederalReserve:
     # ------------------------------------------------------------------ insurance
     @staticmethod
     def hull_value(captain: Any) -> int:
-        return int(SHIP_CATALOG.get(captain.ship.ship_type, {}).get("price", 0))
+        return int(hulls.spec(captain.ship).get("price", 0))
 
     def premium_for(self, captain: Any) -> int:
         return max(INSURANCE_MIN_PREMIUM, int(self.hull_value(captain) * INSURANCE_PREMIUM_RATE))

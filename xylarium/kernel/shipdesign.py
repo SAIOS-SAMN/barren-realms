@@ -12,8 +12,9 @@ Xylarium workbench: anyone can design ships - a frame filled with modules, held 
     draw different ships.
   * Liners: berths carry passengers; leisure decks are built for a biology (a water spa comforts biotic guests, a
     plasma bath plasmic ones). A VIP charter pays more the better the ship's comfort fits its guests (tourism.py).
-  * A design registers into the hull catalogue under its name, so the yards, AI and every system that reads hull
-    specs see it like any stock hull. Building one draws its materials (Fe, Ti, Si) from the yard's warehouse.
+  * A design is the kernel's record, with a hull entry in the shape every system reads (hulls.py): the yards and the
+    AI see it beside the stock hulls, and a ship built from it carries it. Building one draws its materials (Fe,
+    Ti, Si) from the yard's warehouse.
   * Designs are property: whoever else builds one pays its designer a royalty out of the price. Designing is a
     career - a player (or an AI draughtsman) may do nothing else.
 """
@@ -106,7 +107,7 @@ def register(kernel: Any, designer: Any, name: str, frame: str, modules: Dict[st
     name = (name or "").strip()
     if not name or len(name) > 40:
         raise ValueError("Name the design (up to 40 characters).")
-    if name in SHIP_CATALOG and SHIP_CATALOG[name].get("designer") in (None, ""):
+    if name in SHIP_CATALOG:
         raise ValueError(f"'{name}' is a stock hull.")
     if name in designs(kernel) and designs(kernel)[name]["designer"] != designer.id:
         raise ValueError(f"'{name}' is someone else's design.")
@@ -130,15 +131,16 @@ def register(kernel: Any, designer: Any, name: str, frame: str, modules: Dict[st
                 royalty=round(max(0.0, min(DESIGN_ROYALTY_MAX, float(royalty))), 3), built=0,
                 description=description or f"{frame.title()} drawn by {designer.name}.",
                 created=kernel.cycle_count)
+    spec["hull"] = _hull(spec)
     designs(kernel)[name] = spec
-    _catalogue(spec)
     _stats(kernel)["designed"] += 1
     return spec
 
 
-def _catalogue(spec: Dict[str, Any]) -> None:
-    """Enter a design in the hull catalogue (the shape every system reads)."""
-    SHIP_CATALOG[spec["name"]] = {
+def _hull(spec: Dict[str, Any]) -> Dict[str, Any]:
+    """A design's entry in the hull catalogue (the shape every system reads - hulls.py)."""
+    return {
+        "name": spec["name"],
         "holds": spec["holds"], "max_shields": spec["max_shields"], "max_fighters": spec["max_fighters"],
         "price": spec["price"], "min_rank_tier": spec["min_rank_tier"], "berths": spec["berths"],
         "mass": spec["mass"], "tank": spec["tank"], "drive": spec["drive"], "mining": spec["mining"],
@@ -148,9 +150,9 @@ def _catalogue(spec: Dict[str, Any]) -> None:
 
 
 def restore(kernel: Any) -> None:
-    """After a load: every saved design goes back into the catalogue."""
+    """After a load: designs saved before hull entries were kept get theirs."""
     for spec in designs(kernel).values():
-        _catalogue(spec)
+        spec.setdefault("hull", _hull(spec))
 
 
 def royalty_on_build(kernel: Any, builder: Any, ship_name: str, price_sol: int) -> int:
@@ -172,7 +174,8 @@ def royalty_on_build(kernel: Any, builder: Any, ship_name: str, price_sol: int) 
 
 
 def comfort_fit(ship: Any, metabolism: str) -> float:
-    return float(SHIP_CATALOG.get(ship.ship_type, {}).get("comfort", {}).get(metabolism, 0.0))
+    from xylarium.kernel import hulls
+    return float(hulls.spec(ship).get("comfort", {}).get(metabolism, 0.0))
 
 
 def _stats(kernel: Any) -> Dict[str, Any]:

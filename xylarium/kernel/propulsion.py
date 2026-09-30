@@ -39,6 +39,7 @@ from xylarium.config import (
     SKIM_ENERGY_PER_SEASON,
     SKIM_HE3_SHARE,
 )
+from xylarium.kernel import hulls
 from xylarium.kernel import matter, topology
 
 BURN_MASS_PER_UNIT = 50      # tonnes (holds + cargo units) moved one jump per unit of reaction mass (torch)
@@ -65,7 +66,7 @@ def bunker_capacity(ship: Any) -> int:
     d = drive_of(ship)
     if not d.get("v_e"):
         return 0
-    cfg = SHIP_CATALOG.get(ship.ship_type, {})
+    cfg = hulls.spec(ship)
     if cfg.get("tank") is not None and cfg.get("designer"):
         return int(cfg["tank"])                              # a drawn design carries the tanks it was drawn with
     holds = int(cfg.get("holds", 30))
@@ -73,7 +74,7 @@ def bunker_capacity(ship: Any) -> int:
 
 
 def burn_for(ship: Any) -> int:
-    cfg = SHIP_CATALOG.get(ship.ship_type, {})
+    cfg = hulls.spec(ship)
     hull = cfg.get("mass") if cfg.get("designer") else cfg.get("holds", 30)   # a drawn design's own mass
     cg = ship.cargo
     carried = cg.ore + cg.organics + cg.equipment + sum(cg.elements.values())
@@ -389,14 +390,15 @@ def quarter(kernel: Any) -> list:
 
 
 # ---------------------------------------------------------------------- the yards: hulls are matter too
-def hull_metal(ship_type: str) -> tuple:
+def hull_metal(ship_type: str, kernel: Any = None) -> tuple:
     """Iron and titanium in a hull (the same metal a wreck leaves as scrap). A drawn design carries its own bill
     of materials."""
     from xylarium.config import HULL_SCRAP_PER_1000_CR
-    mats = SHIP_CATALOG.get(ship_type, {}).get("materials")
+    cfg = hulls.lookup(kernel, ship_type) or {}
+    mats = cfg.get("materials")
     if mats:
         return max(1, int(mats.get("Fe", 0))), max(0, int(mats.get("Ti", 0)))
-    value = SHIP_CATALOG.get(ship_type, {}).get("price", 0)
+    value = cfg.get("price", 0)
     fe = max(2, int(value / 1000 * HULL_SCRAP_PER_1000_CR))
     return fe, max(1, fe // 2)
 
@@ -411,12 +413,12 @@ def refit(kernel: Any, yard_sector: Any, old_type: str, new_type: str) -> bool:
         return False
     from xylarium.kernel.economy import EconomyManager
     EconomyManager.ensure_port_inventory(port)
-    fe_old, ti_old = hull_metal(old_type)
+    fe_old, ti_old = hull_metal(old_type, kernel)
     port.stock["Fe"] = port.stock.get("Fe", 0) + fe_old
     port.stock["Ti"] = port.stock.get("Ti", 0) + ti_old
     matter.source("hull_meltdown", "Fe", fe_old)
     matter.source("hull_meltdown", "Ti", ti_old)
-    fe_need, ti_need = hull_metal(new_type)
+    fe_need, ti_need = hull_metal(new_type, kernel)
     ti_used = min(ti_need, port.stock.get("Ti", 0))
     fe_need += 2 * (ti_need - ti_used)                      # substitution: iron for the missing titanium
     fe_used = min(fe_need, port.stock.get("Fe", 0))
@@ -424,7 +426,7 @@ def refit(kernel: Any, yard_sector: Any, old_type: str, new_type: str) -> bool:
     port.stock["Fe"] = port.stock.get("Fe", 0) - fe_used
     matter.sink("shipbuilding", "Ti", ti_used)
     matter.sink("shipbuilding", "Fe", fe_used)
-    si_need = int((SHIP_CATALOG.get(new_type, {}).get("materials") or {}).get("Si", 0))
+    si_need = int(((hulls.lookup(kernel, new_type) or {}).get("materials") or {}).get("Si", 0))
     si_used = min(si_need, port.stock.get("Si", 0))           # shields, reactors and lasers are silicon
     if si_used:
         port.stock["Si"] -= si_used

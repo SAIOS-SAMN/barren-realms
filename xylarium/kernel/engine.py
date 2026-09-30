@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 from collections import deque
 import random
 
+from xylarium.kernel import hulls
 from xylarium.kernel import matter
 from xylarium.config import (
     TOTAL_SECTORS,
@@ -916,7 +917,7 @@ class GameKernel:
             success=True,
             action=ActionType.MOVE,
             message=msg,
-            turns_spent=SHIP_CATALOG.get(captain.ship.ship_type, {}).get("move_turns", 1) + coast_turns,
+            turns_spent=hulls.spec(captain.ship).get("move_turns", 1) + coast_turns,
             data={"new_sector": destination, "lane_cost": lane_cost, "coasted": bool(coast_turns)},
             logs=logs
         )
@@ -2124,7 +2125,7 @@ class GameKernel:
     def crew_wage(captain: Captain) -> int:
         """Crew pay per active turn, by hull: bigger holds and bays need bigger crews."""
         from xylarium.config import CREW_WAGE_BASE
-        cfg = SHIP_CATALOG.get(captain.ship.ship_type, {})
+        cfg = hulls.spec(captain.ship)
         return int(round(CREW_WAGE_BASE + cfg.get("holds", 25) / 25 + cfg.get("max_fighters", 20) / 50))
 
     def _settle_wages(self, captain: Captain) -> None:
@@ -2268,7 +2269,7 @@ class GameKernel:
                     action=ActionType.SHIPYARD_PURCHASE,
                     message="Quantity must be greater than zero.",
                 )
-            ship_cfg = SHIP_CATALOG.get(captain.ship.ship_type, {})
+            ship_cfg = hulls.spec(captain.ship)
             max_fighters = ship_cfg.get("max_fighters", 20)
             if captain.ship.fighters + qty > max_fighters:
                 return ActionResult(
@@ -2334,13 +2335,13 @@ class GameKernel:
 
         elif item == "upgrade_ship":
             ship_name = kwargs.get("ship_name")
-            if ship_name not in SHIP_CATALOG:
+            cfg = hulls.lookup(self, ship_name)
+            if cfg is None:
                 return ActionResult(
                     success=False,
                     action=ActionType.SHIPYARD_PURCHASE,
                     message=f"Unknown hull model: '{ship_name}'.",
                 )
-            cfg = SHIP_CATALOG[ship_name]
             if cfg.get("clade") and cfg["clade"] != getattr(captain, "clade", "") \
                     and cfg["clade"] != getattr(captain, "faction_id", None):
                 return ActionResult(
@@ -2374,6 +2375,7 @@ class GameKernel:
                 captain.ship.fuel = 0
                 captain.ship.drive, captain.ship.core_wear = cfg["drive"], 0
             captain.ship.ship_type = ship_name
+            captain.ship.design = dict(cfg) if cfg.get("designer") else None    # a drawn hull travels with its ship
             captain.ship.cargo.capacity = int(cfg["holds"] * (0.8 if iron_frame else 1.0))
             captain.ship.max_shields = cfg["max_shields"]
             captain.ship.shields = cfg["max_shields"]
@@ -3030,7 +3032,7 @@ class GameKernel:
             "promotion_requirements": captain.get_promotion_requirements(self) if hasattr(captain, "get_promotion_requirements") else {},
             "can_promote": captain.can_promote(self)[0] if hasattr(captain, "can_promote") else False,
             "clade_matrix": CLADE_RANK_MATRIX,
-            "ship_catalog": SHIP_CATALOG,
+            "ship_catalog": hulls.catalog(self),
             "sector": {
                 "id": sector.id,
                 "name": sector.name,

@@ -94,7 +94,8 @@ def beds(planet: Any) -> int:
 
 
 def berths(ship: Any) -> int:
-    spec = SHIP_CATALOG.get(ship.ship_type, {})
+    from xylarium.kernel import hulls
+    spec = hulls.spec(ship)
     return int(spec.get("berths", spec.get("holds", 25) // 10))
 
 

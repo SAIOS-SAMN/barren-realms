@@ -22,6 +22,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 
+from xylarium.kernel import hulls
 from xylarium.kernel import matter, topology
 from xylarium.kernel.models import (
     ActionType,
@@ -1049,7 +1050,7 @@ class SeatSurvive:
                     temper = temperament(captain, kernel)
                     reserve = AI_INVEST_RESERVE * temper["caution"]
                     # Save for the next hull first: capital that compounds beats paper
-                    saving_for = SeatGrow._next_hull_price(captain)
+                    saving_for = SeatGrow._next_hull_price(captain, kernel)
                     if saving_for and captain.credits < saving_for * 1.5 + AI_CASH_RESERVE * 4 + 500:
                         cheap = []
                     else:
@@ -1561,22 +1562,22 @@ class SeatGrow:
         return harbors[0] if harbors else None
 
     @staticmethod
-    def _next_hull_price(captain: Captain) -> Optional[int]:
+    def _next_hull_price(captain: Captain, kernel: Any = None) -> Optional[int]:
         """Price of the cheapest larger hull this captain is authorized to fly (what it is saving toward)."""
         from xylarium.config import SHIP_CATALOG
-        cur = SHIP_CATALOG.get(captain.ship.ship_type, {})
-        prices = [cfg["price"] for cfg in SHIP_CATALOG.values()
+        cur = hulls.spec(captain.ship)
+        prices = [cfg["price"] for cfg in hulls.catalog(kernel).values()
                   if cfg.get("holds", 0) > cur.get("holds", 0) and cfg.get("min_rank_tier", 1) <= getattr(captain, "rank_tier", 1)
                   and not (cfg.get("clade") and cfg["clade"] not in (captain.clade, captain.faction_id))]
         return min(prices) if prices else None
 
     @classmethod
-    def _upgrade_option(cls, captain: Captain, cycle: int) -> Optional[Dict[str, Any]]:
+    def _upgrade_option(cls, captain: Captain, cycle: int, kernel: Any = None) -> Optional[Dict[str, Any]]:
         """Capital growth: buy the next larger hull we're authorized for while keeping a trading float."""
         from xylarium.config import SHIP_CATALOG
-        cur = SHIP_CATALOG.get(captain.ship.ship_type, {})
+        cur = hulls.spec(captain.ship)
         best = None
-        for name, cfg in SHIP_CATALOG.items():
+        for name, cfg in hulls.catalog(kernel).items():
             if cfg.get("holds", 0) <= cur.get("holds", 0) or cfg.get("min_rank_tier", 1) > getattr(captain, "rank_tier", 1):
                 continue
             if cfg.get("clade") and cfg["clade"] not in (captain.clade, captain.faction_id):
@@ -1654,7 +1655,7 @@ class SeatGrow:
                 captain.active_plan = None
 
         # 3. Capital growth before speculation when the treasury is deep enough
-        upgrade = cls._upgrade_option(captain, cycle)
+        upgrade = cls._upgrade_option(captain, cycle, kernel)
         if upgrade:
             captain.active_plan = upgrade
             return cls._advance_plan(captain, upgrade, sector, dist, parent, kernel)

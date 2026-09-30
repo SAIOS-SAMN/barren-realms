@@ -5,6 +5,7 @@ Handles ship-to-ship tactical engagements and planetary orbital sieges (BRE/SRE 
 
 import random
 from typing import Dict, Any, List, Optional
+from xylarium.kernel import hulls
 from xylarium.kernel import matter
 from xylarium.kernel.models import (
     Captain,
@@ -74,6 +75,7 @@ def _eject_to_sol(captain: Captain, kernel: Optional[Any], credit_loss_frac: flo
 
     scout = SHIP_CATALOG.get("Scout Ship", {})
     captain.ship.ship_type = "Scout Ship"
+    captain.ship.design = None                                 # a stock escape craft, whatever was drawn before
     if captain.ship.fuel:
         from xylarium.kernel.propulsion import fuel_of
         matter.sink("vaporized", fuel_of(captain.ship) or "H", captain.ship.fuel)
@@ -338,8 +340,8 @@ class CombatManager:
         att_power = int(att_fighters * random.uniform(8.0, 14.0)) + random.randint(15, 35)
         def_power = int(def_fighters * random.uniform(8.0, 14.0)) + random.randint(10, 25)
         # Heavy broadside batteries (Gothic Battle-Cruisers, Fanatic Boarding Vessels)
-        att_power = int(att_power * SHIP_CATALOG.get(attacker.ship.ship_type, {}).get("broadside", 1.0))
-        def_power = int(def_power * SHIP_CATALOG.get(defender.ship.ship_type, {}).get("broadside", 1.0))
+        att_power = int(att_power * hulls.spec(attacker.ship).get("broadside", 1.0))
+        def_power = int(def_power * hulls.spec(defender.ship).get("broadside", 1.0))
 
         # 1. Attacker damages Defender
         if defender.ship.shields > 0:

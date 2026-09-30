@@ -21,6 +21,7 @@ Xylarium crime: who breaks the law is a matter of pedigree, temperament and a re
     as transfers, never from nowhere.
 """
 
+from xylarium.kernel import hulls
 import random
 import zlib
 from typing import Any, Dict, List, Optional, Tuple
@@ -141,7 +142,7 @@ def _opportunities(kernel: Any, captain: Any, sector: Any) -> List[Tuple[float, 
             mine, theirs = _power(captain.ship), _power(other.ship)
             p_win = mine / max(1e-9, mine + theirs)
             gain = p_win * (other.credits * 0.5 + (other.ship.cargo.ore + other.ship.cargo.organics) * 5)
-            hull = SHIP_CATALOG.get(captain.ship.ship_type, {}).get("price", 0) * 0.6
+            hull = hulls.spec(captain.ship).get("price", 0) * 0.6
             downside = (1.0 - p_win) * (hull + captain.credits * 0.5)
             out.append((gain, downside, "piracy", {"action": ActionType.ATTACK_SHIP, "target_id": other.id}))
     # A would-be thief with no crew recruits one where operatives are for hire (any starport)

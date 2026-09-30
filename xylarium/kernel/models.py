@@ -539,6 +539,7 @@ class Ship:
     fuel: int = 0            # reaction mass in the drive bunker (not in the cargo holds): H, or He-3 for a He-3 drive
     drive: str = "H"         # "H" fusion torch, "HE3" fusion drive, "WARP" stabilizer (propulsion.py)
     core_wear: int = 0       # jumps on the installed warp core
+    design: Optional[Dict[str, Any]] = None   # the hull entry of a drawn design this ship was built to (hulls.py)
     has_cryo_containment: bool = False  # Stasis Pod cryogenic containment reducing transit spoilage by 80%
 
     def to_dict(self) -> Dict[str, Any]:
@@ -551,6 +552,7 @@ class Ship:
             "fuel": self.fuel,
             "drive": self.drive,
             "core_wear": self.core_wear,
+            "design": dict(self.design) if self.design else None,
             "has_cryo_containment": self.has_cryo_containment,
         }
 
@@ -562,6 +564,7 @@ class Ship:
             fuel=int(data.get("fuel", 0)),
             drive=data.get("drive", "H"),
             core_wear=int(data.get("core_wear", 0)),
+            design=data.get("design"),
             shields=data["shields"],
             max_shields=data["max_shields"],
             fighters=data["fighters"],

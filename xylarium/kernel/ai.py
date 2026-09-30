@@ -5,6 +5,7 @@ Heuristic decision loops for Traders, Pirates, Industrialists, and Mercenaries.
 
 import random
 from typing import Dict, List, Optional, TYPE_CHECKING
+from xylarium.kernel import hulls
 from xylarium.kernel import matter
 from xylarium.config import (
     AI_CAPTAINS_CONFIG,
@@ -598,7 +599,7 @@ class AIManager:
             disposable = max(0, captain.credits - AI_CASH_RESERVE)
 
             # 2. Re-arm fighters up to the respawn-kit floor first, then toward bay capacity
-            ship_cfg = SHIP_CATALOG.get(captain.ship.ship_type, {})
+            ship_cfg = hulls.spec(captain.ship)
             max_fighters = ship_cfg.get("max_fighters", 20)
             if captain.ship.fighters < max_fighters and disposable >= 60:
                 budget = disposable // 2 if captain.ship.shields < captain.ship.max_shields else disposable

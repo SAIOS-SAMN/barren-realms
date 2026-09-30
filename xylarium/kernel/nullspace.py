@@ -20,6 +20,7 @@ from xylarium.config import (
     HULL_SCRAP_PER_1000_CR,
     SHIP_CATALOG,
 )
+from xylarium.kernel import hulls
 from xylarium.kernel import matter
 from xylarium.kernel.models import ActionResult, ActionType, Captain, Sector
 from xylarium.kernel.experience import ExperienceManager
@@ -61,7 +62,7 @@ class NullSpaceManager:
     # ------------------------------------------------------------------ mining
     @staticmethod
     def mining_yield(captain: Captain) -> int:
-        cfg = SHIP_CATALOG.get(captain.ship.ship_type, {})
+        cfg = hulls.spec(captain.ship)
         if cfg.get("designer"):
             return MINING_YIELD_DEFAULT + int(cfg.get("mining", 0))       # a drawn design mines with its lasers
         return MINING_YIELD.get(captain.ship.ship_type, MINING_YIELD_DEFAULT)
@@ -170,7 +171,7 @@ class NullSpaceManager:
             matter.sink("vaporized", fk, fuel - kept)
             captain.ship.fuel = 0
         # The hull itself becomes scrap metal (hull mass is not in the census until it breaks apart)
-        hull_value = SHIP_CATALOG.get(captain.ship.ship_type, {}).get("price", 0)
+        hull_value = hulls.spec(captain.ship).get("price", 0)
         scrap = max(2, int(hull_value / 1000 * HULL_SCRAP_PER_1000_CR))
         spill["Fe"] = spill.get("Fe", 0) + scrap
         spill["Ti"] = spill.get("Ti", 0) + max(1, scrap // 2)

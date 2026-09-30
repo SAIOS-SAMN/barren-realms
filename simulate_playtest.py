@@ -41,6 +41,7 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+from xylarium.kernel import hulls
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.models import ActionType
 from xylarium.persistence.store import StatePersistence
@@ -991,7 +992,7 @@ def net_worth_sol(kernel: GameKernel, cap: Any) -> int:
     cargo_value = sum(q * COMMODITY_CONFIG.get(k, {}).get("base_price", 10) for k, q in goods.items()) * 0.8
     # Productive capital: hull at 60% resale, equity portfolio at market price
     from xylarium.config import SHIP_CATALOG
-    hull = SHIP_CATALOG.get(cap.ship.ship_type, {}).get("price", 0) * 0.6
+    hull = hulls.spec(cap.ship).get("price", 0) * 0.6
     companies = kernel.market_manager.companies
     equity = sum(companies[t].share_price * n for t, n in getattr(cap, "portfolio", {}).items() if t in companies)
     return int(liquid_sol(kernel, cap) + cargo_value + sum(a.get("appraisal_sol", 0) for a in cap.artifacts)

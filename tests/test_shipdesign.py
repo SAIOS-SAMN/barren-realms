@@ -6,8 +6,7 @@ earn their designers royalties, and a liner's decks decide how much its guests p
 import random
 import unittest
 
-from xylarium.config import SHIP_CATALOG
-from xylarium.kernel import matter, propulsion, shipdesign, tourism
+from xylarium.kernel import hulls, matter, propulsion, shipdesign, tourism
 from xylarium.kernel.economy import EconomyManager
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.models import ActionType
@@ -43,7 +42,7 @@ class TestWorkbench(unittest.TestCase):
         res = self.k.dispatch("draughtsman", ActionType.SHIP_DESIGN, name="Longhauler", frame="frigate",
                               modules={"drive": 2, "reactor": 1, "tank": 8, "hold": 90}, drive="H", royalty=0.1)
         self.assertTrue(res.success, res.message)
-        self.assertEqual(SHIP_CATALOG["Longhauler"]["holds"], 90)
+        self.assertEqual(hulls.lookup(self.k, "Longhauler")["holds"], 90)
         buyer = self.k.register_player("buyer", "Buyer")
         buyer.credits = 10 ** 6
         buyer.rank_tier = 3
@@ -64,9 +63,9 @@ class TestWorkbench(unittest.TestCase):
         heavy = shipdesign.register(self.k, self.d, "Anvil", "cruiser", {"drive": 3, "reactor": 1, "tank": 6, "armor": 150})
         self.assertLess(light["mass"], heavy["mass"])
         ship = self.d.ship
-        ship.ship_type = "Feather"
+        ship.ship_type, ship.design = "Feather", light["hull"]
         b_light = propulsion.burn_for(ship)
-        ship.ship_type = "Anvil"
+        ship.ship_type, ship.design = "Anvil", heavy["hull"]
         self.assertGreater(propulsion.burn_for(ship), b_light)
 
     def test_a_liner_is_drawn_for_its_guests_and_they_pay_for_the_fit(self):
@@ -87,6 +86,7 @@ class TestWorkbench(unittest.TestCase):
              "status": "IN_TRANSIT", "captain": self.d.id, "posted": 0}
         tourism.charters(self.k)[c["id"]] = c
         self.d.charter, self.d.ship.ship_type, self.d.sector_id = c["id"], "Tidewater", dest.id
+        self.d.ship.design = spec["hull"]
         wallet = self.d.credits + sum(self.d.fx_wallet.values())
         tourism.arrive(self.k, self.d)
         self.assertEqual(self.d.credits + sum(self.d.fx_wallet.values()) - wallet, 1000)

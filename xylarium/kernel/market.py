@@ -7,6 +7,7 @@ quarterly dividend distributions, and population-listed star trade freight contr
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
 import random
+from xylarium.kernel import hulls
 from xylarium.kernel import matter, topology
 from xylarium.kernel.models import TradeHauler, Captain, Ship, CargoHold, AIPersonality
 from xylarium.config import (
@@ -2445,8 +2446,7 @@ class MarketManager:
         # Ship hull valuation
         ship = getattr(captain, "ship", None)
         if ship:
-            ship_type = getattr(ship, "ship_type", "")
-            ship_cfg = SHIP_CATALOG.get(ship_type, {})
+            ship_cfg = hulls.spec(ship)
             equity += ship_cfg.get("price", 1000)
 
             # Cargo inventory valuation
@@ -2715,7 +2715,7 @@ class MarketManager:
             if hauler.escort_fighters < count:
                 return False, f"Hauler only has {hauler.escort_fighters} escort fighters deployed.", {}
             hauler.escort_fighters -= count
-            max_f = getattr(captain.ship, "max_fighters", SHIP_CATALOG.get(getattr(captain.ship, "ship_type", ""), {}).get("max_fighters", 100))
+            max_f = getattr(captain.ship, "max_fighters", hulls.spec(captain.ship).get("max_fighters", 100))
             captain.ship.fighters = min(max_f, captain.ship.fighters + count)
             msg = f"ESCORT RECALLED: Recovered {count} fighter wings from {hauler.name} to flagship."
         else:
@@ -2916,7 +2916,7 @@ class MarketManager:
 
         # Return escort fighters to captain flagship
         if hauler.escort_fighters > 0 and hasattr(captain, "ship"):
-            max_f = getattr(captain.ship, "max_fighters", SHIP_CATALOG.get(getattr(captain.ship, "ship_type", ""), {}).get("max_fighters", 100))
+            max_f = getattr(captain.ship, "max_fighters", hulls.spec(captain.ship).get("max_fighters", 100))
             captain.ship.fighters = min(max_f, captain.ship.fighters + hauler.escort_fighters)
 
         # The Stardock buys the hull back out of its own treasury (it cannot pay what it does not have)
