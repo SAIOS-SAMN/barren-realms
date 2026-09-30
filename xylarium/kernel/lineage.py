@@ -296,6 +296,13 @@ def _creed(captain: Any) -> str:
     return "mercantile"
 
 
+def house_endangered(kernel: Any, captain: Any) -> bool:
+    """A house down to its last backup clones turns defensive: no raids, no picked fights, restock first."""
+    from xylarium.config import HOUSE_ENDANGERED_CLONES
+    house = house_of(kernel, captain)
+    return bool(house and house["status"] == "ACTIVE" and house["clones"] < HOUSE_ENDANGERED_CLONES)
+
+
 def house_of(kernel: Any, captain: Any) -> Optional[Dict[str, Any]]:
     hid = getattr(captain, "house_id", None)
     return getattr(kernel, "npc_lineages", {}).get(hid) if hid else None
@@ -340,7 +347,10 @@ def npc_tick(kernel: Any) -> List[str]:
                 if c.sector_id == 1:
                     return True
                 return house["creed"] == "outlaw" and sec.port is not None and sec.security.value == "ANARCHY"
-            buyer = next((c for c in live if at_vats(c) and c.credits >= LINEAGE_CLONE_PRICE * 4), None)
+            # An endangered house spends more readily on the vats: survival before savings
+            from xylarium.config import HOUSE_ENDANGERED_CLONES
+            margin = 1.2 if house["clones"] < HOUSE_ENDANGERED_CLONES else 4
+            buyer = next((c for c in live if at_vats(c) and c.credits >= LINEAGE_CLONE_PRICE * margin), None)
             if buyer is not None:
                 buyer.credits -= LINEAGE_CLONE_PRICE
                 kernel._stardock_revenue(kernel.sectors[buyer.sector_id], LINEAGE_CLONE_PRICE)

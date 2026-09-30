@@ -224,6 +224,7 @@ class TestP4ColonyCapsAndFamine(unittest.TestCase):
         self.planet.organics_silo = 50
         self.planet.morale = 90
         self.planet.citadel_level = 2  # upkeep that a tiny colony's tax cannot cover
+        self.planet.population = 500
         yield_data = ColonyManager.tick_colony(self.planet)
         self.assertFalse(yield_data["upkeep_paid"])
         # Gross tax was collected and fully spent on arrears; nothing reaches the vault

@@ -164,3 +164,91 @@ class TestPublicWorksAndAnchor(unittest.TestCase):
         for _ in range(50):
             alignment.deed(self.kernel, player, "famine_aid")
         self.assertGreater(player.cosmic_alignment, 0.0)
+
+
+class TestCommerceTaxHousesAndArbitrage(unittest.TestCase):
+    def setUp(self):
+        random.seed(43)
+        self.kernel = GameKernel(seed=42)
+
+    def test_port_trades_pay_a_sales_tax_to_the_regions_worlds(self):
+        from xylarium.kernel.models import ActionType
+        cap = self.kernel.register_player("merchant", "Merchant")
+        sec = next(s for s in self.kernel.sectors.values()
+                   if s.port and s.port.sells.get("ORGANICS") and self.kernel._tax_recipients(s))
+        self.kernel.sectors[cap.sector_id].captains.remove(cap.id)
+        cap.sector_id = sec.id
+        sec.captains.append(cap.id)
+        cap.credits = 20000
+        self.kernel.tick_simulation = lambda: None   # isolate the trade from the world tick it would trigger
+        worlds = self.kernel._tax_recipients(sec)
+        vaults = sum(p.treasury for p in worlds)
+        before = totals(self.kernel)
+        res = self.kernel.dispatch("merchant", ActionType.TRADE, type="BUY", commodity="ORGANICS", amount=10)
+        self.assertTrue(res.success, res.message)
+        self.assertGreater(res.data.get("sales_tax", 0), 0)
+        self.assertGreater(sum(p.treasury for p in worlds), vaults)
+        self.assertEqual(before, totals(self.kernel))          # a transfer: nothing created or destroyed
+
+    def test_an_endangered_house_lies_low(self):
+        from xylarium.kernel import lineage
+        from xylarium.kernel.ai import AIManager
+        malakor = self.kernel.captains["ai_malakor"]
+        house = lineage.house_of(self.kernel, malakor)
+        house["clones"] = 0
+        self.assertTrue(lineage.house_endangered(self.kernel, malakor))
+        malakor.cosmic_alignment = 0.0
+        sec = next(s for s in self.kernel.sectors.values() if s.is_protected_space and s.security.value != "FEDERATION")
+        mark = self.kernel.register_player("mark", "Mark")
+        for c in (malakor, mark):
+            self.kernel.sectors[c.sector_id].captains.remove(c.id)
+            c.sector_id = sec.id
+            sec.captains.append(c.id)
+        mark.credits = 10000
+        malakor.credits = 0      # can't afford the vats either: it simply lies low
+        AIManager.execute_turn(self.kernel, malakor)
+        self.assertEqual(mark.credits, 10000)                 # no shakedown, no raid
+
+    def test_financier_arbitrage_narrows_a_mispriced_cross_pair(self):
+        from xylarium.kernel.ai import AIManager
+        fxm = self.kernel.fx_market
+        pool = fxm.cross_pools["FRN/VOID"]
+        pool["b"] *= 1.3                                       # VOID far too cheap on the Galactic ISSE
+        def gap():
+            return abs((pool["b"] / pool["a"]) / (fxm.rate("VOID") / fxm.rate("FRN")) - 1)
+        before_gap = gap()
+        fin = self.kernel.register_player("fin", "Financier")
+        fin.is_ai = True
+        fin.traits = {"calling": "financier", "thrift": 1.0, "ambition": 1.0, "caution": 1.0, "risk": 1.0,
+                      "horizon": 1.0, "spend": 0.1}
+        fin.credits = 200_000
+        money_before = totals(self.kernel)
+        import xylarium.config as cfg
+        old = cfg.FINANCIER_ARBITRAGE_CHANCE
+        cfg.FINANCIER_ARBITRAGE_CHANCE = 1.0
+        try:
+            for _ in range(10):
+                AIManager._financier_arbitrage(self.kernel, fin)
+        finally:
+            cfg.FINANCIER_ARBITRAGE_CHANCE = old
+        self.assertLess(gap(), before_gap)
+        self.assertGreater(fin.credits, 200_000)
+        self.assertEqual(money_before, totals(self.kernel))
+
+
+class TestCrossReanchor(unittest.TestCase):
+    def test_the_isse_rebalances_its_own_books_toward_the_hub_rate(self):
+        random.seed(59)
+        kernel = GameKernel(seed=42)
+        fxm = kernel.fx_market
+        pool = fxm.cross_pools["FRN/VOID"]
+        pool["b"] = int(pool["b"] * 1.4)
+        fxm.pools["VOID"]["local"] -= int(pool["b"] - pool["b"] / 1.4)     # keep money where it was
+
+        def gap():
+            return abs((pool["b"] / pool["a"]) / (fxm.rate("VOID") / fxm.rate("FRN")) - 1)
+        before_gap = gap()
+        money = totals(kernel)
+        fxm.reanchor_cross(0.5)
+        self.assertLess(gap(), before_gap * 0.8)
+        self.assertEqual(money, totals(kernel))

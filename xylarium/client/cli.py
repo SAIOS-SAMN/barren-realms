@@ -204,6 +204,7 @@ class TerminalClient:
         **{w: "RECALL" for w in ["RECALL", "RETRIEVE"]},
         **{w: "FX" for w in ["FX", "FOREX", "CURRENCY", "CURRENCIES"]},
         **{w: "NATIVES" for w in ["NATIVES", "NATIVE", "LOCALS", "CONTACT", "UPLIFT"]},
+        **{w: "POPULATION" for w in ["POPULATION", "POP", "DEMOGRAPHY", "SETTLE"]},
         **{w: "LIBRARY" for w in ["L", "LIBRARY", "LIB", "CHRONICLE", "CHRONICLES", "HISTORY", "LORE"]},
         **{w: "WRITE" for w in ["WRITE", "JOURNAL", "LOG"]},
         **{w: "ALIGN" for w in ["ALIGN", "ALIGNMENT", "KARMA", "CONSCIENCE"]},
@@ -308,6 +309,9 @@ class TerminalClient:
         if choice == "NATIVES":
             self._prompt_natives()
             return
+        if choice == "POPULATION":
+            self._prompt_population()
+            return
         if choice == "BANKS":
             self._show_banking()
             return
@@ -399,6 +403,28 @@ class TerminalClient:
             self._do_quit()
         else:
             print(c_red(f"Unknown command: '{choice}'. Type 'H' for help."))
+
+    def _prompt_population(self) -> None:
+        """Your worlds' peoples: housing, habitats, and the choice between the stars and enough."""
+        from xylarium.kernel import demography
+        worlds = [p for p in self.kernel.get_all_planets() if p.owner_id == self.player_id]
+        if not worlds:
+            print(c_gray("You govern no worlds."))
+            return
+        print(c_cyan("\n  WORLD                     PEOPLE      HOUSING   HAB  CITADEL  POLICY"))
+        for i, p in enumerate(worlds, 1):
+            print(f"  {i:>2}. {p.name[:22]:<22} {p.population:>9,} {demography.housing_cap(p):>10,}  "
+                  f"{p.habitats:>3}   T{p.citadel_level}     {(p.growth_policy or 'undecided').upper()}")
+        print(c_gray("  Full worlds dig habitats, then (citadel T2+) EXPAND sends settler fleets to free worlds in reach,"
+                     " or STEADY adopts population controls (content people, the Light's regard)."))
+        try:
+            raw = input(c_gold("World # and EXPAND/STEADY (Enter to exit) > ")).strip().split()
+        except (KeyboardInterrupt, EOFError):
+            return
+        if len(raw) != 2 or not raw[0].isdigit() or not (1 <= int(raw[0]) <= len(worlds)):
+            return
+        self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
+                                                planet_id=worlds[int(raw[0]) - 1].id, policy=raw[1]))
 
     def _prompt_natives(self) -> None:
         """Dealings with non-spacefaring locals, under the doctrine in force here."""

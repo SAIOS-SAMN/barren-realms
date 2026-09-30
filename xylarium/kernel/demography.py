@@ -1,0 +1,471 @@
+"""
+Xylarium: demography - peoples grow on their worlds, and then decide what to become.
+
+  * Housing is technology. A world's housing is its citadel's base x how well it suits its people's
+    biology x (1 + 25% per sub-surface habitat). When a population presses on its housing the colony
+    council builds - first the citadel (which is also the yard that makes settler ships), then habitats -
+    paying the region's starport contractors from the vault. Nothing is minted: construction is a transfer.
+  * At the engineering ceiling a people chooses. Expansionists send settler fleets to found daughter
+    worlds within reach (the multi-planetary drive). Others adopt population controls: they hold their
+    numbers below housing, are content for it, and the Light notices (stewardship). AI houses choose by
+    temperament and alignment, indigenous civilizations by their own alignment, players by command.
+  * Space : people : resources stay in balance. When the charted galaxy runs short of free worlds, or
+    settler fleets keep finding nothing in reach, the frontier opens a new star cluster (declared new
+    territory: new worlds, belts, ports and their capital).
+  * Households are consumers. Every fiscal quarter each populated world buys a basket of goods from its
+    regional starports - organics, water, equipment - from their household purse (their share of what the
+    colony earns) to the port treasury, goods out of the warehouse; savings beyond need go to the vault.
+    Demand drains stock, stock sets prices, prices send captains hauling: the demand side of the loop.
+"""
+
+from typing import Any, Dict, List, Optional
+
+from xylarium.config import (
+    CITADEL_CONFIG,
+    COLONY_KIT_ORGANICS,
+    DAUGHTER_CITADEL_TIER,
+    DAUGHTER_COOLDOWN_QUARTERS,
+    DAUGHTER_EMIGRANT_SHARE,
+    DAUGHTER_EMIGRANTS_MAX,
+    DAUGHTER_EMIGRANTS_MIN,
+    DAUGHTER_MIN_HABITABILITY,
+    DAUGHTER_RADIUS_BY_TIER,
+    DAUGHTER_SETTLER_COST,
+    DEMOGRAPHY_COUNCIL_RESERVE,
+    DEMOGRAPHY_PRESSURE,
+    FRONTIER_FREE_WORLDS_RATIO,
+    FRONTIER_MAX_CLUSTERS,
+    FRONTIER_MIN_INTERVAL,
+    FRONTIER_PRESSURE_QUARTERS,
+    CITADEL_BUILD_QUARTERS_PER_TIER,
+    HABITAT_BUILD_QUARTERS,
+    HABITAT_COST,
+    HABITAT_HOUSING_BONUS,
+    HABITAT_ORE,
+    HABITATS_MAX_BY_TIER,
+    HOUSEHOLD_BASKET,
+    HOUSEHOLD_RADIUS,
+    HOUSEHOLD_SHORTAGE_MORALE,
+    HOUSEHOLD_PURSE_PER_CAPITA,
+    PRICE_LEVEL,
+    STEADY_STATE_MORALE,
+    STEADY_STATE_SHARE,
+)
+
+POLICIES = ("expand", "steady")
+
+
+# ---------------------------------------------------------------------- housing
+def housing_cap(planet: Any) -> int:
+    cfg = CITADEL_CONFIG.get(planet.citadel_level, CITADEL_CONFIG[0])
+    base = cfg.get("max_population", 2500) * max(0.1, getattr(planet, "habitability", 1.0))
+    return int(base * (1.0 + HABITAT_HOUSING_BONUS * getattr(planet, "habitats", 0)))
+
+
+def growth_ceiling(planet: Any) -> int:
+    """Where natural growth stops: housing, or less for a people that has chosen population controls."""
+    cap = housing_cap(planet)
+    if getattr(planet, "growth_policy", None) == "steady":
+        return int(cap * STEADY_STATE_SHARE)
+    return cap
+
+
+def at_engineering_ceiling(planet: Any) -> bool:
+    return (planet.citadel_level >= max(CITADEL_CONFIG)
+            and getattr(planet, "habitats", 0) >= HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0))
+
+
+def building(planet: Any) -> bool:
+    """A world crowding its housing that can still build (citadel or habitats) and hasn't chosen to hold steady."""
+    if getattr(planet, "growth_policy", None) == "steady" or planet.population <= 0:
+        return False
+    if planet.population < housing_cap(planet) * DEMOGRAPHY_PRESSURE:
+        return False
+    if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
+        return True
+    return planet.citadel_level + 1 in CITADEL_CONFIG and self_governed(planet)
+
+
+def self_governed(planet: Any, kernel: Any = None) -> bool:
+    """AI and indigenous worlds' councils raise their own citadels; players raise theirs."""
+    if kernel is None:
+        from xylarium.kernel import ledger
+        kernel = ledger.active_kernel()
+    owner = kernel.captains.get(planet.owner_id) if (kernel is not None and planet.owner_id) else None
+    return owner is None or getattr(owner, "is_ai", False)
+
+
+def governed(planet: Any) -> bool:
+    """Worlds with a government that runs a budget: colonies, and indigenous spacefaring civilizations."""
+    return planet.population > 0 and (planet.owner_id is not None or getattr(planet, "civilization", None) is not None)
+
+
+def metabolism_of(kernel: Any, planet: Any) -> str:
+    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
+    if owner is not None:
+        return getattr(owner, "metabolism", "biotic")
+    civ = getattr(planet, "civilization", None)
+    return getattr(civ, "metabolism", "biotic") or "biotic"
+
+
+# ---------------------------------------------------------------------- stats
+def stats(kernel: Any) -> Dict[str, Any]:
+    s = getattr(kernel, "demography", None)
+    if s is None:
+        s = kernel.demography = {"habitats": 0, "citadels": 0, "daughters": 0, "emigrants": 0, "steady": 0,
+                                 "no_room": 0, "clusters_opened": [], "last_cluster_cycle": 0,
+                                 "household_spend": {}, "household_units": 0, "shortages": 0}
+    return s
+
+
+# ---------------------------------------------------------------------- quarter
+def quarter(kernel: Any) -> List[str]:
+    """Runs each fiscal quarter: councils build, peoples choose, settlers sail, households shop, the frontier opens."""
+    logs: List[str] = []
+    st = stats(kernel)
+    for sec in list(kernel.sectors.values()):
+        for planet in list(sec.planets):
+            if not governed(planet) or getattr(planet, "natives", None):
+                continue
+            log = develop(kernel, planet)
+            if log:
+                logs.append(log)
+    households(kernel)
+    log = frontier(kernel)
+    if log:
+        logs.append(log)
+    return logs
+
+
+def _pay_contractor(kernel: Any, planet: Any, amount: int) -> None:
+    from xylarium.kernel.colony import ColonyManager
+    from xylarium.kernel import ledger
+    planet.treasury -= amount
+    port = ColonyManager._contractor_port(planet, kernel)
+    if port is not None:
+        port.treasury += amount
+    else:
+        ledger.burn("colony_construction", amount, planet.currency)
+
+
+def develop(kernel: Any, planet: Any) -> Optional[str]:
+    """The colony council's quarter: build when crowded, choose at the ceiling, act on the choice."""
+    st = stats(kernel)
+    level = PRICE_LEVEL.get(planet.currency, 1.0)
+    reserve = int(DEMOGRAPHY_COUNCIL_RESERVE * level)
+    cap = housing_cap(planet)
+    policy = getattr(planet, "growth_policy", None)
+
+    if policy == "steady":
+        planet.morale = min(100, planet.morale + STEADY_STATE_MORALE)
+        _stewardship(kernel, planet)
+        return None
+    if planet.population < cap * DEMOGRAPHY_PRESSURE:
+        return None
+
+    if kernel.cycle_count < getattr(planet, "works_ready_cycle", 0):
+        return None   # the council's crews are still on the last project
+
+    # 1. Technology first: the citadel is both housing and the yard that builds settler ships.
+    #    Players upgrade their own citadels; councils of AI and indigenous worlds do it themselves.
+    nxt = planet.citadel_level + 1
+    if self_governed(planet, kernel) and nxt in CITADEL_CONFIG:
+        cfg = CITADEL_CONFIG[nxt]
+        cost = int(cfg["upgrade_cost"] * level)
+        if planet.treasury >= cost + reserve and planet.ore_silo >= cfg["upgrade_ore"]:
+            _pay_contractor(kernel, planet, cost)
+            planet.ore_silo -= cfg["upgrade_ore"]
+            planet.citadel_level = nxt
+            planet.works_ready_cycle = kernel.cycle_count + CITADEL_BUILD_QUARTERS_PER_TIER * nxt * _quarter_len()
+            st["citadels"] += 1
+            if getattr(kernel, "event_bus", None):
+                civ = getattr(planet, "civilization", None)
+                who = civ.name if (civ is not None and planet.owner_id is None) else planet.name
+                kernel.event_bus.broadcast_radio(sender=planet.name, channel="COMM-1", sector_id=planet.sector_id,
+                                                 text=f"CIVIC ASCENT: {who} on {planet.name} has raised its Citadel to "
+                                                      f"Tier {nxt} ({cfg['name']}) to house a growing people.")
+            return f"[DEMOGRAPHY] {planet.name} raised its citadel to Tier {nxt} ({cfg['name']}) to house its people."
+
+    # 2. Dig: sub-surface habitats, up to what the citadel's engineering allows
+    if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
+        cost = int(HABITAT_COST * level * (1 + planet.habitats))
+        if planet.treasury >= cost + reserve and planet.ore_silo >= HABITAT_ORE:
+            _pay_contractor(kernel, planet, cost)
+            planet.ore_silo -= HABITAT_ORE
+            planet.habitats += 1
+            planet.works_ready_cycle = kernel.cycle_count + HABITAT_BUILD_QUARTERS * _quarter_len()
+            st["habitats"] += 1
+            return None
+        return None   # saving for the next habitat
+
+    # 3. No more room to dig here: a people chooses what it will become
+    if planet.citadel_level < DAUGHTER_CITADEL_TIER and nxt in CITADEL_CONFIG:
+        return None   # still climbing the ladder (players: upgrade the citadel to build settler ships)
+    if policy is None:
+        policy = planet.growth_policy = choose_policy(kernel, planet)
+        if policy == "steady":
+            st["steady"] += 1
+            _covenant(kernel, planet)
+            return f"[DEMOGRAPHY] {planet.name} adopted population controls: it will live within its world."
+    if policy == "expand":
+        return send_settlers(kernel, planet)
+    return None
+
+
+def choose_policy(kernel: Any, planet: Any) -> str:
+    """Expand to the stars, or live within one world? Temperament and alignment decide."""
+    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
+    if owner is not None and not getattr(owner, "is_ai", False):
+        return "expand"   # players decide for themselves (POPULATION command); the default is the stars
+    if owner is not None:
+        from xylarium.kernel.cognition import temperament
+        t = temperament(owner, kernel)
+        drive = t.get("ambition", 1.0) * t.get("horizon", 1.0) - t.get("caution", 1.0)
+        drive -= 0.6 * getattr(owner, "cosmic_alignment", 0.0)     # the Light leans toward enough
+        return "expand" if drive > -0.25 else "steady"
+    civ = getattr(planet, "civilization", None)
+    align = getattr(civ, "alignment", 0.0) or 0.0
+    # Indigenous peoples: a steady, luminous people keeps its world; others reach outward
+    seed = sum(ord(ch) for ch in planet.id) % 100 / 100.0
+    return "steady" if align + 0.3 * seed > 0.35 else "expand"
+
+
+def _stewardship(kernel: Any, planet: Any) -> None:
+    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
+    if owner is not None:
+        from xylarium.kernel import alignment
+        alignment.deed(kernel, owner, "stewardship")
+    else:
+        civ = getattr(planet, "civilization", None)
+        if civ is not None and hasattr(civ, "alignment"):
+            civ.alignment = round(min(1.0, (civ.alignment or 0.0) + 0.002), 4)
+
+
+def _covenant(kernel: Any, planet: Any) -> None:
+    chron = getattr(kernel, "chronicle", None)
+    if chron is None:
+        return
+    civ = getattr(planet, "civilization", None)
+    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
+    people = getattr(civ, "name", None) or (owner.name + "'s colonists" if owner else planet.name)
+    chron.record(kernel, "COVENANT", planet.id, people, f"The Covenant of Enough on {planet.name}",
+                 f"The people of {planet.name} looked at the sky, and at their children, and chose. They will not "
+                 f"send fleets. They will be as many as their world can carry, and no more.",
+                 sector_id=planet.sector_id, tags=["demography", "stewardship"],
+                 alignment=getattr(civ, "alignment", None) if civ else getattr(owner, "cosmic_alignment", None))
+
+
+# ---------------------------------------------------------------------- settlers
+def _reach(kernel: Any, origin: int, radius: int) -> List[int]:
+    dist, frontier = {origin: 0}, [origin]
+    while frontier:
+        nxt = []
+        for sid in frontier:
+            if dist[sid] >= radius:
+                continue
+            for w in kernel.sectors[sid].warps:
+                if w in kernel.sectors and w not in dist:
+                    dist[w] = dist[sid] + 1
+                    nxt.append(w)
+        frontier = nxt
+    return sorted(dist, key=lambda s: dist[s])
+
+
+def free_world(planet: Any) -> bool:
+    return (planet.owner_id is None and planet.population <= 0 and not getattr(planet, "natives", None)
+            and not getattr(planet, "faction_id", None) and getattr(planet, "civilization", None) is None)
+
+
+def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
+    from xylarium.kernel.universe import habitability
+    st = stats(kernel)
+    quarter_now = kernel.cycle_count // max(1, _quarter_len())
+    if quarter_now - getattr(planet, "last_daughter_quarter", -10 ** 6) < DAUGHTER_COOLDOWN_QUARTERS:
+        return None
+    level = PRICE_LEVEL.get(planet.currency, 1.0)
+    cost = int(DAUGHTER_SETTLER_COST * level)
+    if planet.treasury < cost + int(DEMOGRAPHY_COUNCIL_RESERVE * level):
+        return None
+    emigrants = min(DAUGHTER_EMIGRANTS_MAX, int(planet.population * DAUGHTER_EMIGRANT_SHARE))
+    if emigrants < DAUGHTER_EMIGRANTS_MIN:
+        return None
+    metab = metabolism_of(kernel, planet)
+    radius = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 0)
+    best = None
+    for sid in _reach(kernel, planet.sector_id, radius):
+        for cand in kernel.sectors[sid].planets:
+            if not free_world(cand):
+                continue
+            hab = habitability(metab, cand.planet_type)
+            if hab >= DAUGHTER_MIN_HABITABILITY and (best is None or hab > best[1]):
+                best = (cand, hab)
+        if best is not None and best[1] >= 0.8:
+            break
+    planet.last_daughter_quarter = quarter_now
+    if best is None:
+        st["no_room"] += 1
+        frontier_state(kernel)["pressure"] += 1
+        return None
+    daughter, hab = best
+    _pay_contractor(kernel, planet, cost)
+    planet.population -= emigrants
+    daughter.population = emigrants
+    daughter.habitability = hab
+    daughter.owner_id = planet.owner_id
+    daughter.organics_silo += COLONY_KIT_ORGANICS
+    daughter.morale = max(daughter.morale, 80)
+    daughter.growth_policy = None
+    if planet.owner_id is None and getattr(planet, "civilization", None) is not None:
+        daughter.civilization = planet.civilization          # the same people, now on two worlds
+    daughter.metropole_id = planet.id
+    st["daughters"] += 1
+    st["emigrants"] += emigrants
+    chron = getattr(kernel, "chronicle", None)
+    civ = getattr(planet, "civilization", None)
+    people = getattr(civ, "name", None) or planet.name
+    if chron is not None:
+        chron.record(kernel, "SETTLEMENT", daughter.id, people, f"The Settling of {daughter.name}",
+                     f"{emigrants:,} of {planet.name}'s people crossed to {daughter.name} in Sector "
+                     f"{daughter.sector_id:03d}. Their world had grown too small for them.",
+                     sector_id=daughter.sector_id, tags=["demography", "settlement"])
+    if getattr(kernel, "event_bus", None):
+        kernel.event_bus.broadcast_radio(sender=planet.name,
+                                         text=f"SETTLER FLEET: {emigrants:,} colonists from {planet.name} have founded "
+                                              f"a daughter world on {daughter.name} (Sector {daughter.sector_id:03d}).",
+                                         channel="COMM-1", sector_id=daughter.sector_id)
+    return f"[DEMOGRAPHY] {planet.name} founded daughter world {daughter.name} with {emigrants:,} settlers."
+
+
+def _quarter_len() -> int:
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    return FISCAL_QUARTER_CYCLES
+
+
+# ---------------------------------------------------------------------- frontier
+def frontier_state(kernel: Any) -> Dict[str, Any]:
+    f = getattr(kernel, "frontier", None)
+    if f is None:
+        f = kernel.frontier = {"pressure": 0}
+    return f
+
+
+def frontier(kernel: Any) -> Optional[str]:
+    """Open a new star cluster when the galaxy's peoples run out of room."""
+    st = stats(kernel)
+    rm = getattr(kernel, "research_manager", None)
+    if rm is None:
+        return None
+    if kernel.cycle_count - st["last_cluster_cycle"] < FRONTIER_MIN_INTERVAL:
+        return None
+    if len(rm.minted_clusters) >= FRONTIER_MAX_CLUSTERS:
+        return None
+    from xylarium.kernel.universe import habitability
+    populated = free = 0
+    for sec in kernel.sectors.values():
+        for p in sec.planets:
+            if p.population > 0:
+                populated += 1
+            elif free_world(p) and max(habitability(m, p.planet_type) for m in ("biotic", "mineral", "plasmic", "cryogenic")) >= DAUGHTER_MIN_HABITABILITY:
+                free += 1
+    fs = frontier_state(kernel)
+    crowded = free < FRONTIER_FREE_WORLDS_RATIO * max(1, populated)
+    if not crowded and fs["pressure"] < FRONTIER_PRESSURE_QUARTERS:
+        return None
+    index = 2 if 2 not in rm.minted_clusters else (3 if 3 not in rm.minted_clusters else max(rm.minted_clusters) + 1)
+    ok, msg, new_ids = rm.mint_frontier_cluster(kernel, index)
+    if not ok:
+        return None
+    fs["pressure"] = 0
+    st["last_cluster_cycle"] = kernel.cycle_count
+    st["clusters_opened"].append({"cycle": kernel.cycle_count, "cluster": index, "sectors": len(new_ids),
+                                  "reason": "crowded" if crowded else "settler pressure"})
+    return f"[FRONTIER] {msg}"
+
+
+# ---------------------------------------------------------------------- households
+def _markets(kernel: Any, planet: Any) -> List[Any]:
+    cache = getattr(kernel, "_household_markets", None)
+    if cache is None or kernel.cycle_count - cache.get("_built", -10 ** 9) > 250:
+        cache = kernel._household_markets = {"_built": kernel.cycle_count}
+    key = planet.id
+    if key not in cache:
+        ports = []
+        for sid in _reach(kernel, planet.sector_id, HOUSEHOLD_RADIUS):
+            port = kernel.sectors[sid].port
+            if port is not None and port.currency == planet.currency:
+                ports.append(sid)
+        cache[key] = ports
+    return [kernel.sectors[sid].port for sid in cache[key] if kernel.sectors[sid].port is not None]
+
+
+def households(kernel: Any) -> None:
+    """Every populated world buys its basket from the region's starports: vault -> port, goods consumed."""
+    from xylarium.kernel.economy import EconomyManager
+    st = stats(kernel)
+    for sec in kernel.sectors.values():
+        for planet in sec.planets:
+            if planet.population <= 0 or getattr(planet, "natives", None):
+                continue
+            ports = _markets(kernel, planet)
+            budget = planet.household_purse
+            if not ports or budget <= 0:
+                _save(planet)
+                continue
+            wanted = filled = 0
+            prosperity = max(0.3, planet.morale / 100.0)
+            for comm, per_k in HOUSEHOLD_BASKET.items():
+                need = int(planet.population / 1000.0 * per_k * prosperity)
+                if need <= 0:
+                    continue
+                wanted += need
+                # Shop where the goods are plentiful (and therefore cheapest)
+                for port in sorted(ports, key=lambda p: -p.stock.get(comm, 0)):
+                    if need <= 0 or budget <= 0:
+                        break
+                    have = port.stock.get(comm, 0)
+                    if have <= 1:
+                        continue
+                    _, price = EconomyManager.get_unit_prices(port, comm)
+                    if price <= 0:
+                        continue
+                    units = min(need, have - 1, budget // price)
+                    if units <= 0:
+                        continue
+                    bill = units * price
+                    planet.household_purse -= bill
+                    port.treasury += bill
+                    port.stock[comm] = have - units
+                    port.regional_income = round(port.regional_income + 0.3 * bill, 2)
+                    budget -= bill
+                    need -= units
+                    filled += units
+                    st["household_spend"][planet.currency] = st["household_spend"].get(planet.currency, 0) + bill
+            st["household_units"] += filled
+            if wanted and filled < wanted * 0.5:
+                st["shortages"] += 1
+                planet.morale = max(10, planet.morale - HOUSEHOLD_SHORTAGE_MORALE)
+            _save(planet)
+
+
+def _save(planet: Any) -> None:
+    """Households keep modest savings; beyond that their money is deposited with (lent to) the colony."""
+    cap = int(planet.population * HOUSEHOLD_PURSE_PER_CAPITA * PRICE_LEVEL.get(planet.currency, 1.0))
+    if planet.household_purse > cap:
+        planet.treasury += planet.household_purse - cap
+        planet.household_purse = cap
+
+
+# ---------------------------------------------------------------------- player command
+def set_policy(kernel: Any, captain: Any, planet: Any, policy: str) -> str:
+    if planet.owner_id != captain.id:
+        raise ValueError(f"You do not govern {planet.name}.")
+    policy = (policy or "").lower()
+    if policy not in POLICIES:
+        raise ValueError("Population policy is EXPAND (settler fleets) or STEADY (population controls).")
+    was = getattr(planet, "growth_policy", None)
+    planet.growth_policy = policy
+    if policy == "steady" and was != "steady":
+        stats(kernel)["steady"] += 1
+        _covenant(kernel, planet)
+    return (f"{planet.name}: " + ("settler fleets will sail when the world is full." if policy == "expand"
+                                 else "population controls adopted; numbers held at 95% of housing."))

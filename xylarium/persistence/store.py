@@ -40,6 +40,8 @@ class StatePersistence:
                 "factions": kernel.factions.to_dict() if hasattr(kernel, "factions") else None,
                 "chronicle": kernel.chronicle.to_dict() if hasattr(kernel, "chronicle") else None,
                 "native_stats": dict(getattr(kernel, "native_stats", {})),
+                "demography": getattr(kernel, "demography", None),
+                "frontier": getattr(kernel, "frontier", None),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -161,6 +163,10 @@ class StatePersistence:
             kernel.factions = FactionManager.from_dict(data["factions"]) if data.get("factions") else FactionManager()
             kernel.chronicle = ChronicleEngine.from_dict(data["chronicle"]) if data.get("chronicle") else ChronicleEngine()
             kernel.native_stats = dict(data.get("native_stats", {}))
+            if data.get("demography"):
+                kernel.demography = data["demography"]
+            if data.get("frontier"):
+                kernel.frontier = data["frontier"]
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))

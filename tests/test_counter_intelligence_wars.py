@@ -155,7 +155,9 @@ class TestCounterIntelligenceWars(unittest.TestCase):
         )
         self.assertTrue(res_buy.success)
         expected_tariff_cost = max(normal_sell_price + 1, int(normal_sell_price * EMBARGO_TARIFF_BUY_MULT))
-        self.assertEqual(balance(self.player, port18.currency), init_credits - expected_tariff_cost)
+        sales_tax = res_buy.data.get("sales_tax", 0)   # municipal sales tax on port trade
+        wages = self.kernel.crew_wage(self.player) if port18.currency == "SOL" else 0
+        self.assertEqual(balance(self.player, port18.currency), init_credits - expected_tariff_cost - sales_tax - wages)
         self.assertTrue(any("EMBARGO TARIFF" in l for l in res_buy.logs))
 
         # Sell 1 unit in Voss sector

@@ -47,6 +47,7 @@ from xylarium.kernel.models import (
     SecurityLevel,
     PortClass,
     CommodityType,
+    Planet,
 )
 from xylarium.kernel.universe import generate_universe
 from xylarium.kernel.economy import EconomyManager
@@ -103,6 +104,7 @@ from xylarium.config import (
     IMPERIAL_XENO_SURCHARGE,
 )
 from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+from xylarium.kernel import demography as demography_mod
 
 
 class GameKernel:
@@ -153,6 +155,7 @@ class GameKernel:
         if getattr(self, "ledger", None) is not None:
             self.ledger.cycle_hint = self.cycle_count
         ledger_mod.set_active_policy(getattr(self, "monetary_policy", None))
+        ledger_mod.set_active_kernel(self)
 
     def initialize_universe(self, seed: int = 42) -> None:
         """Bootstrap universe sectors, AI rivals, and initial economy."""
@@ -678,6 +681,8 @@ class GameKernel:
             result = self._handle_chronicle_write(captain, kwargs)
         elif action == ActionType.SHORE_LEAVE:
             result = self._handle_shore_leave(captain, current_sector, kwargs)
+        elif action == ActionType.POPULATION_POLICY:
+            result = self._handle_population_policy(captain, kwargs)
         elif action == ActionType.RETIRE_LINEAGE:
             if lineage_mod.bound(self, captain.id) is None:
                 result = ActionResult(success=False, action=action, message="You lead no lineage to retire.")
@@ -953,6 +958,13 @@ class GameKernel:
             )
 
         if res.success:
+            # Municipal sales tax: the region's governments share in the commerce passing through their port
+            value = int(res.data.get("total_cost", 0) or res.data.get("total_payout", 0) or 0)
+            if value > 0:
+                tax = self._collect_trade_tax(captain, sector, value)
+                if tax:
+                    res.data["sales_tax"] = tax
+                    res.message += f" (sales tax {tax:,} {port_cur})"
             # Record 4D activity flux in Phylogeny Manager
             comm_u = commodity.upper()
             amt_f = float(amount)
@@ -974,6 +986,43 @@ class GameKernel:
                 "trade_data": res.data,
             })
         return res
+
+    def _tax_recipients(self, sector: Sector) -> List[Planet]:
+        """The populated worlds (same money, within retail range) whose governments tax a port's commerce."""
+        from xylarium.config import PORT_RETAIL_RADIUS
+        cache = getattr(self, "_tax_cache", None)
+        if cache is None or self.cycle_count - cache.get("_built", -10 ** 9) > 250:
+            cache = self._tax_cache = {"_built": self.cycle_count}
+        if sector.id not in cache:
+            cache[sector.id] = [p.id for p in self.market_manager._regional_worlds(
+                self, sector.id, sector.port.currency, PORT_RETAIL_RADIUS)]
+        return [p for p in (self.get_planet(pid) for pid in cache[sector.id]) if p is not None and p.population > 0]
+
+    def _collect_trade_tax(self, captain: Captain, sector: Sector, value: int) -> int:
+        """Transfers the sales tax from the captain (in the port's money) to the region's worlds, or to port dues."""
+        from xylarium.config import TRADE_SALES_TAX
+        cur = sector.port.currency
+        tax = int(value * TRADE_SALES_TAX)
+        if tax <= 0:
+            return 0
+        if cur != "SOL" and fx_mod.balance(captain, cur) < tax:
+            self.fx_market.ensure_local(captain, cur, tax)
+        tax = min(tax, max(0, fx_mod.balance(captain, cur)))
+        if tax <= 0:
+            return 0
+        fx_mod.debit(captain, cur, tax)
+        worlds = self._tax_recipients(sector)
+        if not worlds:
+            sector.port.treasury += tax          # port dues where no government governs
+            return tax
+        pop = sum(p.population for p in worlds) or 1
+        paid = 0
+        for p in worlds:
+            share = int(tax * p.population / pop)
+            p.treasury += share
+            paid += share
+        worlds[0].treasury += tax - paid
+        return tax
 
     def _handle_planet_claim(self, captain: Captain, sector: Sector, planet_id: Optional[str]) -> ActionResult:
         planet = self._find_planet(sector, planet_id)
@@ -2006,6 +2055,17 @@ class GameKernel:
         captain.wages_due -= pay
         self._stardock_revenue(sector, pay)
 
+    def _handle_population_policy(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        """Sets a governed world's population policy: EXPAND (settler fleets) or STEADY (population controls)."""
+        planet = self.get_planet(kwargs.get("planet_id", ""))
+        if planet is None:
+            return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message="No such world.")
+        try:
+            msg = demography_mod.set_policy(self, captain, planet, kwargs.get("policy", ""))
+        except ValueError as e:
+            return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message=str(e))
+        return ActionResult(success=True, action=ActionType.POPULATION_POLICY, message=msg, logs=[msg])
+
     def _handle_shore_leave(self, captain: Captain, sector: Sector, kwargs: Dict[str, Any]) -> ActionResult:
         """The crew goes ashore: taverns, markets, repairs to morale. Money flows into the port."""
         if sector.port is None or self.turret_blocks(captain, sector):
@@ -2578,10 +2638,15 @@ class GameKernel:
             # Central banks keep their money orderly and lend to ports; the clearing union books it
             for log in self.banking.quarter(self):
                 self.action_logs.append(log)
+            from xylarium.config import CROSS_REANCHOR_RATE
+            self.fx_market.reanchor_cross(CROSS_REANCHOR_RATE)
             # The moral gradient of the universe, and the lives of peoples who have not yet reached the stars
             alignment_mod.quarterly(self)
             NativeManager.tick(self)
             self._tick_sieges()
+            # Peoples grow, build, choose; households shop; the frontier opens when they run out of room
+            for log in demography_mod.quarter(self):
+                self.action_logs.append(log)
 
         # Great powers: tithes, dogma, crusades, secessions, doctrine reviews
         for log in self.factions.tick(self):

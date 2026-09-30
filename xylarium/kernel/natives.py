@@ -30,6 +30,7 @@ Native societies advance on their own; contamination and exploitation can break 
 achieves First Flight and joins the galaxy as a spacefaring civilization.
 """
 
+import zlib
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -502,7 +503,7 @@ class NativeManager:
         natives = planet.natives
         if not natives:
             return
-        rng = random.Random(hash((planet.id, getattr(kernel, "cycle_count", 0))) & 0xFFFFFFFF)
+        rng = random.Random(zlib.crc32(f"{planet.id}:{getattr(kernel, 'cycle_count', 0)}".encode()))
         planet.ruins = _new_ruins(natives["name"], natives["species"], natives["metabolism"], "RECENT",
                                   natives["stage"] + 1, [], "native collapse", kernel.cycle_count,
                                   rng.randint(1, 3), None, 0, rng)

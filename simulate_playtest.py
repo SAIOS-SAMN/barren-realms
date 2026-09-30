@@ -143,7 +143,7 @@ def money_supply(kernel: GameKernel) -> Dict[str, Any]:
     by_cur = ledger_money_supply(kernel)
     out: Dict[str, Any] = {"by_currency": by_cur}
     out["total"] = int(sum(b["total"] / PRICE_LEVEL.get(cur, 1.0) for cur, b in by_cur.items()))
-    for stock in ("captains", "planet_vaults", "company_treasuries", "port_treasuries",
+    for stock in ("captains", "planet_vaults", "households", "company_treasuries", "port_treasuries",
                   "federal_reserve", "contract_escrow", "fx_pools"):
         out[stock] = int(sum(b.get(stock, 0) / PRICE_LEVEL.get(cur, 1.0) for cur, b in by_cur.items()))
     return out
@@ -188,9 +188,30 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
                                    "rate": b.policy_rate, "stamp": round(kernel.banking.stamp.get(b.currency, 0.0)),
                                    "stats": dict(b.stats)} for b in kernel.banking.banks.values()},
             "cross_volume_sol": int(sum(kernel.fx_market.cross_volume.values())),
+            "arbitrage": dict(getattr(kernel.fx_market, "arbitrage", {}) or {}),
+            "cross_gap_max": round(max((abs((p["b"] / p["a"]) / (kernel.fx_market.rate(p["cb"]) / kernel.fx_market.rate(p["ca"])) - 1)
+                                        for p in kernel.fx_market.cross_pools.values()), default=0.0), 3),
         },
         "houses": __import__("xylarium.kernel.lineage", fromlist=["npc_census"]).npc_census(kernel),
         "chronicle_kinds": dict(kernel.chronicle.counts),
+        "demography": _demography_census(kernel),
+    }
+
+
+def _demography_census(kernel: GameKernel) -> Dict[str, Any]:
+    from xylarium.kernel import demography
+    worlds = [p for s in kernel.sectors.values() for p in s.planets if p.population > 0 and not p.natives]
+    st = demography.stats(kernel)
+    return {
+        "worlds": len(worlds),
+        "population": sum(p.population for p in worlds),
+        "housing": sum(demography.housing_cap(p) for p in worlds),
+        "habitats": sum(p.habitats for p in worlds),
+        "citadel_tiers": dict(Counter(p.citadel_level for p in worlds)),
+        "policies": dict(Counter(p.growth_policy or "undecided" for p in worlds)),
+        "sectors": len(kernel.sectors),
+        "clusters": list(kernel.research_manager.minted_clusters),
+        "stats": {k: v for k, v in st.items()},
     }
 
 
@@ -1090,6 +1111,7 @@ class RunStats:
             "territory_genesis": territory_genesis(kernel),
             "fx_rates": {cur: round(kernel.fx_market.rate(cur), 4) for cur in kernel.fx_market.pools},
             "policy": dict(kernel.monetary_policy.factors),
+            "policy_targets": dict(getattr(kernel.monetary_policy, "current", {})),
             "ports": len(ports),
             "ports_illiquid": sum(1 for p in ports if p.treasury < 1000 * PRICE_LEVEL.get(p.currency, 1.0)),
             # Ports with an economic loop: populated worlds of their money within retail range
@@ -1162,6 +1184,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
             stats.window_rates.append({
                 "cycles": f"{window_c0 + 1}-{cycle}",
                 "cycles_per_sec": round((cycle - window_c0) / max(1e-9, now - window_t0), 1),
+                "sectors": len(kernel.sectors),
             })
             print(f"  cycle {cycle:>6}/{cycles}  {stats.window_rates[-1]['cycles_per_sec']:>7} cyc/s  "
                   f"captains={len(kernel.captains)}  exceptions={sum(stats.exceptions.values())}", flush=True)
@@ -1307,8 +1330,19 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         span = max(1, last["cycle"] - first["cycle"])
         lo, hi = ACCEPTANCE["money_growth_per_1k"]
         genesis = r["money"].get("territory_genesis", {})
+        # A growing economy is meant to carry more money: the monetary target grows with new territory and
+        # with population (MonetaryPolicy). What must stay bounded is money relative to that target.
         for cur in sorted(last["supply_by_currency"]):
             start = first["supply_by_currency"].get(cur, 0)
+            t0 = first.get("policy_targets", {}).get(cur) or start
+            t1 = last.get("policy_targets", {}).get(cur)
+            if t1:
+                end_ratio, start_ratio = last["supply_by_currency"][cur] / t1, start / max(1, t0)
+                rate = (max(1e-9, end_ratio) / max(1e-9, start_ratio)) ** (1000 / span) - 1
+                raw = (last["supply_by_currency"][cur] / max(1, start)) ** (1000 / span) - 1
+                gate(f"{cur} supply vs monetary target / 1k cycles", f"{lo:+.0%} .. {hi:+.0%}",
+                     f"{rate:+.1%} (raw supply {raw:+.1%})", lo <= rate <= hi)
+                continue
             end = last["supply_by_currency"][cur] - (genesis.get(cur, 0) - first.get("territory_genesis", {}).get(cur, 0))
             rate = (max(1e-9, end) / max(1e-9, start)) ** (1000 / span) - 1 if start > 0 else float("inf")
             gate(f"{cur} supply growth / 1k cycles (net of new territory)", f"{lo:+.0%} .. {hi:+.0%}", f"{rate:+.1%}", lo <= rate <= hi)
@@ -1352,12 +1386,14 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
     floor = ACCEPTANCE["earliest_tier4_cycle_min"]
     gate("no bot reaches Tier 4 before cycle", f">= {floor}", min(tier4) if tier4 else "never", (min(tier4) >= floor) if tier4 else True)
 
-    windows = [w["cycles_per_sec"] for w in r["performance"]["windows"]]
+    # Throughput per unit of universe: the galaxy is allowed to grow (the frontier opens clusters); what must
+    # not happen is cost per sector creeping up (a leak). Sector-cycles per second, last window vs median.
+    windows = [w["cycles_per_sec"] * w.get("sectors", 1) for w in r["performance"]["windows"]]
     if len(windows) >= 3:
         med = sorted(windows)[len(windows) // 2]
         ratio = windows[-1] / med if med else 0
-        gate("throughput stable (last window / median)", f">= {ACCEPTANCE['throughput_last_vs_median_min']}", round(ratio, 2),
-             ratio >= ACCEPTANCE["throughput_last_vs_median_min"])
+        gate("throughput per sector stable (last window / median)", f">= {ACCEPTANCE['throughput_last_vs_median_min']}",
+             round(ratio, 2), ratio >= ACCEPTANCE["throughput_last_vs_median_min"])
     solvent = sum(1 for b in r["bots"] if b.get("final_net_worth", 0) > 1000)
     need = int(round(ACCEPTANCE["solvent_players_share_min"] * len(r["bots"])))
     gate("solvent player captains (net worth > 1,000)", f">= {need} of {len(r['bots'])}", solvent, solvent >= need)
@@ -1396,6 +1432,18 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
              f"{bk['chain_verify'] or 'intact'}", bk["chain_blocks"] > 0 and not bk["chain_verify"])
         insolvent = [cur for cur, b in bk["banks"].items() if b["reserves"] < 0]
         gate("central banks solvent (reserves >= 0)", "none negative", insolvent or "all solvent", not insolvent)
+        if "demography" in c1:
+            tl_c = [snap for snap in r["world_timeline"] if "cosmos" in snap]
+            mid = next((snap for snap in tl_c if snap["cycle"] >= cycles * 0.4), None)
+            d1 = c1["demography"]
+            if mid is not None:
+                p_mid = mid["cosmos"]["demography"]["population"]
+                gate("population keeps growing after 40% of the run", ">= +20%",
+                     f"{p_mid:,} -> {d1['population']:,}", None if cycles < 5000 else d1["population"] >= 1.2 * p_mid)
+            spend = sum(d1["stats"]["household_spend"].values())
+            gate("households buy from starports", "> 0", f"{spend:,}", spend > 0)
+            gate("frontier opens as peoples fill the galaxy", ">= 1 new cluster by 8,000 cycles",
+                 len(d1["clusters"]) - 1, None if cycles < 8000 else len(d1["clusters"]) > 1)
         h = c1["houses"]
         gate("NPC lineages alive (end)", ">= 3 houses", f"{h['alive']} alive of {h['founded']} founded "
              f"({h['deaths']} deaths, {h['extinct']} extinct, {h['branches']} cadet branches)", h["alive"] >= 3)
@@ -1506,6 +1554,8 @@ def print_report(r: Dict[str, Any]) -> None:
                 top = next(iter(fails))
                 print(f"             {act}: {nf}/{total}+ failed, top: \"{top[:80]}\"")
     ce, cg = r.get("cosmos_end", {}), r.get("cosmos_genesis", {})
+    tl_c = [snap for snap in r["world_timeline"] if "cosmos" in snap]
+    picks_c = [tl_c[len(tl_c) * i // 5] for i in range(5)] + [tl_c[-1]] if len(tl_c) >= 6 else tl_c
     if ce:
         print("\n[COSMOS] alignment, locals, great powers, the Library")
         for label, key in (("all captains", "alignment"), ("private captains", "private_alignment")):
@@ -1520,10 +1570,25 @@ def print_report(r: Dict[str, Any]) -> None:
                   f"dogma {pw['dogma']}, stability {pw['stability']}, stats {pw['stats']}")
         print(f"  library: {ce['chronicle_entries']} records {ce['chronicle_kinds']}")
         print(f"  NPC houses: {ce['houses']}")
+        if "demography" in ce:
+            print("\n[PEOPLES] on-planet growth, the multi-planetary drive, households, the frontier")
+            print(f"  {'cycle':>6}{'worlds':>8}{'population':>13}{'housing':>13}{'habitats':>10}{'sectors':>9}  policies")
+            for snap in picks_c:
+                d = snap["cosmos"]["demography"]
+                print(f"  {snap['cycle']:>6}{d['worlds']:>8}{d['population']:>13,}{d['housing']:>13,}{d['habitats']:>10}"
+                      f"{d['sectors']:>9}  {d['policies']}")
+            d = ce["demography"]
+            st = d["stats"]
+            print(f"  citadels {d['citadel_tiers']}; councils raised {st['citadels']} citadels, dug {st['habitats']} habitats")
+            print(f"  settler fleets: {st['daughters']} daughter worlds, {st['emigrants']:,} emigrants, "
+                  f"{st['no_room']} found no world in reach; steady-state worlds {st['steady']}")
+            print(f"  households: {st['household_units']:,} units bought, spend {st['household_spend']}, shortages {st['shortages']}")
+            print(f"  frontier: clusters {d['clusters']}, opened {st['clusters_opened']}")
         bk = ce.get("banking", {})
         if bk:
             print(f"  clearing union: STAMP imbalance {bk['clearing_imbalance']}, settlement chain {bk['chain_blocks']} blocks "
-                  f"(verify: {bk['chain_verify'] or 'ok'}), Galactic ISSE cross volume {bk['cross_volume_sol']:,} SOL")
+                  f"(verify: {bk['chain_verify'] or 'ok'}), Galactic ISSE cross volume {bk['cross_volume_sol']:,} SOL, "
+                  f"arbitrage {bk.get('arbitrage')}, widest cross-rate gap {bk.get('cross_gap_max', 0):.1%}")
             for cur, b in bk["banks"].items():
                 print(f"    {cur}: reserves {b['reserves']:,}  loans {b['loans']:,}  rate/q {b['rate']:.4f}  STAMP {b['stamp']:+,}  {b['stats']}")
         for e in r.get("chronicle_samples", []):

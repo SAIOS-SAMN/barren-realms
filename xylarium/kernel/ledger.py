@@ -87,6 +87,8 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     for s in kernel.sectors.values():
         for p in s.planets:
             add(getattr(p, "currency", "SOL"), "planet_vaults", p.treasury)
+            if getattr(p, "household_purse", 0):
+                add(getattr(p, "currency", "SOL"), "households", p.household_purse)
             ruins = getattr(p, "ruins", None)
             if ruins and ruins.get("hoard"):
                 add(ruins.get("hoard_currency") or "SOL", "buried_hoards", ruins["hoard"])
@@ -133,7 +135,8 @@ def supply_in_sol(kernel: Any, supply: Optional[Dict[str, Dict[str, int]]] = Non
 class MonetaryPolicy:
     """
     Regional monetary authorities (one per currency) run a fiscal rule each fiscal quarter:
-    the money-supply target is the genesis supply plus declared new territory. When supply
+    the money-supply target is the genesis supply plus declared new territory, grown with the region's
+    population (a larger economy carries more money). When supply
     runs above target - or a regional currency trades weak against its genesis level - public
     services absorb more of colony tax (austerity withdraws money); below target they ease.
     The resulting factor scales colony services, the declared sink paired with colony tax.
@@ -141,6 +144,8 @@ class MonetaryPolicy:
 
     def __init__(self) -> None:
         self.targets: Dict[str, float] = {}
+        self.population0: Dict[str, float] = {}
+        self.current: Dict[str, float] = {}      # this quarter's target (reporting)
         self.factors: Dict[str, float] = {}
         self.history: Dict[str, list] = {}
 
@@ -154,12 +159,23 @@ class MonetaryPolicy:
         for (src, cur), v in kernel.ledger.minted.items():
             if src in ("cluster_genesis", "ghost_sector_genesis"):
                 territory[cur] = territory.get(cur, 0) + v
+        # A growing economy needs more money: the target grows with the region's population (its real size)
+        from xylarium.config import POLICY_GROWTH_ELASTICITY, POLICY_GROWTH_FLOOR
+        people: Dict[str, int] = {}
+        for sec in kernel.sectors.values():
+            for p in sec.planets:
+                if p.population > 0 and not getattr(p, "natives", None):
+                    people[p.currency] = people.get(p.currency, 0) + p.population
         fxm = getattr(kernel, "fx_market", None)
         lo, hi = POLICY_FACTOR_BOUNDS
         for cur, bucket in supply.items():
             if cur not in self.targets:
                 self.targets[cur] = float(bucket["total"])  # first reading = genesis supply
-            target = self.targets[cur] + territory.get(cur, 0)
+            if cur not in self.population0 and people.get(cur):
+                self.population0[cur] = float(people[cur])
+            growth = max(POLICY_GROWTH_FLOOR, people.get(cur, 0) / self.population0[cur]) if self.population0.get(cur) else 1.0
+            target = (self.targets[cur] + territory.get(cur, 0)) * growth ** POLICY_GROWTH_ELASTICITY
+            self.current[cur] = round(target)
             ratio = bucket["total"] / max(1.0, target)
             factor = ratio ** POLICY_SUPPLY_ELASTICITY
             if fxm is not None and cur != "SOL":
@@ -170,18 +186,30 @@ class MonetaryPolicy:
             self.history[cur] = self.history[cur][-40:]
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"targets": dict(self.targets), "factors": dict(self.factors), "history": dict(self.history)}
+        return {"targets": dict(self.targets), "population0": dict(self.population0),
+                "factors": dict(self.factors), "history": dict(self.history)}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MonetaryPolicy":
         mp = cls()
         mp.targets = {k: float(v) for k, v in data.get("targets", {}).items()}
+        mp.population0 = {k: float(v) for k, v in data.get("population0", {}).items()}
         mp.factors = {k: float(v) for k, v in data.get("factors", {}).items()}
         mp.history = {k: list(v) for k, v in data.get("history", {}).items()}
         return mp
 
 
 ACTIVE_POLICY: Optional[MonetaryPolicy] = None
+ACTIVE_KERNEL: Any = None
+
+
+def set_active_kernel(kernel: Any) -> None:
+    global ACTIVE_KERNEL
+    ACTIVE_KERNEL = kernel
+
+
+def active_kernel() -> Any:
+    return ACTIVE_KERNEL
 
 
 def set_active_policy(policy: Optional[MonetaryPolicy]) -> None:

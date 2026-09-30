@@ -2950,6 +2950,13 @@ class TerminalRenderer:
   - Luminous captains buy on goodwill; Shadowed ones pay friction, wear their hulls, and draw
     warrants. At +0.90 an oath of Light binds you; at -0.90 the Dark does.
 
+{c_cyan("PEOPLES & THE FRONTIER (POPULATION):")}
+  - Worlds grow on their own. Housing is technology: citadel tier x biology x sub-surface habitats, which
+    colony councils dig from their vaults when crowded. Households buy food, water and equipment from their
+    region's starports every quarter - they are the market's customers.
+  - A world at its engineering ceiling chooses: EXPAND (citadel T2+ yards send settler fleets to found
+    daughter worlds in reach) or STEADY (population controls: content people, the Light's regard).
+  - When free worlds run short, the frontier opens a new star cluster: new space, worlds and ports.
 {c_cyan("LOCALS & THE PRIME DIRECTIVE (NATIVES, DOCTRINE):")}
   - Many worlds hold non-spacefaring peoples, from the Stone Age to the Orbital age. NATIVES lets
     you observe, contact, trade, uplift, protect (then collect their tithe), or exploit them.

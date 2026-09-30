@@ -135,6 +135,7 @@ class TestDynamicEconomy(unittest.TestCase):
         initial_stock = port.stock["ORE"]
         initial_buy_price, _ = EconomyManager.get_unit_prices(port, "ORE")
 
+        self.kernel.tick_simulation = lambda: None   # isolate the sale from the world tick it would trigger
         res = self.kernel.dispatch("trader_joe", ActionType.TRADE, type="SELL", commodity="ORE", amount=20)
         self.assertTrue(res.success)
         self.assertEqual(self.player.ship.cargo.ore, 0)

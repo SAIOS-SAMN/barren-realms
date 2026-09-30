@@ -152,12 +152,21 @@ class AIManager:
         if not getattr(captain, "active_research", None):
             cls._select_ai_research(kernel, captain)
 
+        # 3b. Financiers scan the Galactic ISSE for triangular mispricings (keeps cross rates honest)
+        cls._financier_arbitrage(kernel, captain)
+
+        # Self-preservation: a house down to its last clones stops picking fights and restocks the vats
+        from xylarium.kernel import lineage
+        endangered = lineage.house_endangered(kernel, captain)
+        if endangered and cls._restock_clones(kernel, captain, current_sector):
+            return
+
         # 4. Anomaly Investigation vs Raid heuristic
-        if cls._handle_ai_anomaly_or_raid(kernel, captain, current_sector):
+        if not endangered and cls._handle_ai_anomaly_or_raid(kernel, captain, current_sector):
             return
 
         # 4a. Outlaw creed: a pirate house that drifts toward the grey middle goes raiding again
-        if cls._keep_outlaw_creed(kernel, captain, current_sector):
+        if not endangered and cls._keep_outlaw_creed(kernel, captain, current_sector):
             return
 
         # 4b. Locals: the Light observe and befriend; the Dark strip what they can reach
@@ -174,7 +183,9 @@ class AIManager:
             return
 
         # Fallback to personality loops if cognitive reduction is satisfied or withheld
-        if captain.personality == AIPersonality.PIRATE:
+        if captain.personality == AIPersonality.PIRATE and endangered:
+            pass  # a hunted house lies low
+        elif captain.personality == AIPersonality.PIRATE:
             cls._execute_pirate_loop(kernel, captain, current_sector)
         elif captain.personality == AIPersonality.TRADER:
             cls._execute_trader_loop(kernel, captain, current_sector)
@@ -189,6 +200,60 @@ class AIManager:
         # Occasional Radio Transmission
         if random.random() < 0.25:
             cls._broadcast_chatter(kernel, captain, current_sector)
+
+    @classmethod
+    def _restock_clones(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> bool:
+        """Heads for the clone vats (Sol) when the house can afford a backup; the house tick buys it there."""
+        from xylarium.config import LINEAGE_CLONE_PRICE
+        if captain.credits < LINEAGE_CLONE_PRICE * 1.5 or sector.id == 1:
+            return False
+        path = kernel.find_path(sector.id, 1)
+        if len(path) < 2:
+            return False
+        res = kernel.dispatch(captain.id, ActionType.MOVE, destination=path[1])
+        return bool(res.success)
+
+    @classmethod
+    def _financier_arbitrage(cls, kernel: "GameKernel", captain: Captain) -> None:
+        """
+        A financier's desk: round-trip SOL through a Galactic ISSE cross pair and the two federation
+        exchanges when the triangle pays after fees. The trade itself pulls the cross rate back toward
+        the rates the SOL hub implies.
+        """
+        from xylarium.config import FINANCIER_ARBITRAGE_CHANCE, FINANCIER_ARBITRAGE_MIN_EDGE, AI_INVEST_RESERVE
+        from xylarium.kernel.cognition import temperament
+        if temperament(captain, kernel).get("calling") != "financier" or random.random() > FINANCIER_ARBITRAGE_CHANCE:
+            return
+        fxm = kernel.fx_market
+        budget = captain.credits - AI_INVEST_RESERVE
+        if budget < 500:
+            return
+        best = None
+        for key, pool in fxm.cross_pools.items():
+            for a, b in ((pool["ca"], pool["cb"]), (pool["cb"], pool["ca"])):
+                for frac in (0.005, 0.01, 0.02, 0.05):
+                    stake = int(min(budget, fxm.to_sol_value(a, pool["a"] if a == pool["ca"] else pool["b"]) * frac))
+                    if stake < 100:
+                        continue
+                    got = fxm.quote_via_sol("SOL", a, stake)                  # SOL -> a (federation exchange)
+                    got = fxm.quote_cross(a, b, got) or 0                      # a -> b (Galactic ISSE)
+                    back = fxm.quote_via_sol(b, "SOL", got)                    # b -> SOL (federation exchange)
+                    edge = (back - stake) / stake
+                    if edge > FINANCIER_ARBITRAGE_MIN_EDGE and (best is None or back - stake > best[0]):
+                        best = (back - stake, a, b, stake)
+        if best is None:
+            return
+        _, a, b, stake = best
+        captain.credits -= stake
+        leg1 = fxm.swap_sol_to(a, stake)
+        leg2 = fxm.swap_cross(a, b, leg1)
+        leg3 = fxm.swap_to_sol(b, leg2)
+        captain.credits += leg3
+        stats = getattr(fxm, "arbitrage", None)
+        if stats is None:
+            stats = fxm.arbitrage = {"trades": 0, "profit_sol": 0}
+        stats["trades"] += 1
+        stats["profit_sol"] += leg3 - stake
 
     @classmethod
     def _keep_outlaw_creed(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> bool:

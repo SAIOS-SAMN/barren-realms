@@ -147,6 +147,7 @@ class ActionType(str, Enum):
     RECALL_SENTRIES = "RECALL_SENTRIES"
     SURVEY_RUINS = "SURVEY_RUINS"
     SHORE_LEAVE = "SHORE_LEAVE"
+    POPULATION_POLICY = "POPULATION_POLICY"
     EXCAVATE = "EXCAVATE"
     SELL_ARTIFACT = "SELL_ARTIFACT"
     STUDY_ARTIFACT = "STUDY_ARTIFACT"
@@ -390,6 +391,12 @@ class Planet:
     faction_id: Optional[str] = None         # Great power this world belongs to (IMPERIUM, ZEALOT)
     siege: Optional[Dict[str, Any]] = None   # Ongoing orbital siege record (for the annals)
     tithe_manifest: Dict[str, int] = field(default_factory=dict)  # Imperial tithe awaiting a Goliath hauler
+    habitats: int = 0                        # Sub-surface habitats dug by the colony council (housing tech)
+    works_ready_cycle: int = 0               # The council's current construction completes at this cycle
+    household_purse: int = 0                 # What the world's households hold to spend at the starports
+    growth_policy: Optional[str] = None      # "expand" (settler fleets) or "steady" (population controls)
+    last_daughter_quarter: int = -10 ** 6    # Last fiscal quarter a settler fleet sailed from here
+    metropole_id: Optional[str] = None       # The world whose settlers founded this one
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -430,6 +437,12 @@ class Planet:
             "faction_id": self.faction_id,
             "siege": dict(self.siege) if self.siege else None,
             "tithe_manifest": dict(self.tithe_manifest),
+            "habitats": self.habitats,
+            "household_purse": self.household_purse,
+            "works_ready_cycle": self.works_ready_cycle,
+            "growth_policy": self.growth_policy,
+            "last_daughter_quarter": self.last_daughter_quarter,
+            "metropole_id": self.metropole_id,
         }
 
     @classmethod
@@ -475,6 +488,12 @@ class Planet:
             faction_id=data.get("faction_id"),
             siege=data.get("siege"),
             tithe_manifest={k: int(v) for k, v in data.get("tithe_manifest", {}).items()},
+            habitats=int(data.get("habitats", 0)),
+            household_purse=int(data.get("household_purse", 0)),
+            works_ready_cycle=int(data.get("works_ready_cycle", 0)),
+            growth_policy=data.get("growth_policy"),
+            last_daughter_quarter=int(data.get("last_daughter_quarter", -10 ** 6)),
+            metropole_id=data.get("metropole_id"),
         )
 
 

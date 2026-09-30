@@ -1094,7 +1094,7 @@ FRONTIER_PORT_CAPITAL_FACTOR = 0.3      # Newly charted frontier outposts start 
 COMPANY_OPEX_RATE = 0.10                # Share of treasury above reserve spent at the home starport per fiscal quarter
 COMPANY_OPEX_RESERVE = 20_000
 PORT_LIQUIDITY_BID_RANGE = (0.8, 1.2)   # Port bids scale with treasury vs. working-capital baseline
-PORT_OPEX_RATE = 0.03                   # Starport operating costs per fiscal quarter, on treasury above the floor
+PORT_OPEX_RATE = 0.10                   # Starport operating costs per fiscal quarter, on treasury above the floor
 PORT_OPEX_FLOOR = 0.25                  # ...floor as a share of the port's working-capital baseline
 FX_PRICE_PASS_THROUGH = 0.25            # Share of currency depreciation passed into local prices (inflation)
 PORT_CONSUMER_SPEND_RATE = 0.04         # Share of a system colony's vault spent at its starport per fiscal quarter
@@ -1142,6 +1142,8 @@ SOL_CORE_WORLDS = [
 POLICY_SUPPLY_ELASTICITY = 2.0          # services factor = (supply / target) ** elasticity ...
 POLICY_FX_ELASTICITY = 2.0              # ... x (FX drift vs genesis level) ** elasticity (regional currencies)
 POLICY_FACTOR_BOUNDS = (0.4, 3.0)
+POLICY_GROWTH_ELASTICITY = 0.5          # Money-supply target grows with population^0.5 (economies of scale in money use)
+POLICY_GROWTH_FLOOR = 0.8               # ...and shrinks at most to 80% if peoples decline
 
 # =============================================================================
 # [10] ARCHAEOLOGY: DEAD CIVILIZATIONS, RUINS, ANTIQUITIES & RELICS
@@ -1180,8 +1182,8 @@ ALIGNMENT_BANDS = [            # (lower bound, title) - first match wins, scanne
 ALIGNMENT_VOW = 0.9            # Beyond this, vows bind: the Light does no wrong, the Dark does no good
 ALIGNMENT_DEEDS = {            # Signed shift per deed, applied with diminishing returns toward the poles
     "fair_trade": 0.0001,         # honest commerce is the grey middle: it neither saves nor damns
-    "freight_delivered": 0.002,
-    "extraction_delivered": 0.001,
+    "freight_delivered": 0.001,   # (halved when households made freight plentiful: commerce stays grey)
+    "extraction_delivered": 0.0005,
     "famine_aid": 0.05,
     "knowledge": 0.008,        # relic study, anomaly decoded, cartography solved
     "belt_charted": 0.001,
@@ -1206,8 +1208,9 @@ ALIGNMENT_DEEDS = {            # Signed shift per deed, applied with diminishing
     "tribute_extorted": -0.04,
     "heresy_purge": -0.03,
     "chronicle_written": 0.002,
+    "stewardship": 0.01,       # a people that chooses to live within its world's means (per quarter held)
 }
-ALIGNMENT_SYNTROPIC_DRIFT = 0.003      # Per fiscal quarter toward the Light for captains with no dark deed that quarter
+ALIGNMENT_SYNTROPIC_DRIFT = 0.0015     # Per fiscal quarter toward the Light for captains with no dark deed that quarter
 ALIGNMENT_RELAXATION = 0.08            # Per quarter, alignment relaxes this share of the way back to character...
 ALIGNMENT_CHARACTER_SHIFT = 0.025      # ...while character itself shifts this share toward sustained conduct
 ALIGNMENT_GOODWILL_MAX = 0.02          # Luminous traders buy up to 2% cheaper (trusted counterparties)
@@ -1430,3 +1433,47 @@ CREDIT_DARK_PRUDENCE = 1.5                 # Dark governors lend this multiple p
 CENTRAL_BANK_RESERVE_CEILING = 0.30         # Reserves above this share of the currency's money supply are idle...
 CENTRAL_BANK_OMO_RATE = 0.25                # ...and this share of the idle excess funds regional public works each quarter
 IDEOLOGICAL_ANCHOR = -0.2                   # Outlaw houses and the Pyre's faithful never rise above this alignment
+
+# --- Commerce tax, house self-preservation, financier arbitrage ---
+TRADE_SALES_TAX = 0.02                      # Municipal sales tax on every port trade, paid to the region's worlds
+HOUSE_ENDANGERED_CLONES = 2                 # Below this many backup clones a house turns defensive
+FINANCIER_ARBITRAGE_CHANCE = 0.3            # Chance per turn a financier scans the Galactic ISSE for triangles
+CROSS_REANCHOR_RATE = 0.5                   # Each quarter the ISSE moves cross pairs halfway to the SOL-implied rate
+FINANCIER_ARBITRAGE_MIN_EDGE = 0.004        # Minimum round-trip profit (after fees) worth trading
+
+# --- [14] Demography: on-planet growth, housing technology, multi-planetary drive, household demand ---
+# Housing = citadel base x habitability x (1 + HABITAT_HOUSING_BONUS x habitats). Habitats are built by the
+# colony council from its vault (paid to the contractor starport) once the world presses on its housing.
+HABITAT_HOUSING_BONUS = 0.25                 # Each sub-surface habitat adds 25% of the citadel's base housing
+HABITATS_MAX_BY_TIER = {0: 1, 1: 2, 2: 3, 3: 4}   # Engineering limits: higher citadels can dig deeper
+HABITAT_COST = 2500                          # SOL-value per habitat (x local price level), paid to the contractor port
+HABITAT_ORE = 60                             # Ore consumed per habitat
+HABITAT_BUILD_QUARTERS = 16                  # Construction time: a council finishes one habitat before starting the next
+CITADEL_BUILD_QUARTERS_PER_TIER = 30         # Raising a citadel to tier n takes n x 30 quarters
+DEMOGRAPHY_PRESSURE = 0.90                   # Population / housing at which a world starts building
+COUNCIL_WORKS_SHARE = 0.5                    # Share of public services a crowded, building world puts into works instead
+DEMOGRAPHY_COUNCIL_RESERVE = 3000            # Vault kept back (SOL-value) when the council builds
+POPULATION_GROWTH_RATE = 0.002               # Natural growth per cycle while fed and housed
+STEADY_STATE_SHARE = 0.95                    # Population-control worlds hold their numbers at this share of housing
+STEADY_STATE_MORALE = 3                      # ...and are content for it (per quarter)
+# Multi-planetary drive: a world at its engineering ceiling either sends settlers or adopts population controls
+DAUGHTER_CITADEL_TIER = 2                    # Settler ships need a Planetary Stronghold's yards
+DAUGHTER_EMIGRANT_SHARE = 0.10               # Share of the parent world that emigrates
+DAUGHTER_EMIGRANTS_MAX = 20_000
+DAUGHTER_EMIGRANTS_MIN = 500
+DAUGHTER_SETTLER_COST = 6000                 # SOL-value (x local price level) for the settler fleet, paid to the contractor
+DAUGHTER_RADIUS_BY_TIER = {2: 3, 3: 6}       # How far a world's settler fleets can reach
+DAUGHTER_MIN_HABITABILITY = 0.3
+DAUGHTER_COOLDOWN_QUARTERS = 8
+# Frontier: the charted galaxy grows when its peoples run out of room (space : people : resources in balance)
+FRONTIER_FREE_WORLDS_RATIO = 0.35            # Open a cluster when free habitable worlds < 35% of populated worlds...
+FRONTIER_PRESSURE_QUARTERS = 12              # ...or when this many settler fleets found no world in reach
+FRONTIER_MIN_INTERVAL = 2000                 # Cycles between new clusters
+FRONTIER_MAX_CLUSTERS = 6
+# Households: populations buy a basket of goods from their regional starports each fiscal quarter
+HOUSEHOLD_BASKET = {"ORGANICS": 0.3, "EQUIPMENT": 0.15, "H2O": 0.2}   # units per 1,000 people per quarter
+HOUSEHOLD_RADIUS = 3                         # Warps a household will shop across (same money)
+HOUSEHOLD_INCOME_SHARE = 0.35               # Share of a colony's earnings that stays with its households (their purse)
+PORT_PAYROLL_SHARE = 0.6                    # Share of a starport's operating costs paid as wages to regional households
+HOUSEHOLD_PURSE_PER_CAPITA = 0.10           # Household savings held beyond this (SOL-value per head) go to the vault
+HOUSEHOLD_SHORTAGE_MORALE = 2                # Morale lost when a world can't fill its basket

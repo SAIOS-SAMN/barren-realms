@@ -7,6 +7,7 @@ troop training, and drop-pod ground assault invasion warfare.
 
 from dataclasses import dataclass, field
 from enum import Enum
+import zlib
 import random
 import math
 from typing import Dict, List, Optional, Tuple, Any
@@ -272,7 +273,7 @@ class SurfaceManager:
     def ensure_surface_grid(planet: Planet) -> SurfaceGrid:
         """Ensures the planet has an instantiated SurfaceGrid object."""
         if planet.surface_grid is None:
-            grid = SurfaceGrid(seed=abs(hash(planet.id)) % 1000000)
+            grid = SurfaceGrid(seed=zlib.crc32(planet.id.encode()) % 1000000)
             planet.surface_grid = grid.to_dict()
             _GRID_CACHE[planet.id] = (planet.surface_grid, grid)
             return grid

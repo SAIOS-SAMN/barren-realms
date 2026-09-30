@@ -59,8 +59,8 @@ class SettlementChain:
             if s.port is not None:
                 accounts[f"port:{sid}"] = [s.port.currency, s.port.treasury]
             for p in s.planets:
-                if p.treasury:
-                    accounts[f"planet:{p.id}"] = [p.currency, p.treasury]
+                if p.treasury or getattr(p, "household_purse", 0):
+                    accounts[f"planet:{p.id}"] = [p.currency, p.treasury, getattr(p, "household_purse", 0)]
         for t, comp in kernel.market_manager.companies.items():
             accounts[f"company:{t}"] = comp.treasury
         accounts["federal_reserve"] = kernel.federal_reserve.total_holdings

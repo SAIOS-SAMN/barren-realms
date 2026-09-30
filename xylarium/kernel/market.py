@@ -655,6 +655,11 @@ class MarketManager:
                 open_by_planet[pid] = open_by_planet.get(pid, 0) + 1
 
         port_sectors = [s for s in kernel.sectors.values() if s.port is not None]
+        reverse: Dict[int, List[int]] = {}
+        for s in kernel.sectors.values():
+            for w in s.warps:
+                reverse.setdefault(w, []).append(s.id)
+        dist_to = None
         for sec in kernel.sectors.values():
             for planet in sec.planets:
                 if planet.population <= 0 or planet.treasury < COLONY_IMPORT_MIN_VAULT:
@@ -679,15 +684,14 @@ class MarketManager:
                     ]
                     if not origins:
                         continue
-                    best = None
-                    for ps in origins:
-                        path = kernel.find_path(ps.id, sec.id)
-                        if path and (best is None or len(path) < len(best[1])):
-                            best = (ps, path)
-                    if not best:
+                    # One reverse breadth-first search from the colony gives every origin's warp distance to it
+                    if dist_to is None or dist_to[0] != sec.id:
+                        dist_to = (sec.id, self._distances_to(kernel, sec.id, reverse))
+                    reachable = [ps for ps in origins if ps.id in dist_to[1]]
+                    if not reachable:
                         continue
-                    origin_sec, path = best
-                    hops = max(1, len(path) - 1)
+                    origin_sec = min(reachable, key=lambda ps: dist_to[1][ps.id])
+                    hops = max(1, dist_to[1][origin_sec.id])
                     hazard_mult = {"BORDERLAND": 1.3, "ANARCHY": 1.8}.get(sec.security.value, 1.0)
                     base = COMMODITY_CONFIG.get(comm, {}).get("base_price", 20)
                     sol_value = (base * COLONY_IMPORT_UNIT_PREMIUM * amount + hops * COLONY_IMPORT_HOP_FEE) * hazard_mult
@@ -722,6 +726,21 @@ class MarketManager:
                     open_by_planet[planet.id] = open_by_planet.get(planet.id, 0) + 1
                     created.append(contract)
         return created
+
+    @staticmethod
+    def _distances_to(kernel: Any, goal: int, reverse: Dict[int, List[int]]) -> Dict[int, int]:
+        """Shortest warp distance from every sector that can reach ``goal`` (BFS over reversed warps)."""
+        dist = {goal: 0}
+        frontier = [goal]
+        while frontier:
+            nxt = []
+            for sid in frontier:
+                for src in reverse.get(sid, ()):
+                    if src not in dist and src in kernel.sectors:
+                        dist[src] = dist[sid] + 1
+                        nxt.append(src)
+            frontier = nxt
+        return dist
 
     @staticmethod
     def _colony_consumer_spending(kernel: Any) -> None:
@@ -873,11 +892,15 @@ class MarketManager:
             if not region:
                 ledger.burn("port_operations", cost, port.currency)
                 continue
+            # Dockhands' wages go to the region's households; the rest to its suppliers and governments
+            from xylarium.config import PORT_PAYROLL_SHARE
             pop = sum(p.population for p in region) or 1
             paid = 0
             for p in region:
                 share = int(cost * p.population / pop)
-                p.treasury += share
+                wages = int(share * PORT_PAYROLL_SHARE)
+                p.household_purse += wages
+                p.treasury += share - wages
                 paid += share
             region[0].treasury += cost - paid
 
@@ -3122,7 +3145,7 @@ class MarketManager:
                     self.companies[sponsor].quarterly_revenue += subsidy
 
         if is_quarter_end:
-            self._colony_consumer_spending(kernel)
+            # (households buy their basket from regional ports in demography.households)
             self._port_retail(kernel)
             self._company_operating_spend(kernel)
             self._port_operating_costs(kernel)

@@ -131,6 +131,37 @@ class FXMarket:
         self.cross_volume[key] = self.cross_volume.get(key, 0.0) + self.to_sol_value(from_cur, amount)
         return out
 
+    def reanchor_cross(self, rate: float) -> Dict[str, float]:
+        """
+        The Galactic ISSE and the federation exchanges are one house: each fiscal quarter it rebalances its
+        own books so a cross pair's price moves ``rate`` of the way toward the rate the SOL hub implies.
+        The cross pool keeps its depth (constant product); the difference in each currency is moved between
+        the cross pool and that currency's federation pool - an internal transfer, nothing minted or burned.
+        Returns each pair's gap before the rebalance.
+        """
+        gaps: Dict[str, float] = {}
+        for key, p in self.cross_pools.items():
+            ca, cb = p["ca"], p["cb"]
+            if ca not in self.pools or cb not in self.pools or p["a"] <= 0 or p["b"] <= 0:
+                continue
+            implied = self.rate(cb) / self.rate(ca)          # b per a, through SOL
+            ratio = p["b"] / p["a"]
+            gaps[key] = round(ratio / implied - 1, 4)
+            new_ratio = ratio * (implied / ratio) ** rate
+            k = p["a"] * p["b"]
+            da = int(round(math.sqrt(k / new_ratio) - p["a"]))
+            db = int(round(math.sqrt(k * new_ratio) - p["b"]))
+            la, lb = self.pools[ca]["local"], self.pools[cb]["local"]
+            # Never move more than a tenth of a federation pool's depth in one quarter
+            if da > 0 and da > la * 0.1 or db > 0 and db > lb * 0.1:
+                scale = min((la * 0.1) / da if da > 0 else 1.0, (lb * 0.1) / db if db > 0 else 1.0)
+                da, db = int(da * scale), int(db * scale)
+            p["a"] += da
+            self.pools[ca]["local"] -= da
+            p["b"] += db
+            self.pools[cb]["local"] -= db
+        return gaps
+
     def convert(self, from_cur: str, to_cur: str, amount: int) -> Tuple[int, str]:
         """Best execution across the federation exchanges and the Galactic ISSE. Returns (out, venue)."""
         if from_cur == to_cur:

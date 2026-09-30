@@ -14,6 +14,7 @@ Core Axioms:
 4. Cognitive Metabolism: Thought is a physical draw (Tier 1 Rations for baseline, Tier 2 Leisure for deep minting).
 """
 
+import zlib
 import hashlib
 import json
 import math
@@ -281,7 +282,7 @@ def temperament(captain: Any, kernel: Any = None) -> Dict[str, float]:
     if t and "calling" in t:
         return t
     from xylarium.config import PERSONA_CALLINGS
-    seed = hash((str(getattr(kernel, "seed", 0)), captain.id)) & 0xFFFFFFFF
+    seed = zlib.crc32(f"{getattr(kernel, 'seed', 0)}:{captain.id}".encode())   # stable across processes
     rng = random.Random(seed)
     callings = list(PERSONA_CALLINGS)
     t = {
@@ -877,7 +878,9 @@ class SeatSurvive:
                     )
 
         # If Security book has massive surplus and hostiles present in sector: ENGAGE CONQUEST
-        if security_book and security_book.total_surplus > 10 and current_sec.security != SecurityLevel.FEDERATION:
+        from xylarium.kernel import lineage as _lineage
+        if security_book and security_book.total_surplus > 10 and current_sec.security != SecurityLevel.FEDERATION \
+                and not _lineage.house_endangered(kernel, captain):
             # Lawful engagement only: anyone in null space, but only wanted outlaws inside protected systems
             # Only pirates prey on anyone in open space; lawful captains hunt wanted outlaws and pirates
             is_pirate = captain.personality == AIPersonality.PIRATE or captain.bounty > 0

@@ -7,6 +7,9 @@ import random
 from typing import Dict, Any, Optional
 from xylarium.config import (
     CITADEL_CONFIG,
+    POPULATION_GROWTH_RATE,
+    HOUSEHOLD_INCOME_SHARE,
+    COUNCIL_WORKS_SHARE,
     SHIP_CATALOG,
     MAX_AI_CAPTAINS,
     PLANETARY_SPACEFLIGHT_CITADEL_TIER,
@@ -51,6 +54,35 @@ from xylarium.kernel.experience import ExperienceManager
 
 class ColonyManager:
     """Handles planetary claiming, investments, citadel upgrades, and colony production."""
+
+    @classmethod
+    def _pay_local(cls, planet: Planet, kernel: Optional[Any], amount: int) -> None:
+        """What a colony already paid out of its vault goes to the region's contractors (not the void)."""
+        if amount <= 0:
+            return
+        port = cls._contractor_port(planet, kernel)
+        if port is not None:
+            port.treasury += amount
+        elif kernel is not None:
+            from xylarium.kernel import ledger
+            ledger.burn("colony_construction", amount, planet.currency)
+
+    @classmethod
+    def _pay_contractor_sol(cls, planet: Planet, sol_amount: int, to_vault: bool = False) -> None:
+        """A captain's SOL spent on a world goes to its contractors (or its vault), cleared into local money."""
+        if sol_amount <= 0:
+            return
+        from xylarium.kernel import ledger, fx as fx_mod
+        kernel = ledger.active_kernel()
+        target = planet if to_vault else cls._contractor_port(planet, kernel)
+        if target is None:
+            ledger.burn("colony_construction", sol_amount, "SOL")
+            return
+        cur = planet.currency if to_vault else target.currency
+        if cur != "SOL" and fx_mod.ACTIVE_FX is not None:
+            target.treasury += fx_mod.ACTIVE_FX.swap_sol_to(cur, sol_amount)
+        else:
+            target.treasury += sol_amount
 
     @staticmethod
     def _contractor_port(planet: Planet, kernel: Optional[Any]) -> Optional[Any]:
@@ -180,6 +212,7 @@ class ColonyManager:
 
         # Colony kit is consumed: credits to outfitters, equipment into habitat modules
         captain.credits -= COLONY_KIT_CREDITS
+        cls._pay_contractor_sol(planet, COLONY_KIT_CREDITS)
         captain.ship.cargo.equipment -= COLONY_KIT_EQUIPMENT
         if planet.population <= 0:
             from xylarium.kernel.universe import habitability
@@ -279,7 +312,8 @@ class ColonyManager:
             )
 
         cfg = CITADEL_CONFIG.get(planet.citadel_level, CITADEL_CONFIG[0])
-        max_pop = int(cfg.get("max_population", 2500) * max(0.1, getattr(planet, "habitability", 1.0)))
+        from xylarium.kernel import demography
+        max_pop = demography.housing_cap(planet)
 
         if planet.population >= max_pop:
             return ActionResult(
@@ -295,6 +329,7 @@ class ColonyManager:
             investment_credits = new_colonists * 5
 
         captain.credits -= investment_credits
+        cls._pay_contractor_sol(planet, investment_credits, to_vault=True)   # settlement grants land in the vault
         planet.population += new_colonists
         msg = f"Invested {investment_credits:,} Cr into {planet.name}. Gained +{new_colonists:,} colonists! (Total: {planet.population:,} / Cap: {max_pop:,})"
 
@@ -353,6 +388,7 @@ class ColonyManager:
             captain.ship.cargo.ore -= cost_ore
 
         captain.credits -= cost_cr
+        cls._pay_contractor_sol(planet, cost_cr)
         planet.shields += points
         msg = f"Reinforced {planet.name} shields by +{points} MW for {cost_cr:,} Cr and {cost_ore} Ore. (Current: {planet.shields}/{max_s})"
 
@@ -397,6 +433,7 @@ class ColonyManager:
             )
 
         captain.credits -= cost_cr
+        cls._pay_contractor_sol(planet, cost_cr)
         planet.fighters += count
         msg = f"Stationed {count} Defense Fighters on {planet.name} for {cost_cr:,} Cr. (Total Garrison: {planet.fighters}/{max_f})"
 
@@ -456,6 +493,7 @@ class ColonyManager:
             captain.ship.cargo.ore -= ore_needed
 
         captain.credits -= cost_cr
+        cls._pay_contractor_sol(planet, cost_cr)
         planet.citadel_level = next_level
         planet.max_shields = cfg["max_shields"]
         ExperienceManager.award(captain, "industry", XP_INDUSTRY_CITADEL, None, key=f"citadel:{planet.id}:{next_level}")
@@ -579,8 +617,10 @@ class ColonyManager:
             return {}
 
         cfg = CITADEL_CONFIG.get(planet.citadel_level, CITADEL_CONFIG[0])
-        # Housing scales with how well the world suits its population's biology
-        max_pop = int(cfg.get("max_population", 2500) * max(0.1, getattr(planet, "habitability", 1.0)))
+        # Housing is technology: citadel x biology x sub-surface habitats (see demography.py). Worlds under
+        # population controls hold their numbers below it.
+        from xylarium.kernel import demography
+        max_pop = demography.growth_ceiling(planet)
         tax_mult = cfg["tax_multiplier"]
 
         # 1. Food Consumption: 1 Organics per 1,000 colonists per cycle (min 1)
@@ -593,7 +633,7 @@ class ColonyManager:
             planet.morale = min(100, planet.morale + 2)
             # Population natural growth (+2%) up to housing cap
             if planet.population < max_pop:
-                pop_growth = min(max_pop - planet.population, max(1, int(planet.population * 0.02)))
+                pop_growth = min(max_pop - planet.population, max(1, int(planet.population * POPULATION_GROWTH_RATE)))
                 planet.population += pop_growth
             else:
                 pop_growth = 0
@@ -620,11 +660,32 @@ class ColonyManager:
         vault_cap = COLONY_VAULT_CAP * level
         morale_factor = max(0.1, planet.morale / 100.0)
         headroom = max(0.0, (vault_cap - planet.treasury) / vault_cap)
-        tax_yield = int(planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor * headroom)
+        # What the colony earns is split: households keep their share (their purse, spent at the region's
+        # starports each quarter - see demography.households); the government taxes the rest.
+        # The fiscal rule works both sides: above target (factor > 1) the colony's money earnings are
+        # smaller (tight money) *and* public services absorb more of what the government keeps.
+        policy = ledger.policy_factor(planet.currency)
+        share = HOUSEHOLD_INCOME_SHARE
+        earnings = (planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor
+                    / max(1.0, policy))
+        household_income = int(earnings * share)
+        if household_income > 0:
+            ledger.mint("colony_tax", household_income, planet.currency)
+            planet.household_purse += household_income
+        tax_yield = int(earnings * (1.0 - share) * headroom)
         upkeep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])
         upkeep_credits = int(upkeep["credits"] * level)
-        services_due = int(planet.population * COLONY_SERVICES_PER_CAPITA * level * tax_mult
-                           * ledger.policy_factor(planet.currency))
+        services_due = int(planet.population * COLONY_SERVICES_PER_CAPITA * (1.0 - share) * level
+                           * tax_mult * policy)
+        # A crowded world that is still building puts part of its public budget into works (housing,
+        # citadel) instead of current services - the council spends it next quarter (demography.develop)
+        from xylarium.kernel import demography
+        if demography.building(planet):
+            services_due = int(services_due * (1.0 - COUNCIL_WORKS_SHARE))
+        # Austerity withdraws what the budget can bear (this cycle's tax and a tenth of savings); it does
+        # not push a solvent colony into arrears
+        if policy > 1.0:
+            services_due = min(services_due, max(0, tax_yield + planet.treasury // 10 - upkeep_credits))
         spending = upkeep_credits + services_due
         upkeep_paid = (tax_yield + planet.treasury >= spending) and planet.ore_silo >= upkeep["ore"]
         if upkeep_paid:
@@ -670,6 +731,7 @@ class ColonyManager:
             # Recruit if treasury is healthy or during security lockout
             if planet.treasury >= 3000 or (planet.security_lockout > 0 and planet.treasury >= 1000):
                 planet.treasury -= 500
+                cls._pay_local(planet, kernel, 500)
                 planet.security_operatives += 1
                 recruited_sec = 1
 
@@ -700,24 +762,7 @@ class ColonyManager:
         if civ_intel:
             res["civilization"] = civ_intel
 
-        # 5. Autonomous Citadel Upgrade for Indigenous Civilizations
-        if is_indigenous and planet.citadel_level < 3:
-            next_lvl = planet.citadel_level + 1
-            cfg_next = CITADEL_CONFIG.get(next_lvl, {})
-            cost_cr = cfg_next.get("upgrade_cost", 999999)
-            cost_ore = cfg_next.get("upgrade_ore", 999999)
-            if planet.treasury >= cost_cr + 5000 and planet.ore_silo >= cost_ore:
-                planet.treasury -= cost_cr
-                planet.ore_silo -= cost_ore
-                planet.citadel_level = next_lvl
-                if event_bus:
-                    civ_n = planet.civilization.name if planet.civilization else planet.name
-                    event_bus.broadcast_radio(
-                        sender=planet.name,
-                        text=f"CIVIC ASCENT: Indigenous {civ_n} on {planet.name} has upgraded Citadel to Tier {next_lvl} ({cfg_next['name']})!",
-                        channel="COMM-1",
-                        sector_id=planet.sector_id,
-                    )
+        # 5. Citadel upgrades for indigenous and AI worlds are the colony council's (demography.develop)
 
         # 6. Planetary Spaceflight (Civiligenesis) - Vector 2
         launched_cap = None
@@ -765,6 +810,7 @@ class ColonyManager:
         rate = fx_mod.ACTIVE_FX.rate(planet.currency) if (fx_mod.ACTIVE_FX and planet.currency != "SOL") else 1.0
         planet.treasury -= PLANETARY_SPACEFLIGHT_COST
         float_local = min(PLANETARY_SPACEFLIGHT_COST // 2, int(4000 * rate))
+        cls._pay_local(planet, kernel, PLANETARY_SPACEFLIGHT_COST - float_local)   # the yard that built the ship
         crew_float = (fx_mod.ACTIVE_FX.swap_to_sol(planet.currency, float_local)
                       if (fx_mod.ACTIVE_FX and planet.currency != "SOL") else float_local)
         planet.last_spaceflight_cycle = kernel.cycle_count
@@ -909,6 +955,7 @@ class ColonyManager:
             )
 
         captain.credits -= cost_cr
+        cls._pay_contractor_sol(planet, cost_cr, to_vault=True)   # civic works are paid through the world's budget
         if ore_amount > 0:
             captain.ship.cargo.ore -= ore_amount
             planet.ore_silo = min(5000, planet.ore_silo + ore_amount)

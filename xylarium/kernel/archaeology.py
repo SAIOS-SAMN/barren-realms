@@ -21,6 +21,7 @@ under a Federal Antiquities Permit are licensed. Otherwise finds are looted: Fed
 collectors refuse them, and only the Anarchy black market will fence them, at a discount.
 """
 
+import zlib
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -87,7 +88,7 @@ class ArchaeologyManager:
         civ = getattr(planet, "civilization", None)
         if civ is None or not famine or planet.population > ARCH_COLLAPSE_POPULATION:
             return None
-        rng = random.Random(hash((planet.id, getattr(kernel, "cycle_count", 0))) & 0xFFFFFFFF)
+        rng = random.Random(zlib.crc32(f"{planet.id}:{getattr(kernel, 'cycle_count', 0)}".encode()))
         cycle = getattr(kernel, "cycle_count", 0)
         planet.ruins = _new_ruins(
             civ.name, getattr(civ, "clade", "unknown"), getattr(civ, "metabolism", "biotic"), "RECENT",
