@@ -37,12 +37,15 @@ class TestHousingAndCouncils(unittest.TestCase):
         self.kernel.activate()
         self.world = civ_world(self.kernel)
 
-    def test_habitats_are_housing_technology(self):
+    def test_habitats_add_enclosed_farmland(self):
+        from fractions import Fraction
+        from xylarium.config import PEOPLE_PER_EARTH_AREA, TECH_YIELD, HABITAT_AREA
         w = self.world
         w.habitats = 0
         base = demography.housing_cap(w)
         w.habitats = 2
-        self.assertEqual(demography.housing_cap(w), int(base * 1.5))
+        added = PEOPLE_PER_EARTH_AREA * Fraction(TECH_YIELD[w.citadel_level]) * 2 * Fraction(HABITAT_AREA)
+        self.assertAlmostEqual(demography.housing_cap(w) - base, int(added), delta=1)
 
     def test_a_crowded_world_builds_and_pays_its_contractors(self):
         w = self.world

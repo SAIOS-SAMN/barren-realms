@@ -28,6 +28,7 @@ from xylarium.config import (
     DAUGHTER_EMIGRANT_SHARE,
     DAUGHTER_EMIGRANTS_MAX,
     DAUGHTER_EMIGRANTS_MIN,
+    DAUGHTER_FOUNDING_TIER,
     DAUGHTER_MIN_HABITABILITY,
     DAUGHTER_RADIUS_BY_TIER,
     DAUGHTER_SETTLER_COST,
@@ -40,7 +41,6 @@ from xylarium.config import (
     CITADEL_BUILD_QUARTERS_PER_TIER,
     HABITAT_BUILD_QUARTERS,
     HABITAT_COST,
-    HABITAT_HOUSING_BONUS,
     HABITAT_ORE,
     HABITATS_MAX_BY_TIER,
     HOUSEHOLD_BASKET,
@@ -56,10 +56,10 @@ POLICIES = ("expand", "steady")
 
 
 # ---------------------------------------------------------------------- housing
-def housing_cap(planet: Any) -> int:
-    cfg = CITADEL_CONFIG.get(planet.citadel_level, CITADEL_CONFIG[0])
-    base = cfg.get("max_population", 2500) * max(0.1, getattr(planet, "habitability", 1.0))
-    return int(base * (1.0 + HABITAT_HOUSING_BONUS * getattr(planet, "habitats", 0)))
+def housing_cap(planet: Any, kernel: Any = None) -> int:
+    """How many people the world can feed: its carrying capacity K, derived from physics (biosphere.py)."""
+    from xylarium.kernel import biosphere
+    return biosphere.carrying_capacity(kernel, planet)
 
 
 def growth_ceiling(planet: Any) -> int:
@@ -101,11 +101,8 @@ def governed(planet: Any) -> bool:
 
 
 def metabolism_of(kernel: Any, planet: Any) -> str:
-    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
-    if owner is not None:
-        return getattr(owner, "metabolism", "biotic")
-    civ = getattr(planet, "civilization", None)
-    return getattr(civ, "metabolism", "biotic") or "biotic"
+    from xylarium.kernel import biosphere
+    return biosphere.metabolism_of(kernel, planet)
 
 
 # ---------------------------------------------------------------------- stats
@@ -289,24 +286,26 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     emigrants = min(DAUGHTER_EMIGRANTS_MAX, int(planet.population * DAUGHTER_EMIGRANT_SHARE))
     if emigrants < DAUGHTER_EMIGRANTS_MIN:
         return None
+    from xylarium.kernel import biosphere
     metab = metabolism_of(kernel, planet)
     radius = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 0)
+    # Settlers look for the world that will feed them best: its carrying capacity at a settler's redoubt
     best = None
     for sid in _reach(kernel, planet.sector_id, radius):
         for cand in kernel.sectors[sid].planets:
-            if not free_world(cand):
+            if not free_world(cand) or habitability(metab, cand.planet_type) < DAUGHTER_MIN_HABITABILITY:
                 continue
-            hab = habitability(metab, cand.planet_type)
-            if hab >= DAUGHTER_MIN_HABITABILITY and (best is None or hab > best[1]):
-                best = (cand, hab)
-        if best is not None and best[1] >= 0.8:
-            break
+            k = biosphere.carrying_capacity(kernel, cand, citadel=DAUGHTER_FOUNDING_TIER, habitats=0, metabolism=metab)
+            if k >= 2 * DAUGHTER_EMIGRANTS_MIN and (best is None or k > best[1]):
+                best = (cand, k)
     planet.last_daughter_quarter = quarter_now
     if best is None:
         st["no_room"] += 1
         frontier_state(kernel)["pressure"] += 1
         return None
-    daughter, hab = best
+    daughter, k_daughter = best
+    hab = habitability(metab, daughter.planet_type)
+    emigrants = min(emigrants, k_daughter // 2)       # a new world is settled at half what it can feed
     _pay_contractor(kernel, planet, cost)
     planet.population -= emigrants
     daughter.population = emigrants
@@ -318,6 +317,7 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     if planet.owner_id is None and getattr(planet, "civilization", None) is not None:
         daughter.civilization = planet.civilization          # the same people, now on two worlds
     daughter.metropole_id = planet.id
+    daughter.citadel_level = max(daughter.citadel_level, DAUGHTER_FOUNDING_TIER)   # the fleet raises a redoubt
     st["daughters"] += 1
     st["emigrants"] += emigrants
     chron = getattr(kernel, "chronicle", None)

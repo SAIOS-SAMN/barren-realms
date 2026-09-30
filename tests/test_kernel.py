@@ -241,6 +241,7 @@ class TestPlanetaryColonization(unittest.TestCase):
     def test_invest_population_growth(self):
         """Investing credits increases planetary population."""
         self.planet.owner_id = "emperor"
+        self.planet.habitats = 2              # enclosed farms, so the world can feed newcomers
         initial_pop = self.planet.population
 
         res = self.kernel.dispatch("emperor", ActionType.PLANET_INVEST, planet_id=self.planet.id, credits=1000)

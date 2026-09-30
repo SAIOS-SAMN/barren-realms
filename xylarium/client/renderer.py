@@ -1228,7 +1228,7 @@ class TerminalRenderer:
         p_pop = planet.get("population", 0)
         p_treasury = planet.get("treasury", 0)
         p_morale = planet.get("morale", 100)
-        max_pop = citadel_info.get("max_population", 2500)
+        max_pop = planet.get("carrying_capacity") or citadel_info.get("max_population", 2500)
         est_yield = int(p_pop * 0.15 * citadel_info["tax_multiplier"] * (p_morale / 100.0))
         morale_badge = c_green(f"{p_morale}% (Stable)") if p_morale >= 70 else c_red(f"{p_morale}% [FAMINE CRISIS!]")
 

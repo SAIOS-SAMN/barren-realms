@@ -1140,7 +1140,7 @@ SOL_CORE_WORLDS = [
      "body": {"q": "1/1", "radius": "1/1", "mass": "1/1", "giant": False, "day": "1/1", "tilt": 23,
               "locked": False, "phase0": "0/1"}},
     # Luna orbits Terra, not the Sun: it shares Terra's year; tidally locked to its planet
-    {"name": "Luna Yards", "type": "BARREN", "population": 20000, "citadel": 2, "moon_of": "planet_1",
+    {"name": "Luna Yards", "type": "BARREN", "population": 20000, "citadel": 2, "moon_of": "planet_1", "habitats": 3,
      "body": {"q": "1/1", "radius": "3/11", "mass": "27/1331", "giant": False, "day": "273/10", "tilt": 7,
               "locked": True, "phase0": "0/1", "parent": "planet_1"}},
 ]
@@ -1449,9 +1449,8 @@ CROSS_REANCHOR_RATE = 0.5                   # Each quarter the ISSE moves cross 
 FINANCIER_ARBITRAGE_MIN_EDGE = 0.004        # Minimum round-trip profit (after fees) worth trading
 
 # --- [14] Demography: on-planet growth, housing technology, multi-planetary drive, household demand ---
-# Housing = citadel base x habitability x (1 + HABITAT_HOUSING_BONUS x habitats). Habitats are built by the
-# colony council from its vault (paid to the contractor starport) once the world presses on its housing.
-HABITAT_HOUSING_BONUS = 0.25                 # Each sub-surface habitat adds 25% of the citadel's base housing
+# Carrying capacity is derived from physics and biology (biosphere.py); habitats are enclosed farms and
+# living space that add usable area independent of the light. Councils build them from the vault.
 HABITATS_MAX_BY_TIER = {0: 1, 1: 2, 2: 3, 3: 4}   # Engineering limits: higher citadels can dig deeper
 HABITAT_COST = 2500                          # SOL-value per habitat (x local price level), paid to the contractor port
 HABITAT_ORE = 60                             # Ore consumed per habitat
@@ -1460,7 +1459,6 @@ CITADEL_BUILD_QUARTERS_PER_TIER = 30         # Raising a citadel to tier n takes
 DEMOGRAPHY_PRESSURE = 0.90                   # Population / housing at which a world starts building
 COUNCIL_WORKS_SHARE = 0.5                    # Share of public services a crowded, building world puts into works instead
 DEMOGRAPHY_COUNCIL_RESERVE = 3000            # Vault kept back (SOL-value) when the council builds
-POPULATION_GROWTH_RATE = 0.002               # Natural growth per cycle while fed and housed
 STEADY_STATE_SHARE = 0.95                    # Population-control worlds hold their numbers at this share of housing
 STEADY_STATE_MORALE = 3                      # ...and are content for it (per quarter)
 # Multi-planetary drive: a world at its engineering ceiling either sends settlers or adopts population controls
@@ -1471,6 +1469,7 @@ DAUGHTER_EMIGRANTS_MIN = 500
 DAUGHTER_SETTLER_COST = 6000                 # SOL-value (x local price level) for the settler fleet, paid to the contractor
 DAUGHTER_RADIUS_BY_TIER = {2: 3, 3: 6}       # How far a world's settler fleets can reach
 DAUGHTER_MIN_HABITABILITY = 0.3
+DAUGHTER_FOUNDING_TIER = 1                   # Settler fleets raise a redoubt: daughters start with tier-1 agriculture
 DAUGHTER_COOLDOWN_QUARTERS = 8
 # Frontier: the charted galaxy grows when its peoples run out of room (space : people : resources in balance)
 FRONTIER_FREE_WORLDS_RATIO = 0.35            # Open a cluster when free habitable worlds < 35% of populated worlds...
@@ -1484,3 +1483,15 @@ HOUSEHOLD_INCOME_SHARE = 0.35               # Share of a colony's earnings that 
 PORT_PAYROLL_SHARE = 0.6                    # Share of a starport's operating costs paid as wages to regional households
 HOUSEHOLD_PURSE_PER_CAPITA = 0.10           # Household savings held beyond this (SOL-value per head) go to the vault
 HOUSEHOLD_SHORTAGE_MORALE = 2                # Morale lost when a world can't fill its basket
+
+# --- [15] Biosphere: the biology that turns light and land into food and people (biosphere.py) ---
+# The only chosen biological constants; carrying capacity, food and growth rates are derived from them.
+PEOPLE_PER_EARTH_AREA = 50_000        # Subsistence carrying capacity of one Earth-area of ideal land at citadel tech 1
+TECH_YIELD = {0: "1/5", 1: "1/1", 2: "3/1", 3: "8/1", 4: "12/1"}   # Agricultural technology by citadel tier
+HABITAT_AREA = "1/20"                  # Each habitat adds this much Earth-area of enclosed, lit farmland and housing
+BIRTH_RATE = "3/100"                   # A people's maximum natural increase per standard year
+CROP_SURPLUS_RATE = "6/100"            # How fast farms can add food per standard year on ideal land in a full season
+FOOD_PER_THOUSAND = 1                  # Organics a thousand people eat per cycle
+# Where each metabolism's energy peaks (flux, Earth = 1). Plasmic life feeds on a giant's own heat (its mass).
+LIGHT_OPTIMUM = {"biotic": "1/1", "cryogenic": "1/8", "mineral": "3/1", "umbral": "1/800"}
+PLASMIC_MASS_OPTIMUM = 100             # Earth masses at which a giant's internal heat best feeds plasmic life

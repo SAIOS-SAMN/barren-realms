@@ -7,7 +7,6 @@ import random
 from typing import Dict, Any, Optional
 from xylarium.config import (
     CITADEL_CONFIG,
-    POPULATION_GROWTH_RATE,
     HOUSEHOLD_INCOME_SHARE,
     COUNCIL_WORKS_SHARE,
     SHIP_CATALOG,
@@ -319,7 +318,7 @@ class ColonyManager:
             return ActionResult(
                 success=False,
                 action=ActionType.PLANET_INVEST,
-                message=f"Housing cap reached! Citadel Tier {planet.citadel_level} ({cfg['name']}) supports up to {max_pop:,} colonists. Upgrade Citadel to expand housing.",
+                message=f"{planet.name} is at its carrying capacity: its land and Tier {planet.citadel_level} ({cfg['name']}) agriculture feed {max_pop:,} people. Raise the citadel or dig habitats to feed more.",
             )
 
         # 5 credits per new colonist
@@ -617,26 +616,24 @@ class ColonyManager:
             return {}
 
         cfg = CITADEL_CONFIG.get(planet.citadel_level, CITADEL_CONFIG[0])
-        # Housing is technology: citadel x biology x sub-surface habitats (see demography.py). Worlds under
+        # Carrying capacity is derived from the world's physics and technology (biosphere.py). Worlds under
         # population controls hold their numbers below it.
         from xylarium.kernel import demography
         max_pop = demography.growth_ceiling(planet)
         tax_mult = cfg["tax_multiplier"]
 
-        # 1. Food Consumption: 1 Organics per 1,000 colonists per cycle (min 1)
-        required_food = max(1, planet.population // 1000)
+        # 1. Food and people (biosphere.py): the world eats, and - fed - grows logistically toward what its
+        # land can carry, never faster than its farms can add food. Over capacity, it shrinks.
+        from xylarium.kernel import biosphere
+        required_food = biosphere.consumption(planet)
         famine = False
         famine_loss = 0
 
         if planet.organics_silo >= required_food:
             planet.organics_silo -= required_food
             planet.morale = min(100, planet.morale + 2)
-            # Population natural growth (+2%) up to housing cap
-            if planet.population < max_pop:
-                pop_growth = min(max_pop - planet.population, max(1, int(planet.population * POPULATION_GROWTH_RATE)))
-                planet.population += pop_growth
-            else:
-                pop_growth = 0
+            pop_growth = biosphere.births(kernel, planet, max_pop)
+            planet.population = max(1, planet.population + pop_growth)
         else:
             # Famine penalty: population decline and morale crash
             deficit = required_food - planet.organics_silo
@@ -719,7 +716,7 @@ class ColonyManager:
 
         # 3. Mining yields
         ore_mined = max(1, int(planet.population * 0.02))
-        organics_harvested = max(1, int(planet.population * 0.015))
+        organics_harvested = biosphere.harvest(kernel, planet, demography.housing_cap(planet, kernel))
         planet.ore_silo = min(5000, planet.ore_silo + ore_mined)
         planet.organics_silo = min(5000, planet.organics_silo + organics_harvested)
 

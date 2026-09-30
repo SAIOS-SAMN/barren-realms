@@ -455,5 +455,6 @@ def _found_sol_core_worlds(sec: Sector) -> None:
             garrison_troops=5000,
             body=spec.get("body"),
             moon_of=spec.get("moon_of"),
+            habitats=spec.get("habitats", 0),
         ))
         physics.apply_derived(sec.planets[-1], physics.star(sec))

@@ -395,6 +395,8 @@ class Planet:
     body: Optional[Dict[str, Any]] = None    # exact orbit & body: q (a = q^2 AU), radius, mass, day, tilt (physics.py)
     moon_of: Optional[str] = None            # a moon orbits this planet rather than the star
     works_ready_cycle: int = 0               # The council's current construction completes at this cycle
+    harvest_carry: int = 0                   # thousandths of a unit of harvest carried between cycles
+    growth_carry: Optional[str] = None       # exact fractional births carried between cycles (biosphere.py)
     household_purse: int = 0                 # What the world's households hold to spend at the starports
     growth_policy: Optional[str] = None      # "expand" (settler fleets) or "steady" (population controls)
     last_daughter_quarter: int = -10 ** 6    # Last fiscal quarter a settler fleet sailed from here
@@ -441,6 +443,8 @@ class Planet:
             "tithe_manifest": dict(self.tithe_manifest),
             "habitats": self.habitats,
             "household_purse": self.household_purse,
+            "growth_carry": self.growth_carry,
+            "harvest_carry": self.harvest_carry,
             "works_ready_cycle": self.works_ready_cycle,
             "body": dict(self.body) if self.body else None,
             "moon_of": self.moon_of,
@@ -494,6 +498,8 @@ class Planet:
             tithe_manifest={k: int(v) for k, v in data.get("tithe_manifest", {}).items()},
             habitats=int(data.get("habitats", 0)),
             household_purse=int(data.get("household_purse", 0)),
+            growth_carry=data.get("growth_carry"),
+            harvest_carry=int(data.get("harvest_carry", 0)),
             works_ready_cycle=int(data.get("works_ready_cycle", 0)),
             body=dict(data["body"]) if data.get("body") else None,
             moon_of=data.get("moon_of"),

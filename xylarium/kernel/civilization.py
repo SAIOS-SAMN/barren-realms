@@ -135,6 +135,8 @@ class Civilization:
     native_policy: Optional[str] = None    # System-level doctrine for locals (overrides a laxer galactic card)
     dogma: float = 0.0                     # Dogma index for theocracies (Choir of the Pyre)
     faction_id: Optional[str] = None
+    home_type: Optional[str] = None        # The world type the species evolved on (biosphere adaptation)
+    light_optimum: Optional[str] = None    # The light its biology evolved under (exact flux, Earth = 1)
 
     @property
     def era_name(self) -> str:
@@ -171,6 +173,8 @@ class Civilization:
             "native_policy": self.native_policy,
             "dogma": round(self.dogma, 4),
             "faction_id": self.faction_id,
+            "home_type": self.home_type,
+            "light_optimum": self.light_optimum,
         }
 
     @classmethod
@@ -199,6 +203,8 @@ class Civilization:
             native_policy=data.get("native_policy"),
             dogma=float(data.get("dogma", 0.0)),
             faction_id=data.get("faction_id"),
+            home_type=data.get("home_type"),
+            light_optimum=data.get("light_optimum"),
         )
 
 

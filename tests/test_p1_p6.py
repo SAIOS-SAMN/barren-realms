@@ -193,31 +193,46 @@ class TestP4ColonyCapsAndFamine(unittest.TestCase):
         self.planet.citadel_level = 0  # Tier 0 max pop is 2,500
         self.planet.treasury = 1000    # Upkeep funded so food mechanics are measured in isolation
 
-    def test_citadel_population_cap_enforced(self):
-        self.planet.population = 2400
+    def test_carrying_capacity_is_enforced(self):
+        from xylarium.kernel import demography
+        self.planet.habitats = 2              # enclosed farms: any world can feed a few
+        cap = demography.housing_cap(self.planet, self.kernel)
+        self.assertGreater(cap, 100)
+        self.planet.population = cap - 100
         self.player.credits = 5000
 
-        # Invest 1,000 Cr -> requests +200 colonists, but cap only allows +100
+        # Invest 1,000 Cr -> requests +200 colonists, but the land only feeds +100
         res = ColonyManager.invest_population(self.player, self.planet, 1000)
         self.assertTrue(res.success)
-        self.assertEqual(self.planet.population, 2500)
+        self.assertEqual(self.planet.population, cap)
 
         # Next investment rejected
         res2 = ColonyManager.invest_population(self.player, self.planet, 500)
         self.assertFalse(res2.success)
-        self.assertIn("Housing cap reached", res2.message)
+        self.assertIn("carrying capacity", res2.message)
 
     def test_colony_organics_consumption_and_natural_growth(self):
-        self.planet.population = 2000
-        self.planet.organics_silo = 50
+        from xylarium.kernel import demography
+        self.planet.habitats = 2
+        self.kernel.activate()
+        cap = demography.housing_cap(self.planet, self.kernel)
+        self.planet.population = cap // 4
+        self.planet.organics_silo = 500
         self.planet.morale = 90
+        need = max(1, self.planet.population // 1000)
 
-        yield_data = ColonyManager.tick_colony(self.planet)
+        yield_data = ColonyManager.tick_colony(self.planet, kernel=self.kernel)
         self.assertFalse(yield_data["famine"])
-        # Consumes max(1, 2000 // 1000) = 2 Organics
-        self.assertEqual(self.planet.organics_silo, 50 - 2 + yield_data["organics_harvested"])
+        self.assertEqual(self.planet.organics_silo, 500 - need + yield_data["organics_harvested"])
+        harvested = yield_data["organics_harvested"]
+        for _ in range(9):
+            harvested += ColonyManager.tick_colony(self.planet, kernel=self.kernel)["organics_harvested"]
+        self.assertGreater(harvested, 10 * need)                        # below capacity, farms feed a surplus
         self.assertGreater(self.planet.morale, 90)
-        self.assertGreater(yield_data["pop_growth"], 0)
+        start = self.planet.population
+        for _ in range(50):
+            ColonyManager.tick_colony(self.planet, kernel=self.kernel)
+        self.assertGreater(self.planet.population, start)             # fed and below K: the people grow
 
     def test_unpaid_upkeep_halts_taxes_and_erodes_morale(self):
         self.planet.treasury = 0

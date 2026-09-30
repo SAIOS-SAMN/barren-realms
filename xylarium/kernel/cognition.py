@@ -625,9 +625,8 @@ class SeatSurvive:
             # 4. Matter surplus investment
             matter_book = books.get("MATTER")
             if matter_book and matter_book.total_surplus >= 5000:
-                from xylarium.config import CITADEL_CONFIG
-                cfg = CITADEL_CONFIG.get(planet.citadel_level, CITADEL_CONFIG[0])
-                if planet.population < cfg.get("max_population", 2500):
+                from xylarium.kernel import demography
+                if planet.population < demography.housing_cap(planet, kernel_ref()):
                     return CognitiveDeed(
                         seat="SURVIVE",
                         action_type=ActionType.PLANET_INVEST,
