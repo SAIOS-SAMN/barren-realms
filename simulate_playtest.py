@@ -1273,6 +1273,10 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
             "genesis": money_at_genesis,
             "ledger_genesis": ledger_at_genesis,
             "ledger_end": ledger_net(kernel),
+            # authority churn: fiscal transfers minted + public services burned (both are the rule's own flows)
+            "churn": {cur: kernel.ledger.minted.get(("fiscal_transfer", cur), 0)
+                      + kernel.ledger.burned.get(("public_services", cur), 0)
+                      for cur in {c for (_, c) in list(kernel.ledger.minted) + list(kernel.ledger.burned)}},
             "end": money_supply(kernel),
             "net_flows": dict(flows.net.most_common()),
             "federal_stats": dict(kernel.federal_reserve.stats),
@@ -1328,7 +1332,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 
 # Gates whose names start with these are laws (invariants); all others are observations.
 LAWS = (
-    "money conserved", "quantity equation holds", "clearing union conserves", "settlement chain seals",
+    "money conserved", "monetary churn", "quantity equation holds", "clearing union conserves", "settlement chain seals",
     "central banks solvent", "orbits never cross", "throughput per sector", "invariant violations",
     "exceptions", "deterministic",
 )
@@ -1382,6 +1386,16 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         span = max(1, last["cycle"] - first["cycle"])
         lo, hi = ACCEPTANCE["money_growth_per_1k"]
         genesis = r["money"].get("territory_genesis", {})
+        # Monetary churn: what the authorities mint as transfers and burn as services, per year, relative to the
+        # money they govern. A feedback loop between a level-triggered sink and the authority shows up here
+        # long before it shows in M / M*.
+        years = max(1e-9, span / 100.0)
+        for cur in sorted(last["supply_by_currency"]):
+            churn = (r["money"].get("churn", {}) or {}).get(cur)
+            if churn is None:
+                continue
+            per_year = churn / years / max(1, last["supply_by_currency"][cur])
+            gate(f"monetary churn per year / supply [{cur}]", "<= 2.0", f"{per_year:.2f}", per_year <= 2.0)
         # M V = P Y: with V measured at genesis, the money an economy holds must track what its output needs
         # (M / M*), however much the galaxy has grown. Raw supply growth is reported alongside.
         for cur in sorted(last["supply_by_currency"]):

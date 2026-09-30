@@ -678,10 +678,13 @@ class ColonyManager:
             planet.household_purse += household_income
         tax_yield = int(earnings * (1.0 - share) * headroom)
         if ledger.ACTIVE_POLICY is not None:
-            ledger.ACTIVE_POLICY.record_earnings(planet.currency, household_income + tax_yield, tax_yield)
+            ledger.ACTIVE_POLICY.record_earnings(planet.currency, household_income + tax_yield,
+                                                 earnings * (1.0 - share))   # the base services are measured on
         upkeep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])
         upkeep_credits = int(upkeep["credits"] * level)
-        services_due = int(tax_yield * withdraw)
+        # Withdrawal is measured against the government's earnings before the vault taper: a full vault
+        # pays no new tax, but it is exactly the savings the authority must be able to reach
+        services_due = int(earnings * (1.0 - share) * withdraw)
         # A crowded world that is still building puts part of its public budget into works (housing,
         # citadel) instead of current services - the council spends it next quarter (demography.develop)
         from xylarium.kernel import demography
@@ -708,9 +711,9 @@ class ColonyManager:
                 contractor.treasury += upkeep_credits
             else:
                 ledger.burn("citadel_upkeep", upkeep_credits, planet.currency)
-            if planet.treasury > vault_cap:
-                ledger.burn("vault_overflow", planet.treasury - int(vault_cap), planet.currency)
-                planet.treasury = int(vault_cap)
+            # (A full vault no longer destroys money: tax already tapers to nothing as the vault fills, and the
+            # regional authority's services withdrawal is the one sink - a second, level-triggered burn fed back
+            # into the authority's feed-forward and pumped money through households without end.)
             services = services_due
         else:
             # Arrears: everything available is spent, the gap erodes morale

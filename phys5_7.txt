@@ -1,0 +1,218 @@
+Xylarium playtest: 10,000 cycles, seed 7, bots ['BIOTIC', 'LITHIC', 'PLASMIC', 'CRYOGENIC', 'ANARCHY', 'IMPERIAL']
+  cycle   1000/10000     42.7 cyc/s  captains=24  exceptions=0
+  cycle   2000/10000     43.9 cyc/s  captains=25  exceptions=0
+  cycle   3000/10000     40.8 cyc/s  captains=25  exceptions=0
+  cycle   4000/10000     31.5 cyc/s  captains=24  exceptions=0
+  cycle   5000/10000     29.5 cyc/s  captains=25  exceptions=0
+  cycle   6000/10000     30.4 cyc/s  captains=25  exceptions=0
+  cycle   7000/10000     34.3 cyc/s  captains=25  exceptions=0
+  cycle   8000/10000     42.1 cyc/s  captains=25  exceptions=0
+  cycle   9000/10000     35.5 cyc/s  captains=26  exceptions=0
+  cycle  10000/10000     30.8 cyc/s  captains=26  exceptions=0
+
+==============================================================================
+ PLAYTEST REPORT  cycles=10,000  seed=7
+==============================================================================
+
+[PERFORMANCE] 35.4 cyc/s overall, wall 282.88s, boot 0.033s
+  throughput by window: 1-1000: 42.7, 1001-2000: 43.9, 2001-3000: 40.8, 3001-4000: 31.5, 4001-5000: 29.5, 5001-6000: 30.4, 6001-7000: 34.3, 7001-8000: 42.1, 8001-9000: 35.5, 9001-10000: 30.8
+  save 0.194s / 4.86 MB, load 0.055s (ok=True), player view 1.49 ms / 133 KB
+  largest player-view sections: market 60KB, player 27KB, cognition 10KB, clade_matrix 7KB, phylogeny 5KB, alchemy 4KB
+  subsystem                                  sec  % tick     calls   us/call
+  tick_simulation (total)                159.444   100.0     10000   15944.4
+  cognition.think (inside ai)            118.396    74.3    174698     677.7
+  dispatch (bot actions)                  92.551    58.0    301970     306.5
+  ai.execute_turn                         69.454    43.6    174674     397.6
+  colony.tick_colony                      24.648    15.5   1378166      17.9
+  market.tick_market                      15.106     9.5     10000    1510.6
+  surface.tick_surface                    10.527     6.6    491433      21.4
+  economy.tick_port                        8.524     5.3    519188      16.4
+  astronomy.tick                           6.654     4.2     10000     665.4
+  get_player_view                          4.991     3.1      2333    2139.5
+  research.tick_cognitive_metabolism       0.577     0.4     10000      57.7
+  alchemy.tick_cooldown                    0.351     0.2    244706       1.4
+  governance.tick_senate                   0.053     0.0     10000       5.3
+  cartography.tick_survey_probes           0.023     0.0     10000       2.3
+  turn_maintenance                         0.004     0.0       200      21.8
+
+[UNBOUNDED GROWTH] (collections that grew over the run)
+  market_manager.companies[*].price_history            206 ->    3794
+  market_manager.trade_haulers                           1 ->      21
+  market_manager.trade_council.resolution_history       30 ->      50
+  kernel._household_markets                             31 ->      46
+  market_manager._kernel_ref._household_markets         31 ->      46
+  kernel.npc_lineages                                    8 ->      21
+  market_manager._kernel_ref.npc_lineages                8 ->      21
+  kernel._contractor_cache                              31 ->      43
+  market_manager._kernel_ref._contractor_cache          31 ->      43
+  market_manager.companies                              30 ->      39
+  kernel.captains                                       22 ->      26
+  market_manager._kernel_ref.captains                   22 ->      26
+
+[EXCEPTIONS] none
+
+[INVARIANT VIOLATIONS] (counted per 100-cycle check) none
+
+[WORLD / AI ECONOMY]
+   cycle captains      AI money  top%  gini broke @sec1 stuck claimed @cap
+     100       22       176,248   19% 0.365     0     2     0       2    0
+    2600       25     2,808,854   15% 0.244     0     1     0       1    1
+    5100       25     4,302,551   24% 0.528     0     3     0       4    4
+    7600       24     6,011,392   28% 0.513     0     3     0       3    5
+   10000       26     6,237,108   25% 0.556     0     0     0      13    6
+
+[MONEY SUPPLY] by currency, genesis -> end (stocks)
+  FRN: total     1,215,239 ->     7,263,387   captains 2,435,290  planet_vaults 1,279,399  port_treasuries 773,810  fx_pools 1,187,916  contract_escrow 14,970
+  SOL: total     2,114,462 ->     5,313,283   captains 839,756  planet_vaults 127,077  port_treasuries 566,705  company_treasuries 1,797,650  federal_reserve 69,058  fx_pools 851,801  contract_escrow 30,903
+  THR: total     3,503,675 ->    21,865,346   captains 27,834  planet_vaults 11,233,151  port_treasuries 4,133,751  fx_pools 1,125,361  contract_escrow 98,995
+  VOID: total     3,540,338 ->     8,641,858   captains 29,389  planet_vaults 2,957,033  port_treasuries 1,035,166  fx_pools 977,515  contract_escrow 24,276
+  declared faucets (ledger mints): colony_tax [THR] 46,933,493, colony_tax [SOL] 12,608,612, colony_tax [VOID] 9,371,082, colony_tax [FRN] 3,772,755, fiscal_transfer [FRN] 2,298,563, fiscal_transfer [VOID] 1,053,326, cluster_genesis [VOID] 917,000, exchange_endowment [THR] 913,625, discovery_reward [SOL] 50,000, captain_charter [SOL] 10,500
+  net creation (+) / destruction (-) by source, valued at genesis price levels:
+    world tick: AI turns, colonies (tax - upkeep), other     +15,261,582
+    player:MOVE                                             +126,000
+    market tick (contracts, corporate, consumer spending)         -36,933
+    player:COGNITIVE_AUTOMATE                                     +0
+    player:TRADE                                                  +0
+    null space (belts, debris)                                    +0
+    player:FREIGHT_ACCEPT                                         +0
+    player:SURVEY_RUINS                                           +0
+    player:EXCAVATE                                               +0
+    player:FREIGHT_DELIVER                                        +0
+    player:SALVAGE_DEBRIS                                         +0
+    player:SHIPYARD_PURCHASE                                      +0
+    rations                                                       +0
+    player:SELL_ARTIFACT                                          +0
+  federal reserve activity: lobbying 3,000, hull_claims 127,400, jump_gates 2,000, premiums 927,170, relief_loans 34,000, wreck_salvage 156,707, council_subsidies 110,000, bounties_posted 133,513, loan_repayments 23,000, escheat 11,357, bounties_paid 169,329, rank_endowments 211,095, antitrust_surtax 5,712
+  illiquid ports by currency (end): {'VOID': 1} of {'SOL': 2, 'FRN': 7, 'THR': 5, 'VOID': 38}
+
+[FX & PHYSICAL ECONOMY]
+   cycle  FRN/SOL VOID/SOL    policy S/F/V  illiquid ports  belt reserve  debris sentries  wanted AI FX (SOL)
+     100    1.000    2.465 2.16/4.61/12.09            0/52           99%       1      177       0      29,224
+    2600    1.710    2.440  0.85/0.00/5.62            8/52           78%       0     1368       5      17,362
+    5100    1.976    2.337  0.47/0.00/2.22            3/52           84%       0     1565       5      19,407
+    7600    2.214    3.461  0.50/0.00/0.00            0/52           89%       0     1594       2      13,948
+   10000    1.931    1.312  2.31/0.00/1.20            1/52           84%       2     1959       3   1,294,586
+  activity: mining runs (ai) 42,366, mining runs (player) 20,771, contracts delivered (ai) 1,821, extraction orders posted 1,758, contracts delivered (player) 1,694, battles in null space 868, colony import orders posted 761, hulls destroyed -> debris 754, salvage recoveries (ai) 626, deep-space scans (ai) 558, battles in systems 415, sentry deployments (ai) 334, artifacts unearthed (ai) 300, excavations (ai) 253, artifacts sold (ai) 226, artifacts unearthed (player) 210, artifacts sold (player) 210, deep-space scans (player) 196, excavations (player) 182, salvage recoveries (player) 147, relics studied (ai) 97, cave-ins 92, hostile acts (warrants) 18, civilizations collapsed -> ruins 13
+
+   cycle   gini  top%  AI median fail-streak  colonies(bots)
+     100  0.353   14%     17,816           5               0
+    2600  0.268   11%    203,922           2               1
+    5100  0.424   13%    289,781           2               1
+    7600  0.417   16%    277,418           1               1
+   10000  0.466   14%    216,237           2               1
+
+[PLAYER DELIVERY] (one autopilot captain per lineage, driven by the game's cognition; * = scripted baseline)
+  BIOT   liquid=   56,104 SOL (credits 56,104, wallet {})  tier=3  node=biotic_director  exp=5594  CR=850  crystals=50
+             ascensions: biotic_supercargo -> biotic_director   turn-starved actions: 0   net trade cashflow: 0   freight delivered: 299   cognition ok: 9771
+             experience by domain: commerce 4133, industry 940, navigation 231, science 190
+  LITH   liquid=   26,027 SOL (credits 26,022, wallet {'FRN': 2, 'THR': 6})  tier=3  node=lith_specie_monopolist  exp=4384  CR=850  crystals=50
+             ascensions: lith_geode_resonator -> lith_specie_monopolist   turn-starved actions: 0   net trade cashflow: 0   freight delivered: 124   cognition ok: 9792
+             experience by domain: commerce 2778, industry 1121, science 214, navigation 171
+  PLAS   liquid=   76,818 SOL (credits 68,557, wallet {'THR': 11900})  tier=3  node=plasmic_solar_archon  exp=6012  CR=850  crystals=50
+             ascensions: plasmic_flux_warden -> plasmic_solar_archon   turn-starved actions: 0   net trade cashflow: 0   freight delivered: 348   cognition ok: 9826
+             experience by domain: commerce 4433, industry 971, science 283, navigation 218, combat 7
+  CRYO   liquid=    1,594 SOL (credits 1,417, wallet {'FRN': 343})  tier=3  node=cryo_subzero_mathematician  exp=5267  CR=850  crystals=50
+             ascensions: cryo_logic_monk -> cryo_subzero_mathematician   turn-starved actions: 0   net trade cashflow: 0   freight delivered: 321   cognition ok: 9755
+             experience by domain: commerce 3824, industry 946, navigation 240, science 156, combat 1
+  ANAR   liquid=   45,757 SOL (credits 45,757, wallet {})  tier=3  node=anarchy_syndicate_broker  exp=5279  CR=850  crystals=50
+             ascensions: anarchy_black_smuggler -> anarchy_syndicate_broker   turn-starved actions: 0   net trade cashflow: 0   freight delivered: 124   cognition ok: 9577
+             experience by domain: commerce 3585, industry 1154, navigation 227, science 213
+  IMPE   liquid=   50,082 SOL (credits 50,081, wallet {'FRN': 3})  tier=3  node=imperial_navigator_patron  exp=4180  CR=568  crystals=50
+             ascensions: imperial_rogue_trader -> imperial_navigator_patron   turn-starved actions: 0   net trade cashflow: 0   freight delivered: 143   cognition ok: 9709
+             experience by domain: commerce 2848, industry 819, science 207, navigation 206
+  BIOT*  liquid=    1,670 SOL (credits 1,659, wallet {'THR': 8, 'VOID': 7, 'FRN': 2})  tier=3  node=biotic_director  exp=3369  CR=850  crystals=50
+             ascensions: biotic_supercargo -> biotic_director   turn-starved actions: 0   net trade cashflow: 764,459   freight delivered: 335   cognition ok: 691
+             experience by domain: commerce 2879, navigation 212, science 154, industry 24
+             colonies founded: [{'cycle': 266, 'planet': 'planet_204_c', 'tier': 1}]
+             hungry at 30 of 100 samples
+             ascension blocked by: {'Net Equity': 22, 'Experience 2131': 20, 'Experience 2089': 9, 'Experience 2108': 6, 'Experience 3314': 6, 'Credit Rating': 5}
+
+[COSMOS] alignment, locals, great powers, the Library
+  all captains      mean -0.085 -> -0.055   light/neutral/dark 0/3/1 -> 5/15/6
+  private captains  mean -0.085 -> +0.059   light/neutral/dark 0/3/1 -> 5/13/2
+  natives: 11 -> 20 societies, mean stage 2.27 -> 3.55, events {'collapses': 4, 'advances': 41, 'first_flights': 5}
+  doctrines: {'FEDERATION': 'BETA', 'COMPACT': 'GAMMA', 'NONE': 'DELTA', 'IMPERIUM': 'GAMMA', 'ZEALOT': 'EPSILON'}
+  IMPERIUM: worlds 6, systems 9%, fleet 2, dogma 0.0, stability 1.0, stats {'tithe_delivered': 758511, 'tithe_lost': 156979, 'warships': 2, 'inquisitions': 30, 'heresies': 6}
+  ZEALOT: worlds 12, systems 18%, fleet 4, dogma 0.34, stability 0.391, stats {'feast_burned': 103198, 'surplus_tithed': 1188423, 'crusaders': 18, 'expansions': 81, 'converts': 38620434, 'tribute': 929979, 'purges': 14, 'secessions': 69}
+  library: 1143 records {'CAPTAINS_LOG': 403, 'GENESIS_MANIFESTO': 42, 'FIELD_NOTES': 289, 'FACTION_DECREE': 116, 'PLANETARY_ANNALS': 259, 'LINEAGE_LEGACY': 16, 'GALACTIC_HISTORY': 4, 'RUIN': 14}
+  NPC houses: {'founded': 21, 'alive': 5, 'extinct': 16, 'branches': 20, 'deaths': 34, 'max_generation': 3}
+
+[PEOPLES] on-planet growth, the multi-planetary drive, households, the frontier
+   cycle  worlds   population      housing  habitats  sectors  policies
+     100      30      312,924    2,038,510         3      180  {'undecided': 30}
+    2100      31      452,339    2,056,929         3      180  {'undecided': 31}
+    4100      37      615,212    2,139,922         3      180  {'undecided': 37}
+    6100      36      819,873    2,183,149         5      180  {'undecided': 36}
+    8100      46    1,039,968    2,373,394         5      180  {'undecided': 46}
+   10000      45    1,221,162    2,399,298         6      180  {'undecided': 45}
+  citadels {3: 4, 1: 13, 0: 27, 2: 1}; councils raised 7 citadels, dug 3 habitats
+  settler fleets: 0 daughter worlds, 0 emigrants, 0 found no world in reach; steady-state worlds 0
+  households: 170,084 units bought, spend {'SOL': 3307123, 'THR': 15273546, 'VOID': 1845434, 'FRN': 329217}, shortages 1
+  exports: worlds sold their surplus harvest and ore to regional ports for {'SOL': 10432999, 'FRN': 22338883, 'THR': 27961161, 'VOID': 29014176}
+  frontier: clusters [1, 2, 3], opened []
+  physics: 138 worlds {'TERRESTRIAL': 16, 'BARREN': 20, 'GAS_GIANT': 46, 'OCEANIC': 6, 'ICE': 32, 'VOLCANIC': 9, 'ROGUE': 9}, 11 tidally locked, 0 spacing violations
+  credit: lent 3,521,198, interest 1,827,036, margin calls 223, defaults 14 (written off 261,207), corporate levy 9,606,896
+  fibres: 112,847 passages, 294 of 405 lanes developed, top 10% of lanes carry 67% of development, trunks [('35-45', 288781), ('28-35', 247900), ('1-5', 206732), ('13-16', 197971), ('22-28', 183700)], cheapest transit x0.25
+  clearing union: STAMP imbalance -0.0, settlement chain 400 blocks (verify: ok), Galactic ISSE cross volume 4,683,722 SOL, arbitrage {'trades': 3081, 'profit_sol': 462277}, widest cross-rate gap 155.8%
+    SOL: reserves 20,000  loans 0  rate/q 0.0088  STAMP +662,935  {'injected': 1013704, 'absorbed': 350769, 'lent': 21742, 'repaid': 32613}
+    FRN: reserves 1,000,857  loans 80,859  rate/q 0.0372  STAMP -430,802  {'injected': 235637, 'absorbed': 1011080, 'lent': 111096, 'repaid': 66510}
+    THR: reserves 4,102,940  loans 0  rate/q 0.1085  STAMP -1,477,187  {'absorbed': 3765763, 'public_works': 4746, 'lent': 64899, 'written_off': 460040, 'repaid': 104617, 'injected': 72795}
+    VOID: reserves 70,000  loans 9,209  rate/q 0.0142  STAMP +70,384  {'injected': 255244, 'lent': 216888, 'absorbed': 8901, 'written_off': 3491643, 'repaid': 8231}
+    - [GALACTIC_HISTORY] The History of the Galaxy, Age 5 (cycle 10000): GALACTIC HISTORY, cycles 7500-10000. 26 captains sail the lanes: 5 walk in the Light, 15 keep to the grey middle, 6 have turned to the Dark (mean -0.05, 'Neutral'). The Library received 254 new records (99 captains' logs
+    - [GENESIS_MANIFESTO] The Founding of House Ashgrave (cycle 10000): GENESIS MANIFESTO. Mother Ashgrave founds House Ashgrave (human-outlaw, Anarchy clade; creed: outlaw). Let the Library record where it began.
+    - [CAPTAINS_LOG] The Loss of the Mining Barge (cycle 9950): Cold-log, entropy index 2409.950. The Mining Barge is gone, broken apart at Nebular Passage (Sector 092) by Pyre-Marshal Castigan 17. What is left of the crew rides an escape pod home to Sol. Ships are borrowed from the 
+    - [FACTION_DECREE] Zephyr Station Is Conquered (cycle 9907): HEAR THE CHOIR OF THE PYRE. Zephyr Station has been conquered and consecrated for the Pyre. Its fires are lit; its songs are ours.
+    - [PLANETARY_ANNALS] The Conquest of Zephyr Station (cycle 9907): Annals of Zephyr Station. The shields fell and the vaults were opened to Pyre-Marshal Castigan 17. The former governor (indigenous_planet_45_1) is gone. The markets reopened the next day, as markets always do.
+    - [FIELD_NOTES] Discovery: the Free Ancient Secession gravitic keel shard (cycle 9894): Strata-record, layer 2409.894. Today we recorded the Free Ancient Secession gravitic keel shard at Ancient Depths (Sector 040). The science officer has not slept since. Nothing is free out here, and nothing is forgiven.
+    - [RUIN] The Ruin of Sentinel Segmentum 5 (cycle 9850): Sentinel Segmentum 5 borrowed against IRIR and the market turned. The margin desk sold them out; 19,816 Cr of debt went unpaid.
+    - [LINEAGE_LEGACY] The End of House Knife (cycle 9768): HERE ENDS HOUSE KNIFE, founded by Kaddo the Knife at cycle 9500 (human-outlaw, Anarchy clade, outlaw creed). It ran 1 generation(s) and 0 cadet branch(es), held as many as 1 world(s), lost 5 hull(s), and ended at cycle 9
+
+[LAWS] invariants of the universe's physics and ledgers
+  [PASS] money conserved: every change declared [FRN]         target == 0           actual +0
+  [PASS] money conserved: every change declared [SOL]         target == 0           actual +0
+  [PASS] money conserved: every change declared [THR]         target == 0           actual +0
+  [PASS] money conserved: every change declared [VOID]        target == 0           actual +0
+  [PASS] monetary churn per year / supply [FRN]               target <= 2.0         actual 0.00
+  [PASS] monetary churn per year / supply [SOL]               target <= 2.0         actual 0.02
+  [PASS] monetary churn per year / supply [THR]               target <= 2.0         actual 0.01
+  [PASS] monetary churn per year / supply [VOID]              target <= 2.0         actual 0.01
+  [PASS] quantity equation holds: M / M* [FRN]                target 0.8 .. 1.25    actual 0.990 (raw supply +19.8% / 1k cycles)
+  [PASS] quantity equation holds: M / M* [SOL]                target 0.8 .. 1.25    actual 1.050 (raw supply +9.4% / 1k cycles)
+  [PASS] quantity equation holds: M / M* [THR]                target 0.8 .. 1.25    actual 0.991 (raw supply +19.7% / 1k cycles)
+  [PASS] quantity equation holds: M / M* [VOID]               target 0.8 .. 1.25    actual 0.993 (raw supply +7.3% / 1k cycles)
+  [PASS] throughput per sector stable (last window / median)  target >= 0.7         actual 0.87
+  [PASS] clearing union conserves STAMP (accounts net to zero) target |sum| < 0.01   actual -0.0
+  [PASS] settlement chain seals and verifies                  target blocks > 0, intact actual 400 blocks, intact
+  [PASS] central banks solvent (reserves >= 0)                target none negative  actual all solvent
+  [PASS] orbits never cross (spacing law, every system)       target 0 violations   actual 0 of 138 worlds
+  [PASS] deterministic across processes (same seed, different hash seeds) target identical      actual identical after 300 cycles
+  [PASS] invariant violations                                 target 0              actual 0
+  [PASS] exceptions                                           target 0              actual 0
+
+[OBSERVATIONS] emergent outcomes against a band of interest (never failed)
+  [  ok] FRN FX rate vs genesis level                         band 0.5x .. 2.0x     actual 1.07x
+  [note] VOID FX rate vs genesis level                        band 0.5x .. 2.0x     actual 0.37x
+  [  ok] THR FX rate vs genesis level                         band 0.5x .. 2.0x     actual 0.58x
+  [  ok] illiquid starports (with a regional economy)         band <= 20%           actual 2% (1/52; all ports 1/52)
+  [  ok] captain wealth Gini                                  band 0.4 .. 0.7       actual 0.466
+  [  ok] richest captain share                                band <= 35%           actual 14%
+  [  ok] broke AI share (<= 250 Cr)                           band <= 15%           actual 0%
+  [  ok] median AI net worth holds (last vs first quarter)    band late >= 75% of early actual 79,229 -> 262,408
+  [  ok] repeated deed failures / 100 cycles                  band <= 20            actual 7 (COLLECT_COLONIAL_TAXES)
+  [  ok] first bot reaches Tier 2 (cycle)                     band 1500 .. 3000     actual 1860
+  [  ok] no bot reaches Tier 4 before cycle                   band >= 8000          actual never
+  [  ok] solvent player captains (net worth > 1,000)          band >= 4 of 7        actual 7
+  [  ok] universe leans syntropic (mean private alignment)    band end >= start - 0.02 (-0.149) actual +0.059
+  [  ok] Light captains >= Dark captains (end)                band light >= dark    actual 5 vs 2
+  [  ok] moral diversity survives (end)                       band >= 25% neutral and >= 1 dark actual 65% neutral, 2 dark
+  [  ok] chronicle entries / 1k cycles                        band >= 15            actual 109.2
+  [  ok] distinct chronicle kinds                             band >= 5             actual 8
+  [  ok] native societies not destroyed                       band >= 50%           actual 64% (4 collapsed, 5 reached the stars)
+  [  ok] native societies develop (stage advances)            band >= 1 by 5,000 cycles actual 46
+  [  ok] population keeps growing after 40% of the run        band >= +20%          actual 601,433 -> 1,221,162
+  [  ok] households buy from starports                        band > 0              actual 20,755,320
+  [  ok] frontier opens as peoples fill the galaxy            band >= 1 new cluster by 8,000 cycles actual 2
+  [  ok] NPC lineages alive (end)                             band >= 3 houses      actual 5 alive of 21 founded (34 deaths, 16 extinct, 20 cadet branches)
+  [  ok] zealot territory (share of star systems)             band <= 25%           actual 18% (dogma 0.34, 14 purges)
+  [  ok] Imperial tithe delivered to the Fortress             band > 0              actual 758511
+  => ALL LAWS HOLD; 1 observation(s) outside their band
