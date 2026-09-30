@@ -7,6 +7,7 @@ import random
 from typing import Dict, Any, Optional
 from xylarium.config import (
     CITADEL_CONFIG,
+    COMMODITY_CONFIG,
     HOUSEHOLD_INCOME_SHARE,
     COUNCIL_WORKS_SHARE,
     SHIP_CATALOG,
@@ -18,7 +19,6 @@ from xylarium.config import (
     PLANETARY_SPACEFLIGHT_COOLDOWN,
     CITADEL_UPKEEP,
     COLONY_TAX_PER_CAPITA,
-    COLONY_SERVICES_PER_CAPITA,
     PRICE_LEVEL,
     COLONY_VAULT_CAP,
     UPKEEP_ARREARS_MORALE_PENALTY,
@@ -49,6 +49,14 @@ from xylarium.kernel.models import (
 from xylarium.kernel.civilization import CivilizationIntelligenceEngine, CIVIC_PROJECTS
 from xylarium.kernel.elements import PeriodicTable
 from xylarium.kernel.experience import ExperienceManager
+
+
+_BASE_ORGANICS = COMMODITY_CONFIG["ORGANICS"]["base_price"]
+_BASE_ORE = COMMODITY_CONFIG["ORE"]["base_price"]
+
+
+def is_indigenous_natives(planet: Planet) -> bool:
+    return bool(getattr(planet, "natives", None))
 
 
 class ColonyManager:
@@ -658,31 +666,30 @@ class ColonyManager:
         morale_factor = max(0.1, planet.morale / 100.0)
         headroom = max(0.0, (vault_cap - planet.treasury) / vault_cap)
         # What the colony earns is split: households keep their share (their purse, spent at the region's
-        # starports each quarter - see demography.households); the government taxes the rest.
-        # The fiscal rule works both sides: above target (factor > 1) the colony's money earnings are
-        # smaller (tight money) *and* public services absorb more of what the government keeps.
-        policy = ledger.policy_factor(planet.currency)
+        # starports each quarter - see demography.households); the government taxes the rest. Public
+        # services withdraw the share of that tax the regional authority sets each season to keep
+        # M V = P Y (ledger.MonetaryPolicy): money grows with real output, no faster.
+        withdraw = ledger.policy_factor(planet.currency)
         share = HOUSEHOLD_INCOME_SHARE
-        earnings = (planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor
-                    / max(1.0, policy))
+        earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor
         household_income = int(earnings * share)
         if household_income > 0:
             ledger.mint("colony_tax", household_income, planet.currency)
             planet.household_purse += household_income
         tax_yield = int(earnings * (1.0 - share) * headroom)
+        if ledger.ACTIVE_POLICY is not None:
+            ledger.ACTIVE_POLICY.record_earnings(planet.currency, household_income + tax_yield, tax_yield)
         upkeep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])
         upkeep_credits = int(upkeep["credits"] * level)
-        services_due = int(planet.population * COLONY_SERVICES_PER_CAPITA * (1.0 - share) * level
-                           * tax_mult * policy)
+        services_due = int(tax_yield * withdraw)
         # A crowded world that is still building puts part of its public budget into works (housing,
         # citadel) instead of current services - the council spends it next quarter (demography.develop)
         from xylarium.kernel import demography
         if demography.building(planet):
             services_due = int(services_due * (1.0 - COUNCIL_WORKS_SHARE))
-        # Austerity withdraws what the budget can bear (this cycle's tax and a tenth of savings); it does
-        # not push a solvent colony into arrears
-        if policy > 1.0:
-            services_due = min(services_due, max(0, tax_yield + planet.treasury // 10 - upkeep_credits))
+        # Withdrawal takes what the budget can bear (this cycle's tax and a tenth of savings); it does not
+        # push a solvent colony into arrears - the authority sees the shortfall and asks again next season
+        services_due = min(services_due, max(0, tax_yield + planet.treasury // 10 - upkeep_credits))
         spending = upkeep_credits + services_due
         upkeep_paid = (tax_yield + planet.treasury >= spending) and planet.ore_silo >= upkeep["ore"]
         if upkeep_paid:
@@ -719,6 +726,10 @@ class ColonyManager:
         organics_harvested = biosphere.harvest(kernel, planet, demography.housing_cap(planet, kernel))
         planet.ore_silo = min(5000, planet.ore_silo + ore_mined)
         planet.organics_silo = min(5000, planet.organics_silo + organics_harvested)
+        # Real output (the Y of M V = P Y): what was harvested and mined, at base prices and price level
+        if ledger.ACTIVE_POLICY is not None and not is_indigenous_natives(planet):
+            ledger.ACTIVE_POLICY.record_output(planet.currency, (organics_harvested * _BASE_ORGANICS
+                                                                 + ore_mined * _BASE_ORE) * level)
 
         # 4. Autonomous Planetary Counter-Intelligence Garrison
         # Fortified colonies (Citadel Tier 1+) allocate vault revenue to defense operatives

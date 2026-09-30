@@ -134,68 +134,111 @@ def supply_in_sol(kernel: Any, supply: Optional[Dict[str, Dict[str, int]]] = Non
 
 class MonetaryPolicy:
     """
-    Regional monetary authorities (one per currency) run a fiscal rule each fiscal quarter:
-    the money-supply target is the genesis supply plus declared new territory, grown with the region's
-    population (a larger economy carries more money). When supply
-    runs above target - or a regional currency trades weak against its genesis level - public
-    services absorb more of colony tax (austerity withdraws money); below target they ease.
-    The resulting factor scales colony services, the declared sink paired with colony tax.
+    Regional monetary authorities, one per currency, keep the quantity equation M V = P Y.
+
+      * Y is real output: the value (at base prices and the region's genesis price level) of what the
+        region's worlds harvest and mine, summed over the last standard year (four seasons).
+      * V is not chosen: it is measured once, from the genesis money supply M0 and the first full year's
+        output Y0 (V = P Y0 / M0). With V and P held, the money the economy needs is M* = M0 x Y / Y0 -
+        money grows exactly as the real economy grows, and a stable price level follows.
+      * Each season the authority closes a quarter of the gap (M* - M) - the whole gap over one year - by
+        setting how much of the governments' tax public services withdraw (a declared burn) or, when
+        colony earnings alone cannot supply what the economy needs, by a fiscal transfer to households
+        (a declared mint). No elasticities, no bounds: the clock sets the pace, output sets the target.
     """
 
     def __init__(self) -> None:
-        self.targets: Dict[str, float] = {}
-        self.population0: Dict[str, float] = {}
-        self.current: Dict[str, float] = {}      # this quarter's target (reporting)
-        self.factors: Dict[str, float] = {}
+        self.targets: Dict[str, float] = {}      # M0: genesis supply per currency
+        self.output0: Dict[str, float] = {}      # Y0: first full year's output
+        self.current: Dict[str, float] = {}      # this season's M* (reporting)
+        self.factors: Dict[str, float] = {}      # withdraw share: services / government tax
         self.history: Dict[str, list] = {}
+        self.output_q: Dict[str, float] = {}     # output accumulating this season
+        self.output_seasons: Dict[str, list] = {}  # the last four seasons' output
+        self.earnings_q: Dict[str, float] = {}   # colony earnings minted this season
+        self.gov_q: Dict[str, float] = {}        # of which the governments' share
+        self.transfers: Dict[str, int] = {}      # cumulative fiscal transfers (reporting)
 
     def factor(self, currency: str) -> float:
         return self.factors.get(currency, 1.0)
 
+    def record_output(self, currency: str, value: float) -> None:
+        self.output_q[currency] = self.output_q.get(currency, 0.0) + value
+
+    def record_earnings(self, currency: str, total: float, government: float) -> None:
+        self.earnings_q[currency] = self.earnings_q.get(currency, 0.0) + total
+        self.gov_q[currency] = self.gov_q.get(currency, 0.0) + government
+
+    def annual_output(self, currency: str) -> float:
+        seasons = self.output_seasons.get(currency, [])
+        return sum(seasons) if len(seasons) >= 4 else 0.0
+
+    def target(self, currency: str, supply: float) -> float:
+        m0 = self.targets.get(currency, supply)
+        y0, y = self.output0.get(currency), self.annual_output(currency)
+        return m0 * y / y0 if (y0 and y) else m0
+
     def update(self, kernel: Any) -> None:
-        from xylarium.config import POLICY_SUPPLY_ELASTICITY, POLICY_FX_ELASTICITY, POLICY_FACTOR_BOUNDS
         supply = money_supply(kernel)
-        territory: Dict[str, int] = {}
-        for (src, cur), v in kernel.ledger.minted.items():
-            if src in ("cluster_genesis", "ghost_sector_genesis"):
-                territory[cur] = territory.get(cur, 0) + v
-        # A growing economy needs more money: the target grows with the region's population (its real size)
-        from xylarium.config import POLICY_GROWTH_ELASTICITY, POLICY_GROWTH_FLOOR
-        people: Dict[str, int] = {}
-        for sec in kernel.sectors.values():
-            for p in sec.planets:
-                if p.population > 0 and not getattr(p, "natives", None):
-                    people[p.currency] = people.get(p.currency, 0) + p.population
-        fxm = getattr(kernel, "fx_market", None)
-        lo, hi = POLICY_FACTOR_BOUNDS
         for cur, bucket in supply.items():
+            m = float(bucket["total"])
             if cur not in self.targets:
-                self.targets[cur] = float(bucket["total"])  # first reading = genesis supply
-            if cur not in self.population0 and people.get(cur):
-                self.population0[cur] = float(people[cur])
-            growth = max(POLICY_GROWTH_FLOOR, people.get(cur, 0) / self.population0[cur]) if self.population0.get(cur) else 1.0
-            target = (self.targets[cur] + territory.get(cur, 0)) * growth ** POLICY_GROWTH_ELASTICITY
+                self.targets[cur] = m                       # first reading = genesis supply M0
+            # close the season's output books
+            seasons = self.output_seasons.setdefault(cur, [])
+            if cur in self.output_q or seasons:
+                seasons.append(self.output_q.get(cur, 0.0))
+                del seasons[:-4]
+            if cur not in self.output0 and len(seasons) >= 4 and self.annual_output(cur) > 0:
+                self.output0[cur] = self.annual_output(cur)  # first full year: V is measured
+            target = self.target(cur, m)
             self.current[cur] = round(target)
-            ratio = bucket["total"] / max(1.0, target)
-            factor = ratio ** POLICY_SUPPLY_ELASTICITY
-            if fxm is not None and cur != "SOL":
-                factor *= fxm.price_level_drift(cur) ** POLICY_FX_ELASTICITY
-            factor = max(lo, min(hi, factor))
-            self.factors[cur] = round(factor, 4)
-            self.history.setdefault(cur, []).append(round(factor, 3))
+            gap = (target - m) / 4.0                        # a quarter of the gap per season
+            earned, gov = self.earnings_q.get(cur, 0.0), self.gov_q.get(cur, 0.0)
+            withdraw = earned - gap                         # what services must burn for net injection = gap
+            if withdraw >= 0:
+                self.factors[cur] = round(withdraw / gov, 4) if gov > 0 else 1.0
+            else:
+                self.factors[cur] = 0.0
+                self._transfer(kernel, cur, int(-withdraw))
+            self.history.setdefault(cur, []).append(round(self.factors[cur], 3))
             self.history[cur] = self.history[cur][-40:]
+        self.output_q, self.earnings_q, self.gov_q = {}, {}, {}
+
+    def _transfer(self, kernel: Any, cur: str, amount: int) -> None:
+        """Fiscal transfer: new money reaches households by population (declared mint)."""
+        worlds = [p for s in kernel.sectors.values() for p in s.planets
+                  if p.population > 0 and p.currency == cur and not getattr(p, "natives", None)]
+        people = sum(p.population for p in worlds)
+        if amount <= 0 or people <= 0:
+            return
+        paid = 0
+        for p in worlds:
+            share = amount * p.population // people
+            p.household_purse += share
+            paid += share
+        if paid:
+            mint("fiscal_transfer", paid, cur)
+            self.transfers[cur] = self.transfers.get(cur, 0) + paid
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"targets": dict(self.targets), "population0": dict(self.population0),
-                "factors": dict(self.factors), "history": dict(self.history)}
+        return {"targets": dict(self.targets), "output0": dict(self.output0), "factors": dict(self.factors),
+                "history": dict(self.history), "output_q": dict(self.output_q),
+                "output_seasons": {k: list(v) for k, v in self.output_seasons.items()},
+                "earnings_q": dict(self.earnings_q), "gov_q": dict(self.gov_q), "transfers": dict(self.transfers)}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MonetaryPolicy":
         mp = cls()
         mp.targets = {k: float(v) for k, v in data.get("targets", {}).items()}
-        mp.population0 = {k: float(v) for k, v in data.get("population0", {}).items()}
+        mp.output0 = {k: float(v) for k, v in data.get("output0", {}).items()}
         mp.factors = {k: float(v) for k, v in data.get("factors", {}).items()}
         mp.history = {k: list(v) for k, v in data.get("history", {}).items()}
+        mp.output_q = {k: float(v) for k, v in data.get("output_q", {}).items()}
+        mp.output_seasons = {k: [float(x) for x in v] for k, v in data.get("output_seasons", {}).items()}
+        mp.earnings_q = {k: float(v) for k, v in data.get("earnings_q", {}).items()}
+        mp.gov_q = {k: float(v) for k, v in data.get("gov_q", {}).items()}
+        mp.transfers = {k: int(v) for k, v in data.get("transfers", {}).items()}
         return mp
 
 

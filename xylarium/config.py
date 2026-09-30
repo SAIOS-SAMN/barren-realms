@@ -905,7 +905,6 @@ SURFACE_TROOP_RECRUIT_ORE = 5           # Heavy ore for troop armored plating
 
 # --- Colony fiscal model (replaces population x 0.15 minting) ---
 COLONY_TAX_PER_CAPITA = 0.004          # SOL-value per colonist per cycle before multipliers (x local price level)
-COLONY_SERVICES_PER_CAPITA = 0.0032    # Public services burned per colonist per cycle: net surplus -> 0 at ~20% of vault cap
 COLONY_VAULT_CAP = 500000              # Soft cap; tax tapers linearly to zero as the vault fills
 COLONY_LEVY_SHARE = 0.20               # Governor's sovereign levy: share of the vault drawn per collection
 COLONY_LEVY_INTERVAL = 25              # ...at most once per fiscal quarter
@@ -1146,11 +1145,6 @@ SOL_CORE_WORLDS = [
 ]
 
 # Regional monetary authorities (fiscal rule targeting each currency's money supply)
-POLICY_SUPPLY_ELASTICITY = 2.0          # services factor = (supply / target) ** elasticity ...
-POLICY_FX_ELASTICITY = 2.0              # ... x (FX drift vs genesis level) ** elasticity (regional currencies)
-POLICY_FACTOR_BOUNDS = (0.4, 3.0)
-POLICY_GROWTH_ELASTICITY = 0.5          # Money-supply target grows with population^0.5 (economies of scale in money use)
-POLICY_GROWTH_FLOOR = 0.8               # ...and shrinks at most to 80% if peoples decline
 
 # =============================================================================
 # [10] ARCHAEOLOGY: DEAD CIVILIZATIONS, RUINS, ANTIQUITIES & RELICS
