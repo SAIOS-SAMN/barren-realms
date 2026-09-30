@@ -100,15 +100,11 @@ class ColonyManager:
         """The starport that services a colony's citadel: its own system's, else the nearest of its money."""
         if kernel is None:
             return None
-        cache = getattr(kernel, "_contractor_cache", None)
-        if cache is None or kernel.cycle_count - cache.get("_built", -10 ** 9) > 500:
-            cache = kernel._contractor_cache = {"_built": kernel.cycle_count}
-        if planet.id not in cache:
-            from xylarium.kernel import topology
-            found = topology.nearest(kernel, planet.sector_id, 3,
-                                     lambda sec: sec.port is not None and sec.port.currency == planet.currency)
-            cache[planet.id] = found
-        sid = cache[planet.id]
+        from xylarium.kernel import cache, topology
+        sid = cache.memo(kernel, "contractor_port", planet.id,
+                         lambda: topology.nearest(kernel, planet.sector_id, 3,
+                                                  lambda sec: sec.port is not None and sec.port.currency == planet.currency),
+                         max_age=500)
         return kernel.sectors[sid].port if sid is not None else None
 
     @classmethod

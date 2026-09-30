@@ -158,27 +158,18 @@ def scoop(sector: Any, captain: Any, limit: int = 10) -> int:
 
 
 def _stats(kernel: Any) -> dict:
-    s = getattr(kernel, "propulsion_stats", None)
-    if s is None:
-        s = kernel.propulsion_stats = {}
-    for k in ("burned", "bunkered", "coasted", "warp_jumps", "cores_burned_out", "skimmed_h", "skimmed_he3",
-              "degraded_worlds"):
-        s.setdefault(k, 0)
-    for k in ("burned_by_fuel", "refits", "civ_fuels"):
-        s.setdefault(k, {})
-    return s
+    return state.of(kernel, "propulsion")
 
 
 # ---------------------------------------------------------------------- choosing a fuel cell
 def _abundance(kernel: Any, sector_id: int) -> Dict[str, float]:
     """Each propellant's share of what lies in reach: starport stocks, what the ground holds, and gas-giant wells."""
+    return cache.memo(kernel, "fuel_abundance", sector_id, lambda: _reckon_abundance(kernel, sector_id),
+                      epoch=cache.season(kernel))
+
+
+def _reckon_abundance(kernel: Any, sector_id: int) -> Dict[str, float]:
     from xylarium.kernel import physics
-    cache = getattr(kernel, "_fuel_abundance", None)
-    season = kernel.cycle_count // 25
-    if cache is None or cache.get("_season") != season:
-        cache = kernel._fuel_abundance = {"_season": season}
-    if sector_id in cache:
-        return cache[sector_id]
     fuels = [f for f in FUEL_CELLS if f != "WARP"]
     have = {f: 0.0 for f in fuels}
     for sid in topology.reach(kernel, sector_id, FUEL_REACH):
@@ -194,8 +185,7 @@ def _abundance(kernel: Any, sector_id: int) -> Dict[str, float]:
                 have["H"] += 4 * lift
                 have["He-3"] += 4 * lift / SKIM_HE3_SHARE
     total = sum(have.values()) or 1.0
-    cache[sector_id] = {f: v / total for f, v in have.items()}
-    return cache[sector_id]
+    return {f: v / total for f, v in have.items()}
 
 
 def clear_sight(alignment: float, lessons: float = 0.0) -> float:
@@ -432,3 +422,16 @@ def refit(kernel: Any, yard_sector: Any, old_type: str, new_type: str) -> bool:
         port.stock["Si"] -= si_used
         matter.sink("shipbuilding", "Si", si_used)
     return fe_used < fe_need
+
+
+from xylarium.kernel import cache, state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="propulsion",
+    state=lambda: {"burned": 0, "bunkered": 0, "coasted": 0, "warp_jumps": 0, "cores_burned_out": 0,
+                   "skimmed_h": 0, "skimmed_he3": 0, "degraded_worlds": 0,
+                   "burned_by_fuel": {}, "refits": {}, "civ_fuels": {}},
+    season=quarter,
+    summary=lambda kernel: dict(_stats(kernel)),
+))

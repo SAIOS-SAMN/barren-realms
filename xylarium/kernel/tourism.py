@@ -59,13 +59,7 @@ def _hash(*parts: Any) -> int:
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "tourism_stats", None)
-    if s is None:
-        s = kernel.tourism_stats = {"trips": 0, "spend_sol": 0.0, "fares_sol": 0.0, "h_burned": 0,
-                                    "resorts_built": 0, "stations_built": 0, "h_short_trips": 0,
-                                    "charters": {"posted": 0, "flown": 0, "ransomed": 0, "expired": 0,
-                                                 "paid_sol": 0.0, "ransom_sol": 0.0}}
-    return s
+    return state.of(kernel, "tourism")["stats"]
 
 
 def _sol(cur: str, amount: float) -> float:
@@ -347,10 +341,7 @@ def _travel(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
 
 # ---------------------------------------------------------------------- tier 2: VIP charters
 def charters(kernel: Any) -> Dict[str, Dict[str, Any]]:
-    c = getattr(kernel, "charters", None)
-    if c is None:
-        c = kernel.charters = {}
-    return c
+    return state.of(kernel, "tourism")["charters"]
 
 
 def _post_charter(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
@@ -550,3 +541,18 @@ def summary(kernel: Any) -> Dict[str, Any]:
     stations = sum(1 for s in kernel.sectors.values() for p in s.planets if station(p) is not None)
     open_ch = sum(1 for c in charters(kernel).values() if c["status"] in ("OPEN", "IN_TRANSIT"))
     return {**st, "domes": domes, "stations": stations, "charters_open": open_ch}
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="tourism",
+    state=lambda: {"stats": {"trips": 0, "spend_sol": 0.0, "fares_sol": 0.0, "h_burned": 0, "resorts_built": 0,
+                             "stations_built": 0, "h_short_trips": 0,
+                             "charters": {"posted": 0, "flown": 0, "ransomed": 0, "expired": 0,
+                                          "paid_sol": 0.0, "ransom_sol": 0.0}},
+                   "charters": {}},
+    season=quarter,
+    summary=summary,
+))

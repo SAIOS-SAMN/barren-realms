@@ -20,7 +20,7 @@ Xylarium: demography - peoples grow on their worlds, and then decide what to bec
 
 from typing import Any, Dict, List, Optional
 
-from xylarium.kernel import matter, topology
+from xylarium.kernel import cache, matter, topology
 
 from xylarium.config import (
     CITADEL_CONFIG,
@@ -120,12 +120,7 @@ def metabolism_of(kernel: Any, planet: Any) -> str:
 
 # ---------------------------------------------------------------------- stats
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "demography", None)
-    if s is None:
-        s = kernel.demography = {"habitats": 0, "citadels": 0, "daughters": 0, "emigrants": 0, "steady": 0,
-                                 "no_room": 0, "clusters_opened": [], "last_cluster_cycle": 0,
-                                 "household_spend": {}, "household_units": 0, "shortages": 0}
-    return s
+    return state.of(kernel, "demography")["stats"]
 
 
 # ---------------------------------------------------------------------- quarter
@@ -383,10 +378,7 @@ def _quarter_len() -> int:
 
 # ---------------------------------------------------------------------- frontier
 def frontier_state(kernel: Any) -> Dict[str, Any]:
-    f = getattr(kernel, "frontier", None)
-    if f is None:
-        f = kernel.frontier = {"pressure": 0}
-    return f
+    return state.of(kernel, "demography")["frontier"]
 
 
 def frontier(kernel: Any) -> Optional[str]:
@@ -424,18 +416,12 @@ def frontier(kernel: Any) -> Optional[str]:
 
 # ---------------------------------------------------------------------- households
 def _markets(kernel: Any, planet: Any) -> List[Any]:
-    cache = getattr(kernel, "_household_markets", None)
-    if cache is None or kernel.cycle_count - cache.get("_built", -10 ** 9) > 250:
-        cache = kernel._household_markets = {"_built": kernel.cycle_count}
-    key = planet.id
-    if key not in cache:
-        ports = []
-        for sid in topology.reach(kernel, planet.sector_id, HOUSEHOLD_RADIUS):
-            port = kernel.sectors[sid].port
-            if port is not None and port.currency == planet.currency:
-                ports.append(sid)
-        cache[key] = ports
-    return [kernel.sectors[sid].port for sid in cache[key] if kernel.sectors[sid].port is not None]
+    """The starports of a world's money within HOUSEHOLD_RADIUS (re-surveyed every 250 cycles)."""
+    def survey() -> List[int]:
+        return [sid for sid in topology.reach(kernel, planet.sector_id, HOUSEHOLD_RADIUS)
+                if kernel.sectors[sid].port is not None and kernel.sectors[sid].port.currency == planet.currency]
+    sids = cache.memo(kernel, "household_markets", planet.id, survey, max_age=250)
+    return [kernel.sectors[sid].port for sid in sids if kernel.sectors[sid].port is not None]
 
 
 def households(kernel: Any) -> None:
@@ -475,7 +461,7 @@ def households(kernel: Any) -> None:
                     planet.household_purse -= bill
                     port.treasury += bill
                     port.stock[comm] = have - units
-                    from xylarium.kernel import matter, topology
+                    from xylarium.kernel import matter
                     matter.sink("households", comm, units)      # eaten, drunk, worn out at home
                     port.regional_income = round(port.regional_income + 0.3 * bill, 2)
                     budget -= bill
@@ -585,3 +571,16 @@ def set_policy(kernel: Any, captain: Any, planet: Any, policy: str) -> str:
         _covenant(kernel, planet)
     return (f"{planet.name}: " + ("settler fleets will sail when the world is full." if policy == "expand"
                                  else "population controls adopted; numbers held at 95% of housing."))
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="demography",
+    state=lambda: {"stats": {"habitats": 0, "citadels": 0, "daughters": 0, "emigrants": 0, "steady": 0,
+                             "no_room": 0, "clusters_opened": [], "last_cluster_cycle": 0,
+                             "household_spend": {}, "household_units": 0, "shortages": 0},
+                   "frontier": {"pressure": 0}},
+    season=quarter,
+))

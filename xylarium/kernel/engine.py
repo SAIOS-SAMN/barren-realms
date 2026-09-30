@@ -121,6 +121,8 @@ from xylarium.kernel import government as government_mod
 from xylarium.kernel import shipdesign as shipdesign_mod
 from xylarium.kernel import realms as realms_mod
 from xylarium.kernel import actions as actions_mod
+from xylarium.kernel import subsystem
+from xylarium.kernel.subsystem import Subsystem
 
 
 class GameKernel:
@@ -136,6 +138,9 @@ class GameKernel:
         self.event_bus = EventBus()
         self.cycle_count: int = 0
         self.action_logs: deque[str] = deque(maxlen=20)
+        self.state: Dict[str, Any] = {}          # each subsystem's record (state.py), saved whole
+        self.caches: Dict[str, Any] = {}         # memoized derived values (cache.py), never saved
+        self.graph_version: int = 0              # advances whenever the warp graph changes (topology.py)
         self.market_manager = MarketManager()
         self.research_manager = ResearchManager()
         self.cartography_manager = CartographyManager()
@@ -220,7 +225,7 @@ class GameKernel:
         self.factions.found_great_powers(self, seed)
         self.governance_manager.bind(self, genesis=True)          # the federal treasury is the Federation's vault
         government_mod.enrol_founders(self)
-        realms_mod.genesis(self)                                   # the baseline board's realms and their claims
+        subsystem.run_genesis(self)                                # the baseline board's realms and their claims
         government_mod.assign_ports(self)                          # every starport is bound to its system
         self._seed_alignments(seed)
         self.banking.found(self)   # founding reserves (genesis, before the money baseline)
@@ -687,13 +692,11 @@ class GameKernel:
     def _tax_recipients(self, sector: Sector) -> List[Planet]:
         """The populated worlds (same money, within retail range) whose governments tax a port's commerce."""
         from xylarium.config import PORT_RETAIL_RADIUS
-        cache = getattr(self, "_tax_cache", None)
-        if cache is None or self.cycle_count - cache.get("_built", -10 ** 9) > 250:
-            cache = self._tax_cache = {"_built": self.cycle_count}
-        if sector.id not in cache:
-            cache[sector.id] = [p.id for p in self.market_manager._regional_worlds(
-                self, sector.id, sector.port.currency, PORT_RETAIL_RADIUS)]
-        return [p for p in (self.get_planet(pid) for pid in cache[sector.id]) if p is not None and p.population > 0]
+        from xylarium.kernel import cache
+        pids = cache.memo(self, "tax_region", sector.id,
+                          lambda: [p.id for p in self.market_manager._regional_worlds(
+                              self, sector.id, sector.port.currency, PORT_RETAIL_RADIUS)], max_age=250)
+        return [p for p in (self.get_planet(pid) for pid in pids) if p is not None and p.population > 0]
 
     def _collect_trade_tax(self, captain: Captain, sector: Sector, value: int) -> int:
         """Transfers the sales tax from the captain (in the port's money) to the region's worlds, or to port dues."""
@@ -2389,45 +2392,7 @@ class GameKernel:
 
         # Fiscal quarter: monetary authorities set fiscal policy; antitrust and the public bounty board
         if self.cycle_count % FISCAL_QUARTER_CYCLES == 0:
-            self.monetary_policy.update(self)
-            for log in self.federal_reserve.fiscal_quarter(self):
-                self.action_logs.append(log)
-            # Central banks keep their money orderly and lend to ports; the clearing union books it
-            for log in self.banking.quarter(self):
-                self.action_logs.append(log)
-            from xylarium.config import CROSS_REANCHOR_RATE
-            self.fx_market.reanchor_cross(CROSS_REANCHOR_RATE)
-            # The moral gradient of the universe, and the lives of peoples who have not yet reached the stars
-            alignment_mod.quarterly(self)
-            NativeManager.tick(self)
-            self._tick_sieges()
-            # Credit: interest, margin calls, defaults; hoarded corporate cash levied back to home worlds
-            for log in credit_mod.quarter(self):
-                self.action_logs.append(log)
-            # The worlds' own season: tectonic renewal, solar-wind He-3, volatile escape and outgassing, decay
-            geology_mod.quarter(self)
-            # Hydrogen wells are skimmed; worlds that cannot fuel their defences raise DEGRADED beacons
-            for log in propulsion_mod.quarter(self):
-                self.action_logs.append(log)
-            # Governments of dark owners skim; dark civilizations raid their neighbours (crime.py)
-            for log in crime_mod.quarter(self):
-                self.action_logs.append(log)
-            # The courts sit: judgments, garnishment, warrants and freezes
-            for log in law_mod.quarter(self):
-                self.action_logs.append(log)
-            # The fibres close their season: lane development, economies of scale, fibre distances
-            fibres_mod.season(self)
-            # Newly charted systems (ghost sectors, frontier clusters) get exact physics
-            for sec in self.sectors.values():
-                physics_mod.ensure_system(sec)
-            # Peoples grow, build, choose; households shop; the frontier opens when they run out of room
-            for log in demography_mod.quarter(self):
-                self.action_logs.append(log)
-            # Each people reads its circumstances (fertility and natal cards), provided-for worlds craft their
-            # luxuries, and households travel to the resorts they cannot find at home
-            for mod in (fertility_mod, luxury_mod, tourism_mod, realms_mod, government_mod):
-                for log in mod.quarter(self):
-                    self.action_logs.append(log)
+            subsystem.run_season(self)           # the fiscal quarter, in subsystem.SEASON order
 
         # Great powers: tithes, dogma, crusades, secessions, doctrine reviews
         for log in self.factions.tick(self):
@@ -2868,3 +2833,27 @@ class GameKernel:
                 "spreads": [s.to_dict() for s in spreads]
             }
         return {"success": False, "error": f"Unknown mode: {mode}"}
+
+
+# ---------------------------------------------------------------------- the kernel's own seasonal steps
+def _each_system(kernel: "GameKernel") -> None:
+    for sec in kernel.sectors.values():
+        physics_mod.ensure_system(sec)        # newly charted systems (ghost sectors, frontier clusters) get physics
+
+
+def _reanchor(kernel: "GameKernel") -> None:
+    from xylarium.config import CROSS_REANCHOR_RATE
+    kernel.fx_market.reanchor_cross(CROSS_REANCHOR_RATE)
+
+
+for _sub in (
+    Subsystem("monetary_policy", season=lambda k: k.monetary_policy.update(k) and None),
+    Subsystem("federal_reserve", season=lambda k: k.federal_reserve.fiscal_quarter(k)),
+    Subsystem("banking", season=lambda k: k.banking.quarter(k)),
+    Subsystem("fx_reanchor", season=lambda k: _reanchor(k)),
+    Subsystem("alignment", season=lambda k: alignment_mod.quarterly(k) and None),
+    Subsystem("natives", season=lambda k: NativeManager.tick(k) and None),
+    Subsystem("sieges", season=lambda k: k._tick_sieges() and None),
+    Subsystem("physics", season=lambda k: _each_system(k)),
+):
+    subsystem.register(_sub)

@@ -91,8 +91,8 @@ class TestCrimeQuarter(unittest.TestCase):
         for _ in range(4):
             crime.quarter(k)
             k.cycle_count += 1
-        self.assertGreater(k.crime_stats["skimmed_sol"], 0)
-        self.assertGreater(k.crime_stats["raids"], 0)
+        self.assertGreater(crime.stats(k)["skimmed_sol"], 0)
+        self.assertGreater(crime.stats(k)["raids"], 0)
         self.assertLess(world.treasury, 1_000_000)
         self.assertEqual(m0, totals(k))                                        # transfers only
         self.assertGreater(law.docket(k)["stats"]["filed"], filed)             # every skim goes on the docket

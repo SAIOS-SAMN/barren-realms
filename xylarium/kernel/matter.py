@@ -206,19 +206,29 @@ def commission(captain: Any, kind: str = "commissioning") -> None:
 # ---------------------------------------------------------------------- audit mode
 def audit(kernel: Any) -> None:
     """Optional per-cycle audit (kernel.matter_audit = True): records any undeclared change - the cycle, the
-    commodity and the amount - in kernel.matter_violations, rather than crashing a live game."""
+    commodity and the amount - in the audit's violations (violations(kernel)), rather than crashing a live game."""
     if ACTIVE is None:
         return
     t, n = totals(kernel), ACTIVE.net()
-    base = getattr(kernel, "_matter_audit_base", None)
+    from xylarium.kernel import state
+    rec = state.of(kernel, "matter_audit")
+    base = rec.get("base")
     now = {c: t.get(c, 0) - n.get(c, 0) for c in set(t) | set(n)}
     if base is not None:
         for c in set(now) | set(base):
             d = now.get(c, 0) - base.get(c, 0)
             if d:
-                v = getattr(kernel, "matter_violations", None)
-                if v is None:
-                    v = kernel.matter_violations = []
+                v = rec["violations"]
                 v.append({"cycle": kernel.cycle_count, "commodity": c, "undeclared": d})
                 del v[:-200]
-    kernel._matter_audit_base = now
+    rec["base"] = now
+
+
+def violations(kernel: Any) -> list:
+    from xylarium.kernel import state
+    return state.of(kernel, "matter_audit")["violations"]
+
+
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(name="matter_audit", state=lambda: {"base": None, "violations": []}))

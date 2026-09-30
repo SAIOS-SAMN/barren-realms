@@ -28,7 +28,7 @@ class TestMatterLedger(unittest.TestCase):
         t1, n1 = matter.totals(k), k.matter.net()
         broken = {c: (t1.get(c, 0) - t0.get(c, 0)) - (n1.get(c, 0) - n0.get(c, 0)) for c in set(t0) | set(t1) | set(n1)}
         self.assertEqual({c: d for c, d in broken.items() if d}, {})
-        self.assertEqual(getattr(k, "matter_violations", []), [])
+        self.assertEqual(matter.violations(k), [])
         self.assertGreater(k.matter.sources[("harvest", "ORGANICS")], 0)     # the ledger is alive
 
     def test_storage_never_destroys(self):

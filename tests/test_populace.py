@@ -6,7 +6,7 @@ untouched), frontier clusters with spacefaring peoples, and a settled Imperial h
 import random
 import unittest
 
-from xylarium.kernel import populace
+from xylarium.kernel import populace, state
 from xylarium.kernel.engine import GameKernel
 
 
@@ -24,7 +24,7 @@ class TestPopulace(unittest.TestCase):
         for i in range(populace.BASE_HUMANS + 3):
             k.register_player(f"human{i}", f"Human {i}")
         self.assertEqual(populace.ai_capacity(k), cap0 + 3 * populace.AI_PER_HUMAN)
-        self.assertGreaterEqual(populace.systems(k), k._base_systems + 3 * populace.SYSTEMS_PER_EXPLORER)
+        self.assertGreaterEqual(populace.systems(k), state.of(k, 'populace')['base_systems'] + 3 * populace.SYSTEMS_PER_EXPLORER)
         for sid, warps in before.items():
             # an old system may gain a bridge to the new cluster, but never loses a lane or moves
             self.assertTrue(set(warps) <= set(k.sectors[sid].warps))

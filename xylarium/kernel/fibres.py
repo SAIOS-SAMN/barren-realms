@@ -37,10 +37,7 @@ def key(a: int, b: int) -> str:
 
 
 def state(kernel: Any) -> Dict[str, Any]:
-    f = getattr(kernel, "fibres", None)
-    if f is None:
-        f = kernel.fibres = {"dev": {}, "q": {}, "net": {}, "passages": 0, "seasons": 0}
-    return f
+    return _state.of(kernel, "fibres")
 
 
 def cargo_value(captain: Any) -> float:
@@ -223,15 +220,11 @@ def geodesic(kernel: Any, start: int, goal: int) -> List[int]:
     st = state(kernel)
     version = (st.get("version", 0), st.get("seasons", 0), len(kernel.sectors),
                sum(len(sec.warps) for sec in kernel.sectors.values()))   # new lanes (shortcuts) invalidate
-    cache = getattr(kernel, "_geodesic_cache", None)
-    if cache is None or cache.get("_v") != version:
-        adj = {}
-        for sid, sec in kernel.sectors.items():
-            adj[sid] = [(w, lane_cost(kernel, sid, w)) for w in sec.warps if w in kernel.sectors]
-        cache = kernel._geodesic_cache = {"_v": version, "_adj": adj, "_trees": {}}
-    tree = cache["_trees"].get(start)
-    if tree is None:
-        tree = cache["_trees"][start] = _shortest_tree(cache["_adj"], start)
+    def adjacency() -> Dict[int, List[Tuple[int, float]]]:
+        return {sid: [(w, lane_cost(kernel, sid, w)) for w in sec.warps if w in kernel.sectors]
+                for sid, sec in kernel.sectors.items()}
+    adj = cache.memo(kernel, "geodesic", "_adj", adjacency, epoch=version)
+    tree = cache.memo(kernel, "geodesic", ("tree", start), lambda: _shortest_tree(adj, start), epoch=version)
     dist, prev = tree
     if goal not in dist:
         return []
@@ -261,3 +254,21 @@ def _shortest_tree(adj: Dict[int, List[Tuple[int, float]]], start: int) -> Tuple
                 prev[w] = sid
                 heapq.heappush(heap, (nd, h + 1, w))
     return dist, prev
+
+
+from xylarium.kernel import cache  # noqa: E402
+from xylarium.kernel import state as _state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+
+def _season(kernel: Any) -> List[str]:
+    season(kernel)
+    return []
+
+
+register_subsystem(Subsystem(
+    name="fibres",
+    state=lambda: {"dev": {}, "q": {}, "net": {}, "passages": 0, "seasons": 0},
+    season=_season,
+    summary=summary,
+))

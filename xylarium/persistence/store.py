@@ -4,7 +4,7 @@ JSON Persistence engine for Xylarium game saves.
 
 import json
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.models import Sector, Captain, RadioMessage
 from xylarium.kernel.phylogeny import PHYLOGENY_MANAGER
@@ -41,26 +41,8 @@ class StatePersistence:
                 "factions": kernel.factions.to_dict() if hasattr(kernel, "factions") else None,
                 "chronicle": kernel.chronicle.to_dict() if hasattr(kernel, "chronicle") else None,
                 "native_stats": dict(getattr(kernel, "native_stats", {})),
-                "demography": getattr(kernel, "demography", None),
-                "frontier": getattr(kernel, "frontier", None),
-                "fibres": getattr(kernel, "fibres", None),
-                "credit_stats": getattr(kernel, "credit_stats", None),
-                "geology": getattr(kernel, "geology", None),
-                "propulsion_stats": getattr(kernel, "propulsion_stats", None),
-                "docket": getattr(kernel, "docket", None),
-                "crime_stats": getattr(kernel, "crime_stats", None),
-                "fertility_stats": getattr(kernel, "fertility_stats", None),
-                "luxury_stats": getattr(kernel, "luxury_stats", None),
-                "tourism_stats": getattr(kernel, "tourism_stats", None),
-                "charters": getattr(kernel, "charters", None),
-                "offices": getattr(kernel, "offices", None),
-                "government_stats": getattr(kernel, "government_stats", None),
-                "ship_designs": getattr(kernel, "ship_designs", None),
-                "design_stats": getattr(kernel, "design_stats", None),
-                "base_systems": getattr(kernel, "_base_systems", None),
-                "realms": getattr(kernel, "realms", None),
-                "realm_claims": getattr(kernel, "realm_claims", None),
-                "realm_stats": getattr(kernel, "realm_stats", None),
+                "state": getattr(kernel, "state", {}),               # every subsystem's record (state.py)
+                "graph_version": getattr(kernel, "graph_version", 0),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -73,6 +55,29 @@ class StatePersistence:
         except Exception as e:
             print(f"Error saving game state: {e}")
             return False
+
+    # Saves made before subsystem state was kept in kernel.state stored each record as a top-level key
+    _LEGACY_KEYS = {
+        "credit_stats": ("credit", None), "propulsion_stats": ("propulsion", None), "docket": ("law", None),
+        "crime_stats": ("crime", None), "fertility_stats": ("fertility", None), "luxury_stats": ("luxury", None),
+        "fibres": ("fibres", None), "geology": ("geology", "stats"), "demography": ("demography", "stats"),
+        "frontier": ("demography", "frontier"), "tourism_stats": ("tourism", "stats"),
+        "charters": ("tourism", "charters"), "government_stats": ("government", "stats"),
+        "offices": ("government", "offices"), "ship_designs": ("workbench", "designs"),
+        "design_stats": ("workbench", "stats"), "base_systems": ("populace", "base_systems"),
+        "realms": ("realms", "realms"), "realm_claims": ("realms", "claims"), "realm_stats": ("realms", "stats"),
+    }
+
+    @staticmethod
+    def _migrate_subsystem_keys(kernel: Any, data: Dict[str, Any]) -> None:
+        from xylarium.kernel import state
+        for key, (name, part) in StatePersistence._LEGACY_KEYS.items():
+            if data.get(key) is None or (name in (data.get("state") or {})):
+                continue
+            if part is None:
+                kernel.state[name] = data[key]
+            else:
+                state.of(kernel, name)[part] = data[key]
 
     @staticmethod
     def _migrate_legacy_universe(kernel: GameKernel) -> None:
@@ -190,34 +195,12 @@ class StatePersistence:
             kernel.factions = FactionManager.from_dict(data["factions"]) if data.get("factions") else FactionManager()
             kernel.chronicle = ChronicleEngine.from_dict(data["chronicle"]) if data.get("chronicle") else ChronicleEngine()
             kernel.native_stats = dict(data.get("native_stats", {}))
-            if data.get("demography"):
-                kernel.demography = data["demography"]
-            if data.get("frontier"):
-                kernel.frontier = data["frontier"]
-            if data.get("fibres"):
-                kernel.fibres = data["fibres"]
-            if data.get("credit_stats"):
-                kernel.credit_stats = data["credit_stats"]
-            if data.get("geology"):
-                kernel.geology = data["geology"]
-            if data.get("propulsion_stats"):
-                kernel.propulsion_stats = data["propulsion_stats"]
-            if data.get("docket"):
-                kernel.docket = data["docket"]
-            if data.get("crime_stats"):
-                kernel.crime_stats = data["crime_stats"]
-            for key in ("fertility_stats", "luxury_stats", "tourism_stats", "charters", "offices", "government_stats",
-                        "ship_designs", "design_stats"):
-                if data.get(key):
-                    setattr(kernel, key, data[key])
-            from xylarium.kernel import shipdesign
-            shipdesign.restore(kernel)
-            if data.get("base_systems"):
-                kernel._base_systems = data["base_systems"]
-            if data.get("realms") is not None:
-                kernel.realms = data["realms"]
-                kernel.realm_claims = {int(k): v for k, v in (data.get("realm_claims") or {}).items()}
-                kernel.realm_stats = data.get("realm_stats") or kernel.realm_stats if hasattr(kernel, "realm_stats") else data.get("realm_stats")
+            kernel.state = dict(data.get("state") or {})
+            kernel.caches = {}
+            kernel.graph_version = int(data.get("graph_version", 0))
+            StatePersistence._migrate_subsystem_keys(kernel, data)
+            from xylarium.kernel import subsystem
+            subsystem.restore_all(kernel)
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))

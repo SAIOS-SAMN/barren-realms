@@ -126,9 +126,14 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     tailings = (getattr(planet, "element_deposits", {}) or {}).get("TAILINGS", 0)
     key = (tier, habs, metab, planet.planet_type, str(getattr(planet, "body", None)), planet.owner_id,
            getattr(civ, "light_optimum", None), tailings // 500)
-    cache = getattr(planet, "_k_cache", None)
-    if cache is not None and cache[0] == key:
-        return cache[1]
+    if citadel is None and habitats is None and metabolism is None and kernel is not None \
+            and hasattr(kernel, "caches"):
+        from xylarium.kernel import cache
+        return cache.stamped(kernel, "k_profile", planet.id, key, lambda: _reckon(kernel, planet, None, tier, habs))
+    return _reckon(kernel, planet, metabolism, tier, habs)
+
+
+def _reckon(kernel: Any, planet: Any, metabolism: Optional[str], tier: int, habs: int) -> Dict[str, int]:
     ld = land(kernel, planet, metabolism)
     natural = ld["area"] * ld["chemistry"] * ld["light"] * ld["season"]
     from xylarium.kernel.geology import pollution_factor
@@ -139,11 +144,6 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     prof = {"k": k, "food_rate_micro": int(food * MICRO), "rate_micro_per_cycle": int(rate * MICRO / _YEAR),
             "birth_micro_per_cycle": int(_BIRTH * MICRO / _YEAR) if k > 0 else 0,
             "food_micro_per_cycle": int(food * MICRO / _YEAR) if k > 0 else 0}
-    if citadel is None and habitats is None and metabolism is None:
-        try:
-            planet._k_cache = (key, prof)
-        except AttributeError:
-            pass
     return prof
 
 

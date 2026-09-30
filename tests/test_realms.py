@@ -33,14 +33,14 @@ class TestRealms(unittest.TestCase):
 
     def test_on_a_fresh_board_a_people_becomes_a_realm_when_it_takes_to_space(self):
         k = self.k
-        k.realms, k.realm_claims = {}, {}
+        realms.realms(k).clear(); realms.claims(k).clear()
         w = next(p for s in k.sectors.values() for p in s.planets
                  if p.civilization is not None and not p.owner_id and realms._people(k, p) and p.citadel_level < 2)
         realms.quarter(k)
-        self.assertNotIn(("civ", w.civilization.name), {(r["kind"], r["people"]) for r in k.realms.values()})
+        self.assertNotIn(("civ", w.civilization.name), {(r["kind"], r["people"]) for r in realms.realms(k).values()})
         w.citadel_level = 2
         realms.quarter(k)
-        self.assertIn(("civ", w.civilization.name), {(r["kind"], r["people"]) for r in k.realms.values()})
+        self.assertIn(("civ", w.civilization.name), {(r["kind"], r["people"]) for r in realms.realms(k).values()})
 
     def test_influence_takes_what_a_charter_cannot_hold(self):
         k = self.k

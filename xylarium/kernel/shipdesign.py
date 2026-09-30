@@ -37,10 +37,7 @@ MATERIALS = ("Fe", "Ti", "Si")
 
 
 def designs(kernel: Any) -> Dict[str, Dict[str, Any]]:
-    d = getattr(kernel, "ship_designs", None)
-    if d is None:
-        d = kernel.ship_designs = {}
-    return d
+    return state.of(kernel, "workbench")["designs"]
 
 
 # ---------------------------------------------------------------------- the laws of the workbench
@@ -179,10 +176,7 @@ def comfort_fit(ship: Any, metabolism: str) -> float:
 
 
 def _stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "design_stats", None)
-    if s is None:
-        s = kernel.design_stats = {"designed": 0, "royalties": 0, "ai_designs": 0}
-    return s
+    return state.of(kernel, "workbench")["stats"]
 
 
 # ---------------------------------------------------------------------- the AI draughtsman
@@ -288,3 +282,14 @@ def summary(kernel: Any) -> Dict[str, Any]:
     return {**_stats(kernel), "designs": len(ds), "by_drive": by_drive, "flying": flying,
             "examples": [f"{s['name']} ({s['frame']}, {s['drive']}, holds {s['holds']}, berths {s['berths']})"
                          for s in list(ds.values())[:4]]}
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="workbench",
+    state=lambda: {"designs": {}, "stats": {"designed": 0, "royalties": 0, "ai_designs": 0}},
+    restore=restore,
+    summary=summary,
+))

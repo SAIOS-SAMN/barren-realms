@@ -194,7 +194,19 @@ def quarter(kernel: Any) -> List[str]:
 
 
 def _stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "crime_stats", None)
-    if s is None:
-        s = kernel.crime_stats = {"attempted": {}, "succeeded": {}, "skimmed_sol": 0, "raids": 0}
-    return s
+    return state.of(kernel, "crime")
+
+
+def stats(kernel: Any) -> Dict[str, Any]:
+    return _stats(kernel)
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="crime",
+    state=lambda: {"attempted": {}, "succeeded": {}, "skimmed_sol": 0, "raids": 0},
+    season=quarter,
+    summary=lambda kernel: dict(_stats(kernel)),
+))

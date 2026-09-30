@@ -20,7 +20,7 @@ it receives, and how tightly it holds on to gas (escape energy). The few chosen 
 
 import math
 from fractions import Fraction as F
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from xylarium.kernel import matter, physics
 
@@ -39,11 +39,7 @@ _SEASONS_PER_YEAR = 4
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "geology", None)
-    if s is None:
-        s = kernel.geology = {"crust_mined": 0, "renewed": 0, "implanted": 0, "escaped": 0, "outgassed": 0,
-                              "decayed": 0, "surveyed": 0}
-    return s
+    return state.of(kernel, "geology")["stats"]
 
 
 def rocky(planet: Any) -> bool:
@@ -130,9 +126,7 @@ def quarter(kernel: Any) -> None:
     survey(kernel)
     landfill(kernel)
     decay_share = 1.0 - 0.5 ** (1.0 / (URANIUM_HALF_LIFE_YEARS * _SEASONS_PER_YEAR))
-    carry = getattr(kernel, "_decay_carry", None)
-    if carry is None:
-        carry = kernel._decay_carry = {}
+    carry = state.of(kernel, "geology")["decay_carry"]
     for sec in kernel.sectors.values():
         for p in sec.planets:
             if getattr(p, "body", None) and getattr(sec, "kind", "SYSTEM") == "SYSTEM":
@@ -219,3 +213,22 @@ def horizons(kernel: Any) -> Dict[str, Any]:
             "crust_remaining_min": round(min(mined_worlds), 3) if mined_worlds else None,
             "renewal_to_extraction": round(st["renewed"] / extraction, 4),
             "stats": dict(st)}
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+
+def _season(kernel: Any) -> List[str]:
+    quarter(kernel)
+    return []
+
+
+register_subsystem(Subsystem(
+    name="geology",
+    state=lambda: {"stats": {"crust_mined": 0, "renewed": 0, "implanted": 0, "escaped": 0, "outgassed": 0,
+                             "decayed": 0, "surveyed": 0},
+                   "decay_carry": {}},
+    season=_season,
+    summary=lambda kernel: horizons(kernel),
+))

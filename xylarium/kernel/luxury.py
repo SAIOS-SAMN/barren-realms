@@ -179,11 +179,7 @@ def provided_for(kernel: Any, planet: Any) -> bool:
 
 # ---------------------------------------------------------------------- crafting
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "luxury_stats", None)
-    if s is None:
-        s = kernel.luxury_stats = {"crafted": {}, "bought": {}, "own_use": 0, "spend": {}, "spend_sol": 0.0,
-                                   "spoiled": 0, "want": 0, "met": 0}
-    return s
+    return state.of(kernel, "luxury")
 
 
 def _market_value(kernel: Any, planet: Any, t: str) -> float:
@@ -493,3 +489,15 @@ def summary(kernel: Any) -> Dict[str, Any]:
                     examples.append(f"{lx['name']} ({lx['type'][4:].lower()}, {p.name})")
     return {**st, "signatures": sigs, "examples": examples,
             "access": round(st["met"] / st["want"], 3) if st["want"] else 0.0}
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="luxury",
+    state=lambda: {"crafted": {}, "bought": {}, "own_use": 0, "spend": {}, "spend_sol": 0.0, "spoiled": 0,
+                   "want": 0, "met": 0},
+    season=quarter,
+    summary=summary,
+))

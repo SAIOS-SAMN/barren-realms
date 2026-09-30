@@ -104,7 +104,8 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     for c in mm.contracts.values():
         if c.status in ("OPEN", "IN_TRANSIT") and getattr(c, "escrow_amount", 0):
             add(getattr(c, "currency", "SOL"), "contract_escrow", c.escrow_amount)
-    for ch in (getattr(kernel, "charters", None) or {}).values():
+    from xylarium.kernel import tourism
+    for ch in (tourism.charters(kernel) if hasattr(kernel, "state") else {}).values():
         if ch["status"] in ("OPEN", "IN_TRANSIT"):
             add(ch["currency"], "contract_escrow", ch["escrow"])
     fed = getattr(kernel, "federal_reserve", None)

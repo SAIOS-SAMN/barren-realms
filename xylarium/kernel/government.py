@@ -55,14 +55,9 @@ def sovereign_civ_world(sector: Any) -> Optional[Any]:
 
 def government_of(kernel: Any, sector: Any) -> Tuple[str, Any]:
     """('faction', Faction) | ('civ', seat planet) | ('syndicate', None) - read once a season per system."""
-    season = getattr(kernel, "cycle_count", 0) // 25
-    cache = getattr(kernel, "_gov_cache", None)
-    if cache is None or cache[0] != season:
-        cache = kernel._gov_cache = (season, {})
-    hit = cache[1].get(sector.id)
-    if hit is None:
-        hit = cache[1][sector.id] = _government_of(kernel, sector)
-    return hit
+    from xylarium.kernel import realms
+    return cache.memo(kernel, "government", sector.id, lambda: _government_of(kernel, sector),
+                      epoch=(cache.season(kernel), realms.claims_version(kernel)))
 
 
 def _government_of(kernel: Any, sector: Any) -> Tuple[str, Any]:
@@ -155,16 +150,11 @@ def pay_government(kernel: Any, sector: Any, currency: str, amount: int, source:
 
 # ---------------------------------------------------------------------- offices and budgets
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "government_stats", None)
-    if s is None:
-        s = kernel.government_stats = {"revenue": {}, "spent": {}, "stipends": 0, "grants_directed": 0}
-    return s
+    return state.of(kernel, "government")["stats"]
 
 
 def offices(kernel: Any) -> Dict[str, Dict[str, Any]]:
-    o = getattr(kernel, "offices", None)
-    if o is None:
-        o = kernel.offices = {}
+    o = state.of(kernel, "government")["offices"]
     for fid in BUDGETED:
         o.setdefault(fid, {"holder": None, "auto": True, "shares": None})
     return o
@@ -344,7 +334,6 @@ def direct_grant(kernel: Any, captain: Any, fid: str, planet: Any, amount_sol: i
 def quarter(kernel: Any) -> List[str]:
     """Ports are bound to their systems, offices change hands, and every budget office spends its season."""
     logs: List[str] = []
-    kernel._gov_cache = None                  # jurisdictions are re-read at each season's close
     assign_ports(kernel)
     _elect(kernel)
     for fid in BUDGETED:
@@ -373,3 +362,14 @@ def summary(kernel: Any) -> Dict[str, Any]:
             "civ_revenue": st.get("civ_revenue", 0), "port_owners": owners, "vaults_sol": vaults,
             "holders": {k: v.get("holder") for k, v in o.items()},
             "auto": {k: v.get("auto", True) for k, v in o.items()}}
+
+
+from xylarium.kernel import cache, state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="government",
+    state=lambda: {"stats": {"revenue": {}, "spent": {}, "stipends": 0, "grants_directed": 0}, "offices": {}},
+    season=quarter,
+    summary=summary,
+))

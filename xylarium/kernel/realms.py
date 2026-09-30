@@ -32,24 +32,20 @@ _STYLE = [(0.3, "Concord"), (-0.1, "Commonwealth"), (-0.4, "Dominion"), (-9.0, "
 
 
 def realms(kernel: Any) -> Dict[str, Dict[str, Any]]:
-    r = getattr(kernel, "realms", None)
-    if r is None:
-        r = kernel.realms = {}
-    return r
+    return state.of(kernel, "realms")["realms"]
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "realm_stats", None)
-    if s is None:
-        s = kernel.realm_stats = {"founded": 0, "seceded": 0, "dissolved": 0, "contested": 0}
-    return s
+    return state.of(kernel, "realms")["stats"]
 
 
 def claims(kernel: Any) -> Dict[int, str]:
-    c = getattr(kernel, "realm_claims", None)
-    if c is None:
-        c = kernel.realm_claims = {}
-    return c
+    return state.of(kernel, "realms")["claims"]
+
+
+def claims_version(kernel: Any) -> int:
+    """Advances whenever the claims are redrawn (jurisdiction caches key on it)."""
+    return state.of(kernel, "realms")["claims_version"]
 
 
 def realm_of_sector(kernel: Any, sector_id: int) -> Optional[Dict[str, Any]]:
@@ -157,7 +153,9 @@ def _claim(kernel: Any) -> None:
             contested += 1
     for realm in realms(kernel).values():
         realm["systems"] = sorted(sid for sid, rid in new.items() if rid == realm["id"])
-    kernel.realm_claims = new
+    rec = state.of(kernel, "realms")
+    rec["claims"] = new
+    rec["claims_version"] += 1
     stats(kernel)["contested"] = contested
 
 
@@ -218,7 +216,6 @@ def quarter(kernel: Any, genesis: bool = False) -> List[str]:
         if capital(kernel, realm) is None or realm["capital"] not in [w.id for w in live]:
             realm["capital"] = max(live, key=lambda w: (w.population, w.id)).id
     _claim(kernel)
-    kernel._gov_cache = None
     return logs
 
 
@@ -257,3 +254,24 @@ def summary(kernel: Any) -> Dict[str, Any]:
             "houses": sum(1 for r in rs if r["kind"] == "house"),
             "largest": [f"{r['name']} ({len(r['systems'])} systems, {len(r['worlds'])} worlds, {pop[r['id']]:,} people)"
                         for r in rs[:4]]}
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+
+def _restore(kernel: Any) -> None:
+    """Saved claims come back with string keys (JSON): sector ids are integers."""
+    rec = state.of(kernel, "realms")
+    rec["claims"] = {int(k): v for k, v in rec["claims"].items()}
+
+
+register_subsystem(Subsystem(
+    name="realms",
+    state=lambda: {"realms": {}, "claims": {}, "claims_version": 0,
+                   "stats": {"founded": 0, "seceded": 0, "dissolved": 0, "contested": 0}},
+    season=quarter,
+    restore=_restore,
+    genesis=genesis,
+    summary=summary,
+))

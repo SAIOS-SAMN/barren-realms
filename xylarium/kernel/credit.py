@@ -56,11 +56,7 @@ def _buffer(comp: Any) -> int:
 
 
 def _stats(kernel: Any) -> Dict[str, int]:
-    s = getattr(kernel, "credit_stats", None)
-    if s is None:
-        s = kernel.credit_stats = {"lent": 0, "interest": 0, "margin_calls": 0, "defaults": 0, "written_off": 0,
-                                   "levied": 0, "ruined": []}
-    return s
+    return state.of(kernel, "credit")
 
 
 def quarter(kernel: Any) -> List[str]:
@@ -163,3 +159,15 @@ def _levy(kernel: Any, comp: Any) -> None:
     else:
         home.treasury += amount
     _stats(kernel)["levied"] += amount
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="credit",
+    state=lambda: {"lent": 0, "interest": 0, "margin_calls": 0, "defaults": 0, "written_off": 0, "levied": 0,
+                   "ruined": []},
+    season=quarter,
+    summary=lambda kernel: dict(_stats(kernel)),
+))

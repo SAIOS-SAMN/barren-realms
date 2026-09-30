@@ -58,9 +58,10 @@ def on_player_joined(kernel: Any) -> List[str]:
     """A human joins: if the charted galaxy no longer holds enough frontier for everyone, chart the next cluster."""
     logs: List[str] = []
     rm = getattr(kernel, "research_manager", None)
-    base = getattr(kernel, "_base_systems", None)
-    if base is None:
-        base = kernel._base_systems = systems(kernel)       # the galaxy as the first company found it
+    rec = state.of(kernel, "populace")
+    if rec["base_systems"] is None:
+        rec["base_systems"] = systems(kernel)               # the galaxy as the first company found it
+    base = rec["base_systems"]
     if rm is None or extra_humans(kernel) <= 0:
         return logs
     while systems(kernel) < base + SYSTEMS_PER_EXPLORER * extra_humans(kernel):
@@ -86,3 +87,9 @@ def seed_cluster(kernel: Any, sector_ids: List[int]) -> List[str]:
         if getattr(p, "civilization", None) is not None:
             logs.append(f"[FRONTIER] The {name} of {p.name} already sail the new cluster's lanes.")
     return logs
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(name="populace", state=lambda: {"base_systems": None}))

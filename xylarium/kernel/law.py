@@ -31,14 +31,7 @@ FINE_MULTIPLE = 1.0                   # the fine equals the harm (with restituti
 
 
 def docket(kernel: Any) -> Dict[str, Any]:
-    d = getattr(kernel, "docket", None)
-    if d is None:
-        d = kernel.docket = {"cases": [], "next": 1, "stats": {"filed": 0, "detected": 0, "unsolved": 0,
-                                                               "convicted": 0, "judged_sol": 0, "recovered_sol": 0,
-                                                               "outstanding_sol": 0, "written_off_sol": 0,
-                                                               "warrants": 0, "freezes": 0, "by_kind": {},
-                                                               "haven": 0}}
-    return d
+    return state.of(kernel, "law")
 
 
 # ---------------------------------------------------------------------- presence
@@ -277,3 +270,17 @@ def summary(kernel: Any) -> Dict[str, Any]:
     st = dict(docket(kernel)["stats"])
     st["open_cases"] = sum(1 for c in docket(kernel)["cases"] if c["status"] != "CLOSED")
     return st
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="law",
+    state=lambda: {"cases": [], "next": 1, "stats": {"filed": 0, "detected": 0, "unsolved": 0, "convicted": 0,
+                                                     "judged_sol": 0, "recovered_sol": 0, "outstanding_sol": 0,
+                                                     "written_off_sol": 0, "warrants": 0, "freezes": 0,
+                                                     "by_kind": {}, "haven": 0}},
+    season=quarter,
+    summary=summary,
+))

@@ -206,11 +206,7 @@ def luxury_factor(planet: Any) -> float:
 
 # ---------------------------------------------------------------------- the quarter
 def stats(kernel: Any) -> Dict[str, Any]:
-    s = getattr(kernel, "fertility_stats", None)
-    if s is None:
-        s = kernel.fertility_stats = {"stressed_quarters": 0, "stress_ratio_max": 0.0, "recruits": 0,
-                                      "natal_changes": 0, "by_strategy": {}}
-    return s
+    return state.of(kernel, "fertility")
 
 
 def quarter(kernel: Any) -> List[str]:
@@ -277,3 +273,15 @@ def summary(kernel: Any) -> Dict[str, Any]:
             if p.population > 0 and p.society.get("natal"):
                 natal[p.society["natal"]] = natal.get(p.society["natal"], 0) + 1
     return {**st, "natal_cards": natal}
+
+
+from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
+
+register_subsystem(Subsystem(
+    name="fertility",
+    state=lambda: {"stressed_quarters": 0, "stress_ratio_max": 0.0, "recruits": 0, "natal_changes": 0,
+                   "by_strategy": {}},
+    season=quarter,
+    summary=summary,
+))
