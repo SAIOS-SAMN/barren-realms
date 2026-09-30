@@ -96,8 +96,9 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
             out[k][where] += q
             out[k]["total"] += q
 
+    from xylarium.kernel.propulsion import fuel_of
     for cap in kernel.captains.values():
-        add("H", "bunkers", getattr(cap.ship, "fuel", 0))
+        add(fuel_of(cap.ship) or "H", "bunkers", getattr(cap.ship, "fuel", 0))
         cg = cap.ship.cargo
         add("ORE", "holds", cg.ore)
         add("ORGANICS", "holds", cg.organics)
@@ -115,6 +116,8 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
                 add(el, "reserves", n)
             for el, n in p.element_deposits.items():
                 add(el, "in_ground", n)
+            for comm, n in ((getattr(p, "natives", None) or {}).get("tribute") or {}).items():
+                add(comm, "native_tribute", n)
             for comm, n in getattr(p, "tithe_manifest", {}).items():
                 if comm != "MANPOWER":                     # drafted people are not matter
                     add(comm, "tithes", n)
@@ -193,10 +196,11 @@ def commission(captain: Any, kind: str = "commissioning") -> None:
         source(kind, el, q)
     # a new hull leaves the yard with its drive bunker full
     from xylarium.kernel.propulsion import bunker_capacity
+    from xylarium.kernel.propulsion import fuel_of
     top = bunker_capacity(captain.ship) - getattr(captain.ship, "fuel", 0)
-    if top > 0:
+    if top > 0 and fuel_of(captain.ship):
         captain.ship.fuel = getattr(captain.ship, "fuel", 0) + top
-        source(kind, "H", top)
+        source(kind, fuel_of(captain.ship), top)
 
 
 # ---------------------------------------------------------------------- audit mode

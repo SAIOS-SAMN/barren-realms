@@ -136,7 +136,9 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
             * pollution_factor(planet))
     food = _CROP * ld["light"] * ld["season"]
     rate = min(_BIRTH, food) if k > 0 else F(0)
-    prof = {"k": k, "food_rate_micro": int(food * MICRO), "rate_micro_per_cycle": int(rate * MICRO / _YEAR)}
+    prof = {"k": k, "food_rate_micro": int(food * MICRO), "rate_micro_per_cycle": int(rate * MICRO / _YEAR),
+            "birth_micro_per_cycle": int(_BIRTH * MICRO / _YEAR) if k > 0 else 0,
+            "food_micro_per_cycle": int(food * MICRO / _YEAR) if k > 0 else 0}
     if citadel is None and habitats is None and metabolism is None:
         try:
             planet._k_cache = (key, prof)
@@ -171,17 +173,28 @@ def harvest(kernel: Any, planet: Any, k: int) -> int:
 
 
 def consumption(planet: Any) -> int:
-    return max(1, planet.population * FOOD_PER_THOUSAND // 1000)
+    from xylarium.kernel.fertility import food_factor
+    return max(1, int(planet.population * FOOD_PER_THOUSAND * food_factor(planet)) // 1000)
 
 
 def births(kernel: Any, planet: Any, ceiling: int) -> int:
-    """Logistic growth toward ``ceiling`` this cycle; the fraction of a person is carried (in millionths)."""
+    """
+    Logistic growth this cycle toward min(1, f) x ``ceiling``, where f is the people's fertility relative to
+    replacement (fertility.py): a people below replacement settles under what the land could carry (and
+    shrinks toward it if above - never faster than r of its number), a fertile one grows up to f times faster,
+    never faster than its farms can add food. The fraction of a person is carried (in millionths).
+    """
     p = planet.population
     if p <= 0 or ceiling <= 0:
         return 0
-    r = _profile(kernel, planet)["rate_micro_per_cycle"]
+    prof = _profile(kernel, planet)
+    f = float((getattr(planet, "society", None) or {}).get("fertility", 1.0))
+    speed = max(1.0, f)
+    r = min(int(prof.get("birth_micro_per_cycle", prof["rate_micro_per_cycle"]) * speed),
+            prof.get("food_micro_per_cycle", prof["rate_micro_per_cycle"]))
+    target = max(1, int(ceiling * min(1.0, f)))
     carry = int(getattr(planet, "growth_carry", None) or 0)
-    micro = r * p * (ceiling - p) // ceiling + carry          # floor division: exact in millionths
+    micro = r * p * (target - p) // max(target, p) + carry    # floor division: exact in millionths
     whole = micro // MICRO if micro >= 0 else -((-micro) // MICRO)
     planet.growth_carry = str(micro - whole * MICRO)
     return whole

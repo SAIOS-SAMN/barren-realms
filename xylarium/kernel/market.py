@@ -617,10 +617,23 @@ class MarketManager:
                 company.planet_id = dest_planet_id
                 company.planet_name = dest_name
 
-            # Pick an origin sector different from destination
-            origin_port = random.choice(ports)
-            if origin_port.sector_id == dest_sector and len(ports) > 1:
-                origin_port = [p for p in ports if p.sector_id != dest_sector][0]
+            # Match commodity to industry demand
+            if company.industry == "MINING":
+                comm = random.choice(["EQUIPMENT", "ORGANICS"])
+            elif company.industry == "AGRICULTURE":
+                comm = random.choice(["ORE", "EQUIPMENT"])
+            elif company.industry == "MANUFACTURING":
+                comm = random.choice(["ORE", "STELALITH"])
+            else:
+                comm = random.choice(commodities)
+
+            # The goods are bought where they are: an origin port (not the destination's) that stocks them
+            def stocked(p: Any) -> int:
+                return max((v for k, v in p.stock.items() if k.upper() == comm.upper()), default=0)
+            sources = [p for p in ports if p.sector_id != dest_sector and stocked(p) >= 10]
+            if not sources:
+                continue
+            origin_port = random.choice(sources)
 
             # Distance via BFS path
             path = kernel.find_path(origin_port.sector_id, dest_sector)
@@ -634,16 +647,6 @@ class MarketManager:
                 hazard_mult = 1.4
             elif hazard == "ANARCHY":
                 hazard_mult = 2.0
-
-            # Match commodity to industry demand
-            if company.industry == "MINING":
-                comm = random.choice(["EQUIPMENT", "ORGANICS"])
-            elif company.industry == "AGRICULTURE":
-                comm = random.choice(["ORE", "EQUIPMENT"])
-            elif company.industry == "MANUFACTURING":
-                comm = random.choice(["ORE", "STELALITH"])
-            else:
-                comm = random.choice(commodities)
 
             amount = random.randint(10, 25)
             # Payout formula: base 100 Cr/hop + 20 Cr/unit * hazard multiplier
@@ -890,6 +893,8 @@ class MarketManager:
                 p.treasury += share - wages
                 paid += share
             region[0].treasury += cost - paid
+            if ledger.ACTIVE_POLICY is not None:
+                ledger.ACTIVE_POLICY.record_income(port.currency, cost)
 
     def _company_operating_spend(self, kernel: Any) -> None:
         """

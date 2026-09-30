@@ -55,6 +55,9 @@ def _eject_to_sol(captain: Captain, kernel: Optional[Any], credit_loss_frac: flo
     # breaks up with the hull
     if kernel is not None and hasattr(kernel, "market_manager"):
         kernel.market_manager.forfeit_freight(captain, kernel)
+    if kernel is not None and getattr(captain, "charter", None):
+        from xylarium.kernel import tourism
+        tourism.intercept(kernel, None, captain)          # lost with the hull: the escrow is refunded
     if kernel is not None and old_sec in kernel.sectors:
         from xylarium.kernel.nullspace import NullSpaceManager
         NullSpaceManager.create_debris(kernel.sectors[old_sec], captain, kernel.cycle_count)
@@ -71,6 +74,11 @@ def _eject_to_sol(captain: Captain, kernel: Optional[Any], credit_loss_frac: flo
 
     scout = SHIP_CATALOG.get("Scout Ship", {})
     captain.ship.ship_type = "Scout Ship"
+    if captain.ship.fuel:
+        from xylarium.kernel.propulsion import fuel_of
+        matter.sink("vaporized", fuel_of(captain.ship) or "H", captain.ship.fuel)
+        captain.ship.fuel = 0
+    captain.ship.drive, captain.ship.core_wear = "H", 0        # the escape craft has only a torch
     captain.ship.max_shields = scout.get("max_shields", 100)
     captain.ship.shields = RESPAWN_KIT["shields"]
     captain.ship.fighters = RESPAWN_KIT["fighters"]
@@ -408,6 +416,12 @@ class CombatManager:
             logs.append(f"*** ENEMY DESTROYED! {defender.name}'s ship breaks apart into stardust! ***")
             logs.append(f"*** Plundered {bounty_cr:,} Credits and salvaged cargo from the wreckage! ***")
 
+            # VIPs aboard a lost liner are held for ransom by the victor
+            if kernel is not None and getattr(defender, "charter", None):
+                from xylarium.kernel import tourism
+                note = tourism.intercept(kernel, attacker, defender)
+                if note:
+                    logs.append(note)
             # Respawn defender at Fed Central in escape pod / scout
             _eject_to_sol(defender, kernel)
             _award_victory(attacker, att_power0, def_power0, defender.id, kernel)
@@ -487,6 +501,11 @@ class CombatManager:
 
         att_power = int(attacker.ship.fighters * random.uniform(9.0, 15.0)) + random.randint(20, 50)
         def_power = int(planet.fighters * random.uniform(8.0, 13.0)) + random.randint(15, 30)
+        if planet.society.get("degraded"):
+            # A world that cannot fuel its defences fights at half its readiness-weighted strength
+            r = float(planet.society.get("readiness", 0.0))
+            def_power = int(def_power * (0.5 + 0.5 * r))
+            logs.append(f">> {planet.name} broadcasts a DEGRADED beacon: its batteries fire at reduced power.")
 
         # 1. Attacker strikes planetary defense grid
         if planet.shields > 0:
@@ -505,6 +524,9 @@ class CombatManager:
             planet.fighters -= fighters_lost
             pop_loss = min(planet.population // 4, max(5, att_power // 10))
             planet.population = max(100, planet.population - pop_loss)
+            if kernel is not None:
+                from xylarium.kernel import fertility
+                fertility.mark(planet, "bombarded", kernel.cycle_count)
             logs.append(f">> Direct bombardment destroyed {fighters_lost} fighters and caused {pop_loss} civilian casualties.")
 
         # 2. Planetary ground guns fire back at attacker

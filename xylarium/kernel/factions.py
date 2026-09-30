@@ -351,6 +351,8 @@ class FactionManager:
                 p.ore_silo = rng.randint(200, 600)
                 p.organics_silo = rng.randint(300, 800)
                 p.element_reserves.update({"Fe": rng.randint(60, 160), "Ti": rng.randint(20, 80)})
+                from xylarium.kernel.natives import release_tribute
+                release_tribute(p, inherit=True)
                 p.natives = None
                 p.ruins = None
                 p.currency = faction.currency

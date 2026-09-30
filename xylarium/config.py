@@ -119,6 +119,16 @@ COMMODITY_CONFIG = {
     # landfilled into the region's ground, where they weigh on its worlds' living space.
     "SLAG": {"name": "Industrial Slag", "symbol": "SLG", "category": "WASTE", "base_price": 2, "min_price": 1,
              "max_price": 8, "volatility": 0.3},
+    # Luxuries: four super-types, crafted by provided-for worlds from what they hold in abundance and named for
+    # their people (luxury.py). Every starport trades them; each world craves the ones it cannot make.
+    "LUX_STIMULANT": {"name": "Sensory Stimulants", "symbol": "STM", "category": "LUXURY", "base_price": 90,
+                      "min_price": 40, "max_price": 260, "volatility": 0.6},
+    "LUX_RESONANT": {"name": "Resonant Artifacts", "symbol": "RSN", "category": "LUXURY", "base_price": 140,
+                     "min_price": 60, "max_price": 380, "volatility": 0.5},
+    "LUX_EPHEMERA": {"name": "Exotic Ephemera", "symbol": "EPH", "category": "LUXURY", "base_price": 110,
+                     "min_price": 45, "max_price": 320, "volatility": 0.7},
+    "LUX_CURIO": {"name": "Precursor Curios", "symbol": "CUR", "category": "LUXURY", "base_price": 220,
+                  "min_price": 90, "max_price": 600, "volatility": 0.5},
 
     # [1] VOLATILES & LIFE PRECURSORS (Gases & Liquids)
     "H": {"name": "Hydrogen Fuel", "symbol": "H", "category": "VOLATILES", "base_price": 12, "min_price": 6, "max_price": 35, "volatility": 0.40},
@@ -1325,6 +1335,9 @@ ZEALOT_HALLOW_COST = 4000              # SOL-equivalent from the Pyre's vault to
 
 # New hulls
 SHIP_CATALOG_EXTENSIONS = {
+    "Aegis Pleasure Cruiser": {"holds": 60, "max_shields": 400, "max_fighters": 12, "price": 45000, "min_rank_tier": 2,
+                               "berths": 60,
+                               "description": "Starliner: sixty VIP staterooms, a casino deck and an escort's worth of guns."},
     "Bulk Goliath": {"holds": 400, "max_shields": 600, "max_fighters": 40, "price": 60000, "min_rank_tier": 2,
                      "clade": "IMPERIAL", "move_turns": 2,
                      "description": "Colossal Imperial tithe-hauler. Slow (2 turns per warp) but carries a moon's worth of ore."},
@@ -1494,3 +1507,101 @@ FOOD_PER_THOUSAND = 1                  # Organics a thousand people eat per cycl
 # Where each metabolism's energy peaks (flux, Earth = 1). Plasmic life feeds on a giant's own heat (its mass).
 LIGHT_OPTIMUM = {"biotic": "1/1", "cryogenic": "1/8", "mineral": "3/1", "umbral": "1/800"}
 PLASMIC_MASS_OPTIMUM = 100             # Earth masses at which a giant's internal heat best feeds plasmic life
+
+# --- [16] Fertility, luxury and tourism (fertility.py, luxury.py, tourism.py) ---
+# Fertility f is a people's desired family size relative to replacement (1 = replacement). A world grows
+# logistically toward min(1, f) x K - a transitioned people settles below what its land could carry - and a
+# fertile one (f > 1) fills its land faster, never faster than its farms can feed the newcomers.
+# Reproductive strategy is biology: each clade breeds by one of five strategies; unlisted clades take their
+# metabolism's default.
+REPRODUCTIVE_STRATEGY = {
+    "mycotiform": "r", "hexasocial": "r", "hypobiotid": "r", "cnidiform": "r", "polybrachia": "r",
+    "amphiform": "r", "metamorphid": "r",
+    "bimaniform": "K", "ailuroform": "K", "soniform": "K", "syzygiform": "K", "draconiform": "K",
+    "heliciform": "K", "revenid": "K", "actinoform": "K", "volatiform": "K", "human": "K",
+    "lithophage": "lithic", "endolithid": "lithic", "lithic": "lithic",
+    "cryocoherens": "cryo", "cryocoherent": "cryo",
+    "plasmiform": "plasmic", "plasmic": "plasmic",
+}
+METABOLISM_STRATEGY = {"biotic": "K", "mineral": "lithic", "cryogenic": "cryo", "plasmic": "plasmic", "umbral": "K"}
+FERTILITY_R_MAX = 2.5                  # r-strategists: calories become clutches, up to this multiple of replacement
+FERTILITY_K_SECURE = (1.0, 1.2)        # K-strategists: secure but poor -> fully provided for
+FERTILITY_K_LUXURY_COMPRESSION = 0.35  # ...full luxury access compresses fertility by this share
+FERTILITY_K_URBAN_COMPRESSION = 0.15   # ...and a full world (P = K) by this share
+LITHIC_METAL_PER_THOUSAND = 20         # Fe/Ti (or ore/10) a thousand lithic people need on hand to bud
+FERTILITY_CRYO_MAX = 1.3               # Stillcold fission in cold, quiet isolation
+FERTILITY_STRESS = 0.25                # Famine or bombardment in the last season: fertility falls to a quarter
+FERTILITY_STRESS_SEASONS = 1           # ...for this many fiscal quarters after the blow
+# Natal policy cards (any sovereign world or player; Sacred Hatching for the Pyre's worlds only)
+NATAL_POLICIES = {
+    "propagation": {"name": "Edict of Propagation", "fertility": 1.4, "tax": 0.85, "food": 1.25},
+    "ascetic": {"name": "Ascetic Mandate", "fertility_cap": 1.0, "productivity": 1.2, "luxury_demand": 1.1},
+    "hatching": {"name": "Sacred Hatching", "zealot_only": True, "research_cost": 1},
+}
+HATCHING_FOOD_PER_RECRUIT = 20         # Organics beyond two seasons' stores consumed per fanatic recruit
+# Luxury: four super-types, each crafted by a world from what it holds in abundance, flavoured by its people.
+# A world's demand for a luxury falls with its own availability (nobody craves what they make).
+LUXURY_TYPES = {       # inputs by metabolism, in order of preference (the first the world holds is used)
+    "LUX_STIMULANT": {"inputs": {"biotic": ["ORGANICS"], "plasmic": ["H", "He-3"], "cryogenic": ["H2O"],
+                                 "mineral": ["C", "ORE"], "umbral": ["Xe", "ORGANICS"]}},
+    "LUX_RESONANT": {"inputs": {"mineral": ["Si", "ORE"], "cryogenic": ["H2O", "ORE"], "biotic": ["Si", "ORE"],
+                                "plasmic": ["Si", "ORE"], "umbral": ["Si", "ORE"]}},
+    "LUX_EPHEMERA": {"inputs": {"biotic": ["ORGANICS"], "cryogenic": ["H2O"], "plasmic": ["H"],
+                                "mineral": ["ORE"], "umbral": ["ORGANICS"]}},
+    "LUX_CURIO": {"inputs": {"biotic": ["Ti", "ORE"], "mineral": ["Ti", "ORE"], "plasmic": ["Ti", "ORE"],
+                             "cryogenic": ["Ti", "ORE"], "umbral": ["Ti", "ORE"]}},
+}
+# What a world's sky and ground lend itself to (its signature leans on these, then on its people's affinity)
+LUXURY_WORLD_BIAS = {
+    "TERRESTRIAL": {"LUX_EPHEMERA": 1.5, "LUX_STIMULANT": 1.2},
+    "OCEANIC": {"LUX_EPHEMERA": 1.3, "LUX_RESONANT": 1.2},
+    "ICE": {"LUX_RESONANT": 1.6},
+    "VOLCANIC": {"LUX_STIMULANT": 1.4, "LUX_CURIO": 1.2},
+    "BARREN": {"LUX_CURIO": 1.4, "LUX_RESONANT": 1.3},
+    "GAS_GIANT": {"LUX_STIMULANT": 1.6},
+    "ROGUE": {"LUX_CURIO": 1.5},
+}
+LUXURY_AFFINITY = {"biotic": "LUX_EPHEMERA", "mineral": "LUX_RESONANT", "plasmic": "LUX_STIMULANT",
+                   "cryogenic": "LUX_RESONANT", "umbral": "LUX_CURIO"}
+LUXURY_CRAFT_PER_THOUSAND = 0.4        # Luxury units a thousand provided-for people craft per quarter (x tech tier)
+LUXURY_WANT_PER_THOUSAND = 0.12        # Units of each luxury a thousand people want per quarter (at full comfort)
+LUXURY_PURSE_SHARE = 0.5               # Share of the purse left after the basket that households spend on luxury
+EPHEMERA_SPOILAGE = 0.10               # Perishable imports: share of every stock that spoils each quarter
+# Tourism: two tiers. Mass tourism is a flow along the lanes (households of spacefaring worlds spend part of
+# their surplus at resorts in reach); VIP charters are physical passengers carried by captains' hulls.
+TOURISM_PURSE_SHARE = 0.3              # Share of the post-luxury household surplus spent travelling
+TOURISM_RADIUS = 6                     # Warps a tourist will travel
+TOURISM_FARE_SHARE = 0.25              # Share of a trip paid to the origin port's carriers (who burn the hydrogen)
+TOURIST_H_PER_HUNDRED_HOPS = 1         # Reaction mass burned per hundred passenger-jumps
+TOURIST_SPEND_PER_HEAD = 2             # SOL-value a mass tourist spends per trip (to count heads)
+RESORT_BEDS = 5000                     # Tourist-trips per quarter a Pleasure Dome tile hosts
+RESORT_COST = 4000                     # SOL-value (x price level) to raise one, paid to the contractor port
+RESORT_ORE = 40
+RESORT_H2O_PER_QUARTER = 5             # Water a dome consumes per quarter (pools, gardens, spas)
+ORBITAL_BERTHS_PER_STATION = 8000      # Tourist-trips per quarter an orbital leisure station hosts
+ORBITAL_STATION_COST = 12000           # SOL-value to build one at a starport (the port's operator pays)
+ORBITAL_STATION_MIN_FLOW = 3           # Seasons of tourist traffic through a port before it builds a station
+CHARTER_PARTY = (2, 12)                # VIPs per charter
+CHARTER_FARE_PER_VIP_HOP = 120         # SOL-value per VIP per jump, escrowed from the origin's households
+CHARTER_MIN_PURSE = 20000              # Households must hold this (SOL-value) before their VIPs charter liners
+CHARTER_EXPIRY_CYCLES = 400
+CHARTER_RANSOM_SHARE = 0.6             # A pirate who takes a liner holds its VIPs for this share of the escrow
+
+# --- [17] Drives and hydrogen wells (propulsion.py) ---
+# Hydrogen is most of the universe's matter: every gas giant is a well. A starport in a giant's system skims
+# its atmosphere; each season a skimmer lifts SKIM_ENERGY_PER_SEASON (Earth escape-energy units) of gas, so a
+# lighter giant (shallower well) yields more. A share is helium-3.
+SKIM_ENERGY_PER_SEASON = 3000
+SKIM_HE3_SHARE = 20                    # one unit of He-3 per this many of hydrogen
+# The drive ladder: nobody sensible runs their fleets forever on a scarce fuel.
+DRIVES = {
+    "H": {"name": "Hydrogen fusion torch", "fuel": "H", "burn_div": 1, "bunker_div": 1},
+    "HE3": {"name": "Helium-3 fusion drive", "fuel": "He-3", "burn_div": 4, "bunker_div": 4,
+            "part": "M3_ENGINE_MANIFOLD", "min_tier": 2},
+    "WARP": {"name": "Warp stabilizer drive", "fuel": None, "part": "M4_WARP_CORE", "min_tier": 3, "core_life": 400},
+}
+DRIVE_INSTALL_FEE = 2000               # SOL-value paid to the yard on top of the part
+# Readiness: a world's defence grid and fighters run on fusion. With too little hydrogen in reach it broadcasts
+# a DEGRADED beacon and fights at reduced strength.
+DEFENSE_H_PER_FIGHTER = 2
+DEGRADED_READINESS = 0.5

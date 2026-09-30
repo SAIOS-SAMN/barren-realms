@@ -112,6 +112,10 @@ from xylarium.kernel import matter as matter_mod
 from xylarium.kernel import geology as geology_mod
 from xylarium.kernel import propulsion as propulsion_mod
 from xylarium.kernel import law as law_mod
+from xylarium.kernel import crime as crime_mod
+from xylarium.kernel import fertility as fertility_mod
+from xylarium.kernel import luxury as luxury_mod
+from xylarium.kernel import tourism as tourism_mod
 
 
 class GameKernel:
@@ -697,6 +701,12 @@ class GameKernel:
             result = self._handle_shore_leave(captain, current_sector, kwargs)
         elif action == ActionType.POPULATION_POLICY:
             result = self._handle_population_policy(captain, kwargs)
+        elif action == ActionType.DRIVE_REFIT:
+            try:
+                msg = propulsion_mod.refit_drive(self, captain, current_sector, str(kwargs.get("drive", "")).upper())
+                result = ActionResult(success=True, action=ActionType.DRIVE_REFIT, message=msg, turns_spent=1)
+            except ValueError as e:
+                result = ActionResult(success=False, action=ActionType.DRIVE_REFIT, message=str(e))
         elif action == ActionType.RETIRE_LINEAGE:
             if lineage_mod.bound(self, captain.id) is None:
                 result = ActionResult(success=False, action=action, message="You lead no lineage to retire.")
@@ -733,8 +743,12 @@ class GameKernel:
         # ...and the drive bunker is topped up with the port's hydrogen
         if not captain.faction_id or True:
             dock = self.sectors.get(captain.sector_id)
-            if dock is not None and dock.port is not None and captain.ship.fuel < propulsion_mod.bunker_capacity(captain.ship):
-                propulsion_mod.bunker(self, captain, dock)
+            if dock is not None and dock.port is not None:
+                refit_log = propulsion_mod.consider_refit(self, captain, dock)
+                if refit_log:
+                    self.action_logs.append(f"[DRIVE] {captain.name}: {refit_log}")
+                if captain.ship.fuel < propulsion_mod.bunker_capacity(captain.ship):
+                    propulsion_mod.bunker(self, captain, dock)
 
         # A hungry crew eats the moment rations come aboard rather than waiting for the next meal bell
         if result.success and captain.hunger > 0:
@@ -805,6 +819,9 @@ class GameKernel:
 
         msg = f"Warp drive engaged. Navigated from Sector {current_sector.id} to Sector {destination}."
         logs = [msg]
+        charter_log = tourism_mod.arrive(self, captain)
+        if charter_log:
+            logs.append(charter_log)
 
         picket = NullSpaceManager.picket_engages_intruder(captain, dest_sector)
         if picket:
@@ -2093,12 +2110,16 @@ class GameKernel:
         self._stardock_revenue(sector, pay)
 
     def _handle_population_policy(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
-        """Sets a governed world's population policy: EXPAND (settler fleets) or STEADY (population controls)."""
+        """Sets a governed world's population policy: EXPAND (settler fleets) or STEADY (population controls),
+        or its natal card: NATAL=PROPAGATION / ASCETIC / NONE."""
         planet = self.get_planet(kwargs.get("planet_id", ""))
         if planet is None:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message="No such world.")
         try:
-            msg = demography_mod.set_policy(self, captain, planet, kwargs.get("policy", ""))
+            if kwargs.get("natal") is not None:
+                msg = fertility_mod.set_natal(self, captain, planet, kwargs.get("natal", ""))
+            else:
+                msg = demography_mod.set_policy(self, captain, planet, kwargs.get("policy", ""))
         except ValueError as e:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message=str(e))
         return ActionResult(success=True, action=ActionType.POPULATION_POLICY, message=msg, logs=[msg])
@@ -2689,6 +2710,12 @@ class GameKernel:
                 self.action_logs.append(log)
             # The worlds' own season: tectonic renewal, solar-wind He-3, volatile escape and outgassing, decay
             geology_mod.quarter(self)
+            # Hydrogen wells are skimmed; worlds that cannot fuel their defences raise DEGRADED beacons
+            for log in propulsion_mod.quarter(self):
+                self.action_logs.append(log)
+            # Governments of dark owners skim; dark civilizations raid their neighbours (crime.py)
+            for log in crime_mod.quarter(self):
+                self.action_logs.append(log)
             # The courts sit: judgments, garnishment, warrants and freezes
             for log in law_mod.quarter(self):
                 self.action_logs.append(log)
@@ -2700,6 +2727,11 @@ class GameKernel:
             # Peoples grow, build, choose; households shop; the frontier opens when they run out of room
             for log in demography_mod.quarter(self):
                 self.action_logs.append(log)
+            # Each people reads its circumstances (fertility and natal cards), provided-for worlds craft their
+            # luxuries, and households travel to the resorts they cannot find at home
+            for mod in (fertility_mod, luxury_mod, tourism_mod):
+                for log in mod.quarter(self):
+                    self.action_logs.append(log)
 
         # Great powers: tithes, dogma, crusades, secessions, doctrine reviews
         for log in self.factions.tick(self):

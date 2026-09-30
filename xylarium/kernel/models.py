@@ -148,6 +148,7 @@ class ActionType(str, Enum):
     SURVEY_RUINS = "SURVEY_RUINS"
     SHORE_LEAVE = "SHORE_LEAVE"
     POPULATION_POLICY = "POPULATION_POLICY"
+    DRIVE_REFIT = "DRIVE_REFIT"
     EXCAVATE = "EXCAVATE"
     SELL_ARTIFACT = "SELL_ARTIFACT"
     STUDY_ARTIFACT = "STUDY_ARTIFACT"
@@ -319,6 +320,7 @@ class Port:
     consumed: Dict[str, int] = field(default_factory=dict)  # goods consumed this quarter (sold on to the region)
     base_buys: Dict[str, bool] = field(default_factory=dict)  # the charter's buy list (restocking adds to it)
     regional_income: float = 0.0          # smoothed quarterly retail revenue from the region's households
+    leisure: Dict[str, Any] = field(default_factory=dict)   # orbital leisure station and tourist traffic (tourism.py)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -335,6 +337,7 @@ class Port:
             "faction_id": self.faction_id,
             "regional_income": self.regional_income,
             "base_buys": dict(self.base_buys),
+            "leisure": dict(self.leisure),
         }
 
     @classmethod
@@ -353,6 +356,7 @@ class Port:
             faction_id=data.get("faction_id"),
             regional_income=float(data.get("regional_income", 0.0)),
             base_buys=dict(data.get("base_buys", {})),
+            leisure=dict(data.get("leisure", {})),
         )
 
 
@@ -404,6 +408,7 @@ class Planet:
     growth_policy: Optional[str] = None      # "expand" (settler fleets) or "steady" (population controls)
     last_daughter_quarter: int = -10 ** 6    # Last fiscal quarter a settler fleet sailed from here
     metropole_id: Optional[str] = None       # The world whose settlers founded this one
+    society: Dict[str, Any] = field(default_factory=dict)   # fertility, natal policy, luxury, stresses (fertility.py)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -454,6 +459,7 @@ class Planet:
             "growth_policy": self.growth_policy,
             "last_daughter_quarter": self.last_daughter_quarter,
             "metropole_id": self.metropole_id,
+            "society": _deep_copy(self.society),
         }
 
     @classmethod
@@ -509,6 +515,7 @@ class Planet:
             growth_policy=data.get("growth_policy"),
             last_daughter_quarter=int(data.get("last_daughter_quarter", -10 ** 6)),
             metropole_id=data.get("metropole_id"),
+            society=_deep_copy(data.get("society")) or {},
         )
 
 
@@ -519,7 +526,9 @@ class Ship:
     shields: int
     max_shields: int
     fighters: int
-    fuel: int = 0            # hydrogen reaction mass in the drive bunker (not in the cargo holds)
+    fuel: int = 0            # reaction mass in the drive bunker (not in the cargo holds): H, or He-3 for a He-3 drive
+    drive: str = "H"         # "H" fusion torch, "HE3" fusion drive, "WARP" stabilizer (propulsion.py)
+    core_wear: int = 0       # jumps on the installed warp core
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -529,6 +538,8 @@ class Ship:
             "max_shields": self.max_shields,
             "fighters": self.fighters,
             "fuel": self.fuel,
+            "drive": self.drive,
+            "core_wear": self.core_wear,
         }
 
     @classmethod
@@ -537,6 +548,8 @@ class Ship:
             ship_type=data["ship_type"],
             cargo=CargoHold.from_dict(data["cargo"]),
             fuel=int(data.get("fuel", 0)),
+            drive=data.get("drive", "H"),
+            core_wear=int(data.get("core_wear", 0)),
             shields=data["shields"],
             max_shields=data["max_shields"],
             fighters=data["fighters"],
@@ -729,6 +742,7 @@ class Captain:
     vc_debt: int = 0
     margin_loans: Dict[str, int] = field(default_factory=dict)   # ticker -> SOL owed to that company's margin desk
     frozen_by: List[str] = field(default_factory=list)   # courts that froze this captain's trade (unpaid judgments)
+    charter: Optional[str] = None                        # VIP charter aboard (tourism.py)
     vc_royalty_pct: float = 0.0
     vc_principal_paid: int = 0
     cartography_fragments: List[Dict[str, Any]] = field(default_factory=list)
@@ -1045,6 +1059,7 @@ class Captain:
             "vc_debt": self.vc_debt,
             "margin_loans": dict(self.margin_loans),
             "frozen_by": list(self.frozen_by),
+            "charter": self.charter,
             "vc_royalty_pct": self.vc_royalty_pct,
             "vc_principal_paid": self.vc_principal_paid,
             "cartography_fragments": [dict(f) for f in self.cartography_fragments],
@@ -1137,6 +1152,7 @@ class Captain:
             vc_debt=data.get("vc_debt", 0),
             margin_loans={k: int(v) for k, v in data.get("margin_loans", {}).items()},
             frozen_by=list(data.get("frozen_by", [])),
+            charter=data.get("charter"),
             vc_royalty_pct=data.get("vc_royalty_pct", 0.0),
             vc_principal_paid=data.get("vc_principal_paid", 0),
             cartography_fragments=list(data.get("cartography_fragments", [])),

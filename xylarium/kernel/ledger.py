@@ -102,6 +102,9 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     for c in mm.contracts.values():
         if c.status in ("OPEN", "IN_TRANSIT") and getattr(c, "escrow_amount", 0):
             add(getattr(c, "currency", "SOL"), "contract_escrow", c.escrow_amount)
+    for ch in (getattr(kernel, "charters", None) or {}).values():
+        if ch["status"] in ("OPEN", "IN_TRANSIT"):
+            add(ch["currency"], "contract_escrow", ch["escrow"])
     fed = getattr(kernel, "federal_reserve", None)
     if fed is not None:
         add("SOL", "federal_reserve", fed.total_holdings)
@@ -213,16 +216,24 @@ class MonetaryPolicy:
         self.services_q: Dict[str, float] = {}   # services actually withdrawn this season
         self.transfer_q: Dict[str, float] = {}   # transfer made at the start of this season
         self.last_supply: Dict[str, float] = {}  # supply at the last season's close
+        self.output_total: Dict[str, float] = {}     # cumulative real output (reporting)
+        self.earnings_total: Dict[str, float] = {}   # cumulative colony earnings: GDP by the income approach
 
     def factor(self, currency: str) -> float:
         return self.factors.get(currency, 1.0)
 
     def record_output(self, currency: str, value: float) -> None:
         self.output_q[currency] = self.output_q.get(currency, 0.0) + value
+        self.output_total[currency] = self.output_total.get(currency, 0.0) + value
 
     def record_earnings(self, currency: str, total: float, government: float) -> None:
         self.earnings_q[currency] = self.earnings_q.get(currency, 0.0) + total
+        self.earnings_total[currency] = self.earnings_total.get(currency, 0.0) + total
         self.gov_q[currency] = self.gov_q.get(currency, 0.0) + government
+
+    def record_income(self, currency: str, amount: float) -> None:
+        """Other factor income the worlds earn (export sales, port payroll and purchases): reporting only."""
+        self.earnings_total[currency] = self.earnings_total.get(currency, 0.0) + amount
 
     def record_services(self, currency: str, amount: float) -> None:
         self.services_q[currency] = self.services_q.get(currency, 0.0) + amount
@@ -294,7 +305,8 @@ class MonetaryPolicy:
                 "output_seasons": {k: list(v) for k, v in self.output_seasons.items()},
                 "earnings_q": dict(self.earnings_q), "gov_q": dict(self.gov_q), "transfers": dict(self.transfers),
                 "services_q": dict(self.services_q), "transfer_q": dict(self.transfer_q),
-                "last_supply": dict(self.last_supply)}
+                "last_supply": dict(self.last_supply),
+                "output_total": dict(self.output_total), "earnings_total": dict(self.earnings_total)}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MonetaryPolicy":
@@ -311,6 +323,8 @@ class MonetaryPolicy:
         mp.services_q = {k: float(v) for k, v in data.get("services_q", {}).items()}
         mp.transfer_q = {k: float(v) for k, v in data.get("transfer_q", {}).items()}
         mp.last_supply = {k: float(v) for k, v in data.get("last_supply", {}).items()}
+        mp.output_total = {k: float(v) for k, v in data.get("output_total", {}).items()}
+        mp.earnings_total = {k: float(v) for k, v in data.get("earnings_total", {}).items()}
         return mp
 
 

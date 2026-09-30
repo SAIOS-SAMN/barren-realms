@@ -647,6 +647,9 @@ class ColonyManager:
             deficit = required_food - planet.organics_silo
             matter.consume(planet, "organics_silo", "ORGANICS", planet.organics_silo, "eaten")
             famine = True
+            if kernel is not None:
+                from xylarium.kernel import fertility
+                fertility.mark(planet, "famine", kernel.cycle_count)
             famine_loss = min(planet.population - 100, max(5, deficit * 200))
             planet.population = max(100, planet.population - famine_loss)
             planet.morale = max(10, planet.morale - 15)
@@ -671,7 +674,8 @@ class ColonyManager:
         # M V = P Y (ledger.MonetaryPolicy): money grows with real output, no faster.
         withdraw = ledger.policy_factor(planet.currency)
         share = HOUSEHOLD_INCOME_SHARE
-        earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor
+        from xylarium.kernel.fertility import tax_factor
+        earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor * tax_factor(planet)
         household_income = int(earnings * share)
         if household_income > 0:
             ledger.mint("colony_tax", household_income, planet.currency)

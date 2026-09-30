@@ -509,6 +509,7 @@ class NativeManager:
         planet.ruins = bury(planet, _new_ruins(natives["name"], natives["species"], natives["metabolism"], "RECENT",
                                                natives["stage"] + 1, [], "native collapse", kernel.cycle_count,
                                                rng.randint(1, 3), None, 0, rng))
+        release_tribute(planet, inherit=False)
         planet.natives = None
         if planet.faction_id == "ZEALOT" and planet.population <= 0:
             planet.faction_id = None
@@ -544,6 +545,7 @@ class NativeManager:
         endowment = int(2000 * PRICE_LEVEL.get(planet.currency, 1.0))
         planet.treasury += endowment
         ledger.mint("cluster_genesis", endowment, planet.currency)
+        release_tribute(planet, inherit=True)
         planet.natives = None
         stats = getattr(kernel, "native_stats", None)
         if stats is not None:
@@ -602,7 +604,30 @@ class NativeManager:
                     else:
                         good = PRODUCE.get(n["metabolism"], "ORGANICS")
                         amount = max(1, int(NATIVE_TITHE_SHARE * (10 + 6 * n["stage"])))
-                        n["tribute"][good] = min(200, n["tribute"].get(good, 0) + amount)
+                        have = n["tribute"].get(good, 0)
+                        added = max(0, min(200, have + amount) - have)
+                        if added:
+                            n["tribute"][good] = have + added
+                            matter.source("native_produce", good, added)     # the people's labour, set aside
+
+
+def release_tribute(planet: Any, inherit: bool) -> None:
+    """A people leaves its natives record behind: its world inherits the tribute stores (first flight, annexation),
+    or they are lost with the people (collapse)."""
+    n = planet.natives or {}
+    for good, qty in list((n.get("tribute") or {}).items()):
+        if qty <= 0:
+            continue
+        if not inherit:
+            matter.sink("native_collapse", good, qty)
+        elif good == "ORGANICS":
+            planet.organics_silo += qty
+        elif good == "ORE":
+            planet.ore_silo += qty
+        else:
+            planet.element_reserves[good] = planet.element_reserves.get(good, 0) + qty
+    if n.get("tribute"):
+        n["tribute"] = {}
 
 
 def _advance_text(n: Dict[str, Any], old: str) -> str:

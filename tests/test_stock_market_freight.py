@@ -157,7 +157,7 @@ class TestStockMarketAndFreight(unittest.TestCase):
 
         # 1. Accept contract
         res = self.kernel.dispatch(self.player_id, ActionType.FREIGHT_ACCEPT, contract_id=cid)
-        self.assertTrue(res.success)
+        self.assertTrue(res.success, f"{res.message} [{contract.commodity} {contract.kind}]")
         self.assertIn(cid, self.captain.active_contracts)
         self.assertEqual(contract.status, "IN_TRANSIT")
 

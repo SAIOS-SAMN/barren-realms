@@ -201,10 +201,30 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "geology": __import__("xylarium.kernel.geology", fromlist=["horizons"]).horizons(kernel),
         "propulsion": dict(getattr(kernel, "propulsion_stats", {}) or {}),
         "law": __import__("xylarium.kernel.law", fromlist=["summary"]).summary(kernel),
+        "crime": dict(getattr(kernel, "crime_stats", {}) or {}),
+        "society": _society_census(kernel),
         "industry": {"fabricated": {c: v for (k, c), v in kernel.matter.sources.items() if k == "fabrication"},
                      "recycled_ore": kernel.matter.sources.get(("recycling", "ORE"), 0),
                      "sector_gas": sum(getattr(s, "gas", 0) for s in kernel.sectors.values())},
     }
+
+
+def _society_census(kernel: GameKernel) -> Dict[str, Any]:
+    """Fertility, luxury and tourism, and the output (GDP) they are measured against."""
+    from xylarium.kernel import fertility, luxury, tourism, ledger
+    from xylarium.kernel.fx import ACTIVE_FX
+    pol = ledger.ACTIVE_POLICY
+    # GDP by the income approach: what the worlds' households and governments earned - colony earnings, export
+    # sales and the starports' payroll and purchases in their regions
+    gdp = 0.0
+    for cur, v in (getattr(pol, "earnings_total", None) or {}).items():
+        gdp += ACTIVE_FX.to_sol_value(cur, v) if (ACTIVE_FX is not None and cur != "SOL") else v
+    worlds = [p for s in kernel.sectors.values() for p in s.planets if p.population > 0 and not p.natives]
+    total = sum(p.population for p in worlds)
+    daughters = sum(p.population for p in worlds if p.metropole_id)
+    return {"fertility": fertility.summary(kernel), "luxury": luxury.summary(kernel),
+            "tourism": tourism.summary(kernel), "gdp_sol": round(gdp),
+            "daughter_share": round(daughters / total, 4) if total else 0.0}
 
 
 def _demography_census(kernel: GameKernel) -> Dict[str, Any]:
@@ -1208,12 +1228,68 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
     t0 = time.perf_counter()
     window_t0, window_c0 = t0, 0
     window = max(100, cycles // 10)
+    audit = bool(os.environ.get("XYL_MATTER_AUDIT"))
+    leaks_shown = 0
+
+    audit_from = int(os.environ.get("XYL_AUDIT_FROM", "0") or 0)
+    drift_base = [None]
+
+    def audited(label, fn):
+        nonlocal leaks_shown
+        if not audit or leaks_shown >= 8 or kernel.cycle_count < audit_from:
+            return fn()
+        t0_, n0_ = matter_mod.totals(kernel), kernel.matter.net()
+        out = fn()
+        t1_, n1_ = matter_mod.totals(kernel), kernel.matter.net()
+        d = {c: v for c in set(t0_) | set(t1_) | set(n1_)
+             if (v := (t1_.get(c, 0) - t0_.get(c, 0)) - (n1_.get(c, 0) - n0_.get(c, 0)))}
+        if d:
+            leaks_shown += 1
+            print(f"  [MATTER LEAK] cycle {kernel.cycle_count} in {label}: {d}", flush=True)
+        return out
+
+    if audit:
+        # Finer labels inside the world tick: each AI turn and each quarterly subsystem
+        import importlib
+        from xylarium.kernel.ai import AIManager
+        real_turn = AIManager.execute_turn          # bound (or already wrapped by the timers)
+
+        def turn(k, cap):
+            return audited(f"AI turn {cap.id}", lambda: real_turn(k, cap))
+        AIManager.execute_turn = staticmethod(turn)
+        real_dispatch = kernel.dispatch
+
+        def dispatch(pid, action=None, *a, **kw):
+            return audited(f"dispatch {pid} {getattr(action, 'value', action)} {kw}",
+                           lambda: real_dispatch(pid, action, *a, **kw))
+        kernel.dispatch = dispatch
+        from xylarium.kernel import engine as engine_mod
+        for modname in ("crime", "demography", "geology", "law", "credit", "natives"):
+            m = importlib.import_module(f"xylarium.kernel.{modname}")
+            if hasattr(m, "quarter"):
+                fn = m.quarter
+                wrapped = (lambda fn, name: (lambda *a, **kw: audited(f"{name}.quarter", lambda: fn(*a, **kw))))(fn, modname)
+                setattr(m, "quarter", wrapped)
+                for alias in (f"{modname}_mod", modname):
+                    if getattr(engine_mod, alias, None) is m:
+                        pass
+
     for cycle in range(1, cycles + 1):
         for b in bots:
             for _ in range(actions_per_cycle):
-                b.act(kernel, stats)
+                audited(f"bot {b.id}", lambda: b.act(kernel, stats))
+        if audit and cycle % 100 == 0:
+            # Coarse drift check (cheap): the first 100-cycle window where the census and the ledger part ways
+            tt, nn = matter_mod.totals(kernel), kernel.matter.net()
+            now = {c: tt.get(c, 0) - nn.get(c, 0) for c in set(tt) | set(nn)}
+            if drift_base[0] is not None:
+                d = {c: now.get(c, 0) - drift_base[0].get(c, 0) for c in set(now) | set(drift_base[0])}
+                d = {c: v for c, v in d.items() if v}
+                if d:
+                    print(f"  [MATTER DRIFT] cycles {cycle - 100}-{cycle}: {d}", flush=True)
+            drift_base[0] = now
         try:
-            real_tick()
+            audited("world tick", real_tick)
         except Exception as e:
             stats.record_exception("tick_simulation", e)
             kernel.cycle_count = cycle
@@ -1346,7 +1422,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 LAWS = (
     "money conserved", "matter conserved", "monetary churn", "docket balances", "quantity equation holds", "clearing union conserves", "settlement chain seals",
     "central banks solvent", "orbits never cross", "throughput per sector", "invariant violations",
-    "exceptions", "deterministic",
+    "exceptions", "deterministic", "fertility collapses",
 )
 
 ACCEPTANCE = {
@@ -1545,6 +1621,27 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
             gate("households buy from starports", "> 0", f"{spend:,}", spend > 0)
             gate("frontier opens as peoples fill the galaxy", ">= 1 new cluster by 8,000 cycles",
                  len(d1["clusters"]) - 1, None if cycles < 8000 else len(d1["clusters"]) > 1)
+        if "society" in c1:
+            so = c1["society"]
+            fz = so["fertility"]
+            gate("fertility collapses under famine and bombardment (stressed / unstressed)", "<= 0.30",
+                 f"{fz['stress_ratio_max']:.2f} over {fz['stressed_quarters']} stressed world-seasons",
+                 fz["stress_ratio_max"] <= 0.30 if fz["stressed_quarters"] else None)
+            gate("daughter-world dispersion (share of people on settled worlds)", "0.25 .. 0.40",
+                 f"{so['daughter_share']:.1%}", None if cycles < 8000 else 0.25 <= so["daughter_share"] <= 0.40)
+            spent = so["luxury"]["spend_sol"] + so["tourism"]["spend_sol"] + so["tourism"]["charters"]["paid_sol"]
+            share = spent / so["gdp_sol"] if so["gdp_sol"] else 0.0
+            gate("tourism and luxury share of income (GDP)", "0.05 .. 0.18",
+                 f"{share:.1%} ({spent:,.0f} of {so['gdp_sol']:,} SOL)", 0.05 <= share <= 0.18 if so["gdp_sol"] else None)
+            tl_s = [snap for snap in r["world_timeline"] if "cosmos" in snap and "society" in snap["cosmos"]]
+            last = tl_s[-1] if tl_s else None
+            prev = next((snap for snap in reversed(tl_s) if last and snap["cycle"] <= last["cycle"] - 1000), None)
+            if last and prev:
+                b0 = prev["cosmos"]["society"]["fertility"]["by_strategy"]
+                b1 = last["cosmos"]["society"]["fertility"]["by_strategy"]
+                growth = {k: round(b1[k]["people"] / b0[k]["people"], 2) for k in b1 if b0.get(k, {}).get("people")}
+                gate("species fertility sanity (x population per strategy, last 1,000 cycles)", "0.5x .. 3x",
+                     growth, all(0.5 <= g <= 3.0 for g in growth.values()) if growth else None)
         h = c1["houses"]
         gate("NPC lineages alive (end)", ">= 3 houses", f"{h['alive']} alive of {h['founded']} founded "
              f"({h['deaths']} deaths, {h['extinct']} extinct, {h['branches']} cadet branches)", h["alive"] >= 3)
@@ -1707,10 +1804,33 @@ def print_report(r: Dict[str, Any]) -> None:
             print(f"  law: {lw['filed']} offences {lw['by_kind']}, {lw['detected']} brought to court, {lw['unsolved']} unsolved "
                   f"({lw['haven']} in havens), {lw['convicted']} convicted; judged {lw['judged_sol']:,}, recovered "
                   f"{lw['recovered_sol']:,}, outstanding {lw['outstanding_sol']:,}; {lw['warrants']} warrants, {lw['freezes']} freezes")
+        if ce.get("crime"):
+            cr = ce["crime"]
+            print(f"  crime: attempted {cr.get('attempted')}, succeeded {cr.get('succeeded')}, "
+                  f"skimmed {cr.get('skimmed_sol', 0):,} SOL, civilization raids {cr.get('raids', 0)}")
+        if ce.get("society"):
+            so = ce["society"]
+            fz, lx, tu = so["fertility"], so["luxury"], so["tourism"]
+            print(f"  fertility by strategy: {fz['by_strategy']}; natal cards {fz['natal_cards']}; "
+                  f"{fz['stressed_quarters']} stressed world-seasons; {fz['recruits']:,} hatched fanatics")
+            print(f"  luxury: crafted {lx['crafted']}, bought {lx['bought']}, own use {lx['own_use']:,}, spoiled "
+                  f"{lx['spoiled']:,}; wants met {lx['access']:.0%}; signatures {lx['signatures']}")
+            if lx["examples"]:
+                print(f"    e.g. {'; '.join(lx['examples'])}")
+            ch = tu["charters"]
+            print(f"  tourism: {tu['trips']:,} trips, spent {tu['spend_sol']:,.0f} SOL (fares {tu['fares_sol']:,.0f}), "
+                  f"{tu['domes']} pleasure domes, {tu['stations']} orbital stations, H burned {tu['h_burned']:,}, "
+                  f"{tu['h_short_trips']:,} trips grounded for want of hydrogen")
+            print(f"  VIP charters: posted {ch['posted']}, flown {ch['flown']} (paid {ch['paid_sol']:,.0f} SOL), ransomed "
+                  f"{ch['ransomed']} ({ch['ransom_sol']:,.0f} SOL), expired {ch['expired']}; daughter-world share "
+                  f"{so['daughter_share']:.1%}; income (GDP) {so['gdp_sol']:,} SOL")
         if ce.get("propulsion"):
             pr, ind = ce["propulsion"], ce.get("industry", {})
             print(f"  propulsion: {pr.get('burned', 0):,} reaction mass burned, {pr.get('bunkered', 0):,} bunkered at ports, "
                   f"{pr.get('coasted', 0):,} jumps coasted dry; drifting gas {ind.get('sector_gas', 0):,}")
+            print(f"  wells & drives: skimmed {pr.get('skimmed_h', 0):,} H and {pr.get('skimmed_he3', 0):,} He-3 from gas "
+                  f"giants; refits He-3 {pr.get('refits_he3', 0)}, warp {pr.get('refits_warp', 0)} ({pr.get('warp_jumps', 0):,} "
+                  f"warp jumps, {pr.get('cores_burned_out', 0)} cores burned out); degraded worlds {pr.get('degraded_worlds', 0)}")
             print(f"  industry: fabricated {ind.get('fabricated', {})}, recycled to ore {ind.get('recycled_ore', 0):,}")
         if "fibres" in ce:
             fb = ce["fibres"]

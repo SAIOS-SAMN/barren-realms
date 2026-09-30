@@ -159,10 +159,12 @@ class NullSpaceManager:
         # The drive bunker ruptures: a share drifts as gas-laden debris, the rest burns in the explosion
         fuel = getattr(captain.ship, "fuel", 0)
         if fuel > 0:
+            from xylarium.kernel.propulsion import fuel_of
+            fk = fuel_of(captain.ship) or "H"
             kept = int(fuel * DEBRIS_CARGO_SHARE)
             if kept:
-                spill["H"] = spill.get("H", 0) + kept
-            matter.sink("vaporized", "H", fuel - kept)
+                spill[fk] = spill.get(fk, 0) + kept
+            matter.sink("vaporized", fk, fuel - kept)
             captain.ship.fuel = 0
         # The hull itself becomes scrap metal (hull mass is not in the census until it breaks apart)
         hull_value = SHIP_CATALOG.get(captain.ship.ship_type, {}).get("price", 0)

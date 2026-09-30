@@ -55,6 +55,7 @@ from xylarium.config import (
 )
 
 POLICIES = ("expand", "steady")
+SETTLE_PRESSURE = 0.5           # the logistic inflection: past it, growth slows with every newcomer
 ELEMENT_RESERVE_KEPT = 100      # refined units of each element a world keeps for its own works
 
 
@@ -63,6 +64,13 @@ def housing_cap(planet: Any, kernel: Any = None) -> int:
     """How many people the world can feed: its carrying capacity K, derived from physics (biosphere.py)."""
     from xylarium.kernel import biosphere
     return biosphere.carrying_capacity(kernel, planet)
+
+
+def equilibrium(planet: Any, kernel: Any = None) -> int:
+    """Where this people's numbers settle: housing, or less for a people below replacement (fertility.py).
+    Crowding is felt against it - a transitioned people looks outward before its land is full."""
+    f = float(planet.society.get("fertility", 1.0)) if getattr(planet, "society", None) else 1.0
+    return int(housing_cap(planet, kernel) * min(1.0, f))
 
 
 def growth_ceiling(planet: Any) -> int:
@@ -82,7 +90,7 @@ def building(planet: Any) -> bool:
     """A world crowding its housing that can still build (citadel or habitats) and hasn't chosen to hold steady."""
     if getattr(planet, "growth_policy", None) == "steady" or planet.population <= 0:
         return False
-    if planet.population < housing_cap(planet) * DEMOGRAPHY_PRESSURE:
+    if planet.population < equilibrium(planet) * DEMOGRAPHY_PRESSURE:
         return False
     if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
         return True
@@ -161,7 +169,28 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
         planet.morale = min(100, planet.morale + STEADY_STATE_MORALE)
         _stewardship(kernel, planet)
         return None
-    if planet.population < cap * DEMOGRAPHY_PRESSURE:
+    settled = equilibrium(planet, kernel)
+    if planet.population < settled * SETTLE_PRESSURE:
+        return None
+
+    # 0. Past the inflection of its growth (P = half its equilibrium: each newcomer now adds less than the
+    #    last), a people with a yard that builds settler ships chooses what it will become - the stars, or
+    #    enough. Expansionists sail while they keep building at home.
+    if planet.citadel_level >= DAUGHTER_CITADEL_TIER:
+        if policy is None:
+            policy = planet.growth_policy = choose_policy(kernel, planet)
+            if policy == "steady":
+                st["steady"] += 1
+                _covenant(kernel, planet)
+                return f"[DEMOGRAPHY] {planet.name} adopted population controls: it will live within its world."
+        if policy == "expand":
+            log = send_settlers(kernel, planet)
+            if log:
+                return log
+    # Growth drives technology: past the inflection, a people without the yards works toward them;
+    # habitats and higher citadels wait until housing itself presses
+    toward_yards = planet.citadel_level < DAUGHTER_CITADEL_TIER
+    if planet.population < settled * DEMOGRAPHY_PRESSURE and not toward_yards:
         return None
 
     if kernel.cycle_count < getattr(planet, "works_ready_cycle", 0):
@@ -188,6 +217,8 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
             return f"[DEMOGRAPHY] {planet.name} raised its citadel to Tier {nxt} ({cfg['name']}) to house its people."
 
     # 2. Dig: sub-surface habitats, up to what the citadel's engineering allows
+    if planet.population < settled * DEMOGRAPHY_PRESSURE:
+        return None
     if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
         cost = int(HABITAT_COST * level * (1 + planet.habitats))
         if planet.treasury >= cost + reserve and planet.ore_silo >= HABITAT_ORE:
@@ -199,18 +230,7 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
             return None
         return None   # saving for the next habitat
 
-    # 3. No more room to dig here: a people chooses what it will become
-    if planet.citadel_level < DAUGHTER_CITADEL_TIER and nxt in CITADEL_CONFIG:
-        return None   # still climbing the ladder (players: upgrade the citadel to build settler ships)
-    if policy is None:
-        policy = planet.growth_policy = choose_policy(kernel, planet)
-        if policy == "steady":
-            st["steady"] += 1
-            _covenant(kernel, planet)
-            return f"[DEMOGRAPHY] {planet.name} adopted population controls: it will live within its world."
-    if policy == "expand":
-        return send_settlers(kernel, planet)
-    return None
+    return None   # no more room to dig: the choice above is all that is left (players: upgrade the citadel)
 
 
 def choose_policy(kernel: Any, planet: Any) -> str:
@@ -315,7 +335,9 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     daughter.population = emigrants
     daughter.habitability = hab
     daughter.owner_id = planet.owner_id
-    daughter.organics_silo += COLONY_KIT_ORGANICS
+    kit = min(COLONY_KIT_ORGANICS, planet.organics_silo)      # the fleet's stores come out of the home granary
+    planet.organics_silo -= kit
+    daughter.organics_silo += kit
     daughter.morale = max(daughter.morale, 80)
     daughter.growth_policy = None
     if planet.owner_id is None and getattr(planet, "civilization", None) is not None:
@@ -450,6 +472,11 @@ def households(kernel: Any) -> None:
             if wanted and filled < wanted * 0.5:
                 st["shortages"] += 1
                 planet.morale = max(10, planet.morale - HOUSEHOLD_SHORTAGE_MORALE)
+            if wanted:
+                planet.society["basket_fill"] = round(filled / wanted, 3)
+            # Provided for, households spend part of what is left on the luxuries they cannot make themselves
+            from xylarium.kernel import luxury
+            luxury.shop(kernel, planet, ports)
             _save(planet)
 
 
@@ -518,6 +545,9 @@ def exports(kernel: Any) -> None:
                     surplus -= units
                     ex = st.setdefault("exports", {})
                     ex[planet.currency] = ex.get(planet.currency, 0) + bill
+                    from xylarium.kernel import ledger
+                    if ledger.ACTIVE_POLICY is not None:
+                        ledger.ACTIVE_POLICY.record_income(planet.currency, bill)
 
 
 # ---------------------------------------------------------------------- player command

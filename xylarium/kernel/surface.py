@@ -42,6 +42,7 @@ class DistrictType(str, Enum):
     ELEMENT_REFINERY = "ELEMENT_REFINERY"  # +2 refined periodic elements / tick
     CITADEL_FORTRESS = "CITADEL_FORTRESS"  # +30 garrison defense, +50 max shields
     MILITARY_BARRACKS = "MILITARY_BARRACKS"# Allows recruitment of assault divisions
+    RESORT_DOME = "RESORT_DOME"            # [RC] Pleasure Dome: hosts tourists, drinks water (tourism.py)
 
 
 TERRAIN_GLYPHS = {
@@ -62,6 +63,7 @@ DISTRICT_GLYPHS = {
     DistrictType.ELEMENT_REFINERY: "R",
     DistrictType.CITADEL_FORTRESS: "C",
     DistrictType.MILITARY_BARRACKS: "B",
+    DistrictType.RESORT_DOME: "L",
 }
 
 

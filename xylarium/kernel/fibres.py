@@ -62,6 +62,14 @@ def record(kernel: Any, captain: Any, a: int, b: int) -> None:
     st["passages"] += 1
 
 
+def record_flow(kernel: Any, a: int, b: int, value: float) -> None:
+    """Passenger traffic along a lane (tourism): develops it like goods, carried from a to b."""
+    st = state(kernel)
+    k = key(a, b)
+    st["q"][k] = st["q"].get(k, 0.0) + value
+    st["net"][k] = st["net"].get(k, 0.0) + (1.0 if a < b else -1.0) * value
+
+
 def net_flow(kernel: Any, a: int, b: int) -> float:
     """Signed goods value moved a -> b (antisymmetric: net_flow(a, b) == -net_flow(b, a))."""
     v = state(kernel)["net"].get(key(a, b), 0.0)

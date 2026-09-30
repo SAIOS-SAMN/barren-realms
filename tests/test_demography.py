@@ -55,6 +55,8 @@ class TestHousingAndCouncils(unittest.TestCase):
         w.treasury = 500_000
         w.ore_silo = 5000
         w.works_ready_cycle = 0
+        w.growth_policy = "expand"                     # its settler fleet has just sailed: the council digs
+        w.last_daughter_quarter = self.kernel.cycle_count // demography._quarter_len()
         before = totals(self.kernel)
         demography.develop(self.kernel, w)
         self.assertEqual(w.habitats, 1)

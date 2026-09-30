@@ -157,6 +157,16 @@ class AIManager:
         if endangered and cls._restock_clones(kernel, captain, current_sector):
             return
 
+        # 3c. VIPs aboard are flown straight to their resort; a docked hull with berths signs on (tourism.py)
+        from xylarium.kernel import tourism
+        if tourism.ai_turn(kernel, captain, current_sector):
+            return
+
+        # 3d. Outside the law: pedigree, temperament and the law's presence decide (crime.py)
+        from xylarium.kernel import crime
+        if not endangered and crime.consider(kernel, captain, current_sector):
+            return
+
         # 4. Anomaly Investigation vs Raid heuristic
         if not endangered and cls._handle_ai_anomaly_or_raid(kernel, captain, current_sector):
             return
