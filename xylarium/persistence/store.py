@@ -95,6 +95,10 @@ class StatePersistence:
                 int(s_id): Sector.from_dict(sec_data)
                 for s_id, sec_data in data["sectors"].items()
             }
+            # Universes saved before the physics layer get exact stars and orbits derived on load
+            from xylarium.kernel import physics
+            for sec in kernel.sectors.values():
+                physics.ensure_system(sec)
             kernel.captains = {
                 c_id: Captain.from_dict(cap_data)
                 for c_id, cap_data in data["captains"].items()

@@ -195,6 +195,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "houses": __import__("xylarium.kernel.lineage", fromlist=["npc_census"]).npc_census(kernel),
         "chronicle_kinds": dict(kernel.chronicle.counts),
         "demography": _demography_census(kernel),
+        "physics": __import__("xylarium.kernel.physics", fromlist=["summary"]).summary(kernel.sectors),
     }
 
 
@@ -1432,6 +1433,10 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
              f"{bk['chain_verify'] or 'intact'}", bk["chain_blocks"] > 0 and not bk["chain_verify"])
         insolvent = [cur for cur, b in bk["banks"].items() if b["reserves"] < 0]
         gate("central banks solvent (reserves >= 0)", "none negative", insolvent or "all solvent", not insolvent)
+        if "physics" in c1:
+            ph = c1["physics"]
+            gate("orbits never cross (spacing law, every system)", "0 violations",
+                 f"{ph['spacing_violations']} of {ph['worlds']} worlds", ph["spacing_violations"] == 0)
         if "demography" in c1:
             tl_c = [snap for snap in r["world_timeline"] if "cosmos" in snap]
             mid = next((snap for snap in tl_c if snap["cycle"] >= cycles * 0.4), None)
@@ -1584,6 +1589,10 @@ def print_report(r: Dict[str, Any]) -> None:
                   f"{st['no_room']} found no world in reach; steady-state worlds {st['steady']}")
             print(f"  households: {st['household_units']:,} units bought, spend {st['household_spend']}, shortages {st['shortages']}")
             print(f"  frontier: clusters {d['clusters']}, opened {st['clusters_opened']}")
+        if "physics" in ce:
+            ph = ce["physics"]
+            print(f"  physics: {ph['worlds']} worlds {ph['types']}, {ph['tidally_locked']} tidally locked, "
+                  f"{ph['spacing_violations']} spacing violations")
         bk = ce.get("banking", {})
         if bk:
             print(f"  clearing union: STAMP imbalance {bk['clearing_imbalance']}, settlement chain {bk['chain_blocks']} blocks "

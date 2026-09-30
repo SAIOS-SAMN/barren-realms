@@ -392,6 +392,8 @@ class Planet:
     siege: Optional[Dict[str, Any]] = None   # Ongoing orbital siege record (for the annals)
     tithe_manifest: Dict[str, int] = field(default_factory=dict)  # Imperial tithe awaiting a Goliath hauler
     habitats: int = 0                        # Sub-surface habitats dug by the colony council (housing tech)
+    body: Optional[Dict[str, Any]] = None    # exact orbit & body: q (a = q^2 AU), radius, mass, day, tilt (physics.py)
+    moon_of: Optional[str] = None            # a moon orbits this planet rather than the star
     works_ready_cycle: int = 0               # The council's current construction completes at this cycle
     household_purse: int = 0                 # What the world's households hold to spend at the starports
     growth_policy: Optional[str] = None      # "expand" (settler fleets) or "steady" (population controls)
@@ -440,6 +442,8 @@ class Planet:
             "habitats": self.habitats,
             "household_purse": self.household_purse,
             "works_ready_cycle": self.works_ready_cycle,
+            "body": dict(self.body) if self.body else None,
+            "moon_of": self.moon_of,
             "growth_policy": self.growth_policy,
             "last_daughter_quarter": self.last_daughter_quarter,
             "metropole_id": self.metropole_id,
@@ -491,6 +495,8 @@ class Planet:
             habitats=int(data.get("habitats", 0)),
             household_purse=int(data.get("household_purse", 0)),
             works_ready_cycle=int(data.get("works_ready_cycle", 0)),
+            body=dict(data["body"]) if data.get("body") else None,
+            moon_of=data.get("moon_of"),
             growth_policy=data.get("growth_policy"),
             last_daughter_quarter=int(data.get("last_daughter_quarter", -10 ** 6)),
             metropole_id=data.get("metropole_id"),
@@ -1185,6 +1191,7 @@ class Sector:
     secret_id: Optional[str] = None
     kind: str = "SYSTEM"          # "SYSTEM" (star, ports, planets) or "NULL" (deep space between systems)
     star_type: Optional[str] = None
+    star: Optional[Dict[str, str]] = None                        # exact stellar physics: m, mass, luminosity (physics.py)
     belts: List[Dict[str, Any]] = field(default_factory=list)    # asteroid belts (null space)
     debris: List[Dict[str, Any]] = field(default_factory=list)   # salvage fields from destroyed hulls
     sentries: Dict[str, int] = field(default_factory=dict)       # owner_id -> deployed sentry fighters
@@ -1215,6 +1222,7 @@ class Sector:
             "secret_id": self.secret_id,
             "kind": self.kind,
             "star_type": self.star_type,
+            "star": dict(self.star) if self.star else None,
             "belts": [dict(b, composition=dict(b.get("composition", {}))) for b in self.belts],
             "debris": [dict(d, cargo=dict(d.get("cargo", {}))) for d in self.debris],
             "sentries": dict(self.sentries),
@@ -1238,6 +1246,7 @@ class Sector:
             secret_id=data.get("secret_id"),
             kind=data.get("kind", "SYSTEM"),
             star_type=data.get("star_type"),
+            star=dict(data["star"]) if data.get("star") else None,
             belts=[dict(b, composition=dict(b.get("composition", {}))) for b in data.get("belts", [])],
             debris=[dict(d, cargo=dict(d.get("cargo", {}))) for d in data.get("debris", [])],
             sentries={k: int(v) for k, v in data.get("sentries", {}).items()},

@@ -1044,7 +1044,8 @@ PLANET_TYPE_DEPOSITS = {
 
 # Board layout: star systems are separated by null space
 SYSTEM_PORT_CHANCE = 0.85              # Systems usually host a starport
-SYSTEM_PLANETS = (1, 4)                # Planets per system (min, max)
+SYSTEM_PLANETS = (1, 4)
+FOUNDING_SPACE_RESERVE = 0.4           # Founding peoples leave this share of star systems free for those who come later                # Planets per system (min, max)
 STAR_TYPES = ["G-class yellow dwarf", "K-class orange dwarf", "M-class red dwarf", "F-class white star",
               "A-class blue-white star", "Binary pair", "White dwarf remnant"]
 
@@ -1134,8 +1135,14 @@ TERRAN_POLITY = {
     "discovered_elements": ["Fe", "Si", "H2O"],
 }
 SOL_CORE_WORLDS = [
-    {"name": "Terra", "type": "TERRESTRIAL", "population": 120000, "citadel": 3},
-    {"name": "Luna Yards", "type": "BARREN", "population": 20000, "citadel": 2},
+    # Terra defines the units: a = 1 AU, one year = 100 cycles, one day, Earth's radius and mass
+    {"name": "Terra", "type": "TERRESTRIAL", "population": 120000, "citadel": 3,
+     "body": {"q": "1/1", "radius": "1/1", "mass": "1/1", "giant": False, "day": "1/1", "tilt": 23,
+              "locked": False, "phase0": "0/1"}},
+    # Luna orbits Terra, not the Sun: it shares Terra's year; tidally locked to its planet
+    {"name": "Luna Yards", "type": "BARREN", "population": 20000, "citadel": 2, "moon_of": "planet_1",
+     "body": {"q": "1/1", "radius": "3/11", "mass": "27/1331", "giant": False, "day": "273/10", "tilt": 7,
+              "locked": True, "phase0": "0/1", "parent": "planet_1"}},
 ]
 
 # Regional monetary authorities (fiscal rule targeting each currency's money supply)

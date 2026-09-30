@@ -85,16 +85,20 @@ class AstronomyManager:
             cycle_count=data.get("cycle_count", 0),
         )
 
-    def tick(self, planets: List[Planet]) -> None:
+    def tick(self, planets: List[Planet], sectors: Optional[Dict[int, Any]] = None) -> None:
         """
-        Advances orbital angles for all registered planets by one game cycle.
-        theta(t+1) = (theta(t) + 360.0 / period) % 360.0.
+        Advances the sky one cycle. Worlds with exact physics take their angle from their exact orbital
+        phase at this cycle (physics.orbital_phase: no accumulated drift); others step by 360 / period.
         """
         self.cycle_count += 1
+        from xylarium.kernel import physics
         for p in planets:
+            sec = sectors.get(p.sector_id) if sectors else None
+            if sec is not None and getattr(p, "body", None):
+                p.orbital_angle = float(physics.orbital_phase(sec, p, self.cycle_count)) * 360.0
+                continue
             period = max(1, p.orbital_period)
-            delta = 360.0 / period
-            p.orbital_angle = (p.orbital_angle + delta) % 360.0
+            p.orbital_angle = (p.orbital_angle + 360.0 / period) % 360.0
 
     def compute_position(self, planet: Planet) -> OrbitalPosition:
         """Computes Cartesian coordinates and phase label for a planet."""

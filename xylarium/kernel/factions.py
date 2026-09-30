@@ -41,6 +41,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from xylarium.kernel import physics
 from xylarium.config import (
     AUTHORITIES,
     POLICY_CARDS,
@@ -273,6 +274,12 @@ class FactionManager:
             cands = [sid for sid in range(lo, hi + 1) if sid in kernel.sectors and free_system(sid)
                      and kernel.sectors[sid].port is not None]
             if not cands:
+                # The heavens did not put a harbored free system in the heartland: widen to any free system of
+                # the same security band (a great power always finds a seat - its genesis is not seed luck)
+                band = kernel.sectors[lo].security if lo in kernel.sectors else None
+                cands = [sid for sid, sec in kernel.sectors.items() if free_system(sid) and sec.security == band]
+                cands = [sid for sid in cands if kernel.sectors[sid].port is not None] or cands
+            if not cands:
                 continue
 
             def reach(sid: int) -> List[int]:
@@ -299,16 +306,18 @@ class FactionManager:
             if key == "IMPERIUM":
                 faction.currency = "THR"
             else:
-                faction.currency = kernel.sectors[capital].port.currency
+                cap_port = kernel.sectors[capital].port
+                from xylarium.kernel.fx import currency_for_security
+                faction.currency = cap_port.currency if cap_port else currency_for_security(kernel.sectors[capital].security)
                 faction.dogma = ZEALOT_START_DOGMA
             level = PRICE_LEVEL.get(faction.currency, 1.0)
 
             world_specs: List[Tuple[Planet, int, int]] = []
             cap_sec = kernel.sectors[capital]
-            throne = cap_sec.planets[0]
+            throne = max(cap_sec.planets, key=lambda w: habitability("biotic", w.planet_type))
             world_specs.append((throne, 60000 if key == "IMPERIUM" else 25000, 3 if key == "IMPERIUM" else 2))
             if key == "IMPERIUM":
-                fortress = cap_sec.planets[1] if len(cap_sec.planets) > 1 else None
+                fortress = next((w for w in cap_sec.planets if w is not throne), None)
                 if fortress is None:
                     other = next((s for s in systems if s != capital), None)
                     fortress = kernel.sectors[other].planets[0] if other else None
@@ -317,13 +326,13 @@ class FactionManager:
             for sid in systems:
                 if sid == capital:
                     continue
-                p = kernel.sectors[sid].planets[0]
+                p = max(kernel.sectors[sid].planets, key=lambda w: habitability("biotic", w.planet_type))
                 if all(p is not w[0] for w in world_specs):
                     world_specs.append((p, rng.randint(4000, 12000) if key == "IMPERIUM" else rng.randint(3000, 8000), 1))
 
             for i, (p, pop, citadel) in enumerate(world_specs):
                 if p.planet_type not in ("TERRESTRIAL", "OCEANIC"):
-                    p.planet_type = "TERRESTRIAL"
+                    physics.reseat(kernel.sectors[p.sector_id], p, "TERRESTRIAL")   # a biotic people's world
                 p.habitability = habitability("biotic", p.planet_type)
                 civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
                 civ.faction_id = key

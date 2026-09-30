@@ -176,7 +176,8 @@ class TestPlanetaryColonization(unittest.TestCase):
         self.planet_sector = None
         for s in self.kernel.sectors.values():
             for p in s.planets:
-                if p.owner_id is None and getattr(p.civilization, "name", "") != "Terran Federation":
+                if (p.owner_id is None and p.civilization is None and p.population == 0
+                        and not p.natives and not p.faction_id):
                     self.planet = p
                     self.planet_sector = s
                     break
@@ -216,7 +217,7 @@ class TestPlanetaryColonization(unittest.TestCase):
         self.player.ship.cargo.equipment = 15
         indigenous = next(p for s in self.kernel.sectors.values() for p in s.planets
                           if p.owner_id is None and p.population > 0 and p.civilization is not None
-                          and p.civilization.name != "Terran Federation")
+                          and p.civilization.name != "Terran Federation" and not p.faction_id)
         self.player.sector_id = indigenous.sector_id
         res = self.kernel.dispatch("emperor", ActionType.PLANET_CLAIM, planet_id=indigenous.id)
         self.assertFalse(res.success)

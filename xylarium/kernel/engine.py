@@ -105,6 +105,7 @@ from xylarium.config import (
 )
 from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
 from xylarium.kernel import demography as demography_mod
+from xylarium.kernel import physics as physics_mod
 
 
 class GameKernel:
@@ -2644,6 +2645,9 @@ class GameKernel:
             alignment_mod.quarterly(self)
             NativeManager.tick(self)
             self._tick_sieges()
+            # Newly charted systems (ghost sectors, frontier clusters) get exact physics
+            for sec in self.sectors.values():
+                physics_mod.ensure_system(sec)
             # Peoples grow, build, choose; households shop; the frontier opens when they run out of room
             for log in demography_mod.quarter(self):
                 self.action_logs.append(log)
@@ -2698,7 +2702,7 @@ class GameKernel:
         # 8. Astronomy Keplerian ephemeris advance
         if hasattr(self, "astronomy_manager"):
             all_planets = self.get_all_planets()
-            self.astronomy_manager.tick(all_planets)
+            self.astronomy_manager.tick(all_planets, self.sectors)
 
         # 9. Imperial Senate & Governance legislative advance
         if hasattr(self, "governance_manager"):

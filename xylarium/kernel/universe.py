@@ -27,6 +27,7 @@ from xylarium.config import (
     BORDER_SECTOR_END,
     ORBIT_MIN_RADIUS_AU,
     ORBIT_MAX_RADIUS_AU,
+    FOUNDING_SPACE_RESERVE,
 )
 from xylarium.kernel.models import (
     Sector,
@@ -38,6 +39,7 @@ from xylarium.kernel.models import (
 )
 from xylarium.kernel.civilization import FOUNDING_POLITIES, CivilizationIntelligenceEngine
 from xylarium.kernel.elements import PeriodicTable
+from xylarium.kernel import physics
 
 
 PORT_NAMES = [
@@ -323,6 +325,7 @@ def furnish_sectors(
         if s_id in chosen:
             sec.kind = "SYSTEM"
             sec.star_type = "G-class yellow dwarf (Sol)" if s_id == 1 else rng.choice(STAR_TYPES)
+            sec.star = physics.star_for(sec.star_type)
             if s_id == 1 or rng.random() < SYSTEM_PORT_CHANCE:
                 sec.port = build_port(s_id, rng)
                 sec.port.currency = currency
@@ -332,10 +335,10 @@ def furnish_sectors(
             if s_id == 1:
                 _found_sol_core_worlds(sec)
             if s_id != 1:
-                for i in range(rng.randint(*SYSTEM_PLANETS)):
-                    ptype = rng.choice(PLANET_TYPES)
-                    orbit_r = round(rng.uniform(ORBIT_MIN_RADIUS_AU, ORBIT_MAX_RADIUS_AU), 2)
-                    sec.planets.append(Planet(
+                # Worlds sit on exact, non-crossing orbits; each world's type follows from its light and mass
+                layout = physics.lay_out_system(sec, rng.randint(*SYSTEM_PLANETS), rng)
+                for i, (q, b, ptype) in enumerate(layout):
+                    planet = Planet(
                         id=f"planet_{s_id}" if i == 0 else f"planet_{s_id}_{PLANET_LETTERS[i]}",
                         sector_id=s_id,
                         name=f"{sec.name.split()[0]} {s_id:03d}{PLANET_LETTERS[i]}",
@@ -350,13 +353,14 @@ def furnish_sectors(
                         organics_silo=0,
                         morale=80,
                         element_deposits=_deposits_for(ptype, rng),
-                        orbital_radius=orbit_r,
-                        orbital_period=max(15, min(240, int(30 * (orbit_r ** 1.5)))),
-                        orbital_angle=round(rng.uniform(0.0, 360.0), 2),
                         garrison_troops=0,
                         planet_type=ptype,
                         currency=currency,
-                    ))
+                        body=b,
+                    )
+                    physics.apply_derived(planet, physics.star(sec))
+                    planet.orbital_angle = float(physics.orbital_phase(sec, planet, 0)) * 360.0
+                    sec.planets.append(planet)
         else:
             sec.kind = "NULL"
             sec.port = None
@@ -380,12 +384,27 @@ def furnish_sectors(
     # Species genesis: each founding polity arises on a world of its homeworld type
     candidates = [s for s in systems if s != 1 and sectors[s].planets]
     rng.shuffle(candidates)
+    used_systems = set()
     for idx, polity in enumerate(FOUNDING_POLITIES):
         if idx >= len(candidates) or idx >= len(PLANET_NAMES):
             break
-        sec = sectors[candidates[idx]]
-        home = sec.planets[0]
-        home.planet_type = homeworld_type(polity)
+        want = homeworld_type(polity)
+        # Space is kept for those who come later (great powers, settlers): once free systems run short,
+        # peoples arise on other worlds of already-inhabited systems instead of claiming every star
+        crowded = len(candidates) - len(used_systems) <= len(candidates) * FOUNDING_SPACE_RESERVE
+        pool = [sid for sid in candidates if crowded or sid not in used_systems]
+        # Species arise where the light and the world suit them: find a world physics already made so
+        home = next((p for sid in pool for p in sectors[sid].planets
+                     if p.planet_type == want and p.civilization is None), None)
+        if home is None:
+            # No such world anywhere: a species' world is re-seated on an orbit whose light fits it
+            spare = [(sid, p) for sid in pool for p in sectors[sid].planets if p.civilization is None]
+            if not spare:
+                break
+            sid, home = spare[0]
+            physics.reseat(sectors[sid], home, want)
+        sec = sectors[home.sector_id]
+        used_systems.add(sec.id)
         civ = CivilizationIntelligenceEngine.create_civilization(polity)
         deposits = _deposits_for(home.planet_type, rng)
         reserves: Dict[str, int] = {}
@@ -434,4 +453,7 @@ def _found_sol_core_worlds(sec: Sector) -> None:
             planet_type=spec["type"],
             currency="SOL",
             garrison_troops=5000,
+            body=spec.get("body"),
+            moon_of=spec.get("moon_of"),
         ))
+        physics.apply_derived(sec.planets[-1], physics.star(sec))
