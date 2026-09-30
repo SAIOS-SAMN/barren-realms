@@ -293,25 +293,16 @@ class AIManager:
             res = kernel.dispatch(captain.id, ActionType.ATTACK_SHIP, target_id=target.id)
             return bool(res.success)
         # Hunt: the nearest null sector (within 3 warps) where a non-kin ship is sailing
-        frontier, seen, parent = [sector.id], {sector.id}, {sector.id: None}
-        for _ in range(3):
-            nxt = []
-            for sid in frontier:
-                for w in kernel.sectors[sid].warps:
-                    if w in seen or w not in kernel.sectors:
-                        continue
-                    seen.add(w)
-                    parent[w] = sid
-                    nxt.append(w)
-                    ws = kernel.sectors[w]
-                    if ws.is_null_space and any(c not in kin and c != captain.id and c in kernel.captains
-                                                and not kernel.captains[c].faction_id for c in ws.captains):
-                        step = w
-                        while parent[step] != sector.id:
-                            step = parent[step]
-                        res = kernel.dispatch(captain.id, ActionType.MOVE, destination=step)
-                        return bool(res.success)
-            frontier = nxt
+        from xylarium.kernel import topology
+        dist, parent = topology.tree(kernel, sector.id, 3)
+        for w in dist:                                   # discovery order: nearest first
+            if w == sector.id:
+                continue
+            ws = kernel.sectors[w]
+            if ws.is_null_space and any(c not in kin and c != captain.id and c in kernel.captains
+                                        and not kernel.captains[c].faction_id for c in ws.captains):
+                res = kernel.dispatch(captain.id, ActionType.MOVE, destination=topology.first_hop(parent, sector.id, w))
+                return bool(res.success)
         return False
 
     @classmethod

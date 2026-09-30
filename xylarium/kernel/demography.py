@@ -20,7 +20,7 @@ Xylarium: demography - peoples grow on their worlds, and then decide what to bec
 
 from typing import Any, Dict, List, Optional
 
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 
 from xylarium.config import (
     CITADEL_CONFIG,
@@ -292,21 +292,6 @@ def _covenant(kernel: Any, planet: Any) -> None:
 
 
 # ---------------------------------------------------------------------- settlers
-def _reach(kernel: Any, origin: int, radius: int) -> List[int]:
-    dist, frontier = {origin: 0}, [origin]
-    while frontier:
-        nxt = []
-        for sid in frontier:
-            if dist[sid] >= radius:
-                continue
-            for w in kernel.sectors[sid].warps:
-                if w in kernel.sectors and w not in dist:
-                    dist[w] = dist[sid] + 1
-                    nxt.append(w)
-        frontier = nxt
-    return sorted(dist, key=lambda s: dist[s])
-
-
 def free_world(planet: Any) -> bool:
     return (planet.owner_id is None and planet.population <= 0 and not getattr(planet, "natives", None)
             and not getattr(planet, "faction_id", None) and getattr(planet, "civilization", None) is None)
@@ -340,7 +325,7 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     search_radii = [radius, 6, 10, 16, 25] if is_diaspora else [radius]
     for r in search_radii:
         ring_cands = []
-        for sid in _reach(kernel, planet.sector_id, r):
+        for sid in topology.reach(kernel, planet.sector_id, r):
             for cand in kernel.sectors[sid].planets:
                 if not free_world(cand) or habitability(metab, cand.planet_type) < DAUGHTER_MIN_HABITABILITY:
                     continue
@@ -445,7 +430,7 @@ def _markets(kernel: Any, planet: Any) -> List[Any]:
     key = planet.id
     if key not in cache:
         ports = []
-        for sid in _reach(kernel, planet.sector_id, HOUSEHOLD_RADIUS):
+        for sid in topology.reach(kernel, planet.sector_id, HOUSEHOLD_RADIUS):
             port = kernel.sectors[sid].port
             if port is not None and port.currency == planet.currency:
                 ports.append(sid)
@@ -490,7 +475,7 @@ def households(kernel: Any) -> None:
                     planet.household_purse -= bill
                     port.treasury += bill
                     port.stock[comm] = have - units
-                    from xylarium.kernel import matter
+                    from xylarium.kernel import matter, topology
                     matter.sink("households", comm, units)      # eaten, drunk, worn out at home
                     port.regional_income = round(port.regional_income + 0.3 * bill, 2)
                     budget -= bill

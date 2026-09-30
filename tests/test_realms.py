@@ -6,7 +6,7 @@ claims follow influence; far unhappy worlds secede; the realm's capital governs 
 import random
 import unittest
 
-from xylarium.kernel import government, realms
+from xylarium.kernel import government, realms, topology
 from xylarium.kernel.engine import GameKernel
 
 
@@ -63,7 +63,7 @@ class TestRealms(unittest.TestCase):
         seat = realms.capital(k, realm)
         far = next(p for s in k.sectors.values() for p in s.planets
                    if p.population <= 0 and not p.natives and p.civilization is None and not p.faction_id
-                   and realms._hops_from(k, seat.sector_id, 12).get(s.id, 99) >= realms.SECESSION_HOPS)
+                   and topology.hops(k, seat.sector_id, 12).get(s.id, 99) >= realms.SECESSION_HOPS)
         far.population, far.civilization, far.morale = 5000, seat.civilization, 10
         realms.quarter(k)
         self.assertIn(far.id, realm["worlds"])

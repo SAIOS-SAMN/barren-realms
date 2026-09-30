@@ -41,7 +41,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 from xylarium.kernel import physics
 from xylarium.config import (
     AUTHORITIES,
@@ -189,33 +189,6 @@ def _new_authority(key: str) -> Faction:
                    enforcement=cfg["enforcement"], warrant=cfg["warrant"], alignment=cfg["alignment"])
 
 
-def _bfs(kernel: Any, start: int, limit: int = 99) -> Tuple[Dict[int, int], Dict[int, Optional[int]]]:
-    dist = {start: 0}
-    parent: Dict[int, Optional[int]] = {start: None}
-    frontier = [start]
-    while frontier:
-        nxt = []
-        for cur in frontier:
-            if dist[cur] >= limit:
-                continue
-            for w in kernel.sectors[cur].warps:
-                if w in kernel.sectors and w not in dist:
-                    dist[w] = dist[cur] + 1
-                    parent[w] = cur
-                    nxt.append(w)
-        frontier = nxt
-    return dist, parent
-
-
-def _first_hop(parent: Dict[int, Optional[int]], start: int, goal: int) -> Optional[int]:
-    if goal not in parent or goal == start:
-        return None
-    node = goal
-    while parent[node] is not None and parent[node] != start:
-        node = parent[node]
-    return node
-
-
 class FactionManager:
     def __init__(self) -> None:
         self.factions: Dict[str, Faction] = {k: _new_authority(k) for k in ("FEDERATION", "COMPACT", "NONE")}
@@ -284,7 +257,7 @@ class FactionManager:
                 continue
 
             def reach(sid: int) -> List[int]:
-                dist, _ = _bfs(kernel, sid, hops)
+                dist, _ = topology.tree(kernel, sid, hops)
                 return [s for s in dist if free_system(s)]
 
             capital = max(cands, key=lambda sid: (len(reach(sid)), rng.random()))
@@ -292,9 +265,9 @@ class FactionManager:
             wanted = 4 if key == "IMPERIUM" else 2
             while len(reach(capital)) < wanted and hops < spec[2] + 3:
                 hops += 1
-            systems = sorted(reach(capital), key=lambda s: (_bfs(kernel, capital, hops)[0].get(s, 99), s))
+            systems = sorted(reach(capital), key=lambda s: (topology.tree(kernel, capital, hops)[0].get(s, 99), s))
             systems = systems[:5] if key == "IMPERIUM" else systems[:3]
-            dist, _ = _bfs(kernel, capital, hops)
+            dist, _ = topology.tree(kernel, capital, hops)
             territory = sorted({s for s in dist if (s in systems or (kernel.sectors[s].kind == "NULL" and dist[s] <= 1)
                                                     or s == capital) and s not in forbidden
                                 and kernel.sectors[s].security != SecurityLevel.FEDERATION} - {1})
@@ -763,7 +736,7 @@ class FactionManager:
         seceded = ""
         shrines = [w for w in worlds if w.id != f.capital_planet]
         if shrines:
-            dist, _ = _bfs(kernel, f.capital_sector or shrines[0].sector_id)
+            dist, _ = topology.tree(kernel, f.capital_sector or shrines[0].sector_id)
             shrines.sort(key=lambda w: -dist.get(w.sector_id, 99))
             breakaway = shrines[:max(1, (len(shrines) + 2) // 3)]
             for far in breakaway:
@@ -844,8 +817,8 @@ class FactionManager:
         return False
 
     def _move(self, kernel: Any, cap: Captain, goal: int) -> bool:
-        dist, parent = _bfs(kernel, cap.sector_id, 30)
-        hop = _first_hop(parent, cap.sector_id, goal)
+        dist, parent = topology.tree(kernel, cap.sector_id, 30)
+        hop = topology.first_hop(parent, cap.sector_id, goal)
         if hop is None:
             return False
         res = kernel.dispatch(cap.id, ActionType.MOVE, destination=hop)
@@ -872,7 +845,7 @@ class FactionManager:
                 return True
         home = [p for p in self.worlds(kernel, cap.faction_id) if p.organics_silo > 60]
         if home:
-            dist, _ = _bfs(kernel, cap.sector_id, 30)
+            dist, _ = topology.tree(kernel, cap.sector_id, 30)
             goal = min(home, key=lambda p: dist.get(p.sector_id, 99)).sector_id
             if goal != cap.sector_id and self._move(kernel, cap, goal):
                 return True
@@ -900,7 +873,7 @@ class FactionManager:
             worlds = [w for w in self.worlds(kernel, "IMPERIUM") if w.tithe_manifest]
             if not worlds:
                 return False
-            dist, _ = _bfs(kernel, cap.sector_id, 30)
+            dist, _ = topology.tree(kernel, cap.sector_id, 30)
             target = min(worlds, key=lambda w: dist.get(w.sector_id, 99))
             if cap.sector_id != target.sector_id:
                 return self._move(kernel, cap, target.sector_id)
@@ -1030,7 +1003,7 @@ class FactionManager:
             musters = [p for p in self.worlds(kernel, "ZEALOT") if p.population > 3000]
             if not musters:
                 return False
-            dist, _ = _bfs(kernel, cap.sector_id, 30)
+            dist, _ = topology.tree(kernel, cap.sector_id, 30)
             goal = min(musters, key=lambda p: dist.get(p.sector_id, 99)).sector_id
             return self._move(kernel, cap, goal)
         # 3. The crusade: convert natives, hallow empty worlds, besiege heretic colonies.
@@ -1082,7 +1055,7 @@ class FactionManager:
 
     def _crusade_target(self, kernel: Any, cap: Captain) -> Optional[Dict[str, Any]]:
         from xylarium.kernel.universe import habitability
-        dist, _ = _bfs(kernel, cap.sector_id, ZEALOT_CRUSADE_RANGE)
+        dist, _ = topology.tree(kernel, cap.sector_id, ZEALOT_CRUSADE_RANGE)
         best = None
         for sid, d in dist.items():
             sec = kernel.sectors[sid]

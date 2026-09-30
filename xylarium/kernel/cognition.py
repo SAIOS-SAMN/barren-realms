@@ -22,7 +22,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 from xylarium.kernel.models import (
     ActionType,
     ActionResult,
@@ -801,10 +801,10 @@ class SeatSurvive:
                     return sid == 1 or bool(sp and sp.sells.get(target_comm, False) and sp.stock.get(target_comm, 0) > 0)
 
                 best_path = None
-                dist_map, parent_map = SeatGrow._bfs(kernel, captain.sector_id, 30)
+                dist_map, parent_map = topology.tree(kernel, captain.sector_id, 30)
                 for sid, _d in sorted(dist_map.items(), key=lambda kv: kv[1]):
                     if sid != captain.sector_id and stocks_ration(sid):
-                        hop = SeatGrow._first_hop(parent_map, captain.sector_id, sid)
+                        hop = topology.first_hop(parent_map, captain.sector_id, sid)
                         best_path = [captain.sector_id, hop] if hop is not None else None
                         break
 
@@ -852,7 +852,7 @@ class SeatSurvive:
                     # Move towards the Sol stardock - or, if Sol's turrets turn us away, the nearest Void harbor
                     goal = 1
                     if not welcome(kernel, captain, 1):
-                        dist_map, _ = SeatGrow._bfs(kernel, captain.sector_id, 30)
+                        dist_map, _ = topology.tree(kernel, captain.sector_id, 30)
                         harbors = [sid for sid, _d in sorted(dist_map.items(), key=lambda kv: kv[1])
                                    if kernel.sectors[sid].security == SecurityLevel.ANARCHY and kernel.sectors[sid].port]
                         goal = harbors[0] if harbors else captain.sector_id
@@ -1135,37 +1135,9 @@ class SeatGrow:
             oldest = min(mem, key=lambda k: mem[k].get("c", 0))
             mem.pop(oldest, None)
 
-    @staticmethod
-    def _bfs(kernel: "GameKernel", start: int, limit: int) -> Tuple[Dict[int, int], Dict[int, Optional[int]]]:
-        dist: Dict[int, int] = {start: 0}
-        parent: Dict[int, Optional[int]] = {start: None}
-        frontier = [start]
-        while frontier:
-            nxt = []
-            for cur in frontier:
-                if dist[cur] >= limit:
-                    continue
-                for w in kernel.sectors[cur].warps:
-                    if w in dist or w not in kernel.sectors:
-                        continue
-                    dist[w] = dist[cur] + 1
-                    parent[w] = cur
-                    nxt.append(w)
-            frontier = nxt
-        return dist, parent
-
-    @staticmethod
-    def _first_hop(parent: Dict[int, Optional[int]], start: int, goal: int) -> Optional[int]:
-        if goal not in parent or goal == start:
-            return None
-        node = goal
-        while parent.get(node) is not None and parent[node] != start:
-            node = parent[node]
-        return node if parent.get(node) == start else None
-
     @classmethod
     def _step_toward(cls, captain: Captain, kernel: "GameKernel", parent, goal: int, name: str) -> Optional[CognitiveDeed]:
-        hop = cls._first_hop(parent, captain.sector_id, goal)
+        hop = topology.first_hop(parent, captain.sector_id, goal)
         if hop is None:
             path = kernel.find_path(captain.sector_id, goal)
             hop = path[1] if path and len(path) > 1 else None
@@ -1634,7 +1606,7 @@ class SeatGrow:
             return None
         cycle = cls._cycle(kernel)
         cls.observe_port(captain, sector, kernel)
-        dist, parent = cls._bfs(kernel, sector.id, AI_PLAN_MAX_HOPS)
+        dist, parent = topology.tree(kernel, sector.id, AI_PLAN_MAX_HOPS)
 
         # 0. Free salvage floating in this sector
         if sector.debris and captain.ship.cargo.available_space > 2:

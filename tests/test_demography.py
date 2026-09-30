@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from xylarium.config import CITADEL_CONFIG, HABITATS_MAX_BY_TIER, STEADY_STATE_SHARE
-from xylarium.kernel import demography
+from xylarium.kernel import demography, topology
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.ledger import money_supply
 from xylarium.kernel.models import ActionType
@@ -105,7 +105,7 @@ class TestTheChoice(unittest.TestCase):
         from xylarium.kernel.universe import habitability
         metab = demography.metabolism_of(self.kernel, w)
         target = None
-        for sid in demography._reach(self.kernel, w.sector_id, 3):
+        for sid in topology.reach(self.kernel, w.sector_id, 3):
             for p in self.kernel.sectors[sid].planets:
                 if demography.free_world(p) and habitability(metab, p.planet_type) >= 0.3:
                     target = p

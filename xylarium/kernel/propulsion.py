@@ -39,7 +39,7 @@ from xylarium.config import (
     SKIM_ENERGY_PER_SEASON,
     SKIM_HE3_SHARE,
 )
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 
 BURN_MASS_PER_UNIT = 50      # tonnes (holds + cargo units) moved one jump per unit of reaction mass (torch)
 COAST_EXTRA_TURNS = 2        # the cost of a jump on reserve cells
@@ -178,10 +178,9 @@ def _abundance(kernel: Any, sector_id: int) -> Dict[str, float]:
         cache = kernel._fuel_abundance = {"_season": season}
     if sector_id in cache:
         return cache[sector_id]
-    from xylarium.kernel.demography import _reach
     fuels = [f for f in FUEL_CELLS if f != "WARP"]
     have = {f: 0.0 for f in fuels}
-    for sid in _reach(kernel, sector_id, FUEL_REACH):
+    for sid in topology.reach(kernel, sector_id, FUEL_REACH):
         sec = kernel.sectors[sid]
         if sec.port is not None:
             for f in fuels:
@@ -406,7 +405,7 @@ def refit(kernel: Any, yard_sector: Any, old_type: str, new_type: str) -> bool:
     """A hull upgrade: the old hull is melted down into the yard's warehouse, the new one is built from the
     yard's metal - titanium substituted by twice the iron when short. If even the iron runs out, the yard
     still delivers, as a heavier iron-frame build with less hold space. Returns True for an iron frame."""
-    from xylarium.kernel import matter
+    from xylarium.kernel import matter, topology
     port = getattr(yard_sector, "port", None)
     if port is None:
         return False

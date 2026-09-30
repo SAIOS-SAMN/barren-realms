@@ -32,7 +32,7 @@ from xylarium.config import (
     LUXURY_WORLD_BIAS,
     PRICE_LEVEL,
 )
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 
 _ADJECTIVE = {"TERRESTRIAL": ["Verdant", "Rainroot", "Meadow"], "OCEANIC": ["Tidal", "Brine", "Deepwater"],
               "ICE": ["Rime", "Glacier", "Stillcold"], "VOLCANIC": ["Ember", "Caldera", "Ashen"],
@@ -331,7 +331,7 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
                 fx.ACTIVE_FX is not None and planet.currency != "SOL") else bill
         if need > 0 and budget > 0:
             from xylarium.kernel import demography
-            ext_ports = [kernel.sectors[sid].port for sid in demography._reach(kernel, planet.sector_id, 5)
+            ext_ports = [kernel.sectors[sid].port for sid in topology.reach(kernel, planet.sector_id, 5)
                          if kernel.sectors[sid].port is not None and kernel.sectors[sid].port.currency == planet.currency
                          and kernel.sectors[sid].port not in ports]
             for port in sorted(ext_ports, key=lambda p: -p.stock.get(t, 0)):

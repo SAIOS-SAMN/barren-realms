@@ -7,7 +7,7 @@ quarterly dividend distributions, and population-listed star trade freight contr
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
 import random
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 from xylarium.kernel.models import TradeHauler, Captain, Ship, CargoHold, AIPersonality
 from xylarium.config import (
     COMMODITY_CONFIG,
@@ -704,10 +704,6 @@ class MarketManager:
                 open_by_planet[pid] = open_by_planet.get(pid, 0) + 1
 
         port_sectors = [s for s in kernel.sectors.values() if s.port is not None]
-        reverse: Dict[int, List[int]] = {}
-        for s in kernel.sectors.values():
-            for w in s.warps:
-                reverse.setdefault(w, []).append(s.id)
         dist_to = None
         for sec in kernel.sectors.values():
             for planet in sec.planets:
@@ -735,7 +731,7 @@ class MarketManager:
                         continue
                     # One reverse breadth-first search from the colony gives every origin's warp distance to it
                     if dist_to is None or dist_to[0] != sec.id:
-                        dist_to = (sec.id, self._distances_to(kernel, sec.id, reverse))
+                        dist_to = (sec.id, topology.distances_to(kernel, sec.id))
                     reachable = [ps for ps in origins if ps.id in dist_to[1]]
                     if not reachable:
                         continue
@@ -777,21 +773,6 @@ class MarketManager:
         return created
 
     @staticmethod
-    def _distances_to(kernel: Any, goal: int, reverse: Dict[int, List[int]]) -> Dict[int, int]:
-        """Shortest warp distance from every sector that can reach ``goal`` (BFS over reversed warps)."""
-        dist = {goal: 0}
-        frontier = [goal]
-        while frontier:
-            nxt = []
-            for sid in frontier:
-                for src in reverse.get(sid, ()):
-                    if src not in dist and src in kernel.sectors:
-                        dist[src] = dist[sid] + 1
-                        nxt.append(src)
-            frontier = nxt
-        return dist
-
-    @staticmethod
     def _colony_consumer_spending(kernel: Any) -> None:
         """Colonies buy consumer goods from their system's starport: vault -> port treasury, goods consumed."""
         from xylarium.kernel.economy import EconomyManager
@@ -816,18 +797,7 @@ class MarketManager:
     @staticmethod
     def _regional_worlds(kernel: Any, sector_id: int, currency: str, radius: int) -> List[Any]:
         """Populated worlds within ``radius`` warps of a sector that settle in the same currency."""
-        dist = {sector_id: 0}
-        frontier = [sector_id]
-        while frontier:
-            nxt = []
-            for sid in frontier:
-                if dist[sid] >= radius:
-                    continue
-                for w in kernel.sectors[sid].warps:
-                    if w in kernel.sectors and w not in dist:
-                        dist[w] = dist[sid] + 1
-                        nxt.append(w)
-            frontier = nxt
+        dist = topology.hops(kernel, sector_id, radius)
         return [p for sid in dist for p in kernel.sectors[sid].planets
                 if p.population > 0 and p.currency == currency]
 
@@ -1001,7 +971,7 @@ class MarketManager:
                     continue
 
                 # Supply: belts within reach, weighted by composition share x remaining reserve / distance
-                dist = self._distances(kernel, sec.id, EXTRACTION_SEARCH_HOPS)
+                dist = topology.hops(kernel, sec.id, EXTRACTION_SEARCH_HOPS)
                 best = None
                 for s_id, d in dist.items():
                     for belt in kernel.sectors[s_id].belts:
@@ -1039,22 +1009,6 @@ class MarketManager:
                 open_by_planet[planet.id] = open_by_planet.get(planet.id, 0) + 1
                 created.append(contract)
         return created
-
-    @staticmethod
-    def _distances(kernel: Any, start: int, limit: int) -> Dict[int, int]:
-        dist = {start: 0}
-        frontier = [start]
-        while frontier:
-            nxt = []
-            for cur in frontier:
-                if dist[cur] >= limit:
-                    continue
-                for w in kernel.sectors[cur].warps:
-                    if w in kernel.sectors and w not in dist:
-                        dist[w] = dist[cur] + 1
-                        nxt.append(w)
-            frontier = nxt
-        return dist
 
     def _refund_escrow(self, contract: FreightContract, kernel: Any = None) -> None:
         amount, source = contract.escrow_amount, contract.escrow_source or ""

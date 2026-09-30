@@ -49,7 +49,7 @@ from xylarium.config import (
     TOURIST_H_PER_HUNDRED_HOPS,
     TOURIST_SPEND_PER_HEAD,
 )
-from xylarium.kernel import matter
+from xylarium.kernel import matter, topology
 
 STATION_METAL = {"Fe": 60, "Ti": 30}
 
@@ -211,21 +211,6 @@ def _invest(kernel: Any, st: Dict[str, Any]) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------- tier 1: mass tourism
-def _hops(kernel: Any, origin: int, radius: int) -> Dict[int, int]:
-    dist, frontier = {origin: 0}, [origin]
-    while frontier:
-        nxt = []
-        for sid in frontier:
-            if dist[sid] >= radius:
-                continue
-            for w in kernel.sectors[sid].warps:
-                if w in kernel.sectors and w not in dist:
-                    dist[w] = dist[sid] + 1
-                    nxt.append(w)
-        frontier = nxt
-    return dist
-
-
 def destinations(kernel: Any, planet: Any) -> List[Tuple[float, str, Any, int]]:
     """(attraction, kind, place, hops) for resorts in reach: novel, safe and near first."""
     from xylarium.kernel import biosphere, law, fx
@@ -238,7 +223,7 @@ def destinations(kernel: Any, planet: Any) -> List[Tuple[float, str, Any, int]]:
         if fx.ACTIVE_FX is None or cur == planet.currency:
             return 1.0
         return fx.ACTIVE_FX.price_level_drift(cur) / fx.ACTIVE_FX.price_level_drift(planet.currency)
-    for sid, hops in _hops(kernel, planet.sector_id, TOURISM_RADIUS).items():
+    for sid, hops in topology.hops(kernel, planet.sector_id, TOURISM_RADIUS).items():
         sec = kernel.sectors[sid]
         safety = 0.5 + 0.5 * law.presence(kernel, sec)
         near = 1.0 / (1 + hops)
@@ -266,7 +251,7 @@ def site_for(kernel: Any, planet: Any) -> Optional[Any]:
     from xylarium.kernel import biosphere, law
     home = biosphere.metabolism_of(kernel, planet)
     best, score = None, 0.0
-    for sid, hops in _hops(kernel, planet.sector_id, TOURISM_RADIUS).items():
+    for sid, hops in topology.hops(kernel, planet.sector_id, TOURISM_RADIUS).items():
         sec = kernel.sectors[sid]
         for w in sec.planets:
             if w is planet or w.population <= 0 or getattr(w, "natives", None) or sec.port is None:

@@ -6,7 +6,7 @@ treasuries that budget offices spend back into their jurisdictions - automated b
 import random
 import unittest
 
-from xylarium.kernel import government, tourism
+from xylarium.kernel import government, topology, tourism
 from xylarium.kernel.economy import EconomyManager
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.ledger import money_supply
@@ -85,7 +85,7 @@ class TestGovernment(unittest.TestCase):
         self.assertEqual(tourism.station(world)["owner"], investor.id)
         self.assertEqual(m0, sum(money(k).values()))
         # travellers from a neighbouring world come to the station
-        origin = next(p for sid in tourism._hops(k, 1, 4) for p in k.sectors[sid].planets
+        origin = next(p for sid in topology.hops(k, 1, 4) for p in k.sectors[sid].planets
                       if p.population > 0 and p is not world and tourism.spacefaring(k, p)
                       and k.sectors[p.sector_id].port is not None)
         origin_port = k.sectors[origin.sector_id].port

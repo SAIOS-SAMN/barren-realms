@@ -19,6 +19,7 @@ Xylarium realms: territory is claimed by influence, and polities are born, grow,
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import DAUGHTER_CITADEL_TIER
+from xylarium.kernel import topology
 
 REALMS_AT_GENESIS = True
 CLAIM_REACH = 3                  # jumps a world's influence reaches
@@ -119,21 +120,6 @@ def found(kernel: Any, key: Tuple[str, str], worlds: List[Any], note: str = "") 
 
 
 # ---------------------------------------------------------------------- the season
-def _hops_from(kernel: Any, origin: int, reach: int) -> Dict[int, int]:
-    dist, frontier = {origin: 0}, [origin]
-    while frontier:
-        nxt = []
-        for sid in frontier:
-            if dist[sid] >= reach:
-                continue
-            for w in kernel.sectors[sid].warps:
-                if w in kernel.sectors and w not in dist:
-                    dist[w] = dist[sid] + 1
-                    nxt.append(w)
-        frontier = nxt
-    return dist
-
-
 def _claim(kernel: Any) -> None:
     """Every system goes to the realm with the strongest influence there - a realm's own worlds' systems at any
     strength, others only where its influence reaches CLAIM_MIN_INFLUENCE."""
@@ -149,7 +135,7 @@ def _claim(kernel: Any) -> None:
             if w is None or w.population <= 0:
                 continue
             home.setdefault(w.sector_id, set()).add(rid)
-            for sid, hops in _hops_from(kernel, w.sector_id, CLAIM_REACH).items():
+            for sid, hops in topology.hops(kernel, w.sector_id, CLAIM_REACH).items():
                 sec = kernel.sectors[sid]
                 if getattr(sec, "kind", "") != "SYSTEM" or fm.owner_of(sid) in ("IMPERIUM", "ZEALOT") \
                         or sec.security.value == "FEDERATION":
@@ -204,7 +190,7 @@ def quarter(kernel: Any, genesis: bool = False) -> List[str]:
         seat = capital(kernel, realm)
         if seat is None or realm["kind"] != "civ":
             continue                                   # a captain's colonies answer to their owner
-        dist = _hops_from(kernel, seat.sector_id, 12)
+        dist = topology.hops(kernel, seat.sector_id, 12)
         for pid in list(realm["worlds"]):
             w = kernel.get_planet(pid)
             if w is None or w.id == seat.id:
@@ -251,7 +237,7 @@ def genesis(kernel: Any) -> None:
         if seat is None:
             continue
         charter = []
-        for sid in sorted(_hops_from(kernel, seat.sector_id, CHARTER_REACH)):
+        for sid in sorted(topology.hops(kernel, seat.sector_id, CHARTER_REACH)):
             sec = kernel.sectors[sid]
             if getattr(sec, "kind", "") != "SYSTEM" or fm.owner_of(sid) in ("IMPERIUM", "ZEALOT") \
                     or sec.security.value == "FEDERATION":

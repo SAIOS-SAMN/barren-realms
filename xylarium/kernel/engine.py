@@ -2902,21 +2902,9 @@ class GameKernel:
         return fibres_mod.geodesic(self, start, goal)
 
     def find_path_hops(self, start: int, goal: int) -> List[int]:
-        """Breadth-first search for the fewest-jumps warp trajectory (ignores costs)."""
-        if start == goal:
-            return [start]
-        visited = {start}
-        queue = deque([[start]])
-        while queue:
-            path = queue.popleft()
-            node = path[-1]
-            for neighbor in self.sectors[node].warps:
-                if neighbor == goal:
-                    return path + [neighbor]
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    queue.append(path + [neighbor])
-        return []
+        """The fewest-jumps warp trajectory (ignores costs)."""
+        from xylarium.kernel import topology
+        return topology.path(self, start, goal)
 
     def get_player_view(self, player_id: str) -> Dict[str, Any]:
         """Returns clean data snapshot for client rendering."""

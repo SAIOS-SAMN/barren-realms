@@ -104,25 +104,9 @@ class ColonyManager:
         if cache is None or kernel.cycle_count - cache.get("_built", -10 ** 9) > 500:
             cache = kernel._contractor_cache = {"_built": kernel.cycle_count}
         if planet.id not in cache:
-            found = None
-            dist, frontier = {planet.sector_id: 0}, [planet.sector_id]
-            while frontier and found is None:
-                for sid in frontier:
-                    port = kernel.sectors[sid].port
-                    if port is not None and port.currency == planet.currency:
-                        found = sid
-                        break
-                if found is not None:
-                    break
-                nxt = []
-                for sid in frontier:
-                    if dist[sid] >= 3:
-                        continue
-                    for w in kernel.sectors[sid].warps:
-                        if w in kernel.sectors and w not in dist:
-                            dist[w] = dist[sid] + 1
-                            nxt.append(w)
-                frontier = nxt
+            from xylarium.kernel import topology
+            found = topology.nearest(kernel, planet.sector_id, 3,
+                                     lambda sec: sec.port is not None and sec.port.currency == planet.currency)
             cache[planet.id] = found
         sid = cache[planet.id]
         return kernel.sectors[sid].port if sid is not None else None

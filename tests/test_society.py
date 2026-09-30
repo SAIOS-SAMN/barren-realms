@@ -6,7 +6,7 @@ each conserving money and matter.
 import random
 import unittest
 
-from xylarium.kernel import biosphere, fertility, luxury, matter, propulsion, tourism
+from xylarium.kernel import biosphere, fertility, luxury, matter, propulsion, topology, tourism
 from xylarium.kernel.economy import EconomyManager
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.ledger import money_supply
@@ -181,7 +181,7 @@ class TestTourism(unittest.TestCase):
         self.origin = next(p for p in self.sol.planets if p.population > 0)
         # a resort a few jumps away
         from xylarium.kernel.surface import SurfaceManager, DistrictType
-        reach = tourism._hops(self.k, 1, 3)
+        reach = topology.hops(self.k, 1, 3)
         self.resort = next(p for sid in sorted(reach, key=reach.get) for p in self.k.sectors[sid].planets
                            if reach[sid] >= 1)
         grid = SurfaceManager.ensure_surface_grid(self.resort)

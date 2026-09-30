@@ -258,17 +258,8 @@ def habitability(metabolism: str, planet_type: str) -> float:
 
 
 def warp_distances(sectors: Dict[int, Sector], origin: int = 1) -> Dict[int, int]:
-    dist = {origin: 0}
-    frontier = [origin]
-    while frontier:
-        nxt = []
-        for cur in frontier:
-            for w in sectors[cur].warps:
-                if w in sectors and w not in dist:
-                    dist[w] = dist[cur] + 1
-                    nxt.append(w)
-        frontier = nxt
-    return dist
+    from xylarium.kernel import topology
+    return topology.hops(sectors, origin, 10 ** 9)
 
 
 def _deposits_for(planet_type: str, rng: random.Random) -> Dict[str, int]:
