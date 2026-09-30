@@ -47,6 +47,7 @@ class StatePersistence:
                 "credit_stats": getattr(kernel, "credit_stats", None),
                 "geology": getattr(kernel, "geology", None),
                 "propulsion_stats": getattr(kernel, "propulsion_stats", None),
+                "docket": getattr(kernel, "docket", None),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -186,6 +187,8 @@ class StatePersistence:
                 kernel.geology = data["geology"]
             if data.get("propulsion_stats"):
                 kernel.propulsion_stats = data["propulsion_stats"]
+            if data.get("docket"):
+                kernel.docket = data["docket"]
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))

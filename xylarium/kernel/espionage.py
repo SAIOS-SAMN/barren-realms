@@ -70,6 +70,8 @@ class EspionageManager:
             )
 
         captain.credits -= total_cost
+        from xylarium.kernel import ledger
+        ledger.pay_service(total_cost, sector.id if sector is not None else None)   # the agency's fixers are paid
         captain.operatives += amount
         msg = f"Contracted {amount} intelligence operatives for {total_cost:,} Cr. (Shipboard Agency: {captain.operatives} agents)"
 
@@ -342,6 +344,11 @@ class EspionageManager:
                         from xylarium.kernel.fx import credit
                         credit(attacker, planet.currency, siphoned)
                         attacker.score += max(10, siphoned // 50)
+                        if kernel is not None:
+                            from xylarium.kernel import law, fx as _fx
+                            harm = int(_fx.ACTIVE_FX.to_sol_value(planet.currency, siphoned)) if (_fx.ACTIVE_FX and planet.currency != "SOL") else siphoned
+                            law.file(kernel, "theft", attacker, kernel.sectors.get(planet.sector_id), harm,
+                                     {"kind": "planet", "id": planet.id})
                         data["siphoned_credits"] = siphoned
                         logs.append(f">> VAULT BREACH: Successfully siphoned {siphoned:,} Credits from {planet.name}'s vaults into your offshore accounts!")
                     else:
@@ -353,6 +360,10 @@ class EspionageManager:
                         target_captain.credits -= siphoned
                         attacker.credits += siphoned
                         attacker.score += max(10, siphoned // 50)
+                        if kernel is not None:
+                            from xylarium.kernel import law
+                            law.file(kernel, "theft", attacker, kernel.sectors.get(attacker.sector_id), siphoned,
+                                     {"kind": "captain", "id": target_captain.id})
                         data["siphoned_credits"] = siphoned
                         logs.append(f">> CIPHER SIPHON: Embezzled {siphoned:,} Credits from {target_captain.name}'s encrypted account!")
                     else:

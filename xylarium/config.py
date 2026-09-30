@@ -1215,6 +1215,8 @@ ALIGNMENT_DEEDS = {            # Signed shift per deed, applied with diminishing
     "heresy_purge": -0.03,
     "chronicle_written": 0.002,
     "stewardship": 0.01,       # a people that chooses to live within its world's means (per quarter held)
+    "convicted": -0.03,        # found guilty by a court
+    "restitution": 0.015,      # a judgment paid in full
 }
 ALIGNMENT_SYNTROPIC_DRIFT = 0.0015     # Per fiscal quarter toward the Light for captains with no dark deed that quarter
 ALIGNMENT_RELAXATION = 0.08            # Per quarter, alignment relaxes this share of the way back to character...

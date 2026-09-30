@@ -563,10 +563,7 @@ class EconomyManager:
         cls.ensure_port_inventory(port)
         if not port.base_buys:
             port.base_buys = dict(port.buys)
-        needs = set()
-        for comm, cfg in COMMODITY_CONFIG.items():
-            if port.sells.get(comm) and cfg.get("recipe"):
-                needs.update(cfg["recipe"])
+        needs = cls._needs(port)
         for comm, cfg in COMMODITY_CONFIG.items():
             if cfg.get("category") == "WASTE":
                 continue
@@ -593,6 +590,22 @@ class EconomyManager:
                     port.stock[comm] = new_s
                     matter.sink("regional_industry", comm, curr_s - new_s)
         cls._recycle_slag(port)
+
+    @staticmethod
+    def _needs(port: Port) -> set:
+        """The inputs of everything a port manufactures (cached: what a port sells changes only by charter)."""
+        key = tuple(sorted(c for c, v in port.sells.items() if v))
+        cache = getattr(port, "_needs_cache", None)
+        if cache is not None and cache[0] == key:
+            return cache[1]
+        needs = set()
+        for comm in key:
+            needs.update(COMMODITY_CONFIG.get(comm, {}).get("recipe", {}) or {})
+        try:
+            port._needs_cache = (key, needs)
+        except AttributeError:
+            pass
+        return needs
 
     @staticmethod
     def _fabricate(port: Port, product: str, recipe: Dict[str, int], want: int) -> int:

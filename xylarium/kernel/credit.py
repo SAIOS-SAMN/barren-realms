@@ -137,6 +137,8 @@ def _margin_check(kernel: Any, cap: Any, comp: Any) -> Optional[str]:
                          f"{cap.name} borrowed against {ticker} and the market turned. The margin desk sold them out; "
                          f"{owed:,} Cr of debt went unpaid.", tags=["ruin", "speculation"],
                          alignment=getattr(cap, "cosmic_alignment", None))
+        from xylarium.kernel import law
+        law.file(kernel, "default", cap, kernel.sectors.get(cap.sector_id), owed, {"kind": "company", "id": ticker})
         return f"[CREDIT] {cap.name} defaulted on {owed:,} Cr of {ticker} margin debt."
     cap.margin_loans[ticker] = owed
     if owed <= 0:

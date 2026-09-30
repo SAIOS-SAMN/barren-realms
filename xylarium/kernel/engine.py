@@ -111,6 +111,7 @@ from xylarium.kernel import credit as credit_mod
 from xylarium.kernel import matter as matter_mod
 from xylarium.kernel import geology as geology_mod
 from xylarium.kernel import propulsion as propulsion_mod
+from xylarium.kernel import law as law_mod
 
 
 class GameKernel:
@@ -954,6 +955,10 @@ class GameKernel:
                 action=ActionType.TRADE,
                 message=f"No trade port exists in Sector {sector.id}.",
             )
+        if law_mod.frozen_here(self, captain, sector):
+            return ActionResult(success=False, action=ActionType.TRADE,
+                                message="ASSETS FROZEN: an unpaid judgment of this jurisdiction's court bars you "
+                                        "from its markets until it is settled.")
 
         trade_type = (kwargs.get("type") or kwargs.get("trade_type") or "BUY").upper()
         commodity = kwargs.get("commodity", "").upper()
@@ -1902,6 +1907,7 @@ class GameKernel:
                 pre["target_wanted"] = target.bounty > 0 or getattr(target.personality, "value", "") in ("pirate", "crusader")
                 pre["target_hull"] = target.ship.ship_type
                 pre["target_sector"] = target.sector_id
+                pre["target_credits"] = target.credits
         elif action == ActionType.ATTACK_PLANET:
             planet = self._find_planet(sector, kwargs.get("planet_id"))
             if planet is not None:
@@ -1956,6 +1962,10 @@ class GameKernel:
                 deed(self, captain, "piracy")
                 if any("[HOSTILE ACT]" in l for l in (result.logs or [])):
                     deed(self, captain, "hostile_act")
+                # Piracy is a case at law where it happened: the harm is what the victim lost
+                victim = pre["target"]
+                harm = max(500, pre.get("target_credits", 0) - victim.credits)
+                law_mod.file(self, "piracy", captain, sector, harm, {"kind": "captain", "id": victim.id})
             target = pre["target"]
             if target.ship.ship_type != pre.get("target_hull") or target.sector_id != pre.get("target_sector"):
                 if target.sector_id == 1 and pre.get("target_sector") != 1:
@@ -2679,6 +2689,9 @@ class GameKernel:
                 self.action_logs.append(log)
             # The worlds' own season: tectonic renewal, solar-wind He-3, volatile escape and outgassing, decay
             geology_mod.quarter(self)
+            # The courts sit: judgments, garnishment, warrants and freezes
+            for log in law_mod.quarter(self):
+                self.action_logs.append(log)
             # The fibres close their season: lane development, economies of scale, fibre distances
             fibres_mod.season(self)
             # Newly charted systems (ghost sectors, frontier clusters) get exact physics

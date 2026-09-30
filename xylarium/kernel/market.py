@@ -1602,6 +1602,12 @@ class MarketManager:
         looted_treasury = company.treasury
         captain.credits += looted_treasury
         company.treasury = 0
+        # The minority shareholders' part of that cash was theirs: embezzlement, where a court is watching
+        minority = int(looted_treasury * max(0.0, 1.0 - ownership_pct / 100.0))
+        if minority > 0 and self._kernel_ref is not None:
+            from xylarium.kernel import law
+            law.file(self._kernel_ref, "embezzlement", captain,
+                     self._kernel_ref.sectors.get(captain.sector_id), minority)
 
         # Raider seizes sovereign ownership of target company planetary HQ and outposts
         seized_planets = []

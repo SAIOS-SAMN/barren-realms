@@ -1051,6 +1051,9 @@ class CartographyManager:
                     traveler.credits -= fee
                     if owner:
                         owner.credits += fee
+                    else:
+                        from xylarium.kernel import ledger as _ledger
+                        _ledger.pay_service(fee, institution="ownerless_tolls")   # a dead owner's gate still collects
                     gate.total_revenue += fee
                     gate.total_transits += 1
 
@@ -1200,6 +1203,9 @@ class CartographyManager:
             broker_port.treasury -= local_payout
             fx_mod.credit(captain, broker_port.currency, local_payout)
             payout = FORGED_CHIT_BROKER_VALUE
+            if kernel is not None:
+                from xylarium.kernel import law
+                law.file(kernel, "fraud", captain, broker_sec, payout, {"kind": "port", "id": broker_sec.id})
             log_msg = f"[COUNTERFEIT SALE] Sold forged starmap chit to shady port broker for {payout:,} Cr (Net: +{payout - cost:,} Cr)!"
             if kernel and hasattr(kernel, "action_logs"):
                 kernel.action_logs.append(log_msg)

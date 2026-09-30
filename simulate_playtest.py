@@ -200,6 +200,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "credit": dict(getattr(kernel, "credit_stats", {}) or {}),
         "geology": __import__("xylarium.kernel.geology", fromlist=["horizons"]).horizons(kernel),
         "propulsion": dict(getattr(kernel, "propulsion_stats", {}) or {}),
+        "law": __import__("xylarium.kernel.law", fromlist=["summary"]).summary(kernel),
         "industry": {"fabricated": {c: v for (k, c), v in kernel.matter.sources.items() if k == "fabrication"},
                      "recycled_ore": kernel.matter.sources.get(("recycling", "ORE"), 0),
                      "sector_gas": sum(getattr(s, "gas", 0) for s in kernel.sectors.values())},
@@ -1343,7 +1344,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 
 # Gates whose names start with these are laws (invariants); all others are observations.
 LAWS = (
-    "money conserved", "matter conserved", "monetary churn", "quantity equation holds", "clearing union conserves", "settlement chain seals",
+    "money conserved", "matter conserved", "monetary churn", "docket balances", "quantity equation holds", "clearing union conserves", "settlement chain seals",
     "central banks solvent", "orbits never cross", "throughput per sector", "invariant violations",
     "exceptions", "deterministic",
 )
@@ -1518,6 +1519,16 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
              f"{bk['chain_verify'] or 'intact'}", bk["chain_blocks"] > 0 and not bk["chain_verify"])
         insolvent = [cur for cur, b in bk["banks"].items() if b["reserves"] < 0]
         gate("central banks solvent (reserves >= 0)", "none negative", insolvent or "all solvent", not insolvent)
+        if c1.get("law"):
+            lw = c1["law"]
+            balance = lw["judged_sol"] - (lw["recovered_sol"] + lw["outstanding_sol"] + lw["written_off_sol"])
+            gate("docket balances (judged = recovered + outstanding + written off)", "== 0", f"{balance:+,}", balance == 0)
+            filed = max(1, lw["filed"])
+            gate("crimes brought to court (detected share)", "0.2 .. 0.9", f"{lw['detected'] / filed:.0%} of {lw['filed']} "
+                 f"({lw['by_kind']})", 0.2 <= lw["detected"] / filed <= 0.9 if lw["filed"] else None)
+            if lw["judged_sol"]:
+                gate("judgments recovered (share)", ">= 0.5", f"{lw['recovered_sol'] / lw['judged_sol']:.0%}",
+                     lw["recovered_sol"] / lw["judged_sol"] >= 0.5)
         if "physics" in c1:
             ph = c1["physics"]
             gate("orbits never cross (spacing law, every system)", "0 violations",
@@ -1691,6 +1702,11 @@ def print_report(r: Dict[str, Any]) -> None:
             g = ce["geology"]
             print(f"  geology: mined crusts {g['crust_remaining_mean']} remaining on average (lowest {g['crust_remaining_min']}), "
                   f"renewal / extraction {g['renewal_to_extraction']}, {g['stats']}")
+        if ce.get("law"):
+            lw = ce["law"]
+            print(f"  law: {lw['filed']} offences {lw['by_kind']}, {lw['detected']} brought to court, {lw['unsolved']} unsolved "
+                  f"({lw['haven']} in havens), {lw['convicted']} convicted; judged {lw['judged_sol']:,}, recovered "
+                  f"{lw['recovered_sol']:,}, outstanding {lw['outstanding_sol']:,}; {lw['warrants']} warrants, {lw['freezes']} freezes")
         if ce.get("propulsion"):
             pr, ind = ce["propulsion"], ce.get("industry", {})
             print(f"  propulsion: {pr.get('burned', 0):,} reaction mass burned, {pr.get('bunkered', 0):,} bunkered at ports, "

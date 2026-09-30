@@ -155,12 +155,21 @@ def make_body(st: Dict[str, F], q: F, rng: random.Random, giant: Optional[bool] 
 
 
 def body(planet: Any) -> Dict[str, Any]:
+    """The planet's body with exact values parsed (cached until the stored body changes)."""
     b = getattr(planet, "body", None) or {}
+    snap = tuple(b.items())
+    cache = getattr(planet, "_body_cache", None)
+    if cache is not None and cache[0] is b and cache[1] == snap:
+        return dict(cache[2])
     out = dict(b)
     for k in ("q", "radius", "mass", "day", "phase0"):
         if k in out:
             out[k] = _fr(out[k])
-    return out
+    try:
+        planet._body_cache = (b, snap, out)
+    except AttributeError:
+        pass
+    return dict(out)
 
 
 def apply_derived(planet: Any, st: Dict[str, F]) -> None:
