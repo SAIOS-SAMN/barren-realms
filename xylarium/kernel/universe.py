@@ -5,12 +5,28 @@ ports, planetary bodies, and security classification.
 """
 
 import random
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from xylarium.config import (
+    PLANET_TYPES,
+    HABITABILITY,
+    CLADE_HOMEWORLD,
+    METABOLISM_HOMEWORLD,
+    PLANET_TYPE_DEPOSITS,
+    SYSTEM_PORT_CHANCE,
+    SYSTEM_PLANETS,
+    STAR_TYPES,
+    BELT_CHANCE,
+    BELT_TYPES,
+    BELT_RESERVE_RANGE,
+    PRICE_LEVEL,
+    PORT_START_TREASURY,
+    STARDOCK_START_TREASURY,
     TOTAL_SECTORS,
     FEDERATION_SECTOR_START,
     FEDERATION_SECTOR_END,
     BORDER_SECTOR_END,
+    ORBIT_MIN_RADIUS_AU,
+    ORBIT_MAX_RADIUS_AU,
 )
 from xylarium.kernel.models import (
     Sector,
@@ -20,6 +36,8 @@ from xylarium.kernel.models import (
     PortClass,
     CommodityType,
 )
+from xylarium.kernel.civilization import FOUNDING_POLITIES, CivilizationIntelligenceEngine
+from xylarium.kernel.elements import PeriodicTable
 
 
 PORT_NAMES = [
@@ -217,31 +235,203 @@ def generate_universe(total_sectors: int = TOTAL_SECTORS, seed: int = 42) -> Dic
     for s_id in sectors:
         sectors[s_id].warps = sorted(list(set(sectors[s_id].warps)))
 
-    # 3. Distribute Ports (~65% of sectors)
-    # Sector 1 ALWAYS has Stardock
-    sectors[1].port = build_port(1, rng)
-    for s_id in range(2, total_sectors + 1):
-        if rng.random() < 0.65:
-            sectors[s_id].port = build_port(s_id, rng)
-
-    # 4. Distribute Planets (BRE / SRE style colonization targets)
-    planet_sectors = rng.sample(range(2, total_sectors + 1), k=len(PLANET_NAMES))
-    for idx, s_id in enumerate(planet_sectors):
-        p_name = PLANET_NAMES[idx]
-        planet = Planet(
-            id=f"planet_{s_id}",
-            sector_id=s_id,
-            name=p_name,
-            owner_id=None,
-            population=rng.randint(300, 1500),
-            shields=rng.randint(50, 150),
-            max_shields=200,
-            fighters=rng.randint(10, 40),
-            citadel_level=0,
-            treasury=rng.randint(200, 1200),
-            ore_silo=rng.randint(20, 100),
-            organics_silo=rng.randint(20, 100),
-        )
-        sectors[s_id].planets.append(planet)
-
+    furnish_sectors(sectors, list(range(1, total_sectors + 1)), rng, seed, found_polities=True)
     return sectors
+
+
+# ---------------------------------------------------------------------------
+# Star systems & null space
+# ---------------------------------------------------------------------------
+
+PLANET_LETTERS = ["b", "c", "d", "e", "f"]
+
+
+def homeworld_type(polity: Dict[str, Any]) -> str:
+    """Species arise on worlds suited to their biology: clade first, then metabolism."""
+    return CLADE_HOMEWORLD.get(polity.get("clade", ""), METABOLISM_HOMEWORLD.get(polity.get("metabolism", "biotic"), "TERRESTRIAL"))
+
+
+def habitability(metabolism: str, planet_type: str) -> float:
+    return HABITABILITY.get(metabolism, HABITABILITY["biotic"]).get(planet_type, 0.0)
+
+
+def warp_distances(sectors: Dict[int, Sector], origin: int = 1) -> Dict[int, int]:
+    dist = {origin: 0}
+    frontier = [origin]
+    while frontier:
+        nxt = []
+        for cur in frontier:
+            for w in sectors[cur].warps:
+                if w in sectors and w not in dist:
+                    dist[w] = dist[cur] + 1
+                    nxt.append(w)
+        frontier = nxt
+    return dist
+
+
+def _deposits_for(planet_type: str, rng: random.Random) -> Dict[str, int]:
+    return {e: rng.randint(60, 240) for e in PLANET_TYPE_DEPOSITS.get(planet_type, ["Fe", "Si"])}
+
+
+def make_belt(sector_id: int, idx: int, rng: random.Random) -> Dict[str, Any]:
+    belt_type = rng.choice(list(BELT_TYPES))
+    reserve = rng.randint(*BELT_RESERVE_RANGE)
+    return {
+        "id": f"BELT-{sector_id:03d}-{idx}",
+        "type": belt_type,
+        "composition": dict(BELT_TYPES[belt_type]),
+        "reserve": reserve,
+        "max_reserve": reserve,
+    }
+
+
+def furnish_sectors(
+    sectors: Dict[int, Sector],
+    sector_ids: List[int],
+    rng: random.Random,
+    seed: int,
+    found_polities: bool = False,
+    force_system: Optional[int] = 1,
+) -> None:
+    """
+    Lays out star systems separated by null space among ``sector_ids``.
+    Systems form an independent set of the warp graph (no two systems adjacent), so
+    every jump between systems crosses null space. Systems host a star, usually a
+    starport, and 1-4 planets of varied types; null sectors may hold asteroid belts.
+    Founding polities arise on worlds of their homeworld type; every other world starts
+    uninhabited and settleable.
+    """
+    from xylarium.kernel.fx import currency_for_security
+
+    dist = warp_distances(sectors, 1)
+    order = list(sector_ids)
+    rng.shuffle(order)
+    systems: List[int] = []
+    chosen = set()
+    if force_system in sector_ids:
+        order.remove(force_system)
+        order.insert(0, force_system)
+    for s_id in order:
+        if any(w in chosen for w in sectors[s_id].warps):
+            continue
+        chosen.add(s_id)
+        systems.append(s_id)
+
+    for s_id in sector_ids:
+        sec = sectors[s_id]
+        currency = currency_for_security(sec.security)
+        if s_id in chosen:
+            sec.kind = "SYSTEM"
+            sec.star_type = "G-class yellow dwarf (Sol)" if s_id == 1 else rng.choice(STAR_TYPES)
+            if s_id == 1 or rng.random() < SYSTEM_PORT_CHANCE:
+                sec.port = build_port(s_id, rng)
+                sec.port.currency = currency
+                sec.port.remoteness = dist.get(s_id, 0)
+                base = STARDOCK_START_TREASURY if s_id == 1 else PORT_START_TREASURY
+                sec.port.treasury = int(base * PRICE_LEVEL.get(currency, 1.0))
+            if s_id == 1:
+                _found_sol_core_worlds(sec)
+            if s_id != 1:
+                for i in range(rng.randint(*SYSTEM_PLANETS)):
+                    ptype = rng.choice(PLANET_TYPES)
+                    orbit_r = round(rng.uniform(ORBIT_MIN_RADIUS_AU, ORBIT_MAX_RADIUS_AU), 2)
+                    sec.planets.append(Planet(
+                        id=f"planet_{s_id}" if i == 0 else f"planet_{s_id}_{PLANET_LETTERS[i]}",
+                        sector_id=s_id,
+                        name=f"{sec.name.split()[0]} {s_id:03d}{PLANET_LETTERS[i]}",
+                        owner_id=None,
+                        population=0,
+                        shields=0,
+                        max_shields=200,
+                        fighters=0,
+                        citadel_level=0,
+                        treasury=0,
+                        ore_silo=0,
+                        organics_silo=0,
+                        morale=80,
+                        element_deposits=_deposits_for(ptype, rng),
+                        orbital_radius=orbit_r,
+                        orbital_period=max(15, min(240, int(30 * (orbit_r ** 1.5)))),
+                        orbital_angle=round(rng.uniform(0.0, 360.0), 2),
+                        garrison_troops=0,
+                        planet_type=ptype,
+                        currency=currency,
+                    ))
+        else:
+            sec.kind = "NULL"
+            sec.port = None
+            sec.planets = []
+            if rng.random() < BELT_CHANCE:
+                sec.belts = [make_belt(s_id, 1, rng)]
+                if rng.random() < 0.25:
+                    sec.belts.append(make_belt(s_id, 2, rng))
+
+    # Ancient precursor ruins beneath a share of today's uninhabited worlds
+    from xylarium.kernel.archaeology import ArchaeologyManager
+    ArchaeologyManager.seed_precursor_ruins({s: sectors[s] for s in sector_ids}, rng)
+
+    # Non-spacefaring locals on a share of the worlds whose type suits some biology
+    from xylarium.kernel.natives import NativeManager
+    NativeManager.seed({s: sectors[s] for s in sector_ids}, rng)
+
+    if not found_polities:
+        return
+
+    # Species genesis: each founding polity arises on a world of its homeworld type
+    candidates = [s for s in systems if s != 1 and sectors[s].planets]
+    rng.shuffle(candidates)
+    for idx, polity in enumerate(FOUNDING_POLITIES):
+        if idx >= len(candidates) or idx >= len(PLANET_NAMES):
+            break
+        sec = sectors[candidates[idx]]
+        home = sec.planets[0]
+        home.planet_type = homeworld_type(polity)
+        civ = CivilizationIntelligenceEngine.create_civilization(polity)
+        deposits = _deposits_for(home.planet_type, rng)
+        reserves: Dict[str, int] = {}
+        for elem_id in civ.discovered_elements:
+            deposits.setdefault(elem_id, rng.randint(120, 300))
+            reserves[elem_id] = rng.randint(15, 35)
+        for me in PeriodicTable.get_elements_for_metabolism(civ.metabolism):
+            deposits.setdefault(me.element_id, rng.randint(80, 200))
+        home.name = PLANET_NAMES[idx]
+        home.civilization = civ
+        home.population = rng.randint(300, 1500)
+        home.shields = rng.randint(50, 150)
+        home.fighters = rng.randint(10, 40)
+        home.treasury = int(rng.randint(200, 1200) * PRICE_LEVEL.get(home.currency, 1.0))
+        home.ore_silo = rng.randint(20, 100)
+        home.organics_silo = rng.randint(20, 100)
+        home.morale = 100
+        home.element_deposits = deposits
+        home.element_reserves = reserves
+        home.garrison_troops = rng.randint(15, 40)
+        home.natives = None
+
+
+def _found_sol_core_worlds(sec: Sector) -> None:
+    """Terra and Luna: the Federation's populated core, taxed in SOL and not open to annexation."""
+    from xylarium.config import TERRAN_POLITY, SOL_CORE_WORLDS
+    for i, spec in enumerate(SOL_CORE_WORLDS):
+        civ = CivilizationIntelligenceEngine.create_civilization(dict(TERRAN_POLITY))
+        sec.planets.append(Planet(
+            id="planet_1" if i == 0 else f"planet_1_{PLANET_LETTERS[i]}",
+            sector_id=1,
+            name=spec["name"],
+            owner_id=None,
+            population=spec["population"],
+            shields=3000,
+            max_shields=3000,
+            fighters=1000,
+            citadel_level=spec["citadel"],
+            treasury=50000,
+            ore_silo=2000,
+            organics_silo=4000,
+            morale=100,
+            civilization=civ,
+            element_deposits=_deposits_for(spec["type"], random.Random(1 + i)),
+            element_reserves={"H2O": 500, "Fe": 300},
+            planet_type=spec["type"],
+            currency="SOL",
+            garrison_troops=5000,
+        ))

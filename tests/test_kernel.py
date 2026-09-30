@@ -10,6 +10,7 @@ Verifies all 5 core requirements from the blueprint:
 """
 
 import unittest
+from xylarium.config import COLONY_KIT_CREDITS, COLONY_KIT_EQUIPMENT, CITADEL_UPKEEP
 import os
 import tempfile
 from xylarium.config import TOTAL_SECTORS
@@ -148,11 +149,17 @@ class TestDynamicEconomy(unittest.TestCase):
         # Stardock sells everything
         self.player.sector_id = 1
         self.player.ship.cargo.capacity = 30
-        self.player.ship.cargo.ore = 25  # Only 5 free slots
+        self.player.ship.cargo.organics = 0     # no starter rations: exact hold arithmetic below
+        self.player.ship.cargo.equipment = 25  # 25 equipment consumes 25 holds, leaving 5 free holds
 
-        res = self.kernel.dispatch("trader_joe", ActionType.TRADE, type="BUY", commodity="ORE", amount=10)
+        # Attempting to buy 10 equipment requires 10 holds, exceeding the 5 available
+        res = self.kernel.dispatch("trader_joe", ActionType.TRADE, type="BUY", commodity="EQUIPMENT", amount=10)
         self.assertFalse(res.success)
         self.assertIn("Insufficient cargo holds", res.message)
+
+        # Buying within capacity (e.g., 5 equipment) succeeds
+        res_ok = self.kernel.dispatch("trader_joe", ActionType.TRADE, type="BUY", commodity="EQUIPMENT", amount=5)
+        self.assertTrue(res_ok.success)
 
 
 class TestPlanetaryColonization(unittest.TestCase):
@@ -168,7 +175,7 @@ class TestPlanetaryColonization(unittest.TestCase):
         self.planet_sector = None
         for s in self.kernel.sectors.values():
             for p in s.planets:
-                if p.owner_id is None:
+                if p.owner_id is None and getattr(p.civilization, "name", "") != "Terran Federation":
                     self.planet = p
                     self.planet_sector = s
                     break
@@ -178,11 +185,42 @@ class TestPlanetaryColonization(unittest.TestCase):
         self.assertIsNotNone(self.planet)
         self.player.sector_id = self.planet_sector.id
 
+    def _frontier_world(self):
+        for s in self.kernel.sectors.values():
+            others_present = any(p.owner_id or p.population > 0 for p in s.planets if p.population > 0 or p.owner_id)
+            for p in s.planets:
+                if (p.owner_id is None and p.population == 0 and not others_present
+                        and p.planet_type in ("TERRESTRIAL", "OCEANIC")):  # habitable for biotic settlers
+                    return s, p
+        self.fail("Expected an unsettled frontier world")
+
     def test_claim_unowned_planet(self):
-        """Player claims an unclaimed planet."""
-        res = self.kernel.dispatch("emperor", ActionType.PLANET_CLAIM, planet_id=self.planet.id)
-        self.assertTrue(res.success)
-        self.assertEqual(self.planet.owner_id, "emperor")
+        """An outfitted rookie founds a colony on an unsettled frontier world; the colony kit is consumed."""
+        sector, frontier = self._frontier_world()
+        self.player.sector_id = sector.id
+        self.player.credits = 10000
+        self.player.ship.cargo.equipment = 15
+        res = self.kernel.dispatch("emperor", ActionType.PLANET_CLAIM, planet_id=frontier.id)
+        self.assertTrue(res.success, res.message)
+        self.assertEqual(frontier.owner_id, "emperor")
+        # (crew wages for the turn are paid ashore when the ship is at a port)
+        wages = self.kernel.crew_wage(self.player) if self.kernel.sectors[sector.id].port else 0
+        self.assertEqual(self.player.credits, 10000 - COLONY_KIT_CREDITS - wages)
+        self.assertEqual(self.player.ship.cargo.equipment, 15 - COLONY_KIT_EQUIPMENT)
+        self.assertGreater(frontier.population, 0)
+
+    def test_rookie_cannot_annex_indigenous_world(self):
+        """Indigenous-inhabited worlds need Tier 3 treaty standing (or invasion), not a claim."""
+        self.player.credits = 10000
+        self.player.ship.cargo.equipment = 15
+        indigenous = next(p for s in self.kernel.sectors.values() for p in s.planets
+                          if p.owner_id is None and p.population > 0 and p.civilization is not None
+                          and p.civilization.name != "Terran Federation")
+        self.player.sector_id = indigenous.sector_id
+        res = self.kernel.dispatch("emperor", ActionType.PLANET_CLAIM, planet_id=indigenous.id)
+        self.assertFalse(res.success)
+        self.assertIn("indigenous civilization", res.message)
+        self.assertIsNone(indigenous.owner_id)
 
     def test_tax_collection(self):
         """Collecting taxes empties the treasury and credits the player."""
@@ -192,8 +230,11 @@ class TestPlanetaryColonization(unittest.TestCase):
 
         res = self.kernel.dispatch("emperor", ActionType.PLANET_TAX, planet_id=self.planet.id)
         self.assertTrue(res.success)
-        self.assertEqual(self.planet.treasury, 0)
-        self.assertEqual(self.player.credits, initial_cr + 2500)
+        # Sovereign levy: the governor draws 20% of the vault; the rest runs the colony
+        from xylarium.kernel.fx import balance
+        self.assertEqual(balance(self.player, self.planet.currency) - (initial_cr if self.planet.currency == "SOL" else 0), 500)
+        # ...and only once per fiscal quarter
+        self.assertFalse(self.kernel.dispatch("emperor", ActionType.PLANET_TAX, planet_id=self.planet.id).success)
 
     def test_invest_population_growth(self):
         """Investing credits increases planetary population."""
@@ -230,11 +271,16 @@ class TestPlanetaryColonization(unittest.TestCase):
     def test_colony_turn_tick_yield(self):
         """World simulation ticks produce taxes and resources."""
         self.planet.owner_id = "emperor"
-        self.planet.treasury = 0
+        self.planet.treasury = 1000   # Citadel upkeep must be funded for taxes to accrue
         self.planet.population = 2000
 
         yield_data = ColonyManager.tick_colony(self.planet)
-        self.assertGreater(self.planet.treasury, 0)
+        self.assertTrue(yield_data["upkeep_paid"])
+        self.assertGreater(yield_data["tax_yield"], 0)
+        # Vault moves by the net budget: gross tax minus public services, after citadel upkeep
+        upkeep = CITADEL_UPKEEP[self.planet.citadel_level]["credits"]
+        self.assertEqual(self.planet.treasury,
+                         1000 - upkeep + yield_data["tax_yield"] - yield_data["public_services"])
         self.assertGreater(self.planet.ore_silo, 0)
         self.assertGreater(yield_data["tax_yield"], 0)
 
@@ -353,6 +399,57 @@ class TestTerminalRenderer(unittest.TestCase):
         self.assertIn("SECTOR", sector_output)
         self.assertIn("Wormhole Warps:", sector_output)
         self.assertIn("TRADE PORT", sector_output)
+
+    def test_categorized_port_rendering(self):
+        kernel = GameKernel(seed=42)
+        kernel.register_player("pilot", "Pilot")
+        view = kernel.get_player_view("pilot")
+
+        import re
+        strip_ansi = lambda s: re.sub(r'\x1b\[[0-9;]*m', '', s)
+
+        # Page 0 (Default)
+        sec_output_p0 = TerminalRenderer.render_sector(view, category_page=0)
+        p0_clean = strip_ansi(sec_output_p0)
+        self.assertIn("[1] VOLATILES & GASES:", p0_clean)
+        self.assertIn("Hydrogen Fuel", p0_clean)
+        self.assertIn("[2] STRUCTURAL METALS & ALLOYS:", p0_clean)
+        self.assertIn("Raw Iron Ore", p0_clean)
+        self.assertIn("[3] FISSIONABLES & EXOTICS: (Press [N] for Next Category)", p0_clean)
+
+        # Tabular alignment check: ensure bullet, name, mode, price, stock
+        self.assertIn("• Hydrogen Fuel      : BUYS @  8 Cr  (Stock: 850)", p0_clean)
+        self.assertIn("• Raw Iron Ore       : BUYS @ 12 Cr  (Stock: 850)", p0_clean)
+
+        # Ensure no line in the trade port section exceeds 80 columns
+        port_lines = [l for l in p0_clean.split("\n") if "BUYS" in l or "SELLS" in l or "TRADE PORT" in l or "VOLATILES" in l or "METALS" in l or "----" in l]
+        for line in port_lines:
+            self.assertLessEqual(len(line), 80, f"Port line exceeds 80 characters: {line}")
+
+        # Page 1
+        sec_output_p1 = TerminalRenderer.render_sector(view, category_page=1)
+        p1_clean = strip_ansi(sec_output_p1)
+        self.assertIn("[3] FISSIONABLES & EXOTICS:", p1_clean)
+        self.assertIn("Enriched Uranium", p1_clean)
+        self.assertIn("[4] MANUFACTURED COMPONENTS:", p1_clean)
+        self.assertIn("[5] CORE TRI-COMMODITIES: (Press [N] for Next Category)", p1_clean)
+
+        # Page 2
+        sec_output_p2 = TerminalRenderer.render_sector(view, category_page=2)
+        p2_clean = strip_ansi(sec_output_p2)
+        self.assertIn("[5] CORE TRI-COMMODITIES:", p2_clean)
+        self.assertIn("Ore", p2_clean)
+        self.assertIn("[1] VOLATILES & GASES: (Press [N] for Next Category)", p2_clean)
+
+    def test_sector_without_port_rendering(self):
+        kernel = GameKernel(seed=42)
+        kernel.register_player("pilot", "Pilot")
+        # Sector 9 has no trade port
+        kernel.dispatch("pilot", ActionType.MOVE, destination=9)
+        view = kernel.get_player_view("pilot")
+
+        sector_output = TerminalRenderer.render_sector(view)
+        self.assertIn("No trade port in this sector", sector_output)
 
 
 if __name__ == "__main__":

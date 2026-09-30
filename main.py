@@ -44,24 +44,50 @@ def main():
         if kernel:
             print(c_green("Save state loaded successfully."))
 
+    player_id = "player_1"
+    single_player = not (args.demo or args.bridge)
     if not kernel:
         print(f"Generating new deterministic universe (Seed: {args.seed})...")
-        kernel = GameKernel(seed=args.seed)
-        kernel.register_player(player_id="player_1", player_name=args.name)
+        if single_player:
+            # Lineage Genesis: this save is bound to one lineage for its whole life
+            from xylarium.client.cli import lineage_genesis
+            kernel, player_id = lineage_genesis(args.seed, args.name)
+        else:
+            kernel = GameKernel(seed=args.seed)
+            kernel.register_player(player_id=player_id, player_name=args.name)
+    else:
+        player = kernel.get_player(player_id)
+        if not player:
+            human_caps = [c for c in kernel.captains.values() if not c.is_ai]
+            if human_caps:
+                player_id = human_caps[0].id
+                print(f"Resuming campaign as {human_caps[0].name} ({player_id}).")
+            else:
+                kernel.register_player(player_id=player_id, player_name=args.name)
+                print(f"Enrolled new captain {args.name} into the active universe.")
+
+    if single_player and kernel is not None:
+        from xylarium.config import LINEAGE_LEGACY_FILE
+        from xylarium.kernel import lineage as lineage_mod
+        kernel.legacy_file = LINEAGE_LEGACY_FILE
+        if kernel.lineage is None and kernel.get_player(player_id) is not None:
+            # Saves from before lineages: the captain on file becomes the save's lineage
+            kernel.single_lineage = True
+            lineage_mod.found(kernel, kernel.get_player(player_id))
 
     if args.demo:
         print(bold(c_cyan("\n=== RUNNING XYLARIUM DEMO HEADLESS PASS ===")))
-        view = kernel.get_player_view("player_1")
+        view = kernel.get_player_view(player_id)
         print(f"Player: {view['player']['name']} | Sector: {view['sector']['id']} | Credits: {view['player']['credits']}")
         print(f"Warps available: {[w['sector_id'] for w in view['sector']['warps']]}")
         
         # Warp to adjacent sector
         dest = view['sector']['warps'][0]['sector_id']
         print(f"Navigating to Sector {dest}...")
-        res = kernel.dispatch("player_1", ActionType.MOVE, destination=dest)
+        res = kernel.dispatch(player_id, ActionType.MOVE, destination=dest)
         print(f"Result: {res.message}")
 
-        view2 = kernel.get_player_view("player_1")
+        view2 = kernel.get_player_view(player_id)
         print(f"New Sector: {view2['sector']['id']} ({view2['sector']['name']}) - Security: {view2['sector']['security']}")
         if view2['sector']['port']:
             print(f"Docked at Port: {view2['sector']['port']['name']}")
@@ -92,7 +118,7 @@ def main():
         return
 
     # Start interactive terminal client
-    client = TerminalClient(kernel=kernel, player_id="player_1", save_file=save_file)
+    client = TerminalClient(kernel=kernel, player_id=player_id, player_name=args.name, save_file=save_file)
     client.run()
 
 

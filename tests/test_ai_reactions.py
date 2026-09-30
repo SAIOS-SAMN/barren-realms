@@ -26,7 +26,7 @@ class TestContextAwareAIReactions(unittest.TestCase):
         target_planet = None
         target_sector = None
         for s_id, s in self.kernel.sectors.items():
-            if s.planets and s.planets[0].owner_id is None:
+            if s.planets and s.planets[0].owner_id is None and s_id != 1:  # Sol's core worlds aren't annexable
                 path = self.kernel.find_path(voss_sec, s_id)
                 if path and 1 <= len(path) - 1 <= 3:
                     target_planet = s.planets[0]
@@ -35,13 +35,21 @@ class TestContextAwareAIReactions(unittest.TestCase):
 
         self.assertIsNotNone(target_planet, "Expected an unowned planet within 3 hops of Voss")
         self.player.sector_id = target_sector.id
+        # A colony charter needs standing and an outfitted colony kit (this world may be inhabited)
+        self.player.rank_tier = 3
+        self.player.credit_rating = 700
+        self.player.faction_reputation["Indigenous"] = 75.0
+        self.player.credits = 10000
+        self.player.ship.cargo.equipment = 15
+        if target_planet.population == 0:
+            target_planet.planet_type = "TERRESTRIAL"  # a world the biotic claimant can live on
 
         # Claim the planet
         res = self.kernel.dispatch("tester", ActionType.PLANET_CLAIM, planet_id=target_planet.id)
         self.assertTrue(res.success)
 
         # Check subspace radio for Voss's warning
-        radio_msgs = self.kernel.event_bus.get_recent_radio(10)
+        radio_msgs = self.kernel.event_bus.get_recent_radio(50)
         voss_msgs = [m for m in radio_msgs if m.sender == voss.name]
         self.assertTrue(len(voss_msgs) > 0, "Expected a radio warning from Cynthia Voss")
         self.assertIn("falls within Voss Heavy Industries charter space", voss_msgs[0].text)
@@ -92,7 +100,7 @@ class TestContextAwareAIReactions(unittest.TestCase):
         self.assertGreaterEqual(self.player.credits, 6000)
 
         # Check radio transmission from Ironclaw
-        radio_msgs = self.kernel.event_bus.get_recent_radio(10)
+        radio_msgs = self.kernel.event_bus.get_recent_radio(50)
         ironclaw_msgs = [m for m in radio_msgs if m.sender == ironclaw.name]
         self.assertTrue(len(ironclaw_msgs) > 0, "Expected a radio commendation from Ironclaw Rake")
         self.assertIn("Confirmed kill on outlaw", ironclaw_msgs[0].text)

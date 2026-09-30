@@ -150,7 +150,12 @@ class TestMyceliumBridge(unittest.IsolatedAsyncioTestCase):
         await writer.drain()
 
         # Read goodbye message
-        goodbye = await reader.read(512)
+        goodbye = b""
+        while b"Disconnecting" not in goodbye:
+            chunk = await reader.read(512)
+            if not chunk:
+                break
+            goodbye += chunk
         self.assertIn(b"Disconnecting", goodbye)
 
         writer.close()

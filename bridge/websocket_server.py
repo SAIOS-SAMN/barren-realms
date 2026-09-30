@@ -244,6 +244,32 @@ class WebSocketGateway:
                 "view": view
             })
 
+        elif action == "MARKET":
+            p_id = payload.get("player_id", client.player_id)
+            if not p_id:
+                await client.send_json({"status": "error", "message": "No player_id specified or registered."})
+                return
+            view = self.kernel.get_player_view(p_id)
+            await client.send_json({
+                "status": "ok",
+                "action": "MARKET",
+                "market": view.get("market", {})
+            })
+
+        elif action == "TRADE_ROUTES":
+            p_id = payload.get("player_id", client.player_id)
+            mode = payload.get("mode", "circular")
+            max_hops = int(payload.get("max_hops", 4))
+            if not p_id:
+                await client.send_json({"status": "error", "message": "No player_id specified or registered."})
+                return
+            routes_res = self.kernel.get_trade_routes(p_id, mode=mode, max_hops=max_hops)
+            await client.send_json({
+                "status": "ok",
+                "action": "TRADE_ROUTES",
+                "routes": routes_res
+            })
+
         elif action == "DISPATCH":
             p_id = payload.get("player_id", client.player_id)
             cmd_str = payload.get("command", "").strip().upper()
@@ -259,6 +285,58 @@ class WebSocketGateway:
                 if len(parts) >= 2 and parts[1].isdigit():
                     cmd_type = ActionType.MOVE
                     params = {"destination": int(parts[1])}
+            elif cmd_str.startswith("BUY "):
+                parts = cmd_str.split()
+                if len(parts) >= 3 and parts[2].isdigit():
+                    cmd_type = ActionType.STOCK_BUY
+                    params = {"ticker": parts[1].upper(), "amount": int(parts[2])}
+            elif cmd_str.startswith("SELL "):
+                parts = cmd_str.split()
+                if len(parts) >= 3 and parts[2].isdigit():
+                    cmd_type = ActionType.STOCK_SELL
+                    params = {"ticker": parts[1].upper(), "amount": int(parts[2])}
+            elif cmd_str.startswith("SHORT "):
+                parts = cmd_str.split()
+                if len(parts) >= 3 and parts[2].isdigit():
+                    cmd_type = ActionType.STOCK_SHORT
+                    params = {"ticker": parts[1].upper(), "amount": int(parts[2])}
+            elif cmd_str.startswith("COVER "):
+                parts = cmd_str.split()
+                if len(parts) >= 2:
+                    cmd_type = ActionType.STOCK_COVER
+                    amount_val = int(parts[2]) if len(parts) >= 3 and parts[2].isdigit() else None
+                    params = {"ticker": parts[1].upper(), "amount": amount_val}
+            elif cmd_str.startswith("TAKEOVER "):
+                parts = cmd_str.split()
+                if len(parts) >= 2:
+                    cmd_type = ActionType.CORPORATE_TAKEOVER
+                    params = {"ticker": parts[1].upper()}
+            elif cmd_str.startswith("TARIFF "):
+                parts = cmd_str.split()
+                if len(parts) >= 2 and parts[1].isdigit():
+                    cmd_type = ActionType.SET_TARIFF
+                    params = {"tariff_pct": int(parts[1])}
+            elif cmd_str.startswith("HIRE "):
+                parts = cmd_str.split()
+                if len(parts) >= 2:
+                    cmd_type = ActionType.EXECUTIVE_HIRE
+                    name_val = " ".join(parts[2:]) if len(parts) >= 3 else None
+                    params = {"ticker": parts[1].upper(), "name": name_val}
+            elif cmd_str.startswith("MOVE_EXEC "):
+                parts = cmd_str.split()
+                if len(parts) >= 3 and parts[2].isdigit():
+                    cmd_type = ActionType.EXECUTIVE_MOVE
+                    params = {"exec_id": parts[1].upper(), "destination": int(parts[2])}
+            elif cmd_str.startswith("ACCEPT "):
+                parts = cmd_str.split()
+                if len(parts) >= 2:
+                    cmd_type = ActionType.FREIGHT_ACCEPT
+                    params = {"contract_id": parts[1].upper()}
+            elif cmd_str.startswith("DELIVER "):
+                parts = cmd_str.split()
+                if len(parts) >= 2:
+                    cmd_type = ActionType.FREIGHT_DELIVER
+                    params = {"contract_id": parts[1].upper()}
             elif cmd_str in ["P", "PLANET"]:
                 view = self.kernel.get_player_view(p_id)
                 planets = view.get("sector", {}).get("planets", [])
@@ -302,5 +380,5 @@ class WebSocketGateway:
         else:
             await client.send_json({
                 "status": "error",
-                "message": f"Unsupported action: '{action}'. Use REGISTER, VIEW, or DISPATCH."
+                "message": f"Unsupported action: '{action}'. Use REGISTER, VIEW, MARKET, TRADE_ROUTES, or DISPATCH."
             })

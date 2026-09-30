@@ -4,20 +4,118 @@ Modeled after TradeWars 2002 BBS dynamic supply/demand curves.
 """
 
 from typing import Dict, Tuple, Optional, Any
-from xylarium.config import COMMODITY_CONFIG
-from xylarium.kernel.models import Port, CommodityType, Captain, ActionResult, ActionType
+import hashlib
+from xylarium.config import COMMODITY_CONFIG, EMBARGO_TARIFF_BUY_MULT, EMBARGO_TARIFF_SELL_MULT, get_commodity_stack_multiplier
+from xylarium.kernel.models import Port, CommodityType, Captain, ActionResult, ActionType, PortClass
+
+
+_COMM_LOOKUP = {k.upper(): k for k in COMMODITY_CONFIG.keys()}
+
+from xylarium.kernel import fx
+from xylarium.config import (
+    PRICE_LEVEL,
+    GRADIENT_MANUFACTURED_PER_HOP,
+    GRADIENT_MANUFACTURED_MAX,
+    GRADIENT_RAW_PER_HOP,
+    GRADIENT_RAW_MIN,
+    PORT_LIQUIDITY_BID_RANGE,
+    FX_PRICE_PASS_THROUGH,
+    PORT_START_TREASURY,
+    STARDOCK_START_TREASURY,
+)
 
 
 class EconomyManager:
     """Manages commodity pricing, trade execution, and port stock replenishment."""
 
-    @staticmethod
-    def get_unit_prices(port: Port, commodity: str) -> Tuple[int, int]:
+    @classmethod
+    def ensure_port_inventory(cls, port: Port) -> None:
+        """Ensures that port inventory and buy/sell configurations exist for all commodities."""
+        if not hasattr(port, "stock") or port.stock is None:
+            port.stock = {}
+        if not hasattr(port, "max_stock") or port.max_stock is None:
+            port.max_stock = {}
+        if not hasattr(port, "buys") or port.buys is None:
+            port.buys = {}
+        if not hasattr(port, "sells") or port.sells is None:
+            port.sells = {}
+
+        if port.sector_id == 1:
+            for comm in COMMODITY_CONFIG:
+                if comm not in port.max_stock:
+                    port.max_stock[comm] = 1000
+                if comm not in port.stock:
+                    port.stock[comm] = 850
+                if comm not in port.buys:
+                    port.buys[comm] = True
+                if comm not in port.sells:
+                    port.sells[comm] = True
+            return
+
+        for comm, cfg in COMMODITY_CONFIG.items():
+            if comm in port.buys and comm in port.sells and comm in port.stock:
+                continue
+
+            cat = cfg.get("category", "METALS")
+            h = int(hashlib.md5(f"port_{port.sector_id}_{comm}".encode()).hexdigest(), 16)
+
+            can_buy = False
+            can_sell = False
+
+            if cat == "METALS":
+                can_buy = port.buys.get(CommodityType.ORE.value, False)
+                can_sell = port.sells.get(CommodityType.ORE.value, False)
+                if comm == "AdL" and (port.sector_id < 20 or (h % 100) > 40):
+                    can_buy = False
+                    can_sell = False
+            elif cat == "VOLATILES":
+                can_buy = port.buys.get(CommodityType.ORGANICS.value, False)
+                can_sell = port.sells.get(CommodityType.ORGANICS.value, False)
+                if comm == "Xe" and (h % 100) > 50:
+                    can_buy = False
+                    can_sell = False
+            elif cat == "MANUFACTURED":
+                can_buy = port.buys.get(CommodityType.EQUIPMENT.value, False)
+                can_sell = port.sells.get(CommodityType.EQUIPMENT.value, False)
+                if comm == "M4_WARP_CORE" and (port.sector_id < 25 or (h % 100) > 35):
+                    can_buy = False
+                    can_sell = False
+                elif comm == "M3_ENGINE_MANIFOLD" and (h % 100) > 50:
+                    can_buy = False
+                    can_sell = False
+            elif cat == "EXOTICS":
+                is_traded = (h % 100) < 45
+                if is_traded:
+                    p_val = getattr(port.port_class, "value", str(port.port_class))
+                    can_buy = ((h >> 4) % 2 == 0) or ("BBB" in p_val)
+                    can_sell = ((h >> 4) % 2 == 1) or ("SSS" in p_val)
+
+            max_s = 500 if cat in ("EXOTICS", "MANUFACTURED") else 800
+            if comm not in port.max_stock:
+                port.max_stock[comm] = max_s
+            if comm not in port.buys:
+                port.buys[comm] = can_buy
+            if comm not in port.sells:
+                port.sells[comm] = can_sell
+            if comm not in port.stock:
+                if can_sell:
+                    port.stock[comm] = int(max_s * (0.40 + (h % 35) / 100.0))
+                elif can_buy:
+                    port.stock[comm] = int(max_s * (0.15 + (h % 25) / 100.0))
+                else:
+                    port.stock[comm] = 0
+
+    @classmethod
+    def get_unit_prices(cls, port: Port, commodity: str) -> Tuple[int, int]:
         """
         Calculates (buy_from_player_price, sell_to_player_price) for a given port and commodity.
         Returns (0, 0) if not traded.
         """
-        cfg = COMMODITY_CONFIG.get(commodity)
+        cls.ensure_port_inventory(port)
+
+        matched_comm = _COMM_LOOKUP.get(commodity.upper(), commodity)
+
+        cfg = COMMODITY_CONFIG.get(matched_comm)
         if not cfg:
             return (0, 0)
 
@@ -26,49 +124,142 @@ class EconomyManager:
         max_p = cfg["max_price"]
         volatility = cfg["volatility"]
 
-        max_stock = max(1, port.max_stock.get(commodity, 1000))
-        current_stock = max(0, min(port.stock.get(commodity, 500), max_stock))
+        max_stock = max(1, port.max_stock.get(matched_comm, 1000))
+        current_stock = max(0, min(port.stock.get(matched_comm, 500), max_stock))
 
         # Stock ratio: 1.0 means full stock, 0.0 means depleted
         stock_ratio = current_stock / max_stock
 
         # Port SELLS to captain:
-        # High stock -> Cheap. Low stock -> Expensive.
-        # Scarcity multiplier: when stock is 10%, price is high. When 90%, price is low.
         sell_factor = 1.0 + (0.6 - stock_ratio) * volatility * 1.5
         sell_price = int(round(base * sell_factor))
         sell_price = max(min_p, min(max_p, sell_price))
 
         # Port BUYS from captain:
-        # High port stock -> Port doesn't need more, offers low price.
-        # Low port stock -> Port is desperate, offers high price.
-        # Ensure buy_price is always strictly lower than sell_price to prevent zero-risk same-port flipping
         buy_factor = 1.0 + (0.5 - stock_ratio) * volatility * 1.2
         buy_price = int(round(base * buy_factor * 0.85))
         buy_price = max(min_p // 2, min(sell_price - 2, buy_price))
         buy_price = max(5, buy_price)
 
+        # Regional economics: quote in the port's currency, with a distance-from-Sol gradient
+        factor = cls.regional_factor(port, cfg.get("category", "METALS"))
+        if factor != 1.0:
+            sell_price = max(1, int(round(sell_price * factor)))
+            buy_price = max(1, min(sell_price - 1, int(round(buy_price * factor))))
+        # Balance sheet: cash-rich ports bid up for goods, cash-poor ports bid down
+        buy_price = max(1, min(sell_price - 1, int(round(buy_price * cls.liquidity_factor(port)))))
         return (buy_price, sell_price)
 
+    @staticmethod
+    def liquidity_factor(port: Port) -> float:
+        cur = getattr(port, "currency", "SOL")
+        base = (STARDOCK_START_TREASURY if port.sector_id == 1 else PORT_START_TREASURY) * PRICE_LEVEL.get(cur, 1.0)
+        lo, hi = PORT_LIQUIDITY_BID_RANGE
+        ratio = getattr(port, "treasury", base) / max(1.0, base)
+        return max(lo, min(hi, lo + (hi - lo) * min(1.0, ratio / 2.0)))
+
+    @staticmethod
+    def regional_factor(port: Port, category: str) -> float:
+        """Price level of the port's currency x remoteness gradient (manufactures dearer, raw goods cheaper)."""
+        cur = getattr(port, "currency", "SOL")
+        level = PRICE_LEVEL.get(cur, 1.0)
+        if cur != "SOL" and fx.ACTIVE_FX is not None:
+            # Partial pass-through: a depreciating local currency raises local prices (inflation)
+            level *= fx.ACTIVE_FX.price_level_drift(cur) ** FX_PRICE_PASS_THROUGH
+        hops = getattr(port, "remoteness", 0)
+        if category == "MANUFACTURED":
+            gradient = min(GRADIENT_MANUFACTURED_MAX, 1.0 + GRADIENT_MANUFACTURED_PER_HOP * hops)
+        else:
+            gradient = max(GRADIENT_RAW_MIN, 1.0 - GRADIENT_RAW_PER_HOP * hops)
+        return level * gradient
+
     @classmethod
-    def get_port_catalog(cls, port: Port) -> Dict[str, Dict[str, Any]]:
-        """Returns full trade catalog with current prices and stock for a port."""
+    def get_port_catalog(cls, port: Port, category: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        """Returns full trade catalog with current prices and stock for a port, optionally filtered by category."""
+        cls.ensure_port_inventory(port)
         catalog = {}
-        for comm in [CommodityType.ORE.value, CommodityType.ORGANICS.value, CommodityType.EQUIPMENT.value]:
+        for comm, cfg in COMMODITY_CONFIG.items():
+            if category and category != "ALL" and cfg.get("category") != category:
+                continue
             buy_price, sell_price = cls.get_unit_prices(port, comm)
             catalog[comm] = {
-                "name": COMMODITY_CONFIG[comm]["name"],
+                "name": cfg["name"],
+                "symbol": cfg.get("symbol", comm),
+                "category": cfg.get("category", "METALS"),
                 "stock": port.stock.get(comm, 0),
                 "max_stock": port.max_stock.get(comm, 1000),
                 "port_buys": port.buys.get(comm, False),
                 "port_sells": port.sells.get(comm, False),
                 "buy_price": buy_price if port.buys.get(comm, False) else None,
                 "sell_price": sell_price if port.sells.get(comm, False) else None,
+                "currency": getattr(port, "currency", "SOL"),
             }
         return catalog
 
     @classmethod
-    def execute_buy(
+    def execute_buy(cls, captain: Captain, port: Port, commodity: str, amount: int) -> ActionResult:
+        """
+        Captain buys from the port, paying in the port's currency into the port's treasury.
+        A SOL shortfall is converted through the ISSE FX desk automatically.
+        """
+        cur = getattr(port, "currency", "SOL")
+        if cur != "SOL" and fx.ACTIVE_FX is not None and amount > 0:
+            # Convert enough for the real counter price (reputation friction, xeno surcharges, rounding)
+            _, unit = cls.get_unit_prices(port, commodity)
+            unit = max(1, int(round(unit * cls.counterparty_factor(captain, port, "buy")))) + 1
+            fx.ACTIVE_FX.ensure_local(captain, cur, unit * amount)
+        before = fx.balance(captain, cur)
+        key = commodity.lower()
+        cargo = captain.ship.cargo
+        units_before = cargo.held(commodity)
+        basis_before = cargo.cost_basis.get(key, 0.0)
+        with fx.settle_in(captain, cur):
+            res = cls._buy_core(captain, port, commodity, amount)
+        if res.success:
+            paid = before - fx.balance(captain, cur)
+            port.treasury += paid
+            # Cost basis is kept in SOL so profit is comparable across regional currencies
+            bought = cargo.held(commodity) - units_before
+            if bought > 0:
+                paid_sol = fx.ACTIVE_FX.to_sol_value(cur, paid) if (fx.ACTIVE_FX and cur != "SOL") else paid
+                cargo.cost_basis[key] = (units_before * basis_before + paid_sol) / (units_before + bought)
+        return res
+
+    @classmethod
+    def execute_sell(cls, captain: Captain, port: Port, commodity: str, amount: int) -> ActionResult:
+        """
+        Captain sells to the port, which pays in its currency out of its own treasury:
+        an illiquid port can only buy what it can afford.
+        """
+        cur = getattr(port, "currency", "SOL")
+        unit, _ = cls.get_unit_prices(port, commodity)
+        if unit > 0 and amount > 0 and unit * amount > port.treasury:
+            affordable = port.treasury // unit
+            if affordable <= 0:
+                return ActionResult(
+                    success=False,
+                    action=ActionType.TRADE,
+                    message=f"Port {port.name} is illiquid: its treasury ({port.treasury:,} {cur}) cannot fund purchases today.",
+                )
+            amount = int(affordable)
+        before = fx.balance(captain, cur)
+        with fx.settle_in(captain, cur):
+            res = cls._sell_core(captain, port, commodity, amount)
+        if res.success:
+            port.treasury -= fx.balance(captain, cur) - before
+        return res
+
+    @staticmethod
+    def counterparty_factor(captain: Captain, port: Port, direction: str) -> float:
+        from xylarium.kernel.alignment import price_factor
+        from xylarium.config import IMPERIAL_XENO_SURCHARGE, IMPERIAL_CLADES
+        factor = price_factor(captain, direction)
+        if getattr(port, "faction_id", None) == "IMPERIUM" and getattr(captain, "clade", "BIOTIC") not in IMPERIAL_CLADES:
+            factor *= (1 + IMPERIAL_XENO_SURCHARGE) if direction == "buy" else (1 - IMPERIAL_XENO_SURCHARGE / 2)
+        return factor
+
+    @classmethod
+    def _buy_core(
         cls,
         captain: Captain,
         port: Port,
@@ -78,13 +269,16 @@ class EconomyManager:
         """
         Captain buys `amount` units of `commodity` from `port`.
         """
-        commodity = commodity.upper()
-        if commodity not in COMMODITY_CONFIG:
+        cls.ensure_port_inventory(port)
+        comm_lookup = {k.upper(): k for k in COMMODITY_CONFIG.keys()}
+        matched_comm = comm_lookup.get(commodity.upper())
+        if not matched_comm:
             return ActionResult(
                 success=False,
                 action=ActionType.TRADE,
                 message=f"Unknown commodity: '{commodity}'.",
             )
+        commodity = matched_comm
 
         if not port.sells.get(commodity, False):
             return ActionResult(
@@ -108,33 +302,64 @@ class EconomyManager:
                 message=f"Port only has {avail_stock} units of {commodity} in stock.",
             )
 
-        avail_holds = captain.ship.cargo.available_space
-        if amount > avail_holds:
+        if not captain.ship.cargo.can_fit(commodity, amount):
+            max_units = captain.ship.cargo.available_units_for(commodity)
+            mult = get_commodity_stack_multiplier(commodity)
+            avail_holds = captain.ship.cargo.available_space
             return ActionResult(
                 success=False,
                 action=ActionType.TRADE,
-                message=f"Insufficient cargo holds! You only have {avail_holds} free holds.",
+                message=f"Insufficient cargo holds! You can only fit {max_units} units of {commodity} ({avail_holds} free holds @ {mult}x density).",
             )
 
         _, unit_price = cls.get_unit_prices(port, commodity)
+
+        # Corporate Embargo Tariff (Voss Heavy Industries charter space: sectors 11-25)
+        embargo_tariff_log = None
+        if "ai_voss" in captain.embargoed_by and 11 <= port.sector_id <= 25:
+            tariff_price = max(unit_price + 1, int(unit_price * EMBARGO_TARIFF_BUY_MULT))
+            embargo_tariff_log = f"[EMBARGO TARIFF] Voss Heavy Industries levied a 50% tariff surcharge (+{tariff_price - unit_price} Cr/ea) due to active corporate blacklist!"
+            unit_price = tariff_price
+
+        # Reputation friction: trusted (Luminous+) captains get goodwill; Shadowed ones pay more.
+        # Imperial starports gouge xenos. All of it is a transfer to the port, nothing is created.
+        unit_price = max(1, int(round(unit_price * cls.counterparty_factor(captain, port, "buy"))))
+
         total_cost = unit_price * amount
 
         if captain.credits < total_cost:
             return ActionResult(
                 success=False,
                 action=ActionType.TRADE,
-                message=f"Insufficient credits! Requires {total_cost} Cr, but you have {captain.credits} Cr.",
+                message=f"Insufficient credits! Requires {total_cost:,} Cr, but you have {captain.credits:,} Cr.",
             )
 
         # Execute Transaction
         captain.credits -= total_cost
         port.stock[commodity] -= amount
+
+        # Track weighted average cost basis
+        comm_key = commodity.lower()
+        if not hasattr(captain.ship.cargo, "cost_basis") or captain.ship.cargo.cost_basis is None:
+            captain.ship.cargo.cost_basis = {"ore": 0.0, "organics": 0.0, "equipment": 0.0}
+
         if commodity == CommodityType.ORE.value:
+            old_units = captain.ship.cargo.ore
             captain.ship.cargo.ore += amount
         elif commodity == CommodityType.ORGANICS.value:
+            old_units = captain.ship.cargo.organics
             captain.ship.cargo.organics += amount
         elif commodity == CommodityType.EQUIPMENT.value:
+            old_units = captain.ship.cargo.equipment
             captain.ship.cargo.equipment += amount
+        else:
+            old_units = captain.ship.cargo.elements.get(commodity, 0)
+            captain.ship.cargo.elements[commodity] = old_units + amount
+
+        old_basis = captain.ship.cargo.cost_basis.get(comm_key, 0.0)
+        new_units = max(1, old_units + amount)
+        new_basis = ((old_units * old_basis) + (amount * unit_price)) / new_units if old_units > 0 else float(unit_price)
+        captain.ship.cargo.cost_basis[comm_key] = round(new_basis, 1)
 
         new_buy, new_sell = cls.get_unit_prices(port, commodity)
 
@@ -142,6 +367,9 @@ class EconomyManager:
             f"Purchased {amount} units of {commodity} for {total_cost:,} Cr "
             f"({unit_price} Cr/ea). New stock: {port.stock[commodity]}."
         )
+        logs = [msg]
+        if embargo_tariff_log:
+            logs.append(embargo_tariff_log)
 
         return ActionResult(
             success=True,
@@ -158,11 +386,11 @@ class EconomyManager:
                 "port_stock_remaining": port.stock[commodity],
                 "new_sell_price": new_sell,
             },
-            logs=[msg]
+            logs=logs
         )
 
     @classmethod
-    def execute_sell(
+    def _sell_core(
         cls,
         captain: Captain,
         port: Port,
@@ -172,13 +400,16 @@ class EconomyManager:
         """
         Captain sells `amount` units of `commodity` to `port`.
         """
-        commodity = commodity.upper()
-        if commodity not in COMMODITY_CONFIG:
+        cls.ensure_port_inventory(port)
+        comm_lookup = {k.upper(): k for k in COMMODITY_CONFIG.keys()}
+        matched_comm = comm_lookup.get(commodity.upper())
+        if not matched_comm:
             return ActionResult(
                 success=False,
                 action=ActionType.TRADE,
                 message=f"Unknown commodity: '{commodity}'.",
             )
+        commodity = matched_comm
 
         if not port.buys.get(commodity, False):
             return ActionResult(
@@ -201,6 +432,8 @@ class EconomyManager:
             held_units = captain.ship.cargo.organics
         elif commodity == CommodityType.EQUIPMENT.value:
             held_units = captain.ship.cargo.equipment
+        else:
+            held_units = captain.ship.cargo.elements.get(commodity, 0)
 
         if amount > held_units:
             return ActionResult(
@@ -208,17 +441,50 @@ class EconomyManager:
                 action=ActionType.TRADE,
                 message=f"You only have {held_units} units of {commodity} in your hold.",
             )
+        bonded = captain.ship.cargo.bonded_units(commodity)
+        if amount > held_units - bonded:
+            return ActionResult(
+                success=False,
+                action=ActionType.TRADE,
+                message=f"{bonded} units of {commodity} are bonded freight under contract and cannot be sold.",
+            )
 
         unit_price, _ = cls.get_unit_prices(port, commodity)
+
+        # Corporate Embargo Penalty (Voss Heavy Industries charter space: sectors 11-25)
+        embargo_penalty_log = None
+        if "ai_voss" in captain.embargoed_by and 11 <= port.sector_id <= 25:
+            penalty_price = max(1, int(unit_price * EMBARGO_TARIFF_SELL_MULT))
+            embargo_penalty_log = f"[EMBARGO PENALTY] Voss Heavy Industries deducted 30% from payout (-{unit_price - penalty_price} Cr/ea) due to security blacklist!"
+            unit_price = penalty_price
+        unit_price = max(1, int(unit_price * cls.counterparty_factor(captain, port, "sell")))
+
         total_payout = unit_price * amount
 
         # Execute Transaction
+        comm_key = commodity.lower()
+        if not hasattr(captain.ship.cargo, "cost_basis") or captain.ship.cargo.cost_basis is None:
+            captain.ship.cargo.cost_basis = {"ore": 0.0, "organics": 0.0, "equipment": 0.0}
+        cost_ea = captain.ship.cargo.cost_basis.get(comm_key, 0.0)
+        profit_per_unit = unit_price - int(cost_ea) if cost_ea > 0 else 0
+
         if commodity == CommodityType.ORE.value:
             captain.ship.cargo.ore -= amount
+            if captain.ship.cargo.ore <= 0:
+                captain.ship.cargo.cost_basis["ore"] = 0.0
         elif commodity == CommodityType.ORGANICS.value:
             captain.ship.cargo.organics -= amount
+            if captain.ship.cargo.organics <= 0:
+                captain.ship.cargo.cost_basis["organics"] = 0.0
         elif commodity == CommodityType.EQUIPMENT.value:
             captain.ship.cargo.equipment -= amount
+            if captain.ship.cargo.equipment <= 0:
+                captain.ship.cargo.cost_basis["equipment"] = 0.0
+        else:
+            captain.ship.cargo.elements[commodity] = captain.ship.cargo.elements.get(commodity, 0) - amount
+            if captain.ship.cargo.elements[commodity] <= 0:
+                del captain.ship.cargo.elements[commodity]
+                captain.ship.cargo.cost_basis[comm_key] = 0.0
 
         port.stock[commodity] = min(
             port.max_stock.get(commodity, 1000) * 2,
@@ -229,10 +495,20 @@ class EconomyManager:
 
         new_buy, new_sell = cls.get_unit_prices(port, commodity)
 
+        profit_str = ""
+        net_profit = (profit_per_unit * amount) if cost_ea > 0 else 0
+        if cost_ea > 0:
+            diff_sign = "+" if net_profit >= 0 else ""
+            unit_sign = "+" if profit_per_unit >= 0 else ""
+            profit_str = f" [Net Profit: {diff_sign}{net_profit:,} Cr ({unit_sign}{profit_per_unit}/ea)]"
+
         msg = (
             f"Sold {amount} units of {commodity} to {port.name} for {total_payout:,} Cr "
-            f"({unit_price} Cr/ea). New stock: {port.stock[commodity]}."
+            f"({unit_price} Cr/ea).{profit_str} New stock: {port.stock[commodity]}."
         )
+        logs = [msg]
+        if embargo_penalty_log:
+            logs.append(embargo_penalty_log)
 
         return ActionResult(
             success=True,
@@ -244,12 +520,15 @@ class EconomyManager:
                 "commodity": commodity,
                 "amount": amount,
                 "unit_price": unit_price,
+                "cost_basis": cost_ea,
+                "profit_per_unit": profit_per_unit,
+                "net_profit": net_profit,
                 "total_payout": total_payout,
                 "credits_remaining": captain.credits,
                 "port_stock_remaining": port.stock[commodity],
                 "new_buy_price": new_buy,
             },
-            logs=[msg]
+            logs=logs
         )
 
     @classmethod
@@ -259,9 +538,10 @@ class EconomyManager:
         Ports consume goods they buy and manufacture goods they sell,
         slowly trending stock levels back toward equilibrium (~60%).
         """
-        for comm in [CommodityType.ORE.value, CommodityType.ORGANICS.value, CommodityType.EQUIPMENT.value]:
-            max_s = port.max_stock.get(comm, 1000)
-            curr_s = port.stock.get(comm, 500)
+        cls.ensure_port_inventory(port)
+        for comm in COMMODITY_CONFIG:
+            max_s = port.max_stock.get(comm, 800)
+            curr_s = port.stock.get(comm, 400)
             target_equilibrium = int(max_s * 0.60)
 
             if port.sells.get(comm, False):
@@ -269,6 +549,10 @@ class EconomyManager:
                 if curr_s < target_equilibrium:
                     port.stock[comm] = min(max_s, curr_s + 15)
             elif port.buys.get(comm, False):
-                # Consumption of raw materials bought
+                # Goods bought from captains are sold on to the region's households and industry
+                # (the region pays for them each fiscal quarter - see MarketManager._port_retail)
                 if curr_s > target_equilibrium // 2:
-                    port.stock[comm] = max(50, curr_s - 10)
+                    new_s = max(10, curr_s - 10)
+                    port.consumed[comm] = port.consumed.get(comm, 0) + (curr_s - new_s)
+                    port.stock[comm] = new_s
+
