@@ -1228,29 +1228,40 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
     t0 = time.perf_counter()
     window_t0, window_c0 = t0, 0
     window = max(100, cycles // 10)
-    audit = bool(os.environ.get("XYL_MATTER_AUDIT"))
+    # Audit mode (XYL_AUDIT=1, or the older XYL_MATTER_AUDIT=1): a cheap drift check every 100 cycles, and from
+    # XYL_AUDIT_FROM on, the exact action, AI turn or seasonal hook that creates or destroys undeclared money or matter
+    audit = bool(os.environ.get("XYL_AUDIT") or os.environ.get("XYL_MATTER_AUDIT"))
     leaks_shown = 0
-
     audit_from = int(os.environ.get("XYL_AUDIT_FROM", "0") or 0)
     drift_base = [None]
+
+    def residual() -> Dict[str, int]:
+        """Everything counted minus everything declared: matter per commodity, money per currency ($)."""
+        tt, nn = matter_mod.totals(kernel), kernel.matter.net()
+        out = {c: tt.get(c, 0) - nn.get(c, 0) for c in set(tt) | set(nn)}
+        from xylarium.kernel.ledger import money_supply as supply_by_currency
+        ms, ln = supply_by_currency(kernel), ledger_net(kernel)
+        for cur in set(ms) | set(ln):
+            out["$" + cur] = ms.get(cur, {}).get("total", 0) - ln.get(cur, 0)
+        return out
+
+    def changed(a: Dict[str, int], b: Dict[str, int]) -> Dict[str, int]:
+        return {c: v for c in set(a) | set(b) if (v := b.get(c, 0) - a.get(c, 0))}
 
     def audited(label, fn):
         nonlocal leaks_shown
         if not audit or leaks_shown >= 8 or kernel.cycle_count < audit_from:
             return fn()
-        t0_, n0_ = matter_mod.totals(kernel), kernel.matter.net()
+        r0 = residual()
         out = fn()
-        t1_, n1_ = matter_mod.totals(kernel), kernel.matter.net()
-        d = {c: v for c in set(t0_) | set(t1_) | set(n1_)
-             if (v := (t1_.get(c, 0) - t0_.get(c, 0)) - (n1_.get(c, 0) - n0_.get(c, 0)))}
+        d = changed(r0, residual())
         if d:
             leaks_shown += 1
-            print(f"  [MATTER LEAK] cycle {kernel.cycle_count} in {label}: {d}", flush=True)
+            print(f"  [LEAK] cycle {kernel.cycle_count} in {label}: {d}", flush=True)
         return out
 
     if audit:
-        # Finer labels inside the world tick: each AI turn and each quarterly subsystem
-        import importlib
+        # Finer labels inside the world tick: each AI turn, each dispatched command and each seasonal hook
         from xylarium.kernel.ai import AIManager
         real_turn = AIManager.execute_turn          # bound (or already wrapped by the timers)
 
@@ -1263,16 +1274,9 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
             return audited(f"dispatch {pid} {getattr(action, 'value', action)} {kw}",
                            lambda: real_dispatch(pid, action, *a, **kw))
         kernel.dispatch = dispatch
-        from xylarium.kernel import engine as engine_mod
-        for modname in ("crime", "demography", "geology", "law", "credit", "natives"):
-            m = importlib.import_module(f"xylarium.kernel.{modname}")
-            if hasattr(m, "quarter"):
-                fn = m.quarter
-                wrapped = (lambda fn, name: (lambda *a, **kw: audited(f"{name}.quarter", lambda: fn(*a, **kw))))(fn, modname)
-                setattr(m, "quarter", wrapped)
-                for alias in (f"{modname}_mod", modname):
-                    if getattr(engine_mod, alias, None) is m:
-                        pass
+        for sub in subsystem.REGISTRY.values():
+            if sub.season is not None:
+                sub.season = (lambda fn, name: (lambda k: audited(f"season:{name}", lambda: fn(k))))(sub.season, sub.name)
 
     for cycle in range(1, cycles + 1):
         for b in bots:
@@ -1280,13 +1284,11 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
                 audited(f"bot {b.id}", lambda: b.act(kernel, stats))
         if audit and cycle % 100 == 0:
             # Coarse drift check (cheap): the first 100-cycle window where the census and the ledger part ways
-            tt, nn = matter_mod.totals(kernel), kernel.matter.net()
-            now = {c: tt.get(c, 0) - nn.get(c, 0) for c in set(tt) | set(nn)}
+            now = residual()
             if drift_base[0] is not None:
-                d = {c: now.get(c, 0) - drift_base[0].get(c, 0) for c in set(now) | set(drift_base[0])}
-                d = {c: v for c, v in d.items() if v}
+                d = changed(drift_base[0], now)
                 if d:
-                    print(f"  [MATTER DRIFT] cycles {cycle - 100}-{cycle}: {d}", flush=True)
+                    print(f"  [DRIFT] cycles {cycle - 100}-{cycle}: {d}", flush=True)
             drift_base[0] = now
         try:
             audited("world tick", real_tick)

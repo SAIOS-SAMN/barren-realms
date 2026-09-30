@@ -1569,8 +1569,9 @@ LUXURY_AFFINITY = {"biotic": "LUX_EPHEMERA", "mineral": "LUX_RESONANT", "plasmic
                    "cryogenic": "LUX_RESONANT", "umbral": "LUX_CURIO"}
 LUXURY_CRAFT_PER_THOUSAND = 0.4        # Luxury units a thousand provided-for people craft per quarter (x tech tier)
 LUXURY_WANT_PER_THOUSAND = 0.12        # Units of each luxury a thousand people want per quarter (at full comfort)
+LUXURY_EXPORT_RADIUS = 5               # Luxuries are light and dear: workshops ship them further than bulk goods
 LUXURY_PURSE_SHARE = 0.5               # Share of the purse left after the basket that households spend on luxury
-EPHEMERA_SPOILAGE = 0.02               # Perishable imports: share of every stock that spoils each quarter (base shelf-life dampener)
+EPHEMERA_SPOILAGE = 0.10               # Perishable imports: share of every stock that spoils each quarter (stasis pods cut it in transit)
 # Tourism: two tiers. Mass tourism is a flow along the lanes (households of spacefaring worlds spend part of
 # their surplus at resorts in reach); VIP charters are physical passengers carried by captains' hulls.
 TOURISM_PURSE_SHARE = 0.3              # Share of the post-luxury household surplus spent travelling

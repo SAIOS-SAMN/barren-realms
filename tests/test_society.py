@@ -148,9 +148,11 @@ class TestLuxury(unittest.TestCase):
         self.assertEqual(luxury.council_bid_multiplier(port, "LUX_EPHEMERA", self.k), 1.0)
         p = self.k.sectors[1].planets[0]
         p.society["luxury_unmet_quarters"] = {"LUX_EPHEMERA": 3}
+        self.k.cycle_count += 25                     # the councils read their wants once a season
         mult_3 = luxury.council_bid_multiplier(port, "LUX_EPHEMERA", self.k)
         self.assertGreater(mult_3, 1.0)
         p.society["luxury_unmet_quarters"] = {"LUX_EPHEMERA": 6}
+        self.k.cycle_count += 25
         mult_6 = luxury.council_bid_multiplier(port, "LUX_EPHEMERA", self.k)
         self.assertGreater(mult_6, mult_3)
         # Transit cryo containment

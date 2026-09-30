@@ -11,6 +11,7 @@ from xylarium.kernel import hulls
 from xylarium.kernel import matter, topology
 from xylarium.kernel.models import TradeHauler, Captain, Ship, CargoHold, AIPersonality
 from xylarium.config import (
+    LUXURY_WANT_PER_THOUSAND,
     COMMODITY_CONFIG,
     SPECIALIZED_HULLS,
     VC_SYNDICATES,
@@ -721,12 +722,17 @@ class MarketManager:
                 upkeep_ore = CITADEL_UPKEEP.get(planet.citadel_level, {}).get("ore", 0)
                 if upkeep_ore and planet.ore_silo < upkeep_ore * 25:
                     needs.append(("ORE", min(60, max(15, upkeep_ore * 10))))
+                for t, unmet_q in (planet.society.get("luxury_unmet_quarters") or {}).items():
+                    if unmet_q >= 3 and planet.element_reserves.get(t, 0) < 10:
+                        # two seasons of the world's want, in a hauler-sized lot
+                        lux_amt = min(30, max(10, int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * 2)))
+                        needs.append((t, lux_amt))
                 for comm, amount in needs:
                     if open_by_planet.get(planet.id, 0) >= COLONY_IMPORT_MAX_OPEN:
                         break
                     origins = [
                         ps for ps in port_sectors
-                        if ps.id != sec.id and ps.port.sells.get(comm, False) and ps.port.stock.get(comm, 0) >= amount
+                        if ps.id != sec.id and ps.port.sells.get(comm, False) and ps.port.stock.get(comm, 0) >= (min(amount, 10) if comm.startswith("LUX_") else amount)
                     ]
                     if not origins:
                         continue
@@ -1739,10 +1745,11 @@ class MarketManager:
         if company.poison_pill_uses <= 0:
             return False, f"Poison pill defenses for {ticker} have been exhausted.", {}
 
-        # Mint 25% new dilutive shares allocated to treasury / loyalists
+        # 25% new dilutive shares go into the company's own unissued float: the raider's stake shrinks, and the
+        # shares raise money only when they are sold (no cash appears from nowhere - the economy is closed)
         dilution_shares = int(company.total_shares * 0.25)
         company.total_shares += dilution_shares
-        company.treasury += dilution_shares * 10
+        company.available_shares += dilution_shares
         company.poison_pill_uses -= 1
         company.poison_pill_active = True
 

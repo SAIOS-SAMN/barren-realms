@@ -26,6 +26,7 @@ from xylarium.config import (
     EPHEMERA_SPOILAGE,
     LUXURY_AFFINITY,
     LUXURY_CRAFT_PER_THOUSAND,
+    LUXURY_EXPORT_RADIUS,
     LUXURY_PURSE_SHARE,
     LUXURY_TYPES,
     LUXURY_WANT_PER_THOUSAND,
@@ -167,9 +168,25 @@ def orders(kernel: Any, planet: Any, t: str) -> int:
     less what it already holds. Luxuries are crafted to order - perishable ones especially."""
     from xylarium.kernel import demography
     shelves = sum(port_room(p, t, kernel) for p in demography._markets(kernel, planet))
+    ext_shelves = sum(port_room(p, t, kernel) for p in export_ports(kernel, planet))
     comfort = float(planet.society.get("basket_fill", 0.0))
     own = int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * 0.5 * comfort)
-    return max(0, shelves + own - planet.element_reserves.get(t, 0))
+    return max(0, shelves + ext_shelves // 2 + own - planet.element_reserves.get(t, 0))
+
+
+def export_ports(kernel: Any, planet: Any) -> List[Any]:
+    """Ports of the world's money beyond its household market but within LUXURY_EXPORT_RADIUS: where its workshops
+    ship luxuries when the local shelves are full (half their room counts toward the order book - the voyage is
+    long and the buyer less certain). Re-surveyed every 250 cycles, like the household market."""
+    from xylarium.kernel import cache, demography
+    local = {p.sector_id for p in demography._markets(kernel, planet)}
+
+    def survey() -> List[int]:
+        return [sid for sid in topology.reach(kernel, planet.sector_id, LUXURY_EXPORT_RADIUS)
+                if sid not in local and kernel.sectors[sid].port is not None
+                and kernel.sectors[sid].port.currency == planet.currency]
+    sids = cache.memo(kernel, "luxury_export_ports", planet.id, survey, max_age=250)
+    return [kernel.sectors[sid].port for sid in sids if kernel.sectors[sid].port is not None]
 
 
 def provided_for(kernel: Any, planet: Any) -> bool:
@@ -297,7 +314,20 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
             else:
                 unmet[t] = 0
             continue
-        need = want
+        have_res = planet.element_reserves.get(t, 0)
+        if have_res > 0:
+            use = min(want, have_res)
+            planet.element_reserves[t] -= use
+            matter.sink("households_luxury", t, use)
+            if t != own:                                  # delivered by freight (an import already paid for)
+                st["imported_use"] = st.get("imported_use", 0) + use
+            met_total += use
+            need = want - use
+        else:
+            need = want
+        if need <= 0:
+            unmet[t] = 0
+            continue
         for port in sorted(ports, key=lambda p: -p.stock.get(t, 0)):
             if need <= 0 or budget <= 0:
                 break
@@ -371,14 +401,20 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
 
 # ---------------------------------------------------------------------- dynamic council bidding
 def council_bid_multiplier(port: Any, t: str, kernel: Any = None) -> float:
-    """When a luxury want remains unsatisfied for >= 3 consecutive quarters, the planetary council
-    increases purchase price premium logarithmically, creating margin spreads that divert free AI traders
-    toward luxury fulfillment."""
+    """When a luxury want remains unsatisfied for >= 3 consecutive quarters on the port's worlds or their
+    neighbours' (one jump), the councils bid up its price logarithmically (up to 3x), creating the margin that
+    draws free traders to carry it. Read once a season per port and luxury."""
     if kernel is None:
         from xylarium.kernel import ledger
         kernel = ledger.active_kernel()
-    if kernel is None:
+    if kernel is None or not hasattr(kernel, "caches"):
         return 1.0
+    from xylarium.kernel import cache
+    return cache.memo(kernel, "council_bid", (port.sector_id, t), lambda: _council_bid(kernel, port, t),
+                      epoch=cache.season(kernel))
+
+
+def _council_bid(kernel: Any, port: Any, t: str) -> float:
     max_unmet = 0
     sec = kernel.sectors.get(port.sector_id)
     if sec:
@@ -387,7 +423,7 @@ def council_bid_multiplier(port: Any, t: str, kernel: Any = None) -> float:
                 u = (p.society.get("luxury_unmet_quarters") or {}).get(t, 0)
                 if u > max_unmet:
                     max_unmet = u
-    # Check nearby planets in regional catchment (within 3 warps)
+    # ...and on the worlds one jump away
     for sid in getattr(kernel.sectors.get(port.sector_id), "warps", []):
         s = kernel.sectors.get(sid)
         if s:

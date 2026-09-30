@@ -18,6 +18,7 @@ Xylarium: demography - peoples grow on their worlds, and then decide what to bec
     Demand drains stock, stock sets prices, prices send captains hauling: the demand side of the loop.
 """
 
+import math
 from typing import Any, Dict, List, Optional
 
 from xylarium.kernel import cache, matter, topology
@@ -292,6 +293,17 @@ def free_world(planet: Any) -> bool:
             and not getattr(planet, "faction_id", None) and getattr(planet, "civilization", None) is None)
 
 
+def settler_reach(kernel: Any, planet: Any) -> int:
+    """How far a world's settler fleets can sail: the reach its yards allow (citadel tier), stretched by its fuel
+    cell - reaction mass per jump falls as 1/v_e, so the same tanks carry a fleet sqrt(v_e) times further in the
+    time a voyage allows. A hydrogen torch reaches its yards' range; helium-3 twice it; fission about three times."""
+    from xylarium.config import FUEL_CELLS
+    from xylarium.kernel import propulsion
+    base = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 6 if planet.citadel_level >= 3 else 3)
+    v_e = FUEL_CELLS.get(propulsion.world_fuel(kernel, planet), FUEL_CELLS["H"]).get("v_e") or 1.0
+    return max(base, int(round(base * math.sqrt(max(1.0, v_e)))))
+
+
 def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     from xylarium.kernel.universe import habitability
     st = stats(kernel)
@@ -315,9 +327,12 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
         return None
     from xylarium.kernel import biosphere
     metab = metabolism_of(kernel, planet)
-    radius = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 6 if planet.citadel_level >= 3 else 3)
+    radius = settler_reach(kernel, planet)
     best = None
-    search_radii = [radius, 6, 10, 16, 25] if is_diaspora else [radius]
+    # Settlers take the nearest ring that holds a world to feed them; a diaspora (crowded, escrow-funded)
+    # expedition presses on to the full reach of its yards and drives before giving up
+    search_radii = sorted({min(radius, DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 3)), radius}) \
+        if is_diaspora else [radius]
     for r in search_radii:
         ring_cands = []
         for sid in topology.reach(kernel, planet.sector_id, r):
@@ -526,6 +541,9 @@ def exports(kernel: Any) -> None:
                 if surplus <= 0:
                     continue
                 buyers = [p for p in ports if p.buys.get(comm)]
+                if not buyers and comm.startswith("LUX_"):
+                    from xylarium.kernel import luxury      # luxuries travel further when local shelves are full
+                    buyers = [p for p in luxury.export_ports(kernel, planet) if p.buys.get(comm)]
                 for port in sorted(buyers, key=lambda p: -EconomyManager.get_unit_prices(p, comm)[0]):
                     if surplus <= 0:
                         break

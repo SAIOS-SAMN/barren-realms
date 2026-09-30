@@ -204,3 +204,18 @@ class TestHouseholdsAndFrontier(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSettlerReach(unittest.TestCase):
+    def test_reach_grows_with_the_yards_and_the_fuel_cell(self):
+        random.seed(171)
+        k = GameKernel(seed=7)
+        k.activate()
+        w = next(p for s in k.sectors.values() for p in s.planets if p.population > 0 and not p.natives)
+        w.citadel_level = 2
+        w.society["fuel"], w.society["fuel_reckoned"] = "H", k.cycle_count
+        torch = demography.settler_reach(k, w)
+        w.society["fuel"] = "He-3"
+        self.assertEqual(demography.settler_reach(k, w), 2 * torch)     # sqrt(v_e = 4)
+        w.citadel_level = 3
+        self.assertGreater(demography.settler_reach(k, w), 2 * torch)

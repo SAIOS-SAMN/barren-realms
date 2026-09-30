@@ -1380,12 +1380,8 @@ class SeatGrow:
                 if units <= 0:
                     continue
                 risk = cls.RISK_DISCOUNT.get(kernel.sectors[sid].security.value, 0.6)
-                if comm.startswith("LUX_"):
-                    value = margin * units * risk * 3.0 / (dist[sid] + 2)
-                    res_mag = float(margin * units * 3.0)
-                else:
-                    value = margin * units * risk / (dist[sid] + 2)
-                    res_mag = float(margin * units)
+                value = margin * units * risk / (dist[sid] + 2)
+                res_mag = float(margin * units)
                 profit = margin * units * risk
                 xp = min(XP_TRADE_MAX, math.sqrt(max(0.0, profit) / XP_TRADE_PROFIT_SCALE))
                 plan = {"kind": "haul", "commodity": comm, "dest": sid, "since": cycle, "unit_cost_sol": cost_sol,
