@@ -1,0 +1,104 @@
+diff --git a/xylarium/config.py b/xylarium/config.py
+index f1b0917..042c949 100644
+--- a/xylarium/config.py
++++ b/xylarium/config.py
+@@ -1567,7 +1567,7 @@ LUXURY_WORLD_BIAS = {
+ }
+ LUXURY_AFFINITY = {"biotic": "LUX_EPHEMERA", "mineral": "LUX_RESONANT", "plasmic": "LUX_STIMULANT",
+                    "cryogenic": "LUX_RESONANT", "umbral": "LUX_CURIO"}
+-LUXURY_CRAFT_PER_THOUSAND = 0.4        # Luxury units a thousand provided-for people craft per quarter (x tech tier)
++LUXURY_CRAFT_PER_THOUSAND = 0.6        # Luxury units a thousand provided-for people craft per quarter (x tech tier)
+ LUXURY_WANT_PER_THOUSAND = 0.12        # Units of each luxury a thousand people want per quarter (at full comfort)
+ LUXURY_PURSE_SHARE = 0.5               # Share of the purse left after the basket that households spend on luxury
+ EPHEMERA_SPOILAGE = 0.02               # Perishable imports: share of every stock that spoils each quarter (base shelf-life dampener)
+diff --git a/xylarium/kernel/demography.py b/xylarium/kernel/demography.py
+index 2a00787..9a6fb24 100644
+--- a/xylarium/kernel/demography.py
++++ b/xylarium/kernel/demography.py
+@@ -317,7 +317,7 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
+     metab = metabolism_of(kernel, planet)
+     radius = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 6 if planet.citadel_level >= 3 else 3)
+     best = None
+-    search_radii = [radius, 6, 10, 16, 25] if is_diaspora else [radius]
++    search_radii = [radius, 6, 10, 16, 25]
+     for r in search_radii:
+         ring_cands = []
+         for sid in topology.reach(kernel, planet.sector_id, r):
+@@ -526,6 +526,10 @@ def exports(kernel: Any) -> None:
+                 if surplus <= 0:
+                     continue
+                 buyers = [p for p in ports if p.buys.get(comm)]
++                if not buyers and comm.startswith("LUX_"):
++                    buyers = [kernel.sectors[sid].port for sid in topology.reach(kernel, planet.sector_id, 5)
++                              if kernel.sectors[sid].port is not None and kernel.sectors[sid].port.buys.get(comm)
++                              and kernel.sectors[sid].port.currency == planet.currency]
+                 for port in sorted(buyers, key=lambda p: -EconomyManager.get_unit_prices(p, comm)[0]):
+                     if surplus <= 0:
+                         break
+diff --git a/xylarium/kernel/luxury.py b/xylarium/kernel/luxury.py
+index f162c30..1b37cd0 100644
+--- a/xylarium/kernel/luxury.py
++++ b/xylarium/kernel/luxury.py
+@@ -165,11 +165,16 @@ def _close_sales(port: Any) -> None:
+ def orders(kernel: Any, planet: Any, t: str) -> int:
+     """What a world's workshops can sell next season: room on its region's shelves plus its own households' use,
+     less what it already holds. Luxuries are crafted to order - perishable ones especially."""
+-    from xylarium.kernel import demography
+-    shelves = sum(port_room(p, t, kernel) for p in demography._markets(kernel, planet))
++    from xylarium.kernel import demography, topology
++    markets = demography._markets(kernel, planet)
++    shelves = sum(port_room(p, t, kernel) for p in markets)
++    ext_ports = [kernel.sectors[sid].port for sid in topology.reach(kernel, planet.sector_id, 5)
++                 if kernel.sectors[sid].port is not None and kernel.sectors[sid].port not in markets
++                 and kernel.sectors[sid].port.currency == planet.currency]
++    ext_shelves = sum(port_room(p, t, kernel) for p in ext_ports)
+     comfort = float(planet.society.get("basket_fill", 0.0))
+     own = int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * 0.5 * comfort)
+-    return max(0, shelves + own - planet.element_reserves.get(t, 0))
++    return max(0, shelves + ext_shelves // 2 + own - planet.element_reserves.get(t, 0))
+ 
+ 
+ def provided_for(kernel: Any, planet: Any) -> bool:
+@@ -297,7 +302,19 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
+             else:
+                 unmet[t] = 0
+             continue
+-        need = want
++        have_res = planet.element_reserves.get(t, 0)
++        if have_res > 0:
++            use = min(want, have_res)
++            planet.element_reserves[t] -= use
++            matter.sink("households_luxury", t, use)
++            st["bought"][t] = st["bought"].get(t, 0) + use
++            met_total += use
++            need = want - use
++        else:
++            need = want
++        if need <= 0:
++            unmet[t] = 0
++            continue
+         for port in sorted(ports, key=lambda p: -p.stock.get(t, 0)):
+             if need <= 0 or budget <= 0:
+                 break
+diff --git a/xylarium/kernel/market.py b/xylarium/kernel/market.py
+index ed6cba4..4c4a4f4 100644
+--- a/xylarium/kernel/market.py
++++ b/xylarium/kernel/market.py
+@@ -721,12 +721,16 @@ class MarketManager:
+                 upkeep_ore = CITADEL_UPKEEP.get(planet.citadel_level, {}).get("ore", 0)
+                 if upkeep_ore and planet.ore_silo < upkeep_ore * 25:
+                     needs.append(("ORE", min(60, max(15, upkeep_ore * 10))))
++                for t, unmet_q in (planet.society.get("luxury_unmet_quarters") or {}).items():
++                    if unmet_q >= 3 and planet.element_reserves.get(t, 0) < 10:
++                        lux_amt = min(30, max(10, int(planet.population / 1000.0 * 0.12 * 2)))
++                        needs.append((t, lux_amt))
+                 for comm, amount in needs:
+                     if open_by_planet.get(planet.id, 0) >= COLONY_IMPORT_MAX_OPEN:
+                         break
+                     origins = [
+                         ps for ps in port_sectors
+-                        if ps.id != sec.id and ps.port.sells.get(comm, False) and ps.port.stock.get(comm, 0) >= amount
++                        if ps.id != sec.id and ps.port.sells.get(comm, False) and ps.port.stock.get(comm, 0) >= min(amount, 10)
+                     ]
+                     if not origins:
+                         continue
