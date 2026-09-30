@@ -5,6 +5,7 @@ Handles ship-to-ship tactical engagements and planetary orbital sieges (BRE/SRE 
 
 import random
 from typing import Dict, Any, List, Optional
+from xylarium.kernel import matter
 from xylarium.kernel.models import (
     Captain,
     Sector,
@@ -50,24 +51,31 @@ def _eject_to_sol(captain: Captain, kernel: Optional[Any], credit_loss_frac: flo
     Returns the insurance payout.
     """
     old_sec = captain.sector_id
+    # Bonded freight is settled first (the issuer's goods are repossessed); then what remains of the hold
+    # breaks up with the hull
+    if kernel is not None and hasattr(kernel, "market_manager"):
+        kernel.market_manager.forfeit_freight(captain, kernel)
     if kernel is not None and old_sec in kernel.sectors:
         from xylarium.kernel.nullspace import NullSpaceManager
         NullSpaceManager.create_debris(kernel.sectors[old_sec], captain, kernel.cycle_count)
+    else:
+        cg = captain.ship.cargo
+        for comm, q in (("ORE", cg.ore), ("ORGANICS", cg.organics), ("EQUIPMENT", cg.equipment), *cg.elements.items()):
+            matter.sink("vaporized", comm, q)
     captain.sector_id = 1
     if kernel is not None:
         if old_sec in kernel.sectors and captain.id in kernel.sectors[old_sec].captains:
             kernel.sectors[old_sec].captains.remove(captain.id)
         if 1 in kernel.sectors and captain.id not in kernel.sectors[1].captains:
             kernel.sectors[1].captains.append(captain.id)
-        if hasattr(kernel, "market_manager"):
-            kernel.market_manager.forfeit_freight(captain, kernel)
 
     scout = SHIP_CATALOG.get("Scout Ship", {})
     captain.ship.ship_type = "Scout Ship"
     captain.ship.max_shields = scout.get("max_shields", 100)
     captain.ship.shields = RESPAWN_KIT["shields"]
     captain.ship.fighters = RESPAWN_KIT["fighters"]
-    captain.ship.cargo = _starter_cargo(captain)
+    captain.ship.cargo = _starter_cargo(captain)     # the old hold went to the debris field
+    matter.commission(captain, "respawn_kit")
     if credit_loss_frac > 0:
         lost = int(max(0, captain.credits) * credit_loss_frac)
         captain.credits -= lost
@@ -383,15 +391,19 @@ class CombatManager:
             salvage_org = defender.ship.cargo.organics // 2
             salvage_eq = defender.ship.cargo.equipment // 2
 
+            # The victor hauls it out of the wreck (the rest drifts into the debris field when the hull is lost)
             space = attacker.ship.cargo.available_space
             take_ore = min(space, salvage_ore)
             attacker.ship.cargo.ore += take_ore
+            defender.ship.cargo.ore -= take_ore
             space = attacker.ship.cargo.available_space
             take_org = min(space, salvage_org)
             attacker.ship.cargo.organics += take_org
+            defender.ship.cargo.organics -= take_org
             space = attacker.ship.cargo.available_space
             take_eq = min(space, salvage_eq)
             attacker.ship.cargo.equipment += take_eq
+            defender.ship.cargo.equipment -= take_eq
 
             logs.append(f"*** ENEMY DESTROYED! {defender.name}'s ship breaks apart into stardust! ***")
             logs.append(f"*** Plundered {bounty_cr:,} Credits and salvaged cargo from the wreckage! ***")

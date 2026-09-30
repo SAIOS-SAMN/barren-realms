@@ -13,6 +13,13 @@ Xylarium fibres: the warp lanes as the galaxy's connective tissue, with economie
   * Fibre distance: the cheapest route cost from Sol over developed lanes. Busy fibres pull remote ports
     closer - their regional price gradient (manufactures dearer and raw goods cheaper with distance) eases
     along the trunk routes, so linked regions converge.
+  * Curvature. Spacetime can be disturbed: a shock puts curvature kappa on a lane, and a singularity (mass M)
+    curves every lane touching its sector. A lane's geodesic cost is fibre cost x (1 + kappa), so routes bend
+    around damage. Disturbances obey their physics: a shock radiates away (gravitational waves), halving each
+    season; a singularity evaporates (Hawking), losing mass as 1/M^2 - so its lifetime grows as M^3, and a
+    small one flares out within seasons while a large one reshapes the map for good.
+  * Geodesics: every route in the galaxy (captains, freight, haulers, the route optimizer) follows the
+    cheapest path under these costs; paths are cached until costs change.
 """
 
 import heapq
@@ -98,6 +105,7 @@ def season(kernel: Any) -> None:
     st["q"] = {}
     st["seasons"] += 1
     st["mean"] = mean_development(kernel)
+    relax(kernel)
     reprice_remoteness(kernel)
 
 
@@ -139,3 +147,109 @@ def summary(kernel: Any) -> Dict[str, Any]:
         "trunks": [(k, round(v)) for k, v in dev[:5]],
         "cheapest_cost": round(min((cost(kernel, *map(int, k.split("-"))) for k, _ in dev[:1]), default=1.0), 3),
     }
+
+
+# ---------------------------------------------------------------------- curvature & geodesics
+HAWKING_K = 1.0     # mass-loss constant: dM/dseason = -K / M^2 (a unit singularity lasts a third of a season)
+
+
+def curvature(kernel: Any, a: int, b: int) -> float:
+    st = state(kernel)
+    k = st.get("shock", {}).get(key(a, b), 0.0)
+    holes = st.get("singularities", {})
+    return k + holes.get(str(a), 0.0) + holes.get(str(b), 0.0)
+
+
+def shock(kernel: Any, a: int, b: int, kappa: float) -> None:
+    """A spacetime shock on a lane (a weapon, a collapse): adds curvature that radiates away."""
+    st = state(kernel)
+    st.setdefault("shock", {})[key(a, b)] = st.get("shock", {}).get(key(a, b), 0.0) + float(kappa)
+    _bump(kernel)
+
+
+def singularity(kernel: Any, sector_id: int, mass: float) -> None:
+    """A singularity in a sector (mass in curvature units): every lane touching it bends until it evaporates."""
+    st = state(kernel)
+    holes = st.setdefault("singularities", {})
+    holes[str(sector_id)] = holes.get(str(sector_id), 0.0) + float(mass)
+    _bump(kernel)
+
+
+def relax(kernel: Any) -> None:
+    """A season passes: shocks halve (radiated away), singularities evaporate (dM = -K/M^2, integrated exactly:
+    M^3 falls by 3K per season)."""
+    st = state(kernel)
+    changed = False
+    for k in list(st.get("shock", {})):
+        v = st["shock"][k] / 2.0
+        if v < 0.01:
+            st["shock"].pop(k)
+        else:
+            st["shock"][k] = v
+        changed = True
+    for sid in list(st.get("singularities", {})):
+        m3 = st["singularities"][sid] ** 3 - 3.0 * HAWKING_K
+        if m3 <= 0:
+            st["singularities"].pop(sid)
+        else:
+            st["singularities"][sid] = m3 ** (1.0 / 3.0)
+        changed = True
+    if changed:
+        _bump(kernel)
+
+
+def _bump(kernel: Any) -> None:
+    st = state(kernel)
+    st["version"] = st.get("version", 0) + 1
+
+
+def lane_cost(kernel: Any, a: int, b: int) -> float:
+    return cost(kernel, a, b) * (1.0 + curvature(kernel, a, b))
+
+
+def geodesic(kernel: Any, start: int, goal: int) -> List[int]:
+    """The cheapest path under fibre costs and curvature (a list of sector ids, start..goal; [] if none).
+    Lane costs are computed once per cost version; each start's whole shortest-path tree is cached."""
+    if start == goal:
+        return [start]
+    st = state(kernel)
+    version = (st.get("version", 0), st.get("seasons", 0), len(kernel.sectors),
+               sum(len(sec.warps) for sec in kernel.sectors.values()))   # new lanes (shortcuts) invalidate
+    cache = getattr(kernel, "_geodesic_cache", None)
+    if cache is None or cache.get("_v") != version:
+        adj = {}
+        for sid, sec in kernel.sectors.items():
+            adj[sid] = [(w, lane_cost(kernel, sid, w)) for w in sec.warps if w in kernel.sectors]
+        cache = kernel._geodesic_cache = {"_v": version, "_adj": adj, "_trees": {}}
+    tree = cache["_trees"].get(start)
+    if tree is None:
+        tree = cache["_trees"][start] = _shortest_tree(cache["_adj"], start)
+    dist, prev = tree
+    if goal not in dist:
+        return []
+    path = [goal]
+    while path[-1] != start:
+        path.append(prev[path[-1]])
+    path.reverse()
+    return path
+
+
+def _shortest_tree(adj: Dict[int, List[Tuple[int, float]]], start: int) -> Tuple[Dict[int, float], Dict[int, int]]:
+    """Dijkstra from ``start``; ties go to fewer hops (deterministic)."""
+    dist: Dict[int, float] = {start: 0.0}
+    hops: Dict[int, int] = {start: 0}
+    prev: Dict[int, int] = {}
+    heap: List[Tuple[float, int, int]] = [(0.0, 0, start)]
+    while heap:
+        d, h, sid = heapq.heappop(heap)
+        if d > dist.get(sid, float("inf")) + 1e-12:
+            continue
+        for w, c in adj.get(sid, ()):
+            nd = d + c
+            old = dist.get(w, float("inf"))
+            if nd < old - 1e-12 or (abs(nd - old) <= 1e-12 and h + 1 < hops.get(w, 10 ** 9)):
+                dist[w] = nd
+                hops[w] = h + 1
+                prev[w] = sid
+                heapq.heappush(heap, (nd, h + 1, w))
+    return dist, prev

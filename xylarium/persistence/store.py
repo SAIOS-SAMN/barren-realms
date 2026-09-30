@@ -36,6 +36,7 @@ class StatePersistence:
                 "federal": kernel.federal_reserve.to_dict() if hasattr(kernel, "federal_reserve") else None,
                 "fx": kernel.fx_market.to_dict() if hasattr(kernel, "fx_market") else None,
                 "ledger": kernel.ledger.to_dict() if hasattr(kernel, "ledger") else None,
+                "matter": kernel.matter.to_dict() if hasattr(kernel, "matter") else None,
                 "monetary_policy": kernel.monetary_policy.to_dict() if hasattr(kernel, "monetary_policy") else None,
                 "factions": kernel.factions.to_dict() if hasattr(kernel, "factions") else None,
                 "chronicle": kernel.chronicle.to_dict() if hasattr(kernel, "chronicle") else None,
@@ -44,6 +45,7 @@ class StatePersistence:
                 "frontier": getattr(kernel, "frontier", None),
                 "fibres": getattr(kernel, "fibres", None),
                 "credit_stats": getattr(kernel, "credit_stats", None),
+                "geology": getattr(kernel, "geology", None),
                 "lineage": getattr(kernel, "lineage", None),
                 "single_lineage": bool(getattr(kernel, "single_lineage", False)),
                 "npc_lineages": getattr(kernel, "npc_lineages", {}),
@@ -161,6 +163,8 @@ class StatePersistence:
             from xylarium.kernel.ledger import MoneyLedger
             kernel.fx_market = FXMarket.from_dict(data["fx"]) if data.get("fx") else FXMarket()
             kernel.ledger = MoneyLedger.from_dict(data["ledger"]) if data.get("ledger") else MoneyLedger()
+            from xylarium.kernel.matter import MatterLedger
+            kernel.matter = MatterLedger.from_dict(data["matter"]) if data.get("matter") else MatterLedger()
             from xylarium.kernel.ledger import MonetaryPolicy
             kernel.monetary_policy = (MonetaryPolicy.from_dict(data["monetary_policy"]) if data.get("monetary_policy")
                                       else MonetaryPolicy())
@@ -177,6 +181,8 @@ class StatePersistence:
                 kernel.fibres = data["fibres"]
             if data.get("credit_stats"):
                 kernel.credit_stats = data["credit_stats"]
+            if data.get("geology"):
+                kernel.geology = data["geology"]
             kernel.lineage = data.get("lineage")
             kernel.single_lineage = bool(data.get("single_lineage", False))
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))

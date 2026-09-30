@@ -25,6 +25,7 @@ import zlib
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
+from xylarium.kernel import matter
 from xylarium.config import (
     ARCH_PRECURSOR_CULTURES,
     ARCH_PRECURSOR_SHARE,
@@ -198,6 +199,7 @@ class ArchaeologyManager:
             return ActionResult(success=False, action=ActionType.EXCAVATE,
                                 message=f"Excavation needs {tools} Equipment (tools{' and shoring' if shore else ''}) in your hold.")
         captain.ship.cargo.equipment -= tools
+        matter.sink("excavation_tools", "EQUIPMENT", tools)       # worn out and left in the trench
         if shore:
             r["stability"] = min(1.0, r["stability"] + 0.35)
 
@@ -242,6 +244,7 @@ class ArchaeologyManager:
         if r["elements"] and rng.random() < 0.6:
             elem = rng.choice(r["elements"])
             got = captain.ship.cargo.stow(elem, rng.randint(2, 6) * stratum["depth"])
+            matter.source("excavation", elem, got)                 # a dead city's stores, out of the ground
             if got:
                 logs.append(f"{got} {elem}")
         # Buried hoard: the dead city's treasury, recovered a cache at a time (a transfer, not new money)

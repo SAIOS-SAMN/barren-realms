@@ -6,6 +6,7 @@ Modeled after TradeWars 2002 BBS dynamic supply/demand curves.
 from typing import Dict, Tuple, Optional, Any
 import hashlib
 from xylarium.config import COMMODITY_CONFIG, EMBARGO_TARIFF_BUY_MULT, EMBARGO_TARIFF_SELL_MULT, get_commodity_stack_multiplier
+from xylarium.kernel import matter
 from xylarium.kernel.models import Port, CommodityType, Captain, ActionResult, ActionType, PortClass
 
 
@@ -30,7 +31,20 @@ class EconomyManager:
 
     @classmethod
     def ensure_port_inventory(cls, port: Port) -> None:
-        """Ensures that port inventory and buy/sell configurations exist for all commodities."""
+        """Ensures that port inventory and buy/sell configurations exist for all commodities. A port's founding
+        stock of a commodity it had never carried is declared (the port's charter), so no unit is undeclared."""
+        stock = getattr(port, "stock", None)
+        if stock is not None and len(stock) >= len(COMMODITY_CONFIG):
+            return
+        before = dict(stock or {})
+        cls._ensure_port_inventory(port)
+        for comm, q in port.stock.items():
+            added = q - before.get(comm, 0)
+            if added > 0 and comm not in before:
+                matter.source("port_charter", comm, added)
+
+    @classmethod
+    def _ensure_port_inventory(cls, port: Port) -> None:
         if not hasattr(port, "stock") or port.stock is None:
             port.stock = {}
         if not hasattr(port, "max_stock") or port.max_stock is None:
@@ -42,6 +56,12 @@ class EconomyManager:
 
         if port.sector_id == 1:
             for comm in COMMODITY_CONFIG:
+                if COMMODITY_CONFIG[comm].get("category") == "WASTE":
+                    port.max_stock.setdefault(comm, 1000)
+                    port.stock.setdefault(comm, 0)
+                    port.buys.setdefault(comm, False)
+                    port.sells.setdefault(comm, False)
+                    continue
                 if comm not in port.max_stock:
                     port.max_stock[comm] = 1000
                 if comm not in port.stock:
@@ -486,10 +506,8 @@ class EconomyManager:
                 del captain.ship.cargo.elements[commodity]
                 captain.ship.cargo.cost_basis[comm_key] = 0.0
 
-        port.stock[commodity] = min(
-            port.max_stock.get(commodity, 1000) * 2,
-            port.stock.get(commodity, 0) + amount
-        )
+        # (No cap that deletes goods: a glutted warehouse already pays next to nothing for more)
+        port.stock[commodity] = port.stock.get(commodity, 0) + amount
         captain.credits += total_payout
         captain.score += max(1, total_payout // 20)
 
@@ -534,25 +552,76 @@ class EconomyManager:
     @classmethod
     def tick_port(cls, port: Port) -> None:
         """
-        Simulate port economic activity over a turn cycle.
-        Ports consume goods they buy and manufacture goods they sell,
-        slowly trending stock levels back toward equilibrium (~60%).
+        One cycle of a starport's industry - nothing from nothing:
+          * Manufactured goods it sells are fabricated only from inputs its warehouse holds (the commodity's
+            recipe); the inputs' mass beyond one unit of product is left as slag.
+          * Raw goods it sells arrive from the region's worlds and from captains - never conjured. When its
+            stock of anything it sells or needs as an input runs low, it buys to restock (anti-deadlock).
+          * Goods it buys are sold on to the region's households and industry (paid for each fiscal quarter).
+          * Slag is recycled: two units yield one of ore; the tailings are landfilled (see landfill()).
         """
         cls.ensure_port_inventory(port)
-        for comm in COMMODITY_CONFIG:
+        if not port.base_buys:
+            port.base_buys = dict(port.buys)
+        needs = set()
+        for comm, cfg in COMMODITY_CONFIG.items():
+            if port.sells.get(comm) and cfg.get("recipe"):
+                needs.update(cfg["recipe"])
+        for comm, cfg in COMMODITY_CONFIG.items():
+            if cfg.get("category") == "WASTE":
+                continue
             max_s = port.max_stock.get(comm, 800)
-            curr_s = port.stock.get(comm, 400)
-            target_equilibrium = int(max_s * 0.60)
-
+            curr_s = port.stock.get(comm, 0)
+            target = int(max_s * 0.60)
+            recipe = cfg.get("recipe")
             if port.sells.get(comm, False):
-                # Production of goods to sell
-                if curr_s < target_equilibrium:
-                    port.stock[comm] = min(max_s, curr_s + 15)
-            elif port.buys.get(comm, False):
+                if recipe and curr_s < target:
+                    cls._fabricate(port, comm, recipe, min(15, target - curr_s))
+                # restock: a distributor low on what it sells buys it back in (raw goods only arrive this way)
+                restock = (not recipe) and port.stock.get(comm, 0) < target // 2
+                port.buys[comm] = bool(port.base_buys.get(comm)) or restock or comm in needs and curr_s < target
+            elif port.base_buys.get(comm, False) or comm in needs:
+                if comm in needs:
+                    port.buys[comm] = curr_s < target or bool(port.base_buys.get(comm))
+                if not port.base_buys.get(comm):
+                    continue                     # an input it holds for its own works, not for the region
                 # Goods bought from captains are sold on to the region's households and industry
                 # (the region pays for them each fiscal quarter - see MarketManager._port_retail)
-                if curr_s > target_equilibrium // 2:
+                if curr_s > target // 2:
                     new_s = max(10, curr_s - 10)
                     port.consumed[comm] = port.consumed.get(comm, 0) + (curr_s - new_s)
                     port.stock[comm] = new_s
+                    matter.sink("regional_industry", comm, curr_s - new_s)
+        cls._recycle_slag(port)
+
+    @staticmethod
+    def _fabricate(port: Port, product: str, recipe: Dict[str, int], want: int) -> int:
+        can = min([want] + [port.stock.get(inp, 0) // q for inp, q in recipe.items()])
+        if can <= 0:
+            return 0
+        mass_in = 0
+        for inp, q in recipe.items():
+            port.stock[inp] = port.stock.get(inp, 0) - q * can
+            matter.sink("fabrication", inp, q * can)
+            mass_in += q * can
+        port.stock[product] = port.stock.get(product, 0) + can
+        matter.source("fabrication", product, can)
+        slag = mass_in - can
+        if slag > 0:
+            port.stock["SLAG"] = port.stock.get("SLAG", 0) + slag
+            matter.source("fabrication", "SLAG", slag)
+        return can
+
+    @staticmethod
+    def _recycle_slag(port: Port) -> None:
+        slag = port.stock.get("SLAG", 0)
+        batches = min(slag // 2, 10)
+        if batches <= 0:
+            return
+        port.stock["SLAG"] = slag - 2 * batches
+        matter.sink("recycling", "SLAG", 2 * batches)
+        port.stock["ORE"] = port.stock.get("ORE", 0) + batches           # half recovered as ore
+        matter.source("recycling", "ORE", batches)
+        port.stock["TAILINGS"] = port.stock.get("TAILINGS", 0) + batches  # half left over, awaiting landfill
+        matter.source("recycling", "TAILINGS", batches)
 

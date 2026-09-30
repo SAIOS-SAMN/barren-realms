@@ -66,6 +66,40 @@ class TestFibres(unittest.TestCase):
         cheap = cap.wages_due
         self.assertLess(cheap, self.kernel.crew_wage(cap))
 
+    def test_routes_bend_around_a_spacetime_shock_and_return_as_it_radiates_away(self):
+        k = self.kernel
+        # find two sectors with at least two distinct routes
+        for a in k.sectors:
+            for b in k.sectors:
+                if a >= b:
+                    continue
+                path = k.find_path(a, b)
+                if len(path) < 3:
+                    continue
+                first_lane = (path[0], path[1])
+                fibres.shock(k, *first_lane, kappa=50.0)
+                detour = k.find_path(a, b)
+                if detour and detour != path:
+                    self.assertNotEqual((detour[0], detour[1]), first_lane)
+                    while fibres.state(k).get("shock"):
+                        fibres.relax(k)
+                    self.assertEqual(k.find_path(a, b), path)     # the shock has radiated away
+                    return
+                fibres.state(k)["shock"] = {}
+                fibres._bump(k)
+        self.skipTest("no alternative route found")
+
+    def test_singularities_evaporate_with_lifetime_growing_as_mass_cubed(self):
+        def lifetime(mass):
+            fibres.singularity(self.kernel, 5, mass)
+            seasons = 0
+            while "5" in fibres.state(self.kernel).get("singularities", {}):
+                fibres.relax(self.kernel)
+                seasons += 1
+            return seasons
+        small, big = lifetime(2.0), lifetime(4.0)
+        self.assertAlmostEqual(big / small, 8.0, delta=1.5)          # (4/2)^3
+
 
 if __name__ == "__main__":
     unittest.main()

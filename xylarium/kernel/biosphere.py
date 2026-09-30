@@ -123,14 +123,17 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     habs = getattr(planet, "habitats", 0) if habitats is None else habitats
     metab = metabolism or metabolism_of(kernel, planet)
     civ = getattr(planet, "civilization", None)
+    tailings = (getattr(planet, "element_deposits", {}) or {}).get("TAILINGS", 0)
     key = (tier, habs, metab, planet.planet_type, str(getattr(planet, "body", None)), planet.owner_id,
-           getattr(civ, "light_optimum", None))
+           getattr(civ, "light_optimum", None), tailings // 500)
     cache = getattr(planet, "_k_cache", None)
     if cache is not None and cache[0] == key:
         return cache[1]
     ld = land(kernel, planet, metabolism)
     natural = ld["area"] * ld["chemistry"] * ld["light"] * ld["season"]
-    k = int(PEOPLE_PER_EARTH_AREA * _TECH.get(tier, _TECH[max(_TECH)]) * (natural + _HAB_AREA * habs))
+    from xylarium.kernel.geology import pollution_factor
+    k = int(PEOPLE_PER_EARTH_AREA * _TECH.get(tier, _TECH[max(_TECH)]) * (natural + _HAB_AREA * habs)
+            * pollution_factor(planet))
     food = _CROP * ld["light"] * ld["season"]
     rate = min(_BIRTH, food) if k > 0 else F(0)
     prof = {"k": k, "food_rate_micro": int(food * MICRO), "rate_micro_per_cycle": int(rate * MICRO / _YEAR)}

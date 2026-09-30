@@ -20,6 +20,7 @@ from xylarium.config import (
     HULL_SCRAP_PER_1000_CR,
     SHIP_CATALOG,
 )
+from xylarium.kernel import matter
 from xylarium.kernel.models import ActionResult, ActionType, Captain, Sector
 from xylarium.kernel.experience import ExperienceManager
 
@@ -90,6 +91,10 @@ class NullSpaceManager:
             return ActionResult(success=False, action=ActionType.MINE_ASTEROIDS,
                                 message="Ore holds are full. Return to port or deliver your work order.")
         belt["reserve"] -= total
+        # Mining is a conversion: belt rock becomes the elements the lasers pulled out of it
+        matter.sink("mined", "BELT_ROCK", total)
+        for elem, q in mined.items():
+            matter.source("mined", elem, q)
         from xylarium.config import COMMODITY_CONFIG
         value = sum(q * COMMODITY_CONFIG.get(e, {}).get("base_price", 10) for e, q in mined.items())
         ExperienceManager.award(captain, "industry", min(4.0, max(XP_MINING, (value / 300) ** 0.5)), kernel,
@@ -103,6 +108,30 @@ class NullSpaceManager:
 
     # ------------------------------------------------------------------ debris & salvage
     @staticmethod
+    def abandon_hold(sector: Optional[Sector], captain: Captain, cycle: int, reason: str = "derelict") -> None:
+        """A ship that leaves the galaxy with its hold aboard (its captain dead, its commission struck) becomes a
+        derelict: the whole hold drifts as a salvageable debris field in its sector (nothing is thrown away)."""
+        cargo = captain.ship.cargo
+        spill: Dict[str, int] = {}
+        for core in ("ORE", "ORGANICS", "EQUIPMENT"):
+            if getattr(cargo, core.lower()) > 0:
+                spill[core] = getattr(cargo, core.lower())
+        for elem, qty in cargo.elements.items():
+            if qty > 0:
+                spill[elem] = qty
+        cargo.ore = cargo.organics = cargo.equipment = 0
+        cargo.elements = {}
+        cargo.bonded = {}
+        if not spill:
+            return
+        if sector is None:
+            for comm, q in spill.items():
+                matter.sink("lost_with_ship", comm, q)
+            return
+        sector.debris.append({"id": f"DERELICT-{sector.id:03d}-{cycle}-{random.randint(100, 999)}", "cargo": spill,
+                              "created": cycle, "source": f"{captain.name}'s {reason} {captain.ship.ship_type}"})
+
+    @staticmethod
     def create_debris(sector: Sector, captain: Captain, cycle: int) -> Optional[Dict[str, Any]]:
         """A destroyed hull scatters part of its hold and its own scrap metal into space."""
         cargo = captain.ship.cargo
@@ -115,10 +144,18 @@ class NullSpaceManager:
             units = int(qty * DEBRIS_CARGO_SHARE)
             if units > 0:
                 spill[elem] = units
+        # What the explosion vaporized: the hold's share that did not survive as debris (the hull is lost next)
+        for core in ("ORE", "ORGANICS", "EQUIPMENT"):
+            matter.sink("vaporized", core, getattr(cargo, core.lower()) - spill.get(core, 0))
+        for elem, qty in cargo.elements.items():
+            matter.sink("vaporized", elem, qty - spill.get(elem, 0))
+        # The hull itself becomes scrap metal (hull mass is not in the census until it breaks apart)
         hull_value = SHIP_CATALOG.get(captain.ship.ship_type, {}).get("price", 0)
         scrap = max(2, int(hull_value / 1000 * HULL_SCRAP_PER_1000_CR))
         spill["Fe"] = spill.get("Fe", 0) + scrap
         spill["Ti"] = spill.get("Ti", 0) + max(1, scrap // 2)
+        matter.source("hull_scrap", "Fe", scrap)
+        matter.source("hull_scrap", "Ti", max(1, scrap // 2))
         field = {"id": f"DEBRIS-{sector.id:03d}-{cycle}-{random.randint(100, 999)}", "cargo": spill,
                  "created": cycle, "source": f"{captain.name}'s {captain.ship.ship_type}"}
         sector.debris.append(field)
@@ -227,6 +264,20 @@ class NullSpaceManager:
         for sec in kernel.sectors.values():
             for belt in sec.belts:
                 if belt["reserve"] < belt["max_reserve"]:
-                    belt["reserve"] = min(belt["max_reserve"], belt["reserve"] + max(1, int(belt["max_reserve"] * BELT_REGEN_RATE)))
+                    grow = min(belt["max_reserve"] - belt["reserve"], max(1, int(belt["max_reserve"] * BELT_REGEN_RATE)))
+                    belt["reserve"] += grow
+                    matter.source("collisional_grinding", "BELT_ROCK", grow)
             if sec.debris:
-                sec.debris = [d for d in sec.debris if cycle - d.get("created", cycle) < DEBRIS_LIFETIME and d["cargo"]]
+                keep = []
+                for d in sec.debris:
+                    if cycle - d.get("created", cycle) < DEBRIS_LIFETIME and d["cargo"]:
+                        keep.append(d)
+                        continue
+                    # A dispersing wreck drifts into the sector's belt as rock (or out of the census into the dark)
+                    units = sum(d["cargo"].values())
+                    for comm, q in d["cargo"].items():
+                        matter.sink("debris_dispersed", comm, q)
+                    if sec.belts and units:
+                        sec.belts[0]["reserve"] += units
+                        matter.source("debris_accreted", "BELT_ROCK", units)
+                sec.debris = keep

@@ -276,6 +276,7 @@ class TestPlanetaryColonization(unittest.TestCase):
         self.planet.owner_id = "emperor"
         self.planet.treasury = 1000   # Citadel upkeep must be funded for taxes to accrue
         self.planet.population = 2000
+        self.planet.element_deposits["ORE"] = 10_000   # a crust to mine
 
         yield_data = ColonyManager.tick_colony(self.planet)
         self.assertTrue(yield_data["upkeep_paid"])

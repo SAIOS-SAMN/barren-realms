@@ -198,6 +198,7 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "physics": __import__("xylarium.kernel.physics", fromlist=["summary"]).summary(kernel.sectors),
         "fibres": __import__("xylarium.kernel.fibres", fromlist=["summary"]).summary(kernel),
         "credit": dict(getattr(kernel, "credit_stats", {}) or {}),
+        "geology": __import__("xylarium.kernel.geology", fromlist=["horizons"]).horizons(kernel),
     }
 
 
@@ -1024,8 +1025,8 @@ class RunStats:
             if s.port:
                 for comm, qty in s.port.stock.items():
                     mx = s.port.max_stock.get(comm, None) if isinstance(getattr(s.port, "max_stock", None), dict) else None
-                    if qty < 0 or (mx is not None and qty > mx * 2):  # ports store up to 2x nominal capacity
-                        self.violate("port_stock_out_of_range", f"sector {s.id} {comm}={qty} max={mx}")
+                    if qty < 0:   # a glutted warehouse is allowed (it pays next to nothing); a negative one is not
+                        self.violate("port_stock_negative", f"sector {s.id} {comm}={qty} max={mx}")
             for p in s.planets:
                 if p.treasury < 0:
                     self.violate("negative_planet_treasury", f"{p.name}: {p.treasury}")
@@ -1183,6 +1184,8 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
     kernel = GameKernel(seed=seed)
     money_at_genesis = money_supply(kernel)
     ledger_at_genesis = ledger_net(kernel)
+    from xylarium.kernel import matter as matter_mod
+    matter_at_genesis = (matter_mod.totals(kernel), kernel.matter.net())
     cosmos_at_genesis = cosmos_census(kernel)
     boot_s = time.perf_counter() - t_boot
     bots = make_players(kernel, rng)
@@ -1272,6 +1275,10 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
         "money": {
             "genesis": money_at_genesis,
             "ledger_genesis": ledger_at_genesis,
+            "matter": {"genesis": matter_at_genesis[0], "net_genesis": matter_at_genesis[1],
+                       "end": matter_mod.totals(kernel), "net_end": kernel.matter.net(),
+                       "sources": sorted(([k, c, v] for (k, c), v in kernel.matter.sources.items()), key=lambda x: -x[2])[:12],
+                       "sinks": sorted(([k, c, v] for (k, c), v in kernel.matter.sinks.items()), key=lambda x: -x[2])[:12]},
             "ledger_end": ledger_net(kernel),
             # authority churn: fiscal transfers minted + public services burned (both are the rule's own flows)
             "churn": {cur: kernel.ledger.minted.get(("fiscal_transfer", cur), 0)
@@ -1332,7 +1339,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 
 # Gates whose names start with these are laws (invariants); all others are observations.
 LAWS = (
-    "money conserved", "monetary churn", "quantity equation holds", "clearing union conserves", "settlement chain seals",
+    "money conserved", "matter conserved", "monetary churn", "quantity equation holds", "clearing union conserves", "settlement chain seals",
     "central banks solvent", "orbits never cross", "throughput per sector", "invariant violations",
     "exceptions", "deterministic",
 )
@@ -1380,6 +1387,17 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         declared = m["ledger_end"].get(cur, 0) - m["ledger_genesis"].get(cur, 0)
         undeclared = (end_total["total"] - start_total) - declared
         gate(f"money conserved: every change declared [{cur}]", "== 0", f"{undeclared:+,}", undeclared == 0)
+
+    mt = m.get("matter")
+    if mt:
+        broken = []
+        for comm in sorted(set(mt["end"]) | set(mt["genesis"])):
+            change = mt["end"].get(comm, 0) - mt["genesis"].get(comm, 0)
+            declared = mt["net_end"].get(comm, 0) - mt["net_genesis"].get(comm, 0)
+            if change != declared:
+                broken.append(f"{comm} {change - declared:+,}")
+        gate("matter conserved: every change declared (all commodities)", "0 undeclared",
+             ", ".join(broken[:8]) + (" ..." if len(broken) > 8 else "") if broken else "all exact", not broken)
 
     if len(tl) >= 2:
         first, last = tl[0], tl[-1]
@@ -1665,6 +1683,10 @@ def print_report(r: Dict[str, Any]) -> None:
             cr = ce["credit"]
             print(f"  credit: lent {cr.get('lent', 0):,}, interest {cr.get('interest', 0):,}, margin calls {cr.get('margin_calls', 0)}, "
                   f"defaults {cr.get('defaults', 0)} (written off {cr.get('written_off', 0):,}), corporate levy {cr.get('levied', 0):,}")
+        if ce.get("geology"):
+            g = ce["geology"]
+            print(f"  geology: mined crusts {g['crust_remaining_mean']} remaining on average (lowest {g['crust_remaining_min']}), "
+                  f"renewal / extraction {g['renewal_to_extraction']}, {g['stats']}")
         if "fibres" in ce:
             fb = ce["fibres"]
             print(f"  fibres: {fb['passages']:,} passages, {fb['developed_lanes']} of {fb['lanes']} lanes developed, "
@@ -1679,6 +1701,11 @@ def print_report(r: Dict[str, Any]) -> None:
                 print(f"    {cur}: reserves {b['reserves']:,}  loans {b['loans']:,}  rate/q {b['rate']:.4f}  STAMP {b['stamp']:+,}  {b['stats']}")
         for e in r.get("chronicle_samples", []):
             print(f"    - [{e['kind']}] {e['title']} (cycle {e['cycle']}): {e['body'][:220]}")
+    mt = r["money"].get("matter")
+    if mt:
+        print("\n[MATTER] declared sources and sinks, never netted (largest)")
+        print("  sources: " + ", ".join(f"{k}/{c} {v:,}" for k, c, v in mt["sources"][:8]))
+        print("  sinks:   " + ", ".join(f"{k}/{c} {v:,}" for k, c, v in mt["sinks"][:8]))
     print("\n[LAWS] invariants of the universe's physics and ledgers")
     for g in r["acceptance"]:
         if g.get("law"):

@@ -281,7 +281,7 @@ class IdeologyManager:
 
         # Transfer food
         sender.ship.cargo.organics -= amount_organics
-        target_planet.organics_silo = min(5000, target_planet.organics_silo + amount_organics)
+        target_planet.organics_silo += amount_organics          # aid is delivered whole
         target_planet.morale = min(100, target_planet.morale + 15)
 
         recipient_id = target_planet.owner_id if target_planet.owner_id else f"civ_{target_planet.name}"

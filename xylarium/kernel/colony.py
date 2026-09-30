@@ -37,6 +37,7 @@ from xylarium.config import (
     XP_INDUSTRY_DISTRICT,
     XP_GOVERNANCE_HEALTHY_TAX,
 )
+from xylarium.kernel import matter
 from xylarium.kernel.models import (
     Planet,
     Captain,
@@ -220,12 +221,12 @@ class ColonyManager:
         # Colony kit is consumed: credits to outfitters, equipment into habitat modules
         captain.credits -= COLONY_KIT_CREDITS
         cls._pay_contractor_sol(planet, COLONY_KIT_CREDITS)
-        captain.ship.cargo.equipment -= COLONY_KIT_EQUIPMENT
+        matter.consume(captain.ship.cargo, "equipment", "EQUIPMENT", COLONY_KIT_EQUIPMENT, "colony_kit")   # built into habitats
         if planet.population <= 0:
             from xylarium.kernel.universe import habitability
             planet.habitability = habitability(getattr(captain, "metabolism", "biotic"), planet.planet_type)
             planet.population = COLONY_KIT_COLONISTS
-            planet.organics_silo += COLONY_KIT_ORGANICS
+            matter.produce(planet, "organics_silo", "ORGANICS", COLONY_KIT_ORGANICS, "colony_kit")
         planet.owner_id = captain.id
         msg = (
             f"Colony founded! {planet.name} is now under the sovereignty of {captain.name} "
@@ -390,9 +391,9 @@ class ColonyManager:
 
         # Deduct ore
         if planet.ore_silo >= cost_ore:
-            planet.ore_silo -= cost_ore
+            matter.consume(planet, "ore_silo", "ORE", cost_ore, "construction")
         else:
-            captain.ship.cargo.ore -= cost_ore
+            matter.consume(captain.ship.cargo, "ore", "ORE", cost_ore, "construction")
 
         captain.credits -= cost_cr
         cls._pay_contractor_sol(planet, cost_cr)
@@ -493,11 +494,10 @@ class ColonyManager:
         # Deduct ore
         ore_needed = cost_ore
         if planet.ore_silo >= ore_needed:
-            planet.ore_silo -= ore_needed
+            matter.consume(planet, "ore_silo", "ORE", ore_needed, "construction")
         else:
-            ore_needed -= planet.ore_silo
-            planet.ore_silo = 0
-            captain.ship.cargo.ore -= ore_needed
+            ore_needed -= matter.consume(planet, "ore_silo", "ORE", planet.ore_silo, "construction")
+            matter.consume(captain.ship.cargo, "ore", "ORE", ore_needed, "construction")
 
         captain.credits -= cost_cr
         cls._pay_contractor_sol(planet, cost_cr)
@@ -638,14 +638,14 @@ class ColonyManager:
         famine_loss = 0
 
         if planet.organics_silo >= required_food:
-            planet.organics_silo -= required_food
+            matter.consume(planet, "organics_silo", "ORGANICS", required_food, "eaten")
             planet.morale = min(100, planet.morale + 2)
             pop_growth = biosphere.births(kernel, planet, max_pop)
             planet.population = max(1, planet.population + pop_growth)
         else:
             # Famine penalty: population decline and morale crash
             deficit = required_food - planet.organics_silo
-            planet.organics_silo = 0
+            matter.consume(planet, "organics_silo", "ORGANICS", planet.organics_silo, "eaten")
             famine = True
             famine_loss = min(planet.population - 100, max(5, deficit * 200))
             planet.population = max(100, planet.population - famine_loss)
@@ -696,7 +696,7 @@ class ColonyManager:
         spending = upkeep_credits + services_due
         upkeep_paid = (tax_yield + planet.treasury >= spending) and planet.ore_silo >= upkeep["ore"]
         if upkeep_paid:
-            planet.ore_silo -= upkeep["ore"]
+            matter.consume(planet, "ore_silo", "ORE", upkeep["ore"], "citadel_upkeep")
             # Taxes and public services are the fiscal pair (declared mint / burn) ...
             net = tax_yield - services_due
             if net >= 0:
@@ -729,8 +729,9 @@ class ColonyManager:
         # 3. Mining yields
         ore_mined = max(1, int(planet.population * 0.02))
         organics_harvested = biosphere.harvest(kernel, planet, demography.housing_cap(planet, kernel))
-        planet.ore_silo = min(5000, planet.ore_silo + ore_mined)
-        planet.organics_silo = min(5000, planet.organics_silo + organics_harvested)
+        from xylarium.kernel import geology
+        ore_mined = geology.mine_crust(planet, ore_mined)          # out of the world's own crust
+        organics_harvested = matter.produce(planet, "organics_silo", "ORGANICS", organics_harvested, "harvest")
         # Real output (the Y of M V = P Y): what was harvested and mined, at base prices and price level
         if ledger.ACTIVE_POLICY is not None and not is_indigenous_natives(planet):
             ledger.ACTIVE_POLICY.record_output(planet.currency, (organics_harvested * _BASE_ORGANICS
@@ -910,6 +911,7 @@ class ColonyManager:
         )
 
         kernel.captains[cap_id] = new_cap
+        matter.commission(new_cap)
         if planet.sector_id in kernel.sectors:
             kernel.sectors[planet.sector_id].captains.append(cap_id)
 
@@ -971,7 +973,7 @@ class ColonyManager:
         cls._pay_contractor_sol(planet, cost_cr, to_vault=True)   # civic works are paid through the world's budget
         if ore_amount > 0:
             captain.ship.cargo.ore -= ore_amount
-            planet.ore_silo = min(5000, planet.ore_silo + ore_amount)
+            planet.ore_silo += ore_amount                  # the colony's works draw on it from the silo
 
         total_work = work_points + (ore_amount * 2)
         civ.project_progress += total_work

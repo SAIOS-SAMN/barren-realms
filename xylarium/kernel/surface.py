@@ -12,6 +12,7 @@ import random
 import math
 from typing import Dict, List, Optional, Tuple, Any
 
+from xylarium.kernel import matter
 from xylarium.config import (
     SURFACE_GRID_WIDTH,
     SURFACE_GRID_HEIGHT,
@@ -624,11 +625,13 @@ class SurfaceManager:
             catalyst_h2o = min(hydro_count, planet.element_reserves.get("H2O", 0))
             if catalyst_h2o > 0:
                 planet.element_reserves["H2O"] -= catalyst_h2o
+                matter.sink("hydroponics", "H2O", catalyst_h2o)
                 base_org += catalyst_h2o * 10
             else:
                 catalyst_c = min(hydro_count, planet.element_reserves.get("C", 0))
                 if catalyst_c > 0:
                     planet.element_reserves["C"] -= catalyst_c
+                    matter.sink("hydroponics", "C", catalyst_c)
                     base_org += catalyst_c * 10
 
         # Mantle Bores consume Fe or Ti from planetary reserves to boost ore yield
@@ -637,16 +640,18 @@ class SurfaceManager:
             catalyst_fe = min(bore_count, planet.element_reserves.get("Fe", 0))
             if catalyst_fe > 0:
                 planet.element_reserves["Fe"] -= catalyst_fe
+                matter.sink("mantle_bores", "Fe", catalyst_fe)
                 base_ore += catalyst_fe * 10
             else:
                 catalyst_ti = min(bore_count, planet.element_reserves.get("Ti", 0))
                 if catalyst_ti > 0:
                     planet.element_reserves["Ti"] -= catalyst_ti
+                    matter.sink("mantle_bores", "Ti", catalyst_ti)
                     base_ore += catalyst_ti * 10
 
         # Apply final yields to silos
-        planet.ore_silo = min(10000, planet.ore_silo + base_ore)
-        planet.organics_silo = min(10000, planet.organics_silo + base_org)
+        matter.produce(planet, "ore_silo", "ORE", int(base_ore), "district_mining")
+        matter.produce(planet, "organics_silo", "ORGANICS", int(base_org), "district_farming")
 
         # Apply Shields
         if planet.shields < planet.max_shields:

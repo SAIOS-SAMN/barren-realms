@@ -41,6 +41,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from xylarium.kernel import matter
 from xylarium.kernel import physics
 from xylarium.config import (
     AUTHORITIES,
@@ -539,9 +540,12 @@ class FactionManager:
         return [l for l in logs if l]
 
     def _deliver_tithe(self, kernel: Any, f: Faction, fortress: Planet, goods: Dict[str, int], loss: float = 0.0) -> int:
+        """A transfer to the Fortress; only what is lost in unhauled transit leaves the census (declared)."""
         delivered = 0
-        for key, qty in goods.items():
-            qty = int(qty * (1.0 - loss))
+        for key, qty0 in goods.items():
+            qty = int(qty0 * (1.0 - loss))
+            if key != "MANPOWER" and qty0 - qty > 0:
+                matter.sink("tithe_transit_loss", key, qty0 - qty)
             if qty <= 0:
                 continue
             delivered += qty
@@ -571,9 +575,10 @@ class FactionManager:
             return []
         for k, v in IMPERIUM_WARSHIP_COST.items():
             if k == "ORE":
-                fortress.ore_silo -= v
+                matter.consume(fortress, "ore_silo", "ORE", v, "shipbuilding")
             else:
                 fortress.element_reserves[k] -= v
+                matter.sink("shipbuilding", k, v)
         has_hauler = any(kernel.captains[c].ship.ship_type == "Bulk Goliath" for c in live)
         hull = "Gothic Battle-Cruiser" if has_hauler else "Bulk Goliath"
         crew_float = self._pay_from_vault(kernel, f, IMPERIUM_CREW_FLOAT)   # paid in the realm's own money
@@ -632,7 +637,7 @@ class FactionManager:
                 tithed_sol += fxm.to_sol_value(w.currency, tithe)
             if w.organics_silo > ZEALOT_FEAST_ORGANICS:
                 burned = w.organics_silo - ZEALOT_FEAST_ORGANICS
-                w.organics_silo = ZEALOT_FEAST_ORGANICS
+                matter.consume(w, "organics_silo", "ORGANICS", burned, "zealot_feast")   # burned on the pyres
                 f.bump("feast_burned", burned)
                 f.dogma = min(1.0, f.dogma + 0.002)
         f.bump("surplus_tithed", int(tithed_sol))
@@ -755,6 +760,7 @@ class FactionManager:
         cap.alignment_record["baseline"] = f.alignment
         cap.faction_reputation[f.name.split()[-1]] = 90.0
         kernel.captains[cap.id] = cap
+        matter.commission(cap)
         kernel.sectors[sector_id].captains.append(cap.id)
         f.fleet.append(cap.id)
         return cap

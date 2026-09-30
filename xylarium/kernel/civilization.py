@@ -14,6 +14,7 @@ Implements:
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
 import random
+from xylarium.kernel import matter
 from xylarium.kernel.elements import PeriodicTable, PeriodicElement
 
 # 13 Class Archetype Sigils and Words
@@ -632,7 +633,7 @@ class CivilizationIntelligenceEngine:
                 # Check if planetary ore or organics are available to contribute
                 needed_ore = cfg.get("cost_ore", 0)
                 if needed_ore > 0 and planet.ore_silo >= 5:
-                    planet.ore_silo -= 5
+                    matter.consume(planet, "ore_silo", "ORE", 5, "civic_works")
                     progress_step += 5
 
                 civ.project_progress += progress_step
@@ -678,7 +679,9 @@ class CivilizationIntelligenceEngine:
                     civ.discovered_elements.append(new_elem.element_id)
                     new_element_discovered = new_elem.name
                     # Also seed deposit on planet
-                    deposits[new_elem.element_id] = deposits.get(new_elem.element_id, 0) + random.randint(20, 50)
+                    found = random.randint(20, 50)
+                    deposits[new_elem.element_id] = deposits.get(new_elem.element_id, 0) + found
+                    matter.source("prospecting", new_elem.element_id, found)   # ground newly surveyed
 
                 # Era advancement check
                 if len(civ.discovered_elements) >= (civ.era_index + 1) * 3:
@@ -723,10 +726,10 @@ class CivilizationIntelligenceEngine:
             planet.max_shields += 100
             planet.shields = min(planet.max_shields, planet.shields + 100)
         elif effect == "organics_bonus":
-            planet.organics_silo = min(5000, planet.organics_silo + 50)
+            matter.produce(planet, "organics_silo", "ORGANICS", 50, "civic_harvest")
             planet.morale = min(100, planet.morale + 10)
         elif effect == "ore_bonus":
-            planet.ore_silo = min(5000, planet.ore_silo + 50)
+            matter.produce(planet, "ore_silo", "ORE", 50, "civic_mining")
         elif effect == "famine_immunity":
             planet.morale = max(80, planet.morale)
         elif effect == "tax_bonus":

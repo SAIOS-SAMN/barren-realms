@@ -20,6 +20,8 @@ Xylarium: demography - peoples grow on their worlds, and then decide what to bec
 
 from typing import Any, Dict, List, Optional
 
+from xylarium.kernel import matter
+
 from xylarium.config import (
     CITADEL_CONFIG,
     COLONY_KIT_ORGANICS,
@@ -53,6 +55,7 @@ from xylarium.config import (
 )
 
 POLICIES = ("expand", "steady")
+ELEMENT_RESERVE_KEPT = 100      # refined units of each element a world keeps for its own works
 
 
 # ---------------------------------------------------------------------- housing
@@ -172,7 +175,7 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
         cost = int(cfg["upgrade_cost"] * level)
         if planet.treasury >= cost + reserve and planet.ore_silo >= cfg["upgrade_ore"]:
             _pay_contractor(kernel, planet, cost)
-            planet.ore_silo -= cfg["upgrade_ore"]
+            matter.consume(planet, "ore_silo", "ORE", cfg["upgrade_ore"], "construction")
             planet.citadel_level = nxt
             planet.works_ready_cycle = kernel.cycle_count + CITADEL_BUILD_QUARTERS_PER_TIER * nxt * _quarter_len()
             st["citadels"] += 1
@@ -189,7 +192,7 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
         cost = int(HABITAT_COST * level * (1 + planet.habitats))
         if planet.treasury >= cost + reserve and planet.ore_silo >= HABITAT_ORE:
             _pay_contractor(kernel, planet, cost)
-            planet.ore_silo -= HABITAT_ORE
+            matter.consume(planet, "ore_silo", "ORE", HABITAT_ORE, "construction")
             planet.habitats += 1
             planet.works_ready_cycle = kernel.cycle_count + HABITAT_BUILD_QUARTERS * _quarter_len()
             st["habitats"] += 1
@@ -436,6 +439,8 @@ def households(kernel: Any) -> None:
                     planet.household_purse -= bill
                     port.treasury += bill
                     port.stock[comm] = have - units
+                    from xylarium.kernel import matter
+                    matter.sink("households", comm, units)      # eaten, drunk, worn out at home
                     port.regional_income = round(port.regional_income + 0.3 * bill, 2)
                     budget -= bill
                     need -= units
@@ -479,8 +484,14 @@ def exports(kernel: Any) -> None:
             keep = {"ORGANICS": 2 * season_cycles * biosphere.consumption(planet),
                     "ORE": 2 * season_cycles * CITADEL_UPKEEP.get(planet.citadel_level, {"ore": 0})["ore"] + 500}
             silos = {"ORGANICS": "organics_silo", "ORE": "ore_silo"}
+            # refined element reserves beyond what the world's own works use are for sale too
+            for elem, have in list(planet.element_reserves.items()):
+                if have > ELEMENT_RESERVE_KEPT:
+                    silos[elem] = None
+                    keep[elem] = ELEMENT_RESERVE_KEPT
             for comm, attr in silos.items():
-                surplus = getattr(planet, attr) - keep[comm]
+                held = getattr(planet, attr) if attr else planet.element_reserves.get(comm, 0)
+                surplus = held - keep[comm]
                 if surplus <= 0:
                     continue
                 buyers = [p for p in ports if p.buys.get(comm)]
@@ -500,7 +511,10 @@ def exports(kernel: Any) -> None:
                     port.treasury -= bill
                     planet.household_purse += bill
                     port.stock[comm] = port.stock.get(comm, 0) + units
-                    setattr(planet, attr, getattr(planet, attr) - units)
+                    if attr:
+                        setattr(planet, attr, getattr(planet, attr) - units)
+                    else:
+                        planet.element_reserves[comm] -= units
                     surplus -= units
                     ex = st.setdefault("exports", {})
                     ex[planet.currency] = ex.get(planet.currency, 0) + bill

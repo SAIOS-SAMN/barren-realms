@@ -7,6 +7,7 @@ quarterly dividend distributions, and population-listed star trade freight contr
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
 import random
+from xylarium.kernel import matter
 from xylarium.kernel.models import TradeHauler, Captain, Ship, CargoHold, AIPersonality
 from xylarium.config import (
     COMMODITY_CONFIG,
@@ -909,7 +910,10 @@ class MarketManager:
             for comm in ("EQUIPMENT", "ORE"):
                 _, unit = EconomyManager.get_unit_prices(port, comm)
                 if unit > 0:
-                    port.stock[comm] = max(0, port.stock.get(comm, 0) - (local // 2) // unit)
+                    used = min(port.stock.get(comm, 0), (local // 2) // unit)
+                    port.stock[comm] = port.stock.get(comm, 0) - used
+                    from xylarium.kernel import matter
+                    matter.sink("company_inputs", comm, used)   # the firm's inputs, used up in its work
 
     @staticmethod
     def _local_price_level(currency: str) -> float:
@@ -1039,7 +1043,10 @@ class MarketManager:
         """A voided contract's bonded goods belong to the issuer and are unloaded from the courier."""
         cargo = captain.ship.cargo
         comm = contract.commodity.upper()
-        key = comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else comm.lower()
+        if comm in ("ORE", "ORGANICS", "EQUIPMENT"):
+            key = comm
+        else:
+            key = next((k for k in cargo.elements if k.lower() == contract.commodity.lower()), contract.commodity)
         take = min(contract.amount, cargo.held(key), cargo.bonded_units(key))
         cargo.release_bond(key, contract.amount)
         if take <= 0:
@@ -1050,6 +1057,14 @@ class MarketManager:
             cargo.elements[key] = cargo.elements.get(key, 0) - take
             if cargo.elements[key] <= 0:
                 cargo.elements.pop(key, None)
+        # The issuer's goods go back to the warehouse they were loaded from
+        from xylarium.kernel import ledger
+        k = ledger.active_kernel()
+        sec = k.sectors.get(contract.origin_sector) if k is not None else None
+        if sec is not None and sec.port is not None:
+            sec.port.stock[key] = sec.port.stock.get(key, 0) + take
+        else:
+            matter.sink("repossessed", key, take)
 
     def void_contract(self, contract: FreightContract, kernel: Any = None) -> None:
         """Expires a contract: refunds escrow, repossesses bonded goods, clears the courier manifest."""
@@ -1258,8 +1273,11 @@ class MarketManager:
         }
 
     def _purchase_goods_at_origin(self, contract: FreightContract) -> int:
+        """Load the contract's goods from the origin warehouse (what it holds, no more) and pay for them out of
+        the issuer's escrow. Records what physically left the warehouse in ``self._last_loaded``."""
         kernel = self._kernel_ref
-        if kernel is None or contract.escrow_amount <= 0:
+        self._last_loaded = (None, 0)
+        if kernel is None:
             return 0
         sec = kernel.sectors.get(contract.origin_sector)
         port = sec.port if sec is not None else None
@@ -1268,10 +1286,15 @@ class MarketManager:
         from xylarium.kernel.economy import EconomyManager
         from xylarium.kernel.fx import ACTIVE_FX
         comm = contract.commodity.upper()
+        key = comm if comm in port.stock else contract.commodity
+        units = min(contract.amount, max(0, port.stock.get(key, 0)))
+        if units <= 0:
+            return 0
         _, unit = EconomyManager.get_unit_prices(port, comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else contract.commodity)
-        units = min(contract.amount, max(0, port.stock.get(comm, port.stock.get(contract.commodity, 0))))
+        port.stock[key] = port.stock.get(key, 0) - units
+        self._last_loaded = (key, units)
         goods_local = unit * units                      # in the port's currency
-        if goods_local <= 0:
+        if goods_local <= 0 or contract.escrow_amount <= 0:
             return 0
         def to_sol(cur, amt):
             return ACTIVE_FX.to_sol_value(cur, amt) if (ACTIVE_FX and cur != "SOL") else amt
@@ -1289,8 +1312,6 @@ class MarketManager:
         elif ACTIVE_FX is not None:
             sol = spend if contract.currency == "SOL" else ACTIVE_FX.swap_to_sol(contract.currency, spend)
             port.treasury += sol if port.currency == "SOL" else ACTIVE_FX.swap_sol_to(port.currency, sol)
-        key = comm if comm in port.stock else contract.commodity
-        port.stock[key] = max(0, port.stock.get(key, 0) - units)
         return spend
 
     def forfeit_freight(self, captain: Any, kernel: Any = None) -> List[str]:
@@ -1352,6 +1373,10 @@ class MarketManager:
         # The goods are bought from the origin starport out of the issuer's escrow (converted through
         # the ISSE FX desk when currencies differ); the rest of the escrow is the courier's haulage fee.
         self._purchase_goods_at_origin(contract)
+        stock_key, loaded = self._last_loaded
+        if loaded <= 0:
+            return False, f"{contract.origin_name} has no {contract.commodity} to load for this contract.", {}
+        contract.amount = loaded                          # only what the warehouse held is carried
 
         # Load bonded freight
         contract.status = "IN_TRANSIT"
@@ -1368,10 +1393,10 @@ class MarketManager:
         elif comm == "EQUIPMENT":
             captain.ship.cargo.equipment += contract.amount
         else:
-            # Periodic element cargo
-            elem_id = comm.lower()
+            # Periodic element cargo, under the element's canonical key (as the warehouse held it)
+            elem_id = stock_key
             captain.ship.cargo.elements[elem_id] = captain.ship.cargo.elements.get(elem_id, 0) + contract.amount
-        captain.ship.cargo.bond(comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else comm.lower(), contract.amount)
+        captain.ship.cargo.bond(comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else stock_key, contract.amount)
 
         msg = (
             f"FREIGHT MANIFEST SIGNED: {contract.id} accepted! Loaded {contract.amount} units of {contract.commodity}. "
@@ -1406,15 +1431,22 @@ class MarketManager:
             if have < contract.amount:
                 return False, f"Work order short: hold contains {have}/{contract.amount} unbonded {contract.commodity}.", {}
             if core:
-                setattr(cargo, contract.commodity.lower(), getattr(cargo, contract.commodity.lower()) - contract.amount)
-                planet.ore_silo = min(5000, planet.ore_silo + contract.amount)
+                attr = contract.commodity.lower()
+                setattr(cargo, attr, getattr(cargo, attr) - contract.amount)
+                if attr == "ore":
+                    planet.ore_silo += contract.amount
+                elif attr == "organics":
+                    planet.organics_silo += contract.amount
+                else:
+                    matter.sink("colony_equipment", "EQUIPMENT", contract.amount)
             else:
                 cargo.elements[key] -= contract.amount
                 if cargo.elements[key] <= 0:
                     cargo.elements.pop(key, None)
                 planet.element_reserves[contract.commodity] = planet.element_reserves.get(contract.commodity, 0) + contract.amount
             comm = None
-        bond_key = comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else (comm.lower() if comm else "")
+        bond_key = comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else (
+            next((k for k in captain.ship.cargo.bonded if k.lower() == comm.lower()), comm) if comm else "")
         if comm and captain.ship.cargo.held(bond_key) >= contract.amount:
             captain.ship.cargo.release_bond(bond_key, contract.amount)
         if comm is None:
@@ -1423,18 +1455,19 @@ class MarketManager:
             if captain.ship.cargo.ore < contract.amount:
                 return False, f"Missing cargo! Hold only contains {captain.ship.cargo.ore} Ore.", {}
             captain.ship.cargo.ore -= contract.amount
-            planet.ore_silo = min(5000, planet.ore_silo + contract.amount)
+            planet.ore_silo += contract.amount
         elif comm == "ORGANICS":
             if captain.ship.cargo.organics < contract.amount:
                 return False, f"Missing cargo! Hold only contains {captain.ship.cargo.organics} Organics.", {}
             captain.ship.cargo.organics -= contract.amount
-            planet.organics_silo = min(5000, planet.organics_silo + contract.amount)
+            planet.organics_silo += contract.amount
         elif comm == "EQUIPMENT":
             if captain.ship.cargo.equipment < contract.amount:
                 return False, f"Missing cargo! Hold only contains {captain.ship.cargo.equipment} Equipment.", {}
             captain.ship.cargo.equipment -= contract.amount
+            matter.sink("colony_equipment", "EQUIPMENT", contract.amount)   # installed into the colony's works
         else:
-            elem_id = comm.lower()
+            elem_id = next((k for k in captain.ship.cargo.elements if k.lower() == comm.lower()), contract.commodity)
             if captain.ship.cargo.elements.get(elem_id, 0) < contract.amount:
                 return False, f"Missing element! Hold contains {captain.ship.cargo.elements.get(elem_id, 0)} {comm}.", {}
             captain.ship.cargo.elements[elem_id] -= contract.amount
@@ -2938,7 +2971,7 @@ class MarketManager:
         dst.treasury -= revenue
         fx.credit(owner, dst.currency, revenue)
         src.stock[comm] -= units
-        dst.stock[comm] = min(dst.max_stock.get(comm, 1000) * 2, dst.stock.get(comm, 0) + units)
+        dst.stock[comm] = dst.stock.get(comm, 0) + units
         return to_sol(dst.currency, revenue) - to_sol(src.currency, cost)
 
     def tick_trade_haulers(self, kernel: Any) -> List[str]:
@@ -3299,6 +3332,7 @@ class MarketManager:
                 )
 
                 kernel.captains[enforcer_id] = corp_cap
+                matter.commission(corp_cap)
                 if sec_id in kernel.sectors:
                     kernel.sectors[sec_id].captains.append(enforcer_id)
 
@@ -3355,6 +3389,7 @@ class MarketManager:
                 )
 
                 kernel.captains[bounty_id] = marshal_cap
+                matter.commission(marshal_cap)
                 if 1 in kernel.sectors:
                     kernel.sectors[1].captains.append(bounty_id)
 

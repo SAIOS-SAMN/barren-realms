@@ -317,6 +317,7 @@ class Port:
     remoteness: float = 0         # Fibre distance from Sol (developed lanes count less); drives the price gradient
     faction_id: Optional[str] = None  # Great power operating this starport (Imperial ports gouge xenos)
     consumed: Dict[str, int] = field(default_factory=dict)  # goods consumed this quarter (sold on to the region)
+    base_buys: Dict[str, bool] = field(default_factory=dict)  # the charter's buy list (restocking adds to it)
     regional_income: float = 0.0          # smoothed quarterly retail revenue from the region's households
 
     def to_dict(self) -> Dict[str, Any]:
@@ -333,6 +334,7 @@ class Port:
             "remoteness": self.remoteness,
             "faction_id": self.faction_id,
             "regional_income": self.regional_income,
+            "base_buys": dict(self.base_buys),
         }
 
     @classmethod
@@ -350,6 +352,7 @@ class Port:
             remoteness=float(data.get("remoteness", 0)),
             faction_id=data.get("faction_id"),
             regional_income=float(data.get("regional_income", 0.0)),
+            base_buys=dict(data.get("base_buys", {})),
         )
 
 

@@ -6,6 +6,7 @@ and permanent unlocking of Ghost Sectors and Smuggler Shortcuts.
 
 import random
 from typing import Dict, List, Optional, Any, Tuple
+from xylarium.kernel import matter
 from xylarium.kernel.models import (
     ActionType,
     ActionResult,
@@ -507,6 +508,7 @@ class CartographyManager:
             data=puzzle.to_dict(),
         )
 
+    @matter.declared("ghost_sector_genesis")
     def solve_puzzle(self, captain: Captain, puzzle_id: str, kernel: Any) -> ActionResult:
         """Permanently unlocks the secret Ghost Sector or Smuggler Shortcut in the universe graph."""
         puzzle = self.puzzles[puzzle_id]
@@ -749,7 +751,11 @@ class CartographyManager:
             tmpl = random.choice(matching_templates if matching_templates else FRAGMENT_TEMPLATES)
             frag = dict(tmpl)
             stow_fragment(captain, frag)
-            scrap_cr = captain.ship.cargo.stow("Fe", rng.randint(6, 20)) + captain.ship.cargo.stow("Ti", rng.randint(2, 8))
+            fe = captain.ship.cargo.stow("Fe", rng.randint(6, 20))
+            ti = captain.ship.cargo.stow("Ti", rng.randint(2, 8))
+            matter.source("deep_space_salvage", "Fe", fe)
+            matter.source("deep_space_salvage", "Ti", ti)
+            scrap_cr = fe + ti
             log_msg = f"[DEEP-VOID SALVAGE] Discovered drifting derelict in Sector {sec_id:03d}! Salvaged {frag['name']} and {scrap_cr} units of hull scrap."
             if kernel and hasattr(kernel, "action_logs"):
                 kernel.action_logs.append(log_msg)
@@ -763,6 +769,7 @@ class CartographyManager:
             )
         else:
             scrap_cr = captain.ship.cargo.stow("Fe", rng.randint(3, 10))
+            matter.source("deep_space_salvage", "Fe", scrap_cr)
             msg = f"Derelict hull picked clean by scavengers. Salvaged {scrap_cr} units of raw structural scrap."
             return ActionResult(
                 success=True,

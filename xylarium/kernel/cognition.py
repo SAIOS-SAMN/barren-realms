@@ -22,6 +22,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 
+from xylarium.kernel import matter
 from xylarium.kernel.models import (
     ActionType,
     ActionResult,
@@ -711,17 +712,24 @@ class SeatSurvive:
                                     ration_cost=0,
                                 )
                     if not sold_something and sell_candidates:
+                        # Nothing will buy it: jettison a load to make room - it floats free as salvage
                         c_name, c_qty = sell_candidates[0]
-                        if c_name == "ORE":
-                            captain.ship.cargo.ore = max(0, captain.ship.cargo.ore - min(10, c_qty))
-                        elif c_name == "ORGANICS":
-                            captain.ship.cargo.organics = max(0, captain.ship.cargo.organics - min(10, c_qty))
-                        elif c_name == "EQUIPMENT":
-                            captain.ship.cargo.equipment = max(0, captain.ship.cargo.equipment - min(10, c_qty))
-                        elif c_name in captain.ship.cargo.elements:
-                            captain.ship.cargo.elements[c_name] = max(0, captain.ship.cargo.elements[c_name] - min(10, c_qty))
-                            if captain.ship.cargo.elements[c_name] <= 0:
-                                del captain.ship.cargo.elements[c_name]
+                        cargo_h = captain.ship.cargo
+                        dump = min(10, c_qty, cargo_h.held(c_name))
+                        if c_name in ("ORE", "ORGANICS", "EQUIPMENT"):
+                            setattr(cargo_h, c_name.lower(), getattr(cargo_h, c_name.lower()) - dump)
+                        elif c_name in cargo_h.elements:
+                            cargo_h.elements[c_name] -= dump
+                            if cargo_h.elements[c_name] <= 0:
+                                del cargo_h.elements[c_name]
+                        if dump > 0:
+                            sec_j = kernel.sectors.get(captain.sector_id)
+                            if sec_j is not None:
+                                sec_j.debris.append({"id": f"JETSAM-{sec_j.id:03d}-{kernel.cycle_count}-{captain.id[:6]}",
+                                                     "cargo": {c_name: dump}, "created": kernel.cycle_count,
+                                                     "source": f"{captain.name}'s jettisoned hold"})
+                            else:
+                                matter.sink("jettisoned", c_name, dump)
 
                 # If in port that sells target_comm (and will serve us), buy rations - priced at the real
                 # counter price in the port's own money, paid from every currency the captain holds
@@ -2152,15 +2160,10 @@ class CognitiveOrgan:
             if res.success and deed.deed_name == "FORAGE_DEEP_VOID":
                 metab = getattr(captain, "metabolism", "biotic")
                 cargo = captain.ship.cargo
-                if metab == "mineral":
-                    cargo.stow("ORE", 5)
-                    cargo.stow("Si", 2)
-                elif metab == "plasmic":
-                    cargo.stow("H", 5)
-                    cargo.stow("He-3", 2)
-                else:  # biotic
-                    cargo.stow("ORGANICS", 5)
-                    cargo.stow("H2O", 3)
+                found = {"mineral": (("ORE", 5), ("Si", 2)), "plasmic": (("H", 5), ("He-3", 2))}.get(
+                    metab, (("ORGANICS", 5), ("H2O", 3)))
+                for comm, q in found:
+                    matter.source("forage", comm, cargo.stow(comm, q))   # gathered from the void
             return res
 
         return ActionResult(success=False, action=act, message=f"Unsupported deed action {act}.")

@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 from collections import deque
 import random
 
+from xylarium.kernel import matter
 from xylarium.config import (
     TOTAL_SECTORS,
     PLAYER_STARTING_SECTOR,
@@ -107,6 +108,8 @@ from xylarium.kernel import demography as demography_mod
 from xylarium.kernel import physics as physics_mod
 from xylarium.kernel import fibres as fibres_mod
 from xylarium.kernel import credit as credit_mod
+from xylarium.kernel import matter as matter_mod
+from xylarium.kernel import geology as geology_mod
 
 
 class GameKernel:
@@ -134,6 +137,7 @@ class GameKernel:
         self.federal_reserve = FederalReserve()
         self.fx_market = FXMarket()
         self.ledger = MoneyLedger()
+        self.matter = matter_mod.MatterLedger()          # declared sources and sinks of every commodity
         self.monetary_policy = ledger_mod.MonetaryPolicy()
         self.factions = FactionManager()
         self.chronicle = ChronicleEngine()
@@ -149,12 +153,14 @@ class GameKernel:
         self.initialize_universe(seed)
         self.research_manager.seed_initial_anomalies(self)
         ledger_mod.endow_exchange_depth(self)  # exchanges as deep as the economies they serve
+        geology_mod.survey(self)               # every world's crust is counted from the start
         self.monetary_policy.update(self)  # genesis reading sets each currency's supply target
 
     def activate(self) -> None:
         """Makes this kernel's FX desk and money ledger the ones module-level economics settle against."""
         fx_mod.set_active(getattr(self, "fx_market", None))
         ledger_mod.set_active(getattr(self, "ledger", None))
+        matter_mod.set_active(getattr(self, "matter", None))
         if getattr(self, "ledger", None) is not None:
             self.ledger.cycle_hint = self.cycle_count
         ledger_mod.set_active_policy(getattr(self, "monetary_policy", None))
@@ -306,6 +312,7 @@ class GameKernel:
         ledger_mod.mint("captain_charter", max(0, player.credits))
         # Crews launch provisioned with ten rations of their lineage's food
         player.ship.cargo.stow(CAPTAIN_RATIONS.get(lineage_metabolism, "ORGANICS"), 10)
+        matter_mod.commission(player, "charter")          # a new charter's stores enter the galaxy
         if (bind_lineage or self.single_lineage) and self.lineage is None:
             lineage_mod.found(self, player, background)
         # New charters come with the first maintenance interval of hull cover
@@ -2043,6 +2050,7 @@ class GameKernel:
             for s in self.sectors.values():
                 s.sentries.pop(cid, None)
             self.market_manager.forfeit_freight(cap, self)
+            NullSpaceManager.abandon_hold(sec, cap, self.cycle_count, "decommissioned")
             del self.captains[cid]
 
     @staticmethod
@@ -2593,6 +2601,7 @@ class GameKernel:
             cargo.elements[key] -= 1
             if cargo.elements[key] <= 0:
                 cargo.elements.pop(key, None)
+        matter_mod.sink("eaten", ration, 1)
         if cap.hunger >= CHRONICLE_HUNGER_SURVIVAL:
             chronicle_mod.log_hunger(self, cap, cap.hunger)
         cap.hunger = 0
@@ -2623,6 +2632,8 @@ class GameKernel:
         """Advance world simulation by one tick."""
         self.cycle_count += 1
         self.activate()
+        if getattr(self, "matter_audit", False):
+            matter_mod.audit(self)
 
         # Periodic BBS turn replenishment maintenance cycle (+ hull insurance renewals)
         if self.cycle_count % MAINTENANCE_INTERVAL_CYCLES == 0:
@@ -2653,6 +2664,8 @@ class GameKernel:
             # Credit: interest, margin calls, defaults; hoarded corporate cash levied back to home worlds
             for log in credit_mod.quarter(self):
                 self.action_logs.append(log)
+            # The worlds' own season: tectonic renewal, solar-wind He-3, volatile escape and outgassing, decay
+            geology_mod.quarter(self)
             # The fibres close their season: lane development, economies of scale, fibre distances
             fibres_mod.season(self)
             # Newly charted systems (ghost sectors, frontier clusters) get exact physics
@@ -2751,7 +2764,11 @@ class GameKernel:
         return [p for p in self.get_all_planets() if p.owner_id == owner_id]
 
     def find_path(self, start: int, goal: int) -> List[int]:
-        """Breadth-first search for shortest warp trajectory."""
+        """The geodesic between two sectors: cheapest under lane development and spacetime curvature."""
+        return fibres_mod.geodesic(self, start, goal)
+
+    def find_path_hops(self, start: int, goal: int) -> List[int]:
+        """Breadth-first search for the fewest-jumps warp trajectory (ignores costs)."""
         if start == goal:
             return [start]
         visited = {start}

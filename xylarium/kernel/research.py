@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple
 import random
 
+from xylarium.kernel import matter
 from xylarium.kernel.models import (
     Captain,
     Sector,
@@ -209,6 +210,7 @@ class ResearchManager:
                     # Draw 1 unit of leisure element
                     chosen_elem = random.choice(luxury_candidates)
                     reserves[chosen_elem] -= 1
+                    matter.sink("deep_cognition", chosen_elem, 1)     # a luxury used up in study
                     research_boost = 15
 
                     if getattr(owner, "active_research", None):
@@ -241,9 +243,10 @@ class ResearchManager:
 
                 # Passive Tech Effect: BIO_SYNTHESIZER (Ore -> Organics transposition)
                 owner_techs = getattr(owner, "technologies", [])
-                if "BIO_SYNTHESIZER" in owner_techs and planet.ore_silo >= 5:
-                    planet.ore_silo -= 5
-                    planet.organics_silo = min(5000, planet.organics_silo + 5)
+                if "BIO_SYNTHESIZER" in owner_techs and planet.ore_silo >= 5 and planet.organics_silo <= 4995:
+                    # a conversion: ore in, organics out
+                    matter.consume(planet, "ore_silo", "ORE", 5, "bio_synthesis")
+                    matter.produce(planet, "organics_silo", "ORGANICS", 5, "bio_synthesis")
 
         # 2. Captain passive tech benefits
         for cap in kernel.captains.values():
@@ -344,7 +347,7 @@ class ResearchManager:
 
             # Deposit exotic elements into cargo hold if space permits
             for elem_name, qty in anom.reward_elements.items():
-                captain.ship.cargo.stow(elem_name, qty)
+                matter.source("anomaly_reward", elem_name, captain.ship.cargo.stow(elem_name, qty))
 
             msg = (
                 f"ANOMALY DECODED: Successfully unlocked '{anom.name}' ({anom.id})! "
@@ -373,6 +376,7 @@ class ResearchManager:
             message="Investigation completed without resolution.",
         )
 
+    @matter.declared("cluster_genesis")
     def mint_frontier_cluster(self, kernel: Any, cluster_index: int) -> Tuple[bool, str, List[int]]:
         """
         The Observation Law (Netstratum 13_GALAXY):

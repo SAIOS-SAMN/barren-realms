@@ -113,7 +113,12 @@ COMMODITY_CONFIG = {
         "min_price": 55,
         "max_price": 260,
         "volatility": 0.60,
+        "recipe": {"ORE": 2},
     },
+    # Industrial waste: what fabrication leaves over (inputs = product + slag). Ports recycle it; tailings are
+    # landfilled into the region's ground, where they weigh on its worlds' living space.
+    "SLAG": {"name": "Industrial Slag", "symbol": "SLG", "category": "WASTE", "base_price": 2, "min_price": 1,
+             "max_price": 8, "volatility": 0.3},
 
     # [1] VOLATILES & LIFE PRECURSORS (Gases & Liquids)
     "H": {"name": "Hydrogen Fuel", "symbol": "H", "category": "VOLATILES", "base_price": 12, "min_price": 6, "max_price": 35, "volatility": 0.40},

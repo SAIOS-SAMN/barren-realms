@@ -21,6 +21,7 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
+from xylarium.kernel import matter
 from xylarium.config import LINEAGE_START_CLONES, LINEAGE_LEGACY_FILE
 
 
@@ -388,6 +389,7 @@ def _void_breeds_corsairs(kernel: Any) -> Optional[str]:
     cap.cosmic_alignment = -0.45
     cap.alignment_record["baseline"] = -0.45
     kernel.captains[cap.id] = cap
+    matter.commission(cap)
     lair.captains.append(cap.id)
     house = npc_found(kernel, cap, "void")
     return f"[HOUSE] The Deep Void breeds a new corsair line: {house['name']} rises at Sector {lair.id:03d}."
@@ -433,6 +435,8 @@ def _npc_death(kernel: Any, captain: Any, cause: str) -> str:
             else:
                 h.active = False
     kernel.market_manager.forfeit_freight(captain, kernel)
+    from xylarium.kernel.nullspace import NullSpaceManager
+    NullSpaceManager.abandon_hold(kernel.sectors.get(captain.sector_id), captain, kernel.cycle_count, "derelict")
     for s in kernel.sectors.values():
         s.sentries.pop(captain.id, None)
         if captain.id in s.captains:

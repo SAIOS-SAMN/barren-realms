@@ -5,6 +5,7 @@ Heuristic decision loops for Traders, Pirates, Industrialists, and Mercenaries.
 
 import random
 from typing import Dict, List, Optional, TYPE_CHECKING
+from xylarium.kernel import matter
 from xylarium.config import (
     AI_CAPTAINS_CONFIG,
     COMMODITY_CONFIG,
@@ -479,6 +480,7 @@ class AIManager:
         child_cap.cosmic_alignment = round(max(-1.0, min(1.0, captain.cosmic_alignment * 0.8 + random.uniform(-0.15, 0.15))), 3)
         child_cap.alignment_record["baseline"] = child_cap.cosmic_alignment
         kernel.captains[child_id] = child_cap
+        matter.commission(child_cap)
         if start_sec in kernel.sectors:
             kernel.sectors[start_sec].captains.append(child_id)
         from xylarium.kernel import chronicle, lineage

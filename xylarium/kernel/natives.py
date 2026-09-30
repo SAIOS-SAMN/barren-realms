@@ -34,6 +34,7 @@ import zlib
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
+from xylarium.kernel import matter
 from xylarium.config import (
     NATIVE_WORLD_SHARE,
     NATIVE_STAGES,
@@ -294,6 +295,7 @@ class NativeManager:
                 received[elem] = got
         if not received:
             got = cargo.stow(produce, NATIVE_TRADE_UNITS)
+            matter.source("native_produce", produce, got)          # grown and made by their hands
             if got:
                 received[produce] = got
         _take(cargo, give, NATIVE_TRADE_UNITS)
@@ -617,12 +619,18 @@ def _advance_text(n: Dict[str, Any], old: str) -> str:
 
 
 def _take(cargo: Any, good: str, qty: int) -> None:
+    """Goods handed to a native society leave the census (their society is not an account of ours)."""
     if good in ("ORE", "ORGANICS", "EQUIPMENT"):
-        setattr(cargo, good.lower(), max(0, getattr(cargo, good.lower()) - qty))
+        have = getattr(cargo, good.lower())
+        taken = min(have, qty)
+        setattr(cargo, good.lower(), have - taken)
+        matter.sink("native_society", good, taken)
         return
     key = next((k for k in cargo.elements if k.lower() == good.lower()), good)
-    left = cargo.elements.get(key, 0) - qty
-    if left > 0:
-        cargo.elements[key] = left
+    have = cargo.elements.get(key, 0)
+    taken = min(have, qty)
+    if have - taken > 0:
+        cargo.elements[key] = have - taken
     else:
         cargo.elements.pop(key, None)
+    matter.sink("native_society", key, taken)
