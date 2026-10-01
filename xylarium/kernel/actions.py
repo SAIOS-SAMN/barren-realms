@@ -510,6 +510,7 @@ def _ideology_aid_dispatch(k: Any, captain: Any, current_sector: Any, kwargs: Di
         captain=captain,
         target_planet=p,
         food_units=int(kwargs.get("food_units", 20)),
+        kernel=k,
     )
     return result
 

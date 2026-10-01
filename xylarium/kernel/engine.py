@@ -116,6 +116,8 @@ from xylarium.kernel import law as law_mod
 from xylarium.kernel import crime as crime_mod
 from xylarium.kernel import fertility as fertility_mod
 from xylarium.kernel import nursery as nursery_mod
+from xylarium.kernel import staples as staples_mod
+from xylarium.kernel import sustenance as sustenance_mod
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
@@ -1428,6 +1430,8 @@ class GameKernel:
                         "vault": p.treasury, "currency": p.currency,
                         "vault_sol": int(fxm.to_sol_value(p.currency, p.treasury)),
                         "organics": p.organics_silo, "ore": p.ore_silo, "seat": p.id == home,
+                        "staple": staples_mod.of(self, p), "food": staples_mod.stores(self, p),
+                        "sustenance": p.society.get("sustenance"),
                         "under_siege": bool(p.siege),
                     })
         colonies.sort(key=lambda c: (not c["seat"], -c["population"]))
@@ -1660,7 +1664,8 @@ class GameKernel:
 
     def _handle_population_policy(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
         """Sets a governed world's population policy: EXPAND (settler fleets) or STEADY (population controls),
-        or its natal card: NATAL=PROPAGATION / ASCETIC / NONE, or raises its nursery (NURSERY=1)."""
+        or its natal card: NATAL=PROPAGATION / ASCETIC / NONE, raises its nursery (NURSERY=1), or sends its
+        garrison to take its staple from the richest holder in reach (RAID=1)."""
         planet = self.get_planet(kwargs.get("planet_id", ""))
         if planet is None:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message="No such world.")
@@ -1669,6 +1674,15 @@ class GameKernel:
                 if planet.owner_id != captain.id:
                     raise ValueError(f"You do not govern {planet.name}.")
                 msg = nursery_mod.build(self, planet)
+            elif kwargs.get("raid"):
+                if planet.owner_id != captain.id:
+                    raise ValueError(f"You do not govern {planet.name}.")
+                fed = planet.society.get("sustenance") not in sustenance_mod.HUNGRY
+                msg = sustenance_mod.raid(self, planet)
+                if msg is None:
+                    raise ValueError(f"No one in {planet.name}'s reach holds {staples_mod.of(self, planet)} to take.")
+                if fed:                                   # a fed people raiding is plunder, not necessity
+                    alignment_mod.deed(self, captain, "food_raid")
             elif kwargs.get("natal") is not None:
                 msg = fertility_mod.set_natal(self, captain, planet, kwargs.get("natal", ""))
             else:

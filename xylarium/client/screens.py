@@ -323,6 +323,41 @@ def prompt_stations(cli: Any) -> None:
         cli._print_result(kernel.dispatch(pid, ActionType.CHARTER_ACCEPT))
 
 
+def render_peoples(kernel: Any, captain: Any) -> str:
+    """The known peoples by what they eat: how many, how far they reach, whether they feed themselves."""
+    from xylarium.kernel import staples, sustenance
+    lines = [_rule("THE PEOPLES OF THE KNOWN SECTORS - by what they eat")]
+    lines.append(c_cyan("  METABOLISM   STAPLE      PEOPLES  OFF-WORLD   PEOPLE      WORLDS SECTORS  FEEDS ITSELF  STATES"))
+    for metab, m in sorted(sustenance.census(kernel).items(), key=lambda kv: -kv[1]["people"]):
+        states = ", ".join(f"{k} {v}" for k, v in sorted(m["states"].items(), key=lambda kv: -kv[1]))
+        tone = c_green if m["self_sufficiency"] >= 1.0 else (c_gold if m["self_sufficiency"] >= 0.7 else c_red)
+        lines.append(f"  {metab:<12} {m['staple']:<10} {m['peoples']:>7} {m['off_world']:>9} {m['people']:>10,} "
+                     f"{m['worlds']:>7} {m['sectors']:>7}  {tone(format(m['self_sufficiency'], '.0%')):>12}  {states}")
+    st = sustenance.stats(kernel)
+    lines.append(c_gray(f"  Food wars: {len(st['wars'])} active, {st['wars_begun']} begun, {st['wars_ended']} ended; "
+                        f"{st['raids']} raids ({st['repulsed']} repulsed); relief sent {st['relief']} times "
+                        f"({st['relief_units']:,} units); {st['exodus']} exodus fleets."))
+    for war in list(st["wars"].values())[:6]:
+        lines.append(c_red(f"    {sustenance.people_name(kernel, war['a'])} -> {sustenance.people_name(kernel, war['b'])}"
+                           f" over {war['staple']}: {war['raids']} raids, {war['seized']:,} seized"))
+    mine = kernel.get_planets_owned_by(captain.id)
+    if mine:
+        lines.append(bold(c_white("\n  YOUR WORLDS")))
+        for p in mine:
+            soc = p.society
+            lines.append(f"  {p.name:<24} eats {staples.of(kernel, p):<9} stores {staples.stores(kernel, p):>7,}  "
+                         f"self-sufficiency {soc.get('self_sufficiency', 1.0):>5.0%}  "
+                         f"{(soc.get('sustenance') or 'secure').upper()}")
+    lines.append(c_gray("  A people that cannot feed itself expands if it can sail and find open worlds, or takes food "
+                        "from others if it cannot. Grain is no relief to a people that drinks ice."))
+    return "\n".join(lines)
+
+
+def prompt_peoples(cli: Any) -> None:
+    print(render_peoples(cli.kernel, cli.kernel.captains[cli.player_id]))
+    _ask("Enter to return > ")
+
+
 SCREENS: Dict[str, Callable[[Any], None]] = {
     "ADVISOR": prompt_advisor,
     "REALMS": prompt_realms,
@@ -330,4 +365,5 @@ SCREENS: Dict[str, Callable[[Any], None]] = {
     "DRIVE": prompt_drives,
     "STATION": prompt_stations,
     "CHARTER": prompt_stations,
+    "PEOPLES": prompt_peoples,
 }

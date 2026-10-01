@@ -419,8 +419,11 @@ class SeatSurvive:
             # 1. RATION BOOK
             ration_book = LedgerBook("RATION")
             required_food = max(1.0, pop / 1000.0)
-            ration_book.add("ORGANICS", planet.organics_silo, required_food * 20.0)
-            ration_book.add("WATER", planet.element_reserves.get("H2O", 10), required_food * 10.0)
+            from xylarium.kernel import staples          # a people's rations are its own staple
+            food = staples.of(kernel, planet)
+            ration_book.add(food, staples.held(planet, food), required_food * 20.0)
+            if food == "ORGANICS":
+                ration_book.add("WATER", planet.element_reserves.get("H2O", 10), required_food * 10.0)
             books["RATION"] = ration_book
 
             # 2. THERMAL BOOK
@@ -561,6 +564,11 @@ class SeatSurvive:
             div.add("ORGANICS", planet.organics_silo, req_bio * 20.0)
             div.add("ORE", planet.ore_silo, 100.0)
             div.add("TREASURY", planet.treasury, 5000.0)
+            from xylarium.kernel import staples          # the staple's need overrides its generic entry
+            food = staples.of(kernel, planet)
+            if food != "ORGANICS":
+                div.add("ORGANICS", planet.organics_silo, 0.0)
+            div.add(food, staples.held(planet, food), req_bio * 20.0 + (100.0 if food == "ORE" else 0.0))
 
         return div
 
@@ -933,45 +941,43 @@ class SeatSurvive:
                             ration_cost=0,
                         )
 
-            # Colony Equilibrium Check: Relieve acute deficits on owned colonies
+            # Colony Equilibrium Check: Relieve acute deficits on owned colonies - in the colonists' own staple
             if current_sec.planets:
+                from xylarium.kernel import staples
                 for p in current_sec.planets:
                     if p.owner_id == captain.id:
                         p_books = cls.peel_books(p, kernel)
                         p_ration = p_books.get("RATION")
                         if p_ration and not p_ration.is_closed:
                             p_def = p_ration.get_acute_deficit()
-                            if p_def and p_def.coordinate in ["ORGANICS", "WATER", "H2O", "C"]:
+                            food = staples.of(kernel, p)
+                            want = "H2O" if (p_def and p_def.coordinate == "WATER") else food
+                            if p_def and p_def.coordinate in (food, "WATER"):
                                 # Transfer cargo from ship if available
-                                if p_def.coordinate in ["ORGANICS", "C"] and captain.ship.cargo.unbonded("ORGANICS") >= 10:
+                                core = want in ("ORGANICS", "ORE")
+                                lot = 10 if core else 5
+                                if captain.ship.cargo.unbonded(want) >= lot:
                                     return CognitiveDeed(
                                         seat="SURVIVE",
-                                        action_type=ActionType.PLANET_CARGO_TRANSFER,
+                                        action_type=ActionType.PLANET_CARGO_TRANSFER if core else ActionType.PLANET_ELEMENT_TRANSFER,
                                         deed_name="RELIEVE_COLONY_DEFICIT",
-                                        target_coordinate=p_def.coordinate,
+                                        target_coordinate=want,
                                         residual_magnitude=p_def.deficit,
-                                        parameters={"planet_id": p.id, "commodity": "ORGANICS", "direction": "to_planet", "amount": 10},
-                                        ration_cost=0,
-                                    )
-                                if p_def.coordinate in ["H2O", "WATER"] and captain.ship.cargo.unbonded("H2O") >= 5:
-                                    return CognitiveDeed(
-                                        seat="SURVIVE",
-                                        action_type=ActionType.PLANET_ELEMENT_TRANSFER,
-                                        deed_name="RELIEVE_COLONY_DEFICIT",
-                                        target_coordinate="H2O",
-                                        residual_magnitude=p_def.deficit,
-                                        parameters={"planet_id": p.id, "element": "H2O", "direction": "to_planet", "amount": 5},
+                                        parameters=({"planet_id": p.id, "commodity": want, "direction": "to_planet", "amount": lot}
+                                                    if core else
+                                                    {"planet_id": p.id, "element": want, "direction": "to_planet", "amount": lot}),
                                         ration_cost=0,
                                     )
                                 # Or buy from local port
-                                if current_sec.port and current_sec.port.sells.get("ORGANICS", False) and current_sec.port.stock.get("ORGANICS", 0) > 0 and captain.credits >= 200:
+                                port = current_sec.port
+                                if port and port.sells.get(want, False) and port.stock.get(want, 0) > 0 and captain.credits >= 200:
                                     return CognitiveDeed(
                                         seat="SURVIVE",
                                         action_type=ActionType.TRADE,
                                         deed_name="PROCURE_RELIEF_RATIONS",
-                                        target_coordinate=p_def.coordinate,
+                                        target_coordinate=want,
                                         residual_magnitude=p_def.deficit,
-                                        parameters={"trade_type": "BUY", "commodity": "ORGANICS", "amount": 10},
+                                        parameters={"trade_type": "BUY", "commodity": want, "amount": lot},
                                         ration_cost=0,
                                     )
 
@@ -995,7 +1001,7 @@ class SeatSurvive:
                             p_ration = p_books.get("RATION")
                             if p_ration and not p_ration.is_closed:
                                 p_def = p_ration.get_acute_deficit()
-                                if p_def and p_def.coordinate in ["ORGANICS", "WATER", "H2O", "C"]:
+                                if p_def and p_def.coordinate in ["ORGANICS", "WATER"]:     # haulers carry grain
                                     return CognitiveDeed(
                                         seat="SURVIVE",
                                         action_type=ActionType.HAULER_COMMISSION,
@@ -1020,7 +1026,9 @@ class SeatSurvive:
                     unclaimed = [
                         p for p in current_sec.planets
                         if p.owner_id is None and ColonyManager.claim_requirements(captain, p, current_sec, kernel) is None
+                        and SeatGrow.feeds(captain, p, kernel) > 0
                     ]
+                    unclaimed.sort(key=lambda p: -SeatGrow.feeds(captain, p, kernel))   # where its people can eat
                     if unclaimed:
                         return CognitiveDeed(
                             seat="SURVIVE",
@@ -1529,6 +1537,8 @@ class SeatGrow:
         t = temperament(captain, kernel)
         if t["calling"] != "colonist" or captain.credits < COLONY_KIT_CREDITS * 2 or kernel.get_planets_owned_by(captain.id):
             return []
+        # A colonist reads the worlds in reach as a farmer would: how many of its own people each could feed on
+        # its own staple (the land's carrying capacity for its metabolism), discounted by the voyage
         best = None
         for sid, d in sorted(dist.items(), key=lambda kv: kv[1]):
             if d > 6:
@@ -1538,15 +1548,22 @@ class SeatGrow:
                 if p.owner_id is None and not p.natives and not p.faction_id and p.population <= 0:
                     reason = ColonyManager.claim_requirements(captain, p, sec, kernel)
                     if reason is None or "Equipment" in reason:
-                        best = (d, p)
-                        break
-            if best:
-                break
+                        k = cls.feeds(captain, p, kernel)
+                        if k > 0 and (best is None or k / (d + 4) > best[2] / (best[0] + 4)):
+                            best = (d, p, k)
         if not best:
             return []
-        d, planet = best
-        value = 400.0 * t["horizon"] / (d + 4)   # a lasting asset, valued by how patient the captain is
+        d, planet, k = best
+        fertile = min(2.0, k / 20_000.0)            # a world that feeds twenty thousand is a full prize
+        value = 400.0 * t["horizon"] * (0.5 + fertile) / (d + 4)   # a lasting asset, valued by patience and harvest
         return [(value, {"kind": "settle", "planet_id": planet.id, "since": cls._cycle(kernel)}, None)]
+
+    @staticmethod
+    def feeds(captain: Captain, planet: Any, kernel: "GameKernel") -> int:
+        """How many of the captain's people this world could feed on their own staple as a new colony."""
+        from xylarium.kernel import biosphere
+        return biosphere.carrying_capacity(kernel, planet, citadel=1, habitats=0,
+                                           metabolism=getattr(captain, "metabolism", None) or "biotic")
 
     @staticmethod
     def _shipyard_for(captain: Captain, kernel: "GameKernel", dist: Dict[int, int]) -> Optional[int]:

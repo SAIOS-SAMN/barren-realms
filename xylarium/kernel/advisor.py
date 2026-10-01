@@ -172,7 +172,21 @@ def worlds(kernel: Any, captain: Any) -> List[Dict[str, Any]]:
         if unmet:
             out.append(_op("world", f"{p.name} has gone without {', '.join(t[4:].lower() for t in unmet)}",
                            "its council is bidding up the price: haul some in", "TRADE", 0.0))
-        from xylarium.kernel import nursery
+        from xylarium.kernel import nursery, staples
+        food, state = staples.of(kernel, p), soc.get("sustenance")
+        if state == "pressed":
+            out.append(_op("world", f"{p.name} cannot feed its people and has nowhere open to go",
+                           f"it eats {food}; stores {staples.stores(kernel, p):,}. Haul {food} in, or RAID the richest "
+                           f"holder in reach (it will cost you in the Light)", "POPULATION (World # RAID)", 0.0,
+                           urgent=True))
+        elif state == "stranded":
+            out.append(_op("world", f"{p.name} is hungry and has no yards to reach other worlds",
+                           f"it eats {food}; bring {food} in by freight, or raise its citadel to Tier 2 to build ships",
+                           "TRADE", 0.0, urgent=True))
+        elif state == "expanding":
+            out.append(_op("world", f"{p.name} is hungry, but open worlds lie in reach",
+                           f"it eats {food}: an exodus fleet will carry its people where they can eat", "POPULATION",
+                           0.0))
         fp = soc.get("fertility_parts") or {}
         n = soc.get("nursery")
         name = nursery.design(kernel, p)["name"]

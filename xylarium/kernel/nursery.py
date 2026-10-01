@@ -91,7 +91,7 @@ def supply(kernel: Any, planet: Any, inputs: List[Tuple[str, int]], need: float,
     """
     from xylarium.kernel.colony import ColonyManager
     from xylarium.kernel.economy import EconomyManager
-    from xylarium.kernel.luxury import _reserve
+    from xylarium.kernel.staples import reserve
     left = float(need)
     port = ColonyManager._contractor_port(planet, kernel)
     for comm, per in inputs:
@@ -99,7 +99,7 @@ def supply(kernel: Any, planet: Any, inputs: List[Tuple[str, int]], need: float,
             break
         comm = _resolve(kernel, planet, comm)
         want = int(math.ceil(left * per))
-        own = min(want, max(0, _held(planet, comm) - _reserve(kernel, planet, comm)))
+        own = min(want, max(0, _held(planet, comm) - reserve(kernel, planet, comm)))
         if own > 0:
             _move(planet, comm, -own)
             if to is None:
@@ -297,8 +297,8 @@ def kit_room(kernel: Any, planet: Any, metab: str, emigrants: int) -> int:
     units = 0.0
     for comm, per in inputs:
         comm = _resolve(kernel, planet, comm)
-        from xylarium.kernel.luxury import _reserve
-        have = max(0, _held(planet, comm) - _reserve(kernel, planet, comm)) + \
+        from xylarium.kernel.staples import reserve
+        have = max(0, _held(planet, comm) - reserve(kernel, planet, comm)) + \
             (port.stock.get(comm, 0) if port is not None else 0)
         units += have / per
     return min(emigrants, int(units * 1000 / per_thousand))

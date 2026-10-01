@@ -384,13 +384,14 @@ class EspionageManager:
                     logs.append(f">> GRID OVERLOAD: Sabotaged {target_captain.name}'s shield matrix! Disrupted {dmg} MW of deflectors. (Remaining: {target_captain.ship.shields} MW)")
 
             elif op_type == "destabilize" and planet:
-                lost_org = max(5, planet.organics_silo // 2)
-                planet.organics_silo = max(0, planet.organics_silo - lost_org)
+                from xylarium.kernel import staples          # the people's own food is fouled
+                food = staples.of(kernel, planet) if kernel is not None else "ORGANICS"
+                lost_org = staples.take(planet, food, max(5, staples.held(planet, food) // 2), "sabotage")
                 morale_hit = random.randint(25, 45)
                 planet.morale = max(10, planet.morale - morale_hit)
                 data["lost_organics"] = lost_org
                 data["morale_hit"] = morale_hit
-                logs.append(f">> BIOSPHERE TOXICITY: Contaminated {lost_org} units of Organics in silos! Morale crashed by -{morale_hit}% (Current: {planet.morale}%).")
+                logs.append(f">> BIOSPHERE TOXICITY: Contaminated {lost_org} units of {food} in its stores! Morale crashed by -{morale_hit}% (Current: {planet.morale}%).")
 
             elif op_type == "cartographic_heist":
                 stolen_frags = []

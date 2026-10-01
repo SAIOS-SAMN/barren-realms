@@ -57,14 +57,10 @@ def held(planet: Any, comm: str) -> int:
 
 
 def _reserve(kernel: Any, planet: Any, comm: str) -> int:
-    """What the world keeps of an input for itself: two seasons' food, its works' ore, a reserve of elements."""
-    from xylarium.kernel import biosphere
-    from xylarium.kernel.demography import ELEMENT_RESERVE_KEPT, _quarter_len
-    if comm == "ORGANICS":
-        return 2 * _quarter_len() * biosphere.consumption(planet)
-    if comm == "ORE":
-        return 600
-    return ELEMENT_RESERVE_KEPT
+    """What the world keeps of an input for itself: two seasons of its staple, its works' ore, a reserve of
+    elements (staples.reserve)."""
+    from xylarium.kernel import staples
+    return staples.reserve(kernel, planet, comm)
 
 
 def _take(planet: Any, comm: str, n: int, kind: str) -> None:

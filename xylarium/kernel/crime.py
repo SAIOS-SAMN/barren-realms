@@ -176,20 +176,23 @@ def quarter(kernel: Any) -> List[str]:
                         owner.credits += sol
                         st["skimmed_sol"] += sol
                         law.file(kernel, "embezzlement", owner, sec, sol, {"kind": "planet", "id": p.id})
-            # 2. Raids: a dark civilization takes a neighbouring world's grain in its own system
+            # 2. Raids of greed: a dark civilization takes a neighbouring world's stores of what it eats, in its
+            #    own system (raids of hunger, across systems, are sustenance.py's)
             civ = getattr(p, "civilization", None)
             if civ is not None and p.owner_id is None and p.population > 0 and (civ.alignment or 0.0) < -0.3:
                 rng = _rng("raid", p.id, kernel.cycle_count)
                 if rng.random() < min(1.0, -civ.alignment):
-                    victims = [w for w in sec.planets if w is not p and w.population > 0 and w.organics_silo > 100]
+                    from xylarium.kernel import staples
+                    food = staples.of(kernel, p)
+                    victims = [w for w in sec.planets if w is not p and w.population > 0 and staples.held(w, food) > 100]
                     if victims:
-                        v = max(victims, key=lambda w: w.organics_silo)
-                        take = v.organics_silo // 10
-                        v.organics_silo -= take
-                        p.organics_silo += take                  # a transfer: the grain changes hands
+                        v = max(victims, key=lambda w: staples.held(w, food))
+                        take = staples.held(v, food) // 10
+                        staples.move(v, food, -take)
+                        staples.move(p, food, take)              # a transfer: the stores change hands
                         v.morale = max(10, v.morale - 5)
                         st["raids"] += 1
-                        logs.append(f"[RAID] The {civ.name} of {p.name} raided {v.name}'s granaries ({take} organics).")
+                        logs.append(f"[RAID] The {civ.name} of {p.name} raided {v.name}'s stores ({take} {food}).")
     return logs
 
 

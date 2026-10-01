@@ -217,6 +217,7 @@ class TerminalClient:
         **{w: "DRIVE" for w in ["DRIVE", "DRIVES", "REFIT", "FUEL"]},
         **{w: "STATION" for w in ["STATION", "STATIONS", "RESORT", "TOURISM"]},
         **{w: "CHARTER" for w in ["CHARTER", "CHARTERS", "VIP", "LINER"]},
+        **{w: "PEOPLES" for w in ["PEOPLES", "SPECIES", "FOOD", "SUSTENANCE"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -438,6 +439,8 @@ class TerminalClient:
                      " (domes on hostile worlds), or STEADY adopts population controls (content people, the Light's regard)."))
         print(c_gray("  Natal cards: NATAL PROPAGATION (x1.4 fertility, family subsidies, more food eaten) │ NATAL ASCETIC "
                      "(replacement at most, +20% productivity) │ NATAL NONE"))
+        print(c_gray("  Each people eats its own staple (organics, ore, ice or hydrogen). HUNGRY worlds with yards and open"
+                     " worlds send an exodus; PRESSED ones (nowhere to go) may RAID the richest holder in reach."))
         print(c_gray("  NURSERY raises your people's leap past its biology (citadel T3, or T2 with Applied Xenogenesis); "
                      "it buys its inputs each quarter and goes dark - losing its brood - when they run out."))
         from xylarium.kernel import nursery
@@ -451,16 +454,24 @@ class TerminalClient:
             print(c_gray(f"     {p.name[:22]:<22} fertility {soc.get('fertility', 1.0):.2f} ({strat}-strategist)"
                          f" meaning {fp.get('meaning', 1.0):.2f}  natal {soc.get('natal') or '-'}"
                          f"  luxury wants met {soc.get('lux_access', 0):.0%}"))
+            from xylarium.kernel import staples
+            print(c_gray(f"     {'':<22} eats {staples.of(self.kernel, p)} (stores {staples.stores(self.kernel, p):,})  "
+                         f"self-sufficiency {soc.get('self_sufficiency', 1.0):.0%}  "
+                         f"{(soc.get('sustenance') or 'secure').upper()}"))
             print(c_gray(f"     {'':<22} nursery {nur_txt}  viable {min(soc.get('viable_quarters', 0), VIABILITY_QUARTERS)}"
                          f"/{VIABILITY_QUARTERS} quarters at fertility >= {VIABILITY_FERTILITY}"
                          + (f"  blight R0 {nursery.r0(self.kernel, p):.2f}" if strat == "r" else "")))
         try:
-            raw = input(c_gold("World # and EXPAND/STEADY, NATAL <card> or NURSERY (Enter to exit) > ")).strip().split()
+            raw = input(c_gold("World # and EXPAND/STEADY, NATAL <card>, NURSERY or RAID (Enter to exit) > ")).strip().split()
         except (KeyboardInterrupt, EOFError):
             return
         if len(raw) < 2 or not raw[0].isdigit() or not (1 <= int(raw[0]) <= len(worlds)):
             return
         target = worlds[int(raw[0]) - 1].id
+        if raw[1].upper() == "RAID":
+            self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
+                                                    planet_id=target, raid=1))
+            return
         if raw[1].upper() == "NURSERY":
             self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
                                                     planet_id=target, nursery=1))

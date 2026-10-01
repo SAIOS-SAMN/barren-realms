@@ -68,6 +68,36 @@ Each metabolism has a light it evolved under. A world's **carrying capacity** fo
 chemistry, light fit and growing season, times agricultural technology (citadel tier), plus enclosed habitats. A
 people grows logistically toward it, never faster than its farms can feed the newcomers.
 
+### Staples (`staples.py`)
+Every people eats its own **staple**: carbon life eats organics, lithotrophs graze ore out of the crust, the
+Stillcold drink ice, plasmic life feeds on hydrogen. Food is counted in energy-equivalent units (a thousand people
+need the same number of units of their own staple), and real output values every harvest as food at the price of
+organics. A world's staple is kept where that commodity lives - the granary, the ore silo, or the element reserves -
+so a lithic people's meals and works draw on the same ore, and a plasmic world's food is the hydrogen a refuelling
+captain would buy. Famine, rationing, household groceries, import orders, nurseries' reserves, settler kits, raids,
+sabotage and famine aid are all in the people's own staple: grain is no relief to a people that drinks ice.
+
+### Sustenance (`sustenance.py`)
+Each quarter every world's harvest is read against its need and smoothed into a year's **self-sufficiency**.
+A world short of it whose stores would run out within four quarters is hungry, and its state says what it can do:
+
+| State | Meaning | What follows |
+|---|---|---|
+| secure | it feeds itself | - |
+| importer | it does not, but stores and markets carry it | imports its staple |
+| expanding | hungry, with yards and open worlds in reach it could eat on | an **exodus** fleet sails, even before the people is otherwise viable |
+| pressed | hungry, with yards and nowhere open to go | its council **raids** the richest holder of its staple in reach - a world's stores or a starport (a hydration port, a fuel dock) |
+| stranded | hungry, without yards | it can only raid its own system |
+
+A raid is won with the odds of strength (garrison and fighters, or a port's law), both sides bleed, and the first
+raid between two peoples opens a **food war** in the chronicle (the Water War of ..., the Hydrogen War of ...),
+which ends after eight quarters without one. Necessity still darkens the raider (its civilization's alignment, or
+its owner's `food_raid` deed); each pressed quarter hardens a people further. Abundance shared lightens: luminous
+peoples with a surplus of the same staple send relief to hungry worlds in reach, and giver and receiver both move
+toward the Light. AI colonists read the land as farmers do - they settle the world that would feed the most of
+their own people - and ration and relieve their colonies in their staple. Players see the gauge on `POPULATION`
+and `PEOPLES`, and choose for themselves (`World # RAID`); their worlds never raid alone.
+
 ### Fertility (`fertility.py`)
 How many children a people wants depends on its biology:
 - **r-strategists** (mycotiforms, hexasocial swarms, hypobiotids): stored food becomes clutches - they boom.
@@ -294,4 +324,5 @@ The terminal client's screens for the newer systems (`xylarium/client/screens.py
 (government, budget offices, realms and their claims; set budgets and direct grants), `WORKBENCH` (frames and
 modules, draft by role for a guest biology or lay out by hand, register, build), `DRIVE` (fuel cells, what is
 abundant here, what your people's tradition burns, refit), `STATION` / `CHARTER` (stations over this system's
-worlds, VIP charters posted here), and `POPULATION` (growth policy and natal cards, with each world's fertility).
+worlds, VIP charters posted here), `POPULATION` (growth policy, natal cards, nurseries and raids, with each
+world's fertility, staple and sustenance) and `PEOPLES` (the known peoples by what they eat, and the food wars).

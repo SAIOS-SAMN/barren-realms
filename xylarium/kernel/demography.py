@@ -179,12 +179,17 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
             return log
         return None
     settled = equilibrium(planet, kernel)
-    if planet.population < settled * SETTLE_PRESSURE:
+    exodus = planet.society.get("sustenance") == "expanding"       # hungry, with open worlds in reach
+    if planet.population < settled * SETTLE_PRESSURE and not exodus:
         return None
 
     # 0. Past the inflection of its growth (P = half its equilibrium: each newcomer now adds less than the
     #    last), a people with a yard that builds settler ships chooses what it will become - the stars, or
     #    enough. Expansionists sail while they keep building at home.
+    if exodus and planet.citadel_level >= DAUGHTER_CITADEL_TIER:
+        log = send_settlers(kernel, planet)        # famine is the oldest reason to emigrate
+        if log:
+            return log
     if planet.citadel_level >= DAUGHTER_CITADEL_TIER or is_diaspora:
         if policy is None:
             policy = planet.growth_policy = choose_policy(kernel, planet)
@@ -244,10 +249,13 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
 
 
 def choose_policy(kernel: Any, planet: Any) -> str:
-    """Expand to the stars, or live within one world? Temperament and alignment decide."""
+    """Expand to the stars, or live within one world? Temperament and alignment decide - unless the world
+    cannot feed its people, and then the stars decide (sustenance.py)."""
     owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
     if owner is not None and not getattr(owner, "is_ai", False):
         return "expand"   # players decide for themselves (POPULATION command); the default is the stars
+    if planet.society.get("sustenance") in ("expanding", "pressed"):
+        return "expand"   # a people that cannot feed itself on its own world cannot choose enough
     if owner is not None:
         from xylarium.kernel.cognition import temperament
         t = temperament(owner, kernel)
@@ -321,8 +329,9 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
         pass
     else:
         return None
-    from xylarium.kernel import biosphere, nursery
-    if not nursery.viable(planet):
+    from xylarium.kernel import biosphere, nursery, sustenance
+    exodus = planet.society.get("sustenance") == "expanding"
+    if not nursery.viable(planet) and not exodus:
         nursery.stats(kernel)["gated"] += 1      # a people not sustaining itself does not send fleets
         return None
     metab = metabolism_of(kernel, planet)
@@ -380,6 +389,8 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     planet.population -= emigrants
     planet.crowded_cycles = 0
     planet.society["emigrated_cycle"] = kernel.cycle_count
+    if exodus:
+        sustenance.stats(kernel)["exodus"] += 1
     daughter.society["founded_cycle"] = kernel.cycle_count
     daughter.population = emigrants
     daughter.habitability = hab
@@ -477,7 +488,13 @@ def households(kernel: Any) -> None:
                 continue
             wanted = filled = 0
             prosperity = max(0.3, planet.morale / 100.0)
-            for comm, per_k in HOUSEHOLD_BASKET.items():
+            from xylarium.kernel import staples
+            staple = staples.of(kernel, planet)
+            basket: Dict[str, float] = {}
+            for comm, per_k in HOUSEHOLD_BASKET.items():         # a household's groceries are its people's staple
+                key = staple if comm == "ORGANICS" else comm
+                basket[key] = basket.get(key, 0.0) + per_k
+            for comm, per_k in basket.items():
                 need = int(planet.population / 1000.0 * per_k * prosperity)
                 if need <= 0:
                     continue
@@ -545,13 +562,17 @@ def exports(kernel: Any) -> None:
             ports = _markets(kernel, planet)
             if not ports:
                 continue
-            # keep two seasons of food and of upkeep ore, and enough ore for the council's next works
-            keep = {"ORGANICS": 2 * season_cycles * biosphere.consumption(planet),
-                    "ORE": 2 * season_cycles * CITADEL_UPKEEP.get(planet.citadel_level, {"ore": 0})["ore"] + 500}
+            # keep two seasons of the people's staple and of upkeep ore, and enough ore for the council's next works
+            from xylarium.kernel import staples
+            staple = staples.of(kernel, planet)
+            food_keep = 2 * season_cycles * biosphere.consumption(planet)
+            keep = {"ORGANICS": food_keep if staple == "ORGANICS" else 0,
+                    "ORE": 2 * season_cycles * CITADEL_UPKEEP.get(planet.citadel_level, {"ore": 0})["ore"] + 500
+                    + (food_keep if staple == "ORE" else 0)}
             silos = {"ORGANICS": "organics_silo", "ORE": "ore_silo"}
             # refined element reserves beyond what the world's own works use are for sale too
             for elem, have in list(planet.element_reserves.items()):
-                kept = ELEMENT_RESERVE_KEPT
+                kept = ELEMENT_RESERVE_KEPT + (food_keep if elem == staple else 0)
                 if elem.startswith("LUX_"):
                     # luxuries are crafted to order: the world keeps a season of its own use and ships the rest
                     kept = int(planet.population / 1000.0 * LUXURY_WANT_PER_THOUSAND * 0.5)

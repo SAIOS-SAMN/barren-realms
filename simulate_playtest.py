@@ -223,6 +223,7 @@ def _society_census(kernel: GameKernel) -> Dict[str, Any]:
     daughters = sum(p.population for p in worlds if p.metropole_id)
     sums = subsystem.summaries(kernel)
     return {"fertility": sums["fertility"], "luxury": sums["luxury"], "nursery": sums.get("nursery", {}),
+            "sustenance": sums.get("sustenance", {}),
             "tourism": sums["tourism"], "gdp_sol": round(gdp),
             "daughter_share": round(daughters / total, 4) if total else 0.0}
 
@@ -1729,6 +1730,14 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
             gate("fertility collapses under famine and bombardment (stressed / unstressed)", "<= 0.30",
                  f"{fz['stress_ratio_max']:.2f} over {fz['stressed_quarters']} stressed world-seasons",
                  fz["stress_ratio_max"] <= 0.30 if fz["stressed_quarters"] else None)
+            su = so.get("sustenance") or {}
+            if su.get("by_metabolism"):
+                bm = su["by_metabolism"]
+                people = sum(m["people"] for m in bm.values())
+                fed = sum(m["people"] * min(1.0, m["self_sufficiency"]) for m in bm.values())
+                share = fed / people if people else 1.0
+                gate("peoples feed themselves (population-weighted self-sufficiency)", "0.75 .. 1.0",
+                     f"{share:.1%} " + str({k: v["self_sufficiency"] for k, v in bm.items()}), 0.75 <= share <= 1.0)
             gate("daughter-world dispersion (share of people on settled worlds)", "0.25 .. 0.40",
                  f"{so['daughter_share']:.1%}", None if cycles < 8000 else 0.25 <= so["daughter_share"] <= 0.40)
             spent = so["luxury"]["spend_sol"] + so["tourism"]["spend_sol"] + so["tourism"]["charters"]["paid_sol"]
@@ -1917,6 +1926,16 @@ def print_report(r: Dict[str, Any]) -> None:
             fz, lx, tu = so["fertility"], so["luxury"], so["tourism"]
             print(f"  fertility by strategy: {fz['by_strategy']}; natal cards {fz['natal_cards']}; "
                   f"{fz['stressed_quarters']} stressed world-seasons; {fz['recruits']:,} hatched fanatics")
+            su = so.get("sustenance") or {}
+            if su:
+                print(f"  peoples by staple (metabolism: staple, peoples [off-world], people, worlds, sectors, feeds itself, states):")
+                for metab, m in sorted(su["by_metabolism"].items(), key=lambda kv: -kv[1]["people"]):
+                    print(f"    {metab:<10} {m['staple']:<9} {m['peoples']:>3} [{m['off_world']:>2}] {m['people']:>10,} "
+                          f"{m['worlds']:>4} {m['sectors']:>4}  {m['self_sufficiency']:>6.0%}  {m['states']}")
+                print(f"  food wars: {su['wars_active']} active, {su['wars_begun']} begun, {su['wars_ended']} ended; raids "
+                      f"{su['raids']} ({su['repulsed']} repulsed), seized {su['seized']}; relief {su['relief']} "
+                      f"({su['relief_units']:,} units); exodus fleets {su['exodus']}; hungry world-quarters "
+                      f"{su['hungry_quarters']:,}")
             nu = so.get("nursery") or {}
             if nu:
                 print(f"  nurseries: {nu.get('nurseries')} (built {nu.get('built', 0)}, dark world-quarters "

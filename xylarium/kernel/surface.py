@@ -653,7 +653,10 @@ class SurfaceManager:
 
         # Apply final yields to silos
         matter.produce(planet, "ore_silo", "ORE", int(base_ore), "district_mining")
-        matter.produce(planet, "organics_silo", "ORGANICS", int(base_org), "district_farming")
+        from xylarium.kernel import ledger, staples
+        _k = ledger.active_kernel()
+        food = staples.of(_k, planet) if _k is not None else "ORGANICS"
+        staples.add(planet, food, int(base_org), "district_farming")      # the spires grow what the people eat
 
         # Apply Shields
         if planet.shields < planet.max_shields:
@@ -676,7 +679,7 @@ class SurfaceManager:
             cost_ore = SURFACE_DISTRICT_COST_ORE
 
             # Unclosed deficits check
-            has_ration_deficit = (planet.organics_silo == 0)
+            has_ration_deficit = (staples.held(planet, food) == 0)
             has_ore_deficit = (planet.ore_silo == 0)
 
             if has_ration_deficit or has_ore_deficit:

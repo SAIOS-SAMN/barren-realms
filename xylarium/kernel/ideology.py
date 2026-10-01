@@ -272,16 +272,28 @@ class IdeologyManager:
                 f"You must be in Sector {target_planet.sector_id:03d} to dispatch aid to {target_planet.name}.",
             )
 
-        if sender.ship.cargo.unbonded("ORGANICS") < amount_organics or amount_organics <= 0:
+        # Aid is the recipient people's own staple: grain is no relief to a people that drinks ice
+        from xylarium.kernel import staples
+        food = staples.of(kernel, target_planet) if kernel is not None else "ORGANICS"
+        if sender.ship.cargo.unbonded(food) < amount_organics or amount_organics <= 0:
             return ActionResult(
                 False,
                 ActionType.IDEOLOGY_AID_DISPATCH,
-                f"Insufficient unbonded Organics in cargo hold ({sender.ship.cargo.unbonded('ORGANICS')} available, {amount_organics} requested).",
+                f"The people of {target_planet.name} eat {food}: you hold {sender.ship.cargo.unbonded(food)} "
+                f"unbonded ({amount_organics} offered).",
             )
 
         # Transfer food
-        sender.ship.cargo.organics -= amount_organics
-        target_planet.organics_silo += amount_organics          # aid is delivered whole
+        cargo = sender.ship.cargo
+        if food == "ORGANICS":
+            cargo.organics -= amount_organics
+        elif food == "ORE":
+            cargo.ore -= amount_organics
+        else:
+            cargo.elements[food] = cargo.elements.get(food, 0) - amount_organics
+            if cargo.elements[food] <= 0:
+                cargo.elements.pop(food, None)
+        staples.move(target_planet, food, amount_organics)       # aid is delivered whole
         target_planet.morale = min(100, target_planet.morale + 15)
 
         recipient_id = target_planet.owner_id if target_planet.owner_id else f"civ_{target_planet.name}"

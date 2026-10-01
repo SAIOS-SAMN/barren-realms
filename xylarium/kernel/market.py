@@ -717,8 +717,9 @@ class MarketManager:
                     continue
                 needs = []
                 food_need = max(1, planet.population // 1000)
-                if planet.organics_silo < food_need * 20:
-                    needs.append(("ORGANICS", min(60, max(15, food_need * 5))))
+                from xylarium.kernel import staples          # a world imports what its people eat
+                if staples.stores(kernel, planet) < food_need * 20:
+                    needs.append((staples.of(kernel, planet), min(60, max(15, food_need * 5))))
                 upkeep_ore = CITADEL_UPKEEP.get(planet.citadel_level, {}).get("ore", 0)
                 if upkeep_ore and planet.ore_silo < upkeep_ore * 25:
                     needs.append(("ORE", min(60, max(15, upkeep_ore * 10))))

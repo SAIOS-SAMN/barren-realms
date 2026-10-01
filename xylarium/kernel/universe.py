@@ -412,6 +412,10 @@ def furnish_sectors(
         home.treasury = int(rng.randint(200, 1200) * PRICE_LEVEL.get(home.currency, 1.0))
         home.ore_silo = rng.randint(20, 100)
         home.organics_silo = rng.randint(20, 100)
+        from xylarium.config import STAPLES
+        staple = STAPLES.get(civ.metabolism, "ORGANICS")
+        if staple not in ("ORGANICS", "ORE"):                   # a people's larder holds what it eats
+            home.element_reserves[staple] = home.element_reserves.get(staple, 0) + home.organics_silo
         home.morale = 100
         home.element_deposits = deposits
         home.element_reserves = reserves

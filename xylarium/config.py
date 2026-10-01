@@ -1227,6 +1227,7 @@ ALIGNMENT_DEEDS = {            # Signed shift per deed, applied with diminishing
     "stewardship": 0.01,       # a people that chooses to live within its world's means (per quarter held)
     "convicted": -0.03,        # found guilty by a court
     "restitution": 0.015,      # a judgment paid in full
+    "food_raid": -0.03,        # seizing another people's stores to feed one's own (necessity, but still force)
 }
 ALIGNMENT_SYNTROPIC_DRIFT = 0.0015     # Per fiscal quarter toward the Light for captains with no dark deed that quarter
 ALIGNMENT_RELAXATION = 0.08            # Per quarter, alignment relaxes this share of the way back to character...
@@ -1536,6 +1537,23 @@ LITHIC_METAL_PER_THOUSAND = 20         # Fe/Ti (or ore/10) a thousand lithic peo
 FERTILITY_CRYO_MAX = 1.3               # Stillcold fission in cold, quiet isolation
 FERTILITY_STRESS = 0.25                # Famine or bombardment in the last season: fertility falls to a quarter
 FERTILITY_STRESS_SEASONS = 1           # ...for this many fiscal quarters after the blow
+# Staples: what each metabolism eats. Food is counted in energy-equivalent units - one unit of a people's staple
+# carries the metabolic energy one unit of organics carries a biotic people - so FOOD_PER_THOUSAND is the same need
+# for every people, and real output values every harvest at the price of organics (one food unit). Carbon life eats
+# organics; lithotrophs graze ore out of the crust (geology's mine face); Stillcold life drinks ice; plasmic life
+# feeds on hydrogen - the same hydrogen ships burn and the same ore industry builds with.
+STAPLES = {"biotic": "ORGANICS", "umbral": "ORGANICS", "mineral": "ORE", "cryogenic": "H2O", "plasmic": "H"}
+# Sustenance: each people's food security, read every quarter from what its worlds harvested and needed.
+# Self-sufficiency is harvest / need (smoothed over a year); a people short of it is hungry when its stores
+# would run out within SUSTENANCE_RUNWAY_QUARTERS. Hungry, it expands to open worlds it can eat on if it can
+# sail; with nowhere to go it is pressed - and a pressed people raids the stores and ports that hold its staple.
+SUSTENANCE_RUNWAY_QUARTERS = 4
+SUSTENANCE_SMOOTHING = 0.25            # weight of the newest quarter in the year's self-sufficiency
+FOOD_WAR_PEACE_QUARTERS = 8            # a war over food ends after this long without a raid
+HUNGER_ALIGNMENT_SHIFT = 0.005         # each pressed quarter hardens a people toward the Dark
+FOOD_RAID_ALIGNMENT_SHIFT = 0.01       # each raid of necessity (a civilization's own alignment)
+RELIEF_ALIGNMENT_SHIFT = 0.01          # shared abundance: giver and receiver each move toward the Light
+RELIEF_LIGHT_THRESHOLD = 0.3           # peoples at least this luminous send their surplus to hungry kin
 # Meaning (mu): a people's collective momentum against the satiation of comfort, a multiplier on fertility
 # in [MEANING_FLOOR, MEANING_CEIL]. mu = 1 + frontier + discovery + rebound, then decayed toward the floor by
 # stagnation. How much of it reaches births is how much a strategy's births are a choice (MEANING_WEIGHT):
@@ -1577,7 +1595,7 @@ VIABILITY_FERTILITY = 1.05
 VIABILITY_QUARTERS = 8
 SEED_KIT = {"biotic": ([("ORGANICS", 1)], 10), "umbral": ([("ORGANICS", 1)], 10),
             "mineral": ([("Fe", 1), ("Ti", 1), ("ORE", 10)], 20),   # LITHIC_METAL_PER_THOUSAND: metal to bud from
-            "cryogenic": ([("H2O", 1), ("FUEL", 1)], 5), "plasmic": ([("H", 1), ("He-3", 1), ("FUEL", 1)], 5)}
+            "cryogenic": ([("H2O", 1)], 10), "plasmic": ([("H", 1)], 10)}     # the voyage's food is the people's staple
 # Blight: an r world's density sets a pathogen's reproduction number R0 = (P/K) / BLIGHT_DENSITY. Above 1 an
 # introduction takes off with chance 1 - 1/R0 a quarter; it infects the share z solving z = 1 - exp(-R0 z),
 # kills BLIGHT_FATALITY of the infected, and rots z/2 of the granary.

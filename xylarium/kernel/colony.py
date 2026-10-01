@@ -55,7 +55,6 @@ from xylarium.kernel.elements import PeriodicTable
 from xylarium.kernel.experience import ExperienceManager
 
 
-_BASE_ORGANICS = COMMODITY_CONFIG["ORGANICS"]["base_price"]
 _BASE_ORE = COMMODITY_CONFIG["ORE"]["base_price"]
 
 
@@ -209,7 +208,9 @@ class ColonyManager:
             from xylarium.kernel.universe import habitability
             planet.habitability = habitability(getattr(captain, "metabolism", "biotic"), planet.planet_type)
             planet.population = COLONY_KIT_COLONISTS
-            matter.produce(planet, "organics_silo", "ORGANICS", COLONY_KIT_ORGANICS, "colony_kit")
+            from xylarium.kernel import staples          # the colonists land with stores of their own staple
+            staples.add(planet, staples.of_metabolism(getattr(captain, "metabolism", "biotic")),
+                        COLONY_KIT_ORGANICS, "colony_kit")
         planet.owner_id = captain.id
         msg = (
             f"Colony founded! {planet.name} is now under the sovereignty of {captain.name} "
@@ -615,20 +616,23 @@ class ColonyManager:
 
         # 1. Food and people (biosphere.py): the world eats, and - fed - grows logistically toward what its
         # land can carry, never faster than its farms can add food. Over capacity, it shrinks.
-        from xylarium.kernel import biosphere
+        # Each people eats its own staple (staples.py): organics, ore, ice or hydrogen.
+        from xylarium.kernel import biosphere, staples
         required_food = biosphere.consumption(planet)
         famine = False
         famine_loss = 0
+        soc = planet.society
+        soc["need_q"] = soc.get("need_q", 0) + required_food            # read each quarter by sustenance.py
 
-        if planet.organics_silo >= required_food:
-            matter.consume(planet, "organics_silo", "ORGANICS", required_food, "eaten")
+        if staples.stores(kernel, planet) >= required_food:
+            staples.eat(kernel, planet, required_food)
             planet.morale = min(100, planet.morale + 2)
             pop_growth = biosphere.births(kernel, planet, max_pop)
             planet.population = max(1, planet.population + pop_growth)
         else:
             # Famine penalty: population decline and morale crash
-            deficit = required_food - planet.organics_silo
-            matter.consume(planet, "organics_silo", "ORGANICS", planet.organics_silo, "eaten")
+            deficit = required_food - staples.eat(kernel, planet, required_food)
+            soc["short_q"] = soc.get("short_q", 0) + deficit
             famine = True
             if kernel is not None:
                 from xylarium.kernel import fertility
@@ -645,7 +649,7 @@ class ColonyManager:
         # 1b. Housing crowding & diaspora threshold tracking
         from xylarium.kernel import demography
         h_cap = demography.housing_cap(planet, kernel)
-        food_stable = (not famine and planet.organics_silo >= required_food)
+        food_stable = (not famine and staples.stores(kernel, planet) >= required_food)
         if h_cap > 0 and planet.population >= int(h_cap * DIASPORA_HOUSING_THRESHOLD) and food_stable:
             planet.crowded_cycles = getattr(planet, "crowded_cycles", 0) + 1
         else:
@@ -731,13 +735,15 @@ class ColonyManager:
 
         # 3. Mining yields
         ore_mined = max(1, int(planet.population * 0.02))
-        organics_harvested = biosphere.harvest(kernel, planet, demography.housing_cap(planet, kernel))
+        food_harvested = biosphere.harvest(kernel, planet, demography.housing_cap(planet, kernel))
         from xylarium.kernel import geology
         ore_mined = geology.mine_crust(planet, ore_mined)          # out of the world's own crust
-        organics_harvested = matter.produce(planet, "organics_silo", "ORGANICS", organics_harvested, "harvest")
-        # Real output (the Y of M V = P Y): what was harvested and mined, at base prices and price level
+        food_harvested = staples.harvest(kernel, planet, food_harvested)   # the people's own staple
+        soc["harvest_q"] = soc.get("harvest_q", 0) + food_harvested
+        # Real output (the Y of M V = P Y): what was harvested (in food units) and mined, at base prices and
+        # price level
         if ledger.ACTIVE_POLICY is not None and not is_indigenous_natives(planet):
-            ledger.ACTIVE_POLICY.record_output(planet.currency, (organics_harvested * _BASE_ORGANICS
+            ledger.ACTIVE_POLICY.record_output(planet.currency, (food_harvested * staples.FOOD_UNIT_VALUE
                                                                  + ore_mined * _BASE_ORE) * level)
 
         # 4. Autonomous Planetary Counter-Intelligence Garrison
@@ -765,7 +771,8 @@ class ColonyManager:
             "tax_yield": tax_yield,
             "public_services": services,
             "ore_mined": ore_mined,
-            "organics_harvested": organics_harvested,
+            "organics_harvested": food_harvested,          # in food units of the people's staple
+            "staple": staples.of(kernel, planet) if kernel is not None else "ORGANICS",
             "pop_growth": pop_growth,
             "famine": famine,
             "famine_loss": famine_loss,

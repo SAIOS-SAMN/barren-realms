@@ -177,7 +177,8 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
         parts["nursery"] = 1.0
     if strat == "r":
         stores = 4 * _season_cycles() * biosphere.consumption(planet)
-        food = min(1.0, planet.organics_silo / max(1, stores))
+        from xylarium.kernel import staples
+        food = min(1.0, staples.stores(kernel, planet) / max(1, stores))      # its own staple, stored
         f = 1.0 + (FERTILITY_R_MAX - 1.0) * food * (0.5 + 0.5 * comfort)
         parts["food"] = round(food, 3)
     elif strat == "K":
@@ -362,11 +363,13 @@ def _hatch(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
     """Sacred Hatching: food beyond two seasons' stores is spent raising fanatics for the garrison."""
     from xylarium.kernel import biosphere
     keep = 2 * _season_cycles() * biosphere.consumption(planet)
-    surplus = planet.organics_silo - keep
+    from xylarium.kernel import staples
+    staple = staples.of(kernel, planet)
+    surplus = staples.held(planet, staple) - keep
     recruits = min(max(0, surplus) // HATCHING_FOOD_PER_RECRUIT, planet.population // 100)
     if recruits <= 0:
         return
-    matter.consume(planet, "organics_silo", "ORGANICS", recruits * HATCHING_FOOD_PER_RECRUIT, "sacred_hatching")
+    staples.take(planet, staple, recruits * HATCHING_FOOD_PER_RECRUIT, "sacred_hatching")
     planet.garrison_troops += recruits
     civ = getattr(planet, "civilization", None)
     if civ is not None:
