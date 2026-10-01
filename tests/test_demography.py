@@ -72,6 +72,13 @@ class TestHousingAndCouncils(unittest.TestCase):
         w.habitats = HABITATS_MAX_BY_TIER[1]
         w.population = demography.housing_cap(w)
         w.treasury, w.ore_silo, w.works_ready_cycle = 500_000, 5000, 0
+        from xylarium.kernel import knowledge
+        holder = knowledge.holder_of_planet(w)
+        knowledge.stocks(self.kernel, holder)["materials"] = 0.0      # yards are orbital construction:
+        demography.develop(self.kernel, w)
+        self.assertEqual(w.citadel_level, 1)                          # not learned, not built
+        knowledge.stocks(self.kernel, holder)["materials"] = 200.0
+        w.works_ready_cycle = 0
         demography.develop(self.kernel, w)
         self.assertEqual(w.citadel_level, 2)
 

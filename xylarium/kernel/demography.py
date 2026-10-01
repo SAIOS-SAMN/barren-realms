@@ -240,6 +240,12 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
     if self_governed(planet, kernel) and nxt in CITADEL_CONFIG:
         cfg = CITADEL_CONFIG[nxt]
         cost = cfg["upgrade_cost"] * level
+        if nxt >= DAUGHTER_CITADEL_TIER:
+            # yards are orbital construction: what a people has not learned it cannot build at any price, and the
+            # first it learns costs most (cost / mastery, as a fold does - research.py)
+            from xylarium.kernel import knowledge
+            mastered = knowledge.mastery(kernel, knowledge.holder_of_planet(planet), "orbital_foundry")
+            cost = cost / mastered if mastered > 1e-6 else float("inf")
         if planet.treasury - cost >= keep and planet.ore_silo >= cfg["upgrade_ore"]:
             gain = biosphere.carrying_capacity(kernel, planet, citadel=nxt) - k_now
             options.append(decide.option("raise_citadel", cost + cfg["upgrade_ore"] * ore_price,
