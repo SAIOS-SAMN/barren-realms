@@ -1566,6 +1566,11 @@ RESEARCH_POINTS_PER_UNIT = 10          # old research points (relics, anomalies,
 # organics; lithotrophs graze ore out of the crust (geology's mine face); Stillcold life drinks ice; plasmic life
 # feeds on hydrogen - the same hydrogen ships burn and the same ore industry builds with.
 STAPLES = {"biotic": "ORGANICS", "umbral": "ORGANICS", "mineral": "ORE", "cryogenic": "H2O", "plasmic": "H"}
+# What each metabolism gives back of what it eats (its chemistry, not its culture): carbon life respires water,
+# shadow-life leaves carbon, lithotrophs free the water bound in rock, Stillcold life splits ice and breathes out
+# hydrogen, plasmic life fuses hydrogen and leaves helium-3 ash. Another people whose staple it is eats it.
+METABOLIC_WASTE = {"biotic": "H2O", "umbral": "C", "mineral": "H2O", "cryogenic": "H", "plasmic": "He-3"}
+WASTE_SHARE = "1/2"                    # of what is eaten, given back as waste (respiration: ~0.6 of glucose is water)
 # Sustenance: each people's food security, read every quarter from what its worlds harvested and needed.
 # Self-sufficiency is harvest / need (smoothed over a year); a people short of it is hungry when its stores
 # would run out within SUSTENANCE_RUNWAY_QUARTERS. Hungry, it expands to open worlds it can eat on if it can

@@ -85,7 +85,24 @@ def take(planet: Any, comm: str, n: int, kind: str) -> int:
 
 
 def eat(kernel: Any, planet: Any, n: int) -> int:
-    return take(planet, of(kernel, planet), n, "eaten")
+    eaten = take(planet, of(kernel, planet), n, "eaten")
+    from xylarium.kernel import biosphere
+    excrete(planet, biosphere.metabolism_of(kernel, planet), eaten)
+    return eaten
+
+
+def excrete(planet: Any, metabolism: str, eaten: int) -> int:
+    """What an eater gives back of what it ate - its chemistry's waste, into the world's stores (a declared
+    conversion: the meal was a sink, the waste is a source), where any people whose staple it is can eat it."""
+    from xylarium.config import METABOLIC_WASTE, WASTE_SHARE
+    waste = METABOLIC_WASTE.get(metabolism)
+    if not waste or eaten <= 0:
+        return 0
+    a, _, b = WASTE_SHARE.partition("/")
+    carry = float(planet.society.get("waste_carry", 0.0)) + eaten * float(a) / float(b or 1)
+    n = int(carry)
+    planet.society["waste_carry"] = round(carry - n, 6)
+    return add(planet, waste, n, "respiration") if n > 0 else 0
 
 
 def harvest(kernel: Any, planet: Any, n: int) -> int:

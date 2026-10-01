@@ -120,6 +120,10 @@ def _contacts(kernel: Any, by: Dict[str, List[Any]]) -> Dict[str, Dict[str, int]
                         continue
                     out.setdefault(people, {})[other] = out.setdefault(people, {}).get(other, 0) + 1
                     out.setdefault(other, {})[people] = out.setdefault(other, {}).get(people, 0) + 1
+    from xylarium.kernel import cohabit
+    for a, b, _ in cohabit.pairs(kernel):                 # peoples sharing a world live in each other's sight
+        out.setdefault(a, {})[b] = out.setdefault(a, {}).get(b, 0) + 1
+        out.setdefault(b, {})[a] = out.setdefault(b, {}).get(a, 0) + 1
     return out
 
 
