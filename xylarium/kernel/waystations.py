@@ -68,11 +68,19 @@ def _founder(kernel: Any, sec: Any) -> Optional[Any]:
     return max(caps, key=lambda c: c.credits) if caps else None
 
 
-def found(kernel: Any, sec: Any, founder: Any, capital_sol: float) -> str:
+def dock_currency(sec: Any) -> str:
+    """A dock trades in the money of the people who live around it; an empty system's in its security band's."""
     from xylarium.kernel.fx import currency_for_security
+    peopled = [p for p in sec.planets if p.population > 0 and not getattr(p, "natives", None)]
+    if peopled:
+        return max(peopled, key=lambda p: p.population).currency
+    return currency_for_security(sec.security)
+
+
+def found(kernel: Any, sec: Any, founder: Any, capital_sol: float) -> str:
     from xylarium.kernel.models import Port, PortClass
     fxm = kernel.fx_market
-    cur = currency_for_security(sec.security)
+    cur = dock_currency(sec)
     # the founder's capital becomes the dock's working treasury, in the dock's own money (through the exchange)
     if hasattr(founder, "population"):                                       # a world's council
         own = int(capital_sol * (fxm.rate(founder.currency) if founder.currency != "SOL" else 1.0))
@@ -130,8 +138,27 @@ def _pay_founders(kernel: Any) -> None:
         rec["paid"] = rec.get("paid", 0) + pay
 
 
+def _rehome(kernel: Any) -> None:
+    """A dock whose system has come to live in another money changes its till into it, through the exchange."""
+    for sid, rec in stats(kernel)["docks"].items():
+        sec = kernel.sectors.get(int(sid))
+        port = sec.port if sec is not None else None
+        if port is None:
+            continue
+        cur = dock_currency(sec)
+        if cur == port.currency:
+            continue
+        old = port.currency
+        if port.treasury > 0:
+            port.treasury, _ = kernel.fx_market.convert(old, cur, port.treasury)
+        rate = kernel.fx_market.to_sol_value(old, 1.0) / max(1e-12, kernel.fx_market.to_sol_value(cur, 1.0))
+        rec["capital"] = int(rec["capital"] * rate)
+        port.currency = cur
+
+
 def quarter(kernel: Any) -> List[str]:
     st = stats(kernel)
+    _rehome(kernel)
     st["last_traffic"] = dict(st["traffic"])
     st["traffic"] = {}
     if (kernel.cycle_count // _quarter()) % 4:
@@ -148,8 +175,7 @@ def quarter(kernel: Any) -> List[str]:
         founder = _founder(kernel, sec)
         if founder is None:
             continue
-        from xylarium.kernel.fx import currency_for_security
-        cur = currency_for_security(sec.security)
+        cur = dock_currency(sec)
         capital = PORT_START_TREASURY * PRICE_LEVEL.get(cur, 1.0) / max(1e-9, kernel.fx_market.rate(cur)
                                                                       if cur != "SOL" else 1.0) / 3
         afford = (founder.credits if hasattr(founder, "credits") else

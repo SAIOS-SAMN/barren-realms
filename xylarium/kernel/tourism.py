@@ -303,7 +303,7 @@ def _travel(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
         bill = trips * per_head
         fare = int(bill * TOURISM_FARE_SHARE)
         planet.household_purse -= bill
-        port.treasury += fare
+        port.treasury += _convert(kernel, planet.currency, port.currency, fare)
         port.stock["H"] = port.stock.get("H", 0) - h_need
         origin_sec.gas = getattr(origin_sec, "gas", 0) + h_need       # the exhaust drifts in the origin system
         st["h_burned"] += h_need

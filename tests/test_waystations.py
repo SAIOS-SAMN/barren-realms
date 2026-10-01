@@ -60,6 +60,22 @@ class TestWaystations(unittest.TestCase):
         self.assertEqual(rec["paid"], 500)
         self.assertEqual(m0, money(k))
 
+    def test_a_dock_trades_in_the_money_of_those_who_live_around_it(self):
+        k = fresh()
+        sec = next(s for s in k.sectors.values() if s.port is None and s.id != 1
+                   and any(p.population > 0 and not p.natives for p in s.planets))
+        world = max((p for p in sec.planets if p.population > 0), key=lambda p: p.population)
+        cap = next(c for c in k.captains.values() if getattr(c, "is_ai", False) and not c.faction_id)
+        cap.credits += 10 ** 6
+        waystations.found(k, sec, cap, 50_000)
+        self.assertEqual(sec.port.currency, world.currency)
+        other = next(c for c in ("FRN", "THR", "SOL") if c != world.currency)
+        sec.port.currency = other                                             # its people changed money
+        m0 = money(k)
+        waystations._rehome(k)
+        self.assertEqual(sec.port.currency, world.currency)
+        self.assertEqual(m0, money(k))
+
     def test_a_relic_cannot_hand_the_fourth_axis_to_a_people_without_the_third(self):
         k = fresh()
         for i in range(400):
