@@ -254,6 +254,8 @@ class EconomyManager:
             # Cost basis is kept in SOL so profit is comparable across regional currencies
             bought = cargo.held(commodity) - units_before
             if bought > 0:
+                from xylarium.kernel import enterprise, ledger
+                enterprise.drawn(ledger.active_kernel(), port, commodity, bought)
                 paid_sol = fx.ACTIVE_FX.to_sol_value(cur, paid) if (fx.ACTIVE_FX and cur != "SOL") else paid
                 cargo.cost_basis[key] = (units_before * basis_before + paid_sol) / (units_before + bought)
         return res
@@ -600,6 +602,8 @@ class EconomyManager:
                 if curr_s > target // 2:
                     new_s = max(10, curr_s - 10)
                     port.consumed[comm] = port.consumed.get(comm, 0) + (curr_s - new_s)
+                    from xylarium.kernel import enterprise, ledger
+                    enterprise.drawn(ledger.active_kernel(), port, comm, curr_s - new_s)
                     port.stock[comm] = new_s
                     matter.sink("regional_industry", comm, curr_s - new_s)
         from xylarium.kernel import luxury

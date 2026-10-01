@@ -1102,9 +1102,47 @@ class SeatSurvive:
                 if lot * c.share_price <= spare:
                     options.append(decide.option("buy_shares", lot * c.share_price, lot * per_share,
                                                  ticker=c.ticker, shares=lot))
+        # D. what it holds and no longer believes in, it sells; a company in distress priced above its estate it
+        #    may short; a short whose bet is spent it covers. Every holding is worth the greater of its dividends
+        #    over the horizon and its share of the estate (liquidation.valuation) - the same figure the market reads.
+        if mm is not None and mm.companies:
+            from xylarium.config import SHORT_MIN_CREDIT
+            from xylarium.kernel import liquidation
+
+            def held_value(c: Any) -> float:
+                cur = getattr(c, "home_currency", None) or "SOL"
+                div = c.last_dividend * (kernel.fx_market.to_sol_value(cur, 1.0) if cur != "SOL" else 1.0)
+                return max(laws.present_value(div, horizon, rate), liquidation.fair_price(kernel, c))
+
+            for t, n in list((getattr(captain, "portfolio", {}) or {}).items()):
+                c = mm.companies.get(t)
+                if c is None or n <= 0 or c.share_price <= 0 or (getattr(captain, "margin_loans", {}) or {}).get(t):
+                    continue                         # pledged shares are the desk's to sell, not its own
+                options.append(decide.option("sell_shares", n * held_value(c), n * c.share_price, ticker=t, shares=n))
+            for t, pos in list((getattr(captain, "short_positions", {}) or {}).items()):
+                c = mm.companies.get(t)
+                if c is not None:                    # covering is worth the fall it no longer expects
+                    options.append(decide.option("cover_short", 0.0, pos["shares"] * (held_value(c) - c.share_price),
+                                                 ticker=t, shares=pos["shares"]))
+            if getattr(captain, "credit_rating", 500) >= SHORT_MIN_CREDIT:
+                for c in mm.companies.values():
+                    if not liquidation.distressed(kernel, c.ticker) or c.ticker in (captain.short_positions or {}):
+                        continue
+                    gap = c.share_price - liquidation.fair_price(kernel, c)
+                    lot = int(spare * 0.3 // max(1, c.share_price))
+                    if gap > 0 and lot >= 10:
+                        stake = lot * c.share_price * 0.5          # the margin it must post
+                        options.append(decide.option("short_shares", stake, stake + lot * gap, ticker=c.ticker,
+                                                     shares=lot))
         pick = decide.choose(kernel, options, m, captain.id, "invest")
         if pick is None:
             return None
+        if pick["name"] in ("sell_shares", "short_shares", "cover_short"):
+            act = {"sell_shares": ActionType.STOCK_SELL, "short_shares": ActionType.STOCK_SHORT,
+                   "cover_short": ActionType.STOCK_COVER}[pick["name"]]
+            return CognitiveDeed(seat="SURVIVE", action_type=act, deed_name=pick["name"].upper(),
+                                 target_coordinate="CAPITAL_POSITIONS", residual_magnitude=surplus,
+                                 parameters={"ticker": pick["ticker"], "shares": pick["shares"]}, ration_cost=1)
         if pick["name"] == "claim_world":
             return CognitiveDeed(seat="SURVIVE", action_type=ActionType.PLANET_CLAIM, deed_name="COLONIZE_TERRESTRIAL_BODY",
                                  target_coordinate="CAPITAL_EXPANSION", residual_magnitude=surplus,
@@ -2121,7 +2159,7 @@ class CognitiveOrgan:
                 shortcut_id=params.get("shortcut_id", "SMUGGLER_SHORTCUT"),
                 toll_fee=params.get("toll_fee", 500),
             )
-        elif act == ActionType.STOCK_SELL:
+        elif act in (ActionType.STOCK_SELL, ActionType.STOCK_SHORT, ActionType.STOCK_COVER):
             return kernel.dispatch(captain.id, act, ticker=params.get("ticker"), amount=params.get("shares", 10))
         elif act == ActionType.STOCK_BUY:
             shares = params.get("shares", 10)

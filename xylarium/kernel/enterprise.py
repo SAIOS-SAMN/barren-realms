@@ -224,7 +224,7 @@ def operate(kernel: Any, comp: Any, rec: Dict[str, Any]) -> float:
         if short is not None:
             _import(kernel, comp, planet, short, max(10, int(rec["plant"]) * RECIPES[out].get(short, 1)))
     # plant wears: maintenance paid to the contractors, and capacity that is not kept up is lost
-    upkeep = int(plant_cost(planet, rec["plant"]) * (1 - (1 - DEPRECIATION_YEAR) ** (_quarter() / 100.0)))
+    upkeep = int(upkeep_q(planet, rec["plant"]))
     paid = min(upkeep, max(0, comp.home_cash))
     if paid > 0:
         comp.home_cash -= paid
@@ -292,14 +292,18 @@ def receivership(kernel: Any, ticker: str, rec: Dict[str, Any]) -> str:
     rivals = [(t, r) for t, r in st["firms"].items() if t != ticker and r["process"] == rec["process"]
               and t in mm.companies and mm.companies[t].home_currency == comp.home_currency]
     sold = None
-    if rivals and planet is not None and rec["plant"] > 0:
-        price = int(plant_cost(planet, rec["plant"]) * 0.5)          # half its replacement cost, as it stands
+    port = _port(kernel, planet) if planet is not None else None
+    # a rival takes only the plant the port's demand can use beyond what is already there; the rest is scrapped
+    useful = min(rec["plant"], max(0.0, demand(kernel, port, rec["process"])
+                                   - capacity_at(kernel, port, rec["process"], but=ticker))) if port is not None else 0
+    if rivals and planet is not None and useful >= 1:
+        price = int(plant_cost(planet, useful) * 0.5)               # half its replacement cost, as it stands
         for t, r in sorted(rivals, key=lambda tr: -mm.companies[tr[0]].home_cash):
             buyer = mm.companies[t]
             if buyer.home_cash >= price:
                 buyer.home_cash -= price
                 comp.home_cash += price
-                r["plant"] += rec["plant"]
+                r["plant"] += useful
                 sold = buyer.name
                 break
     from xylarium.kernel import liquidation
@@ -373,6 +377,156 @@ def found(kernel: Any, planet: Any, out: str, batches: int, founder: str = "peop
     return f"[ENTERPRISE] {name} ({ticker}) incorporated on {planet.name}: {batches} batches of {out} a quarter."
 
 
+def drawn(kernel: Any, port: Any, comm: str, units: int) -> None:
+    """Goods leaving a port's shelves - used up by its region or bought by captains: the demand a maker can sell to."""
+    if kernel is None or units <= 0 or port is None:
+        return
+    d = stats(kernel).setdefault("drawn", {}).setdefault(str(port.sector_id), {})
+    d[comm] = d.get(comm, 0) + units
+
+
+def demand(kernel: Any, port: Any, comm: str) -> float:
+    """A port's smoothed offtake of a good, per quarter."""
+    return float(stats(kernel).get("demand", {}).get(str(port.sector_id), {}).get(comm, 0.0))
+
+
+def _smooth_demand(kernel: Any) -> None:
+    st = stats(kernel)
+    dem = st.setdefault("demand", {})
+    drawn_q = st.get("drawn", {})
+    for sid in set(dem) | set(drawn_q):
+        now = drawn_q.get(sid, {})
+        old = dem.setdefault(sid, {})
+        for comm in set(old) | set(now):
+            v = 0.7 * old.get(comm, 0.0) + 0.3 * now.get(comm, 0)
+            if v < 0.01:
+                old.pop(comm, None)
+            else:
+                old[comm] = round(v, 2)
+    st["drawn"] = {}
+
+
+def capacity_at(kernel: Any, port: Any, out: str, but: Optional[str] = None) -> float:
+    """The plant already making `out` for this port (every firm selling there but `but`)."""
+    mm = kernel.market_manager
+    return sum(r["plant"] for t, r in stats(kernel)["firms"].items()
+               if t != but and r["process"] == out and t in mm.companies
+               and _port(kernel, _firm_world(kernel, mm.companies[t])) is port)
+
+
+def residual_demand(kernel: Any, port: Any, out: str, but: Optional[str] = None) -> float:
+    """What the port takes off its shelves each quarter beyond what the makers already there can supply."""
+    return max(0.0, demand(kernel, port, out) - capacity_at(kernel, port, out, but))
+
+
+def working_need(kernel: Any, comp: Any) -> int:
+    """The home cash a firm must keep to run a quarter: its plant's inputs at today's prices and its upkeep. Zero for
+    a company that makes nothing."""
+    rec = stats(kernel)["firms"].get(comp.ticker)
+    planet = _firm_world(kernel, comp)
+    port = _port(kernel, planet) if (rec is not None and planet is not None) else None
+    if port is None:
+        return 0
+    econ = unit_economics(kernel, planet, port, rec["process"])
+    cost = econ["cost"] if econ else 0.0
+    return int(cost * rec["plant"] + upkeep_q(planet, rec["plant"]))
+
+
+def upkeep_q(planet: Any, batches: float) -> float:
+    """What a plant of this size costs to keep up for a quarter (its depreciation, paid to the contractors)."""
+    return plant_cost(planet, batches) * (1 - (1 - DEPRECIATION_YEAR) ** (_quarter() / 100.0))
+
+
+def convert(kernel: Any, comp: Any) -> Optional[str]:
+    """A listed company with no operations puts its own cash to work: the best recipe at its home port, if a
+    quarter's profit on the plant, as its world's council discounts it, beats the plant and a quarter's working
+    cash. It keeps its ticker and its holders; it becomes a firm like any other."""
+    from xylarium.kernel import liquidation
+    planet = _firm_world(kernel, comp)
+    port = _port(kernel, planet) if planet is not None else None
+    if port is None:
+        return None
+    pick = best_recipe(kernel, planet, port)
+    if pick is None:
+        return None
+    out, econ = pick
+    fxm = kernel.fx_market
+    rate = fxm.rate(planet.currency) if planet.currency != "SOL" else 1.0
+    have_sol = max(0, comp.treasury) + (fxm.to_sol_value(comp.home_currency, comp.home_cash)
+                                        if (comp.home_currency and comp.home_currency != "SOL") else comp.home_cash)
+    unit = plant_cost(planet, 1)
+    batches = min(int(residual_demand(kernel, port, out)), int(have_sol * rate // max(1e-9, 2 * unit)))
+    if batches < 1:
+        return None
+    m = decide.mind_of_planet(kernel, planet)
+    worth = decide.worth(kernel, econ["margin"] * batches - upkeep_q(planet, batches), m, planet.currency)
+    if decide.choose(kernel, [decide.option("convert_firm", 2 * plant_cost(planet, batches), worth)], m,
+                     comp.ticker, "convert") is None:
+        return None
+    # committed: its cash, all of it in its world's money - what it holds abroad comes home through the exchange
+    if comp.home_cash > 0 and comp.home_currency and comp.home_currency != planet.currency:
+        comp.home_cash, _ = fxm.convert(comp.home_currency, planet.currency, comp.home_cash)
+    comp.home_currency = planet.currency
+    if comp.treasury > 0:
+        sol = comp.treasury
+        comp.treasury = 0
+        comp.home_cash += fxm.swap_sol_to(planet.currency, sol) if planet.currency != "SOL" else sol
+    batches = min(batches, int(comp.home_cash // max(1e-9, 2 * unit)))
+    if batches < 1:
+        return None                                      # the exchange gave less than it hoped: it tries again
+    capital = plant_cost(planet, batches)
+    comp.home_cash -= int(capital)
+    port.treasury += int(capital)                       # the contractors build it
+    comp.industry = "MANUFACTURING"
+    stats(kernel)["firms"][comp.ticker] = {"process": out, "plant": float(batches), "founder": "company",
+                                           "founder_shares": 0, "since": kernel.cycle_count, "losses": 0,
+                                           "converted": True}
+    liquidation.stats(kernel)["converted"] += 1
+    return f"[ENTERPRISE] {comp.name} ({comp.ticker}) puts its cash to work: {batches} batches of {out} a quarter."
+
+
+def rescue(kernel: Any, ticker: str, rec: Dict[str, Any]) -> Optional[str]:
+    """A distressed firm's way out before the end: a sound rival of the same process and money buys its plant at
+    auction value when, by its own council's mind, the plant's margin is worth the price. The seller is then
+    wound up with the price in its estate - its holders paid, its loans called, its shorts closed."""
+    from xylarium.kernel import liquidation
+    mm = kernel.market_manager
+    comp = mm.companies.get(ticker)
+    planet = _firm_world(kernel, comp) if comp is not None else None
+    port = _port(kernel, planet) if planet is not None else None
+    if port is None or rec["plant"] < 1:
+        return None
+    econ = unit_economics(kernel, planet, port, rec["process"])
+    if econ is None or econ["margin"] <= 0:
+        return None                                      # no one buys a plant that cannot pay where it stands
+    useful = min(rec["plant"], max(0.0, demand(kernel, port, rec["process"])
+                                   - capacity_at(kernel, port, rec["process"], but=ticker)))
+    if useful < 1:
+        return None                                      # the market is served without it
+    price = int(plant_cost(planet, useful) * 0.5)
+    m = decide.mind_of_planet(kernel, planet)
+    worth = decide.worth(kernel, econ["margin"] * useful - upkeep_q(planet, useful), m, planet.currency)
+    for t, r in sorted(stats(kernel)["firms"].items(), key=lambda tr: -(mm.companies[tr[0]].home_cash
+                                                                         if tr[0] in mm.companies else 0)):
+        buyer = mm.companies.get(t)
+        if (t == ticker or buyer is None or r["process"] != rec["process"] or buyer.home_currency != comp.home_currency
+                or liquidation.distressed(kernel, t) or buyer.home_cash < price):
+            continue
+        if decide.choose(kernel, [decide.option("acquire_plant", price, worth)], m, t, ticker, "rescue") is None:
+            return None
+        buyer.home_cash -= price
+        comp.home_cash += price
+        r["plant"] += useful
+        rec["plant"] = 0.0
+        liquidation.stats(kernel)["rescued"] += 1
+        founder = (planet, rec.get("founder_shares", 0)) if rec.get("founder") == "people" else None
+        wound = liquidation.liquidate(kernel, ticker, "acquired", founder=founder, auction=f"plant to {buyer.name}")
+        stats(kernel)["firms"].pop(ticker, None)
+        return (f"[ENTERPRISE] {buyer.name} takes over {comp.name}'s plant; {comp.name} ({ticker}) is wound up "
+                f"with {wound['paid_out_sol']:,.0f} SOL's worth to its holders.")
+    return None
+
+
 def _consider_founding(kernel: Any, planet: Any) -> Optional[str]:
     """The incorporation hurdle: found the best recipe at this port if a quarter's profit on its plant, as the
     council's mind discounts it, beats the plant's cost."""
@@ -386,18 +540,16 @@ def _consider_founding(kernel: Any, planet: Any) -> Optional[str]:
     if pick is None:
         return None
     out, econ = pick
-    # an entrepreneur sizes its plant to its share of the market: the shelves split among those already at it
-    mm = kernel.market_manager
-    rivals = sum(1 for t, r in stats(kernel)["firms"].items() if r["process"] == out and t in mm.companies
-                 and _port(kernel, _firm_world(kernel, mm.companies[t])) is port)
-    batches = int(econ["shelves"] // (4 * (rivals + 1)))   # a quarter of its share of what the shelves hold
+    # an entrepreneur sizes its plant to what the port takes off its shelves each quarter beyond what the makers
+    # already there supply: no one builds into a market already served
+    batches = int(residual_demand(kernel, port, out))
     if batches < 1:
         return None
     capital = plant_cost(planet, batches) * 2           # plant and a quarter's working cash
     if planet.treasury < capital:
         return None
     m = decide.mind_of_planet(kernel, planet)
-    worth = decide.worth(kernel, econ["margin"] * batches, m, planet.currency)
+    worth = decide.worth(kernel, econ["margin"] * batches - upkeep_q(planet, batches), m, planet.currency)
     if decide.choose(kernel, [decide.option("found_firm", capital, worth)], m, planet.id, "found") is None:
         return None
     return found(kernel, planet, out, batches)
@@ -411,17 +563,14 @@ def _consider_growth(kernel: Any, comp: Any, rec: Dict[str, Any]) -> None:
     econ = unit_economics(kernel, planet, port, rec["process"])
     if econ is None or econ["margin"] <= 0 or econ["shelves"] <= rec["plant"]:
         return
-    mm = kernel.market_manager
-    rivals = sum(1 for t, r in stats(kernel)["firms"].items() if r["process"] == rec["process"] and t != comp.ticker
-                 and t in mm.companies and _port(kernel, _firm_world(kernel, mm.companies[t])) is port)
-    add = int((econ["shelves"] / (rivals + 1) - rec["plant"]) // 4)
+    add = int(residual_demand(kernel, port, rec["process"], but=comp.ticker) - rec["plant"])
     if add < 1:
         return
     cost = plant_cost(planet, add)
     if comp.home_cash < cost * 2:
         return
     m = decide.mind_of_planet(kernel, planet)
-    worth = decide.worth(kernel, econ["margin"] * add, m, planet.currency)
+    worth = decide.worth(kernel, econ["margin"] * add - upkeep_q(planet, add), m, planet.currency)
     if decide.choose(kernel, [decide.option("grow_firm", cost, worth)], m, comp.ticker, "grow") is None:
         return
     from xylarium.kernel.colony import ColonyManager
@@ -436,13 +585,15 @@ def quarter(kernel: Any) -> List[str]:
     st = stats(kernel)
     mm = kernel.market_manager
     logs: List[str] = []
+    _smooth_demand(kernel)
     for ticker, rec in list(st["firms"].items()):
         comp = mm.companies.get(ticker)
         if comp is None:
             st["firms"].pop(ticker)
             continue
         profit = operate(kernel, comp, rec)
-        if profit > 0:
+        from xylarium.kernel import liquidation
+        if profit > 0 and not liquidation.distressed(kernel, ticker):     # a distressed firm rebuilds, it does not pay out
             _pay_out(kernel, comp, int(profit * DIVIDEND_SHARE), rec)
             comp.last_dividend = round(int(profit * DIVIDEND_SHARE) / max(1, comp.total_shares), 3)
             _consider_growth(kernel, comp, rec)

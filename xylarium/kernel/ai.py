@@ -1109,10 +1109,16 @@ class AIManager:
             if ironclaw and attacker_id != ironclaw.id:
                 if def_pers == "pirate" or def_id == "ai_malakor":
                     attacker = kernel.captains.get(attacker_id)
-                    bounty_amount = 5000
-                    if attacker:
+                    # the Federal Bounty Office pays out of the Reserve's own funds - a transfer, never minted
+                    fed = getattr(kernel, "federal_reserve", None)
+                    bounty_amount = min(5000, max(0, fed.treasury)) if (fed is not None and attacker) else 0
+                    if attacker and bounty_amount > 0:
+                        fed.treasury -= bounty_amount
+                        fed.stats["bounties_paid"] = fed.stats.get("bounties_paid", 0) + bounty_amount
                         attacker.credits += bounty_amount
                         attacker.score += 1000
+                    if bounty_amount <= 0:
+                        return
 
                     msg = (
                         f"Confirmed kill on outlaw {defender_name} in Sector {sec_id:03d}! "

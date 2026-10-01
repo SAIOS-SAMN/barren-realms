@@ -101,6 +101,19 @@ class TestAuditFixes(unittest.TestCase):
         self.assertIsNone(w.faction_id)
         self.assertIsNone(w.civilization)
 
+    def test_a_pirate_bounty_is_paid_from_the_reserve_not_minted(self):
+        k = fresh()
+        from xylarium.kernel.ai import AIManager
+        if "ai_ironclaw" not in k.captains:
+            self.skipTest("no bounty office captain")
+        hunter = next(c for c in k.captains.values() if c.id != "ai_ironclaw")
+        m0, before = money(k), hunter.credits
+        AIManager.handle_event(k, {"event": "SHIP_DESTROYED", "data": {
+            "attacker_id": hunter.id, "attacker_name": hunter.name, "defender_name": "a pirate",
+            "defender_personality": "pirate", "defender_id": "x", "sector_id": 1}})
+        self.assertEqual(m0, money(k))
+        self.assertGreater(hunter.credits, before)
+
     def test_port_income_decays_when_nothing_is_bought(self):
         k = fresh()
         port = next(s.port for s in k.sectors.values() if s.port is not None)

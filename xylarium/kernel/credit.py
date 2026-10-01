@@ -36,8 +36,10 @@ def lend(kernel: Any, captain: Any, ticker: str, stake: int) -> int:
     """Before a share purchase: the company's margin desk lends ``appetite x stake`` against the shares."""
     comp = kernel.market_manager.companies.get(ticker)
     lev = appetite(kernel, captain)
-    if comp is None or lev <= 0 or stake <= 0 or getattr(captain, "credit_rating", 500) < 450:
-        return 0
+    from xylarium.kernel import liquidation
+    if comp is None or lev <= 0 or stake <= 0 or getattr(captain, "credit_rating", 500) < 450 \
+            or liquidation.distressed(kernel, ticker):
+        return 0                                  # the desk does not lend against a company in distress
     from xylarium.config import COMPANY_OPEX_RESERVE
     idle = comp.treasury - max(_buffer(comp), COMPANY_OPEX_RESERVE)
     amount = int(min(stake * lev, max(0, idle)))

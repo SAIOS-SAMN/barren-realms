@@ -78,5 +78,91 @@ class TestLiquidation(unittest.TestCase):
         self.assertNotIn(self.ticker, self.holder.portfolio)
 
 
+
+class TestSolvency(unittest.TestCase):
+    def setUp(self):
+        random.seed(53)
+        self.k = GameKernel(seed=7)
+        self.k.activate()
+        self.mm = self.k.market_manager
+
+    def _shell(self):
+        firms = enterprise.stats(self.k)["firms"]
+        return next(c for t, c in self.mm.companies.items() if t not in firms)
+
+    def test_a_shell_that_finds_no_work_is_wound_up_in_four_quarters_conserving_money(self):
+        from unittest import mock
+        shell = self._shell()
+        m0 = money(self.k)
+        with mock.patch.object(enterprise, "convert", lambda k, c: None):
+            for q in range(liquidation.WIND_UP_QUARTERS):
+                self.assertIn(shell.ticker, self.mm.companies)
+                liquidation.quarter(self.k)
+                self.assertTrue(shell.ticker not in self.mm.companies or liquidation.distressed(self.k, shell.ticker))
+        self.assertNotIn(shell.ticker, self.mm.companies)
+        self.assertEqual(m0, money(self.k))
+        self.assertGreater(liquidation.stats(self.k)["causes"].get("dormant", 0), 0)
+
+    def test_a_shell_that_can_pay_for_a_plant_converts_and_keeps_its_holders(self):
+        firms = enterprise.stats(self.k)["firms"]
+        m0 = money(self.k)
+        before = set(self.mm.companies)
+        for c in list(self.mm.companies.values()):
+            c.treasury += 10 ** 6                     # cash enough to build
+        dem = enterprise.stats(self.k).setdefault("demand", {})
+        for sec in self.k.sectors.values():            # ports that take goods off their shelves
+            if sec.port is not None:
+                dem[str(sec.id)] = {out: 200.0 for out in enterprise.RECIPES}
+        m0 = money(self.k)
+        for _ in range(4):
+            liquidation.quarter(self.k)
+        converted = [t for t in firms if firms[t].get("converted")]
+        if not converted:
+            self.skipTest("no home port where a recipe pays")
+        self.assertTrue(set(converted) <= before)
+        self.assertEqual(m0, money(self.k))
+
+    def test_the_desk_does_not_lend_against_a_distressed_company(self):
+        from xylarium.kernel import credit
+        shell = self._shell()
+        liquidation.stats(self.k)["standing"][shell.ticker] = {"state": "distressed", "quarters": 1, "why": "dormant"}
+        cap = next(iter(self.k.captains.values()))
+        shell.treasury = 10 ** 7
+        self.assertEqual(credit.lend(self.k, cap, shell.ticker, 10_000), 0)
+
+    def test_a_failing_firms_price_falls_toward_its_estate(self):
+        w, ticker, comp = failing_firm(self.k)
+        if comp is None:
+            self.skipTest("no world with a port of its money")
+        comp.share_price = 500
+        enterprise.stats(self.k)["firms"][ticker]["profit_q"] = -100
+        for _ in range(12):
+            self.mm._revalue_shares(self.k)
+        self.assertLess(comp.share_price, 50)
+        self.assertGreaterEqual(comp.share_price, int(liquidation.fair_price(self.k, comp)))
+
+    def test_a_rescue_moves_the_plant_and_conserves_money(self):
+        w, ticker, comp = failing_firm(self.k)
+        if comp is None:
+            self.skipTest("no world with a port of its money")
+        enterprise.found(self.k, w, "EQUIPMENT", 10)
+        rival = next(t for t in enterprise.stats(self.k)["firms"] if t != ticker)
+        self.mm.companies[rival].home_cash = 10 ** 7
+        rec = enterprise.stats(self.k)["firms"][ticker]
+        plant = rec["plant"] + enterprise.stats(self.k)["firms"][rival]["plant"]
+        m0 = money(self.k)
+        from unittest import mock
+        from xylarium.kernel import decide
+        port = enterprise._port(self.k, w)
+        enterprise.stats(self.k).setdefault("demand", {})[str(port.sector_id)] = {"EQUIPMENT": 10 ** 4}
+        with mock.patch.object(decide, "choose", lambda k, opts, m, *salt: opts[0]), \
+                mock.patch.object(enterprise, "unit_economics", lambda *a: {"margin": 50.0}):
+            log = enterprise.rescue(self.k, ticker, rec)
+        self.assertIsNotNone(log)
+        self.assertNotIn(ticker, self.mm.companies)
+        self.assertEqual(enterprise.stats(self.k)["firms"][rival]["plant"], plant)
+        self.assertEqual(m0, money(self.k))
+
+
 if __name__ == "__main__":
     unittest.main()

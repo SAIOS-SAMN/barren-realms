@@ -500,6 +500,8 @@ class MarketManager:
         matching their local civilization taxon and resource profile.
         """
         created = []
+        if kernel.cycle_count > 0:
+            return created        # after genesis a business is founded only where it pays (enterprise.py)
         for s_id, sec in kernel.sectors.items():
             for planet in sec.planets:
                 # Check if planet already has a company headquartered here
@@ -897,9 +899,10 @@ class MarketManager:
         from xylarium.kernel.colony import ColonyManager
         from xylarium.kernel import enterprise
         firms = enterprise.stats(kernel)["firms"]
+        from xylarium.kernel import liquidation
         for ticker, comp in self.companies.items():
-            if ticker in firms:
-                continue          # a process firm buys, pays wages and keeps its plant up itself (enterprise.operate)
+            if ticker in firms or liquidation.distressed(kernel, ticker):
+                continue          # a firm buys, pays and keeps its plant up itself; a distressed one keeps its estate
             # Operating books in the home money: last season's takings are spent at the home region's starport
             home = kernel.get_planet(comp.planet_id) if getattr(comp, "planet_id", None) else None
             if comp.home_cash > 0 and home is not None:
@@ -1171,6 +1174,7 @@ class MarketManager:
 
         company = self.companies[ticker]
         # The company buys its shares back out of its own treasury: no buyer liquidity, no sale
+        self._market_maker_sol(company, company.share_price * amount)
         affordable = int(company.treasury // max(1, company.share_price))
         if affordable <= 0:
             return False, f"ISSE: {ticker} has no buyback liquidity today.", {}
@@ -1193,7 +1197,7 @@ class MarketManager:
         # Selling pressure marginally eases price (-0.5% per 100 shares)
         price_drop = max(0, int(amount * 0.005))
         if price_drop > 0:
-            company.share_price = max(5, company.share_price - price_drop)
+            company.share_price = max(1, company.share_price - price_drop)
             company.price_history.append(company.share_price)
 
         msg = (
@@ -1867,7 +1871,7 @@ class MarketManager:
             loot = int(company.treasury * 0.25)
             company.treasury -= loot
             captain.credits += loot
-            company.share_price = max(5, company.share_price - 2)
+            company.share_price = max(1, company.share_price - 2)
             company.price_history.append(company.share_price)
 
             msg = (
@@ -1878,6 +1882,26 @@ class MarketManager:
 
         else:
             return False, f"Unknown board mandate: '{mandate}'. Valid: SPECIAL_DIVIDEND, CHANGE_INDUSTRY, CORPORATE_EMBARGO, STRIP_ASSETS.", {}
+
+    def _market_maker_sol(self, company: Any, need: int) -> None:
+        """A company making a market in its own shares pays in SOL; what it holds in its home money beyond what it
+        needs to run a quarter comes through the exchange when its SOL falls short (a swap, nothing minted)."""
+        from xylarium.kernel import enterprise, ledger
+        from xylarium.kernel.fx import ACTIVE_FX
+        kernel = getattr(self, "_kernel_ref", None) or ledger.active_kernel()
+        spare = company.home_cash - (enterprise.working_need(kernel, company) if kernel is not None else 0)
+        short = need - company.treasury
+        if short <= 0 or spare <= 0 or ACTIVE_FX is None:
+            return
+        cur = company.home_currency or "SOL"
+        if cur == "SOL":
+            move = min(spare, short)
+            company.home_cash -= move
+            company.treasury += move
+            return
+        local = min(spare, int(short * ACTIVE_FX.rate(cur) * 1.06) + 1)    # the fee's margin
+        company.home_cash -= local
+        company.treasury += ACTIVE_FX.swap_to_sol(cur, local)
 
     def short_sell(self, captain: Any, ticker: str, amount: int, kernel: Any = None) -> Tuple[bool, str, Dict[str, Any]]:
         if kernel is None:
@@ -1919,6 +1943,7 @@ class MarketManager:
                 f"({int(margin_rate * 100)}% margin). You have {captain.credits:,} Cr."
             ), {}
         # The market maker for a company's shares is its own treasury: it pays for the borrowed shares it takes
+        self._market_maker_sol(company, total_value)
         if company.treasury < total_value:
             return False, (f"No buyer: {ticker}'s market maker cannot take {amount:,} shares "
                            f"({total_value:,} Cr) today."), {}
@@ -1961,7 +1986,7 @@ class MarketManager:
         # Market raid / short downward price pressure
         price_drop = max(1, amount // 200)
         old_price = company.share_price
-        company.share_price = max(5, company.share_price - price_drop)
+        company.share_price = max(1, company.share_price - price_drop)
         company.price_history.append(company.share_price)
 
         msg = (
@@ -2309,7 +2334,7 @@ class MarketManager:
             rival.consumer_trust = max(10, rival.consumer_trust - 25)
             pct_drop = random.uniform(0.18, 0.25)
             price_drop = max(3, int(rival.share_price * pct_drop))
-            rival.share_price = max(5, rival.share_price - price_drop)
+            rival.share_price = max(1, rival.share_price - price_drop)
             rival.price_history.append(rival.share_price)
 
             # Erode rival penetration across sectors
@@ -3122,12 +3147,13 @@ class MarketManager:
                     hauler.status = "IN_TRANSIT"
 
 
-    def _revalue_shares(self) -> None:
-        from xylarium.config import SHARE_BOOK_MULTIPLE, SHARE_REVERSION
+    def _revalue_shares(self, kernel: Any = None) -> None:
+        from xylarium.config import SHARE_REVERSION
+        from xylarium.kernel import liquidation
         for comp in self.companies.values():
-            fair = (comp.treasury + 4 * max(0, comp.quarterly_revenue)) * SHARE_BOOK_MULTIPLE / max(1, comp.total_shares)
-            fair = max(5.0, fair)
-            new_price = max(5, int(round(comp.share_price + SHARE_REVERSION * (fair - comp.share_price))))
+            # what it is worth: the greater of its estate and its estate plus its earnings (liquidation.valuation)
+            fair = max(1.0, liquidation.fair_price(kernel, comp)) if kernel is not None else float(comp.share_price)
+            new_price = max(1, int(round(comp.share_price + SHARE_REVERSION * (fair - comp.share_price))))
             if new_price != comp.share_price:
                 comp.share_price = new_price
                 comp.price_history.append(comp.share_price)
@@ -3148,7 +3174,7 @@ class MarketManager:
         # Fundamentals: each quarter, share prices revert toward book value plus annualized revenue,
         # so momentum (deliveries, PR, buying pressure) can't inflate a paper-wealth bubble forever
         if current_cycle > 0 and current_cycle % FISCAL_QUARTER_CYCLES == 0:
-            self._revalue_shares()
+            self._revalue_shares(kernel)
         fleet_logs = self.tick_trade_haulers(kernel)
 
         # 1. Contract expiration check
@@ -3158,7 +3184,7 @@ class MarketManager:
                 expired_contracts.append(cid)
                 comp = self.companies.get(contract.company_ticker)
                 if comp:
-                    comp.share_price = max(5, comp.share_price - 1)
+                    comp.share_price = max(1, comp.share_price - 1)
                     comp.price_history.append(comp.share_price)
 
         # Prune settled contracts once past their retention window so the board stays bounded
@@ -3229,9 +3255,10 @@ class MarketManager:
             # (ISSE reserve disorder is now corrected by the federations' central banks - banking.py)
             from xylarium.kernel import enterprise
             firms = enterprise.stats(kernel)["firms"]
+            from xylarium.kernel import liquidation
             for ticker, comp in self.companies.items():
-                if ticker in firms:
-                    continue      # a process firm earns what it sells, not a transfer from its world's vault
+                if ticker in firms or liquidation.distressed(kernel, ticker):
+                    continue      # a firm earns what it sells; a distressed company receives nothing it has not earned
                 # Operating income is real: the home colony buys the company's goods & services
                 # (a transfer from the colony vault). quarterly_revenue stays a reporting figure.
                 home = kernel.get_planet(comp.planet_id) if getattr(comp, "planet_id", None) else None
