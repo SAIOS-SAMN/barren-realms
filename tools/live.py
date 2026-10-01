@@ -43,6 +43,8 @@ def residual(kernel: Any) -> Dict[str, int]:
     ms, ln = money_supply(kernel), harness.ledger_net(kernel)
     for cur in set(ms) | set(ln):
         out["$" + cur] = ms.get(cur, {}).get("total", 0) - ln.get(cur, 0)
+    from xylarium.kernel import energy
+    out["~energy_meu"] = energy.residual(kernel)               # stored energy minus declared, milli-EU
     return out
 
 
@@ -72,7 +74,7 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
         "fx": {c: round(kernel.fx_market.rate(c), 3) for c in kernel.fx_market.pools},
         "m_over_mstar": {c: round(supply[c] / t, 3) for c, t in pol.current.items() if t and c in supply},
     }
-    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices"):
+    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest"):
         if name in sums:
             obs[name] = sums[name]
     g = kernel.state.get("genesis") or {}

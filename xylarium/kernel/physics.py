@@ -345,7 +345,12 @@ def planet_flux(sector: Any, planet: Any) -> F:
     b = body(planet)
     if "q" not in b:
         return F(1)
-    return flux(star(sector), b["q"])
+    fl = flux(star(sector), b["q"])
+    from xylarium.kernel import harvest
+    shaded = harvest.shade(getattr(sector, "id", 0)) if sector is not None else 0.0
+    if shaded > 0:                                  # the star's arrays take their share of its light first
+        fl = fl * F(int(round((1.0 - shaded) * 10 ** 9)), 10 ** 9)
+    return fl
 
 
 def summary(sectors: Dict[int, Any]) -> Dict[str, Any]:

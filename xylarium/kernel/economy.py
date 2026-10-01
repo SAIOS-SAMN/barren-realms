@@ -55,6 +55,12 @@ class EconomyManager:
             port.sells = {}
 
         for comm, cfg in COMMODITY_CONFIG.items():
+            if cfg.get("category") == "SYNTHETIC":
+                # made only from energy (antimatter): every port trades it, none is chartered with any
+                port.max_stock.setdefault(comm, 200)
+                port.stock.setdefault(comm, 0)
+                port.buys.setdefault(comm, True)
+                port.sells.setdefault(comm, True)
             if cfg.get("category") == "LUXURY":
                 # Every starport trades luxuries, and none is chartered with any: they are crafted by worlds
                 port.max_stock.setdefault(comm, 600)

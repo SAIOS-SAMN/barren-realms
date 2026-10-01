@@ -682,7 +682,9 @@ class ColonyManager:
         withdraw = ledger.policy_factor(planet.currency)
         share = HOUSEHOLD_INCOME_SHARE
         from xylarium.kernel.fertility import tax_factor
-        earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor * tax_factor(planet)
+        from xylarium.kernel import energy
+        earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor * tax_factor(planet) \
+            * energy.output_factor(planet)                    # industry runs on the energy it had last season
         household_income = int(earnings * share)
         if household_income > 0:
             ledger.mint("colony_tax", household_income, planet.currency)

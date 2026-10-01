@@ -162,8 +162,11 @@ def _reckon(kernel: Any, planet: Any, metabolism: Optional[str], tier: int, habs
 
 def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: Optional[int] = None,
                       metabolism: Optional[str] = None) -> int:
-    """K: how many people this world can feed at its technology."""
-    return _profile(kernel, planet, citadel, habitats, metabolism)["k"]
+    """K: how many people this world can feed at its technology - less what a stripped atmosphere no longer
+    shelters (harvest.py: a stalled dynamo lets the stars' wind take the air)."""
+    k = _profile(kernel, planet, citadel, habitats, metabolism)["k"]
+    air = float(getattr(planet, "society", {}).get("atmosphere", 1.0)) if getattr(planet, "society", None) else 1.0
+    return k if air >= 1.0 else int(k * air)
 
 
 def food_rate(kernel: Any, planet: Any) -> F:

@@ -148,6 +148,29 @@ the mirror - and no people can conceive, be taught, or read from a relic a hyper
 stack operators; discovering one takes mastery of energy *and* information. Folding space (`JUMP`) needs a hyper
 crystal in its people's vocabulary: without one the fold cannot be written, however rich the captain.
 
+### Energy and harvest (`energy.py`, `harvest.py`)
+Energy is a conserved ledger like money and matter: every unit stored in a world's grid came from a declared
+source and leaves through a declared sink, audited each quarter. One unit is a millionth of the sunlight Terra
+receives in a season; Earth's own ratios set the rest (a core-mantle heat flow of ~58 EU a season, ~110 EU a season
+for a modern people of 120,000). Pre-industrial peoples live on muscle and biosphere; from the first citadel tier
+industry needs energy, doubling per tier, and a world short of it loses that share of its industrial output.
+
+Peoples catch it three ways, each to its own design built from the elements it has found and holds (the most
+refractory for collectors and hot exchangers, the best conductor near copper's group, the lightest working fluid
+for a heat engine) and improved by mastery - so peoples of one metabolism on different worlds build differently,
+and any industrial people can at least make crude ore mirrors and bores:
+  * **sunfields** on its worlds - clean, bounded by the world's light;
+  * **core bores** - cheap and local, but divert more than ~40% of a core's heat flow and its dynamo stalls, the
+    stars' wind strips the air, and the world feeds fewer people every season; the people it can no longer feed are
+    the measured harm, and alignment follows (nothing forbids it);
+  * **orbital arrays** at a star's inner edge, for a people with yards - beamed home, and shading every world beyond
+    them by their share of the sphere (negligible for a swarm, decisive for a shell).
+Energy clears in markets: first within each system (surplus worlds sell to short ones at the price between the
+buyer's loss and the seller's alternative), then bridged over the lanes to the people's own worlds, its family of
+patrons and tributaries, and aligned peoples not at war with it, losing 1 - 1/(1+hops)^2 on the way. What is left is
+packed into fuel - hydrogen by electrolysis of water (sold through the ports to every hydrogen drive), antimatter
+for a people that has mastered pair production (the antimatter photon drive) - and the rest is waste heat.
+
 ### Chemistry (`chemistry.py`)
 There is one periodic table for the universe - real elements with their mass, density, condensation temperature,
 cosmic abundance and place (period and group), plus the netstratum exotics placed by their own axes. Every world

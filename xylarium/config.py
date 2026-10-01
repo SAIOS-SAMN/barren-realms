@@ -147,6 +147,8 @@ COMMODITY_CONFIG = {
 
     # [3] FISSIONABLES, NOBLES & EXOTICS (Precious Specie)
     "U": {"name": "Enriched Uranium", "symbol": "U", "category": "EXOTICS", "base_price": 110, "min_price": 55, "max_price": 280, "volatility": 0.60},
+    # made only from energy (energy.py): no port is chartered with any
+    "AM": {"name": "Antimatter Cell", "symbol": "AM", "category": "SYNTHETIC", "base_price": 900, "min_price": 400, "max_price": 2500, "volatility": 0.5},
     "Pt": {"name": "Platinum Catalysts", "symbol": "Pt", "category": "EXOTICS", "base_price": 95, "min_price": 45, "max_price": 240, "volatility": 0.55},
     "SpR": {"name": "Spiral Rime Crystals", "symbol": "SpR", "category": "EXOTICS", "base_price": 240, "min_price": 110, "max_price": 600, "volatility": 0.70},
     "cryogenite": {"name": "Cryogenite", "symbol": "Crg", "category": "EXOTICS", "base_price": 130, "min_price": 60, "max_price": 320, "volatility": 0.60},
@@ -1549,6 +1551,10 @@ PROCESSES = {
     "nursery_cryo": {"domain": "energy", "name": "deep refrigeration"},
     "nursery_plasmic": {"domain": "energy", "name": "magnetic confinement"},
     "genome_editing": {"domain": "biology", "name": "genome editing"},
+    "solar_collectors": {"domain": "energy", "name": "light collection"},
+    "stellar_arrays": {"domain": "energy", "name": "orbital collection and beaming"},
+    "core_taps": {"domain": "materials", "name": "deep core boring"},
+    "antimatter": {"domain": "energy", "name": "pair production and confinement"},
 }
 LEGACY_TECH_PROCESS = {"JUMP_DRIVE": "jump_drive", "CLOAKING_GRID": "cloaking", "NANITE_DRYDOCK": "nanite_repair",
                        "BIO_SYNTHESIZER": "bio_synthesis", "ORBITAL_FOUNDRY": "orbital_foundry",
@@ -1675,6 +1681,7 @@ FUEL_CELLS = {
     "Xe": {"name": "Xenon ion drive", "v_e": 6.0, "min_tier": 2, "part": "M1_SUPERCONDUCTOR", "extra_turns": 1},
     "U": {"name": "Fission pulse drive", "v_e": 10.0, "min_tier": 3, "part": "M3_ENGINE_MANIFOLD"},
     "WARP": {"name": "Warp stabilizer drive", "v_e": None, "min_tier": 3, "part": "M4_WARP_CORE", "core_life": 400},
+    "AM": {"name": "Antimatter photon drive", "v_e": 30.0, "min_tier": 4, "part": "M4_WARP_CORE"},
 }
 # What each biology's engineering tradition burns (before it looks at what is abundant)
 FUEL_TRADITION = {"biotic": "C", "mineral": "U", "plasmic": "H", "cryogenic": "H2O", "umbral": "Xe"}

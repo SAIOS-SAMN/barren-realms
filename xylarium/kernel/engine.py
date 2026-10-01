@@ -130,6 +130,7 @@ from xylarium.kernel import enterprise as enterprise_mod  # noqa: F401  (registe
 from xylarium.kernel import chemistry as chemistry_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import waystations as waystations_mod, liquidation as liquidation_mod  # noqa: F401  (register)
 from xylarium.kernel import observation as observation_mod, primordial as primordial_mod, relations as relations_mod, prices as prices_mod  # noqa: F401
+from xylarium.kernel import harvest as harvest_mod, energy as energy_mod  # noqa: F401
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
