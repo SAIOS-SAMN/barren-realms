@@ -109,6 +109,35 @@ def save(kernel: Any, path: str) -> None:
     os.replace(tmp, path)
 
 
+def _watch_seasons(kernel: Any) -> Dict[str, Any]:
+    """Wraps every seasonal subsystem with a money-only residual check: a quarter that breaks conservation names
+    the season that did it (or none: then it happened between seasons)."""
+    from xylarium.kernel import subsystem as sub_mod
+    blame: Dict[str, Any] = {}
+
+    def money_residual() -> Dict[str, int]:
+        ms, ln = money_supply(kernel), harness.ledger_net(kernel)
+        return {c: ms.get(c, {}).get("total", 0) - ln.get(c, 0) for c in set(ms) | set(ln)}
+
+    for sub in sub_mod.REGISTRY.values():
+        if sub.season is None or getattr(sub.season, "_watched", False):
+            continue
+        inner = sub.season
+
+        def watched(k: Any, _inner=inner, _name=sub.name) -> Any:
+            before = money_residual()
+            out = _inner(k)
+            after = money_residual()
+            moved_ = {c: after.get(c, 0) - before.get(c, 0) for c in set(before) | set(after)
+                      if after.get(c, 0) != before.get(c, 0)}
+            if moved_:
+                blame[f"{_name}@{k.cycle_count}"] = moved_
+            return out
+        watched._watched = True
+        sub.season = watched
+    return blame
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Xylarium living universe")
     ap.add_argument("--seed", type=int, default=7)
@@ -149,6 +178,7 @@ def main() -> None:
     stats = harness.RunStats()
     tick = kernel.tick_simulation
     kernel.tick_simulation = lambda: None
+    blame = _watch_seasons(kernel)                     # which season moved money it should not have (cheap)
 
     stop = {"now": False}
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
@@ -183,6 +213,7 @@ def main() -> None:
             d = moved(base, residual(kernel))
             if d:
                 crash(f"conservation broken in the quarter ending cycle {c}: {d}\n"
+                      f"money moved inside seasons this quarter: {blame or 'none (between seasons: ticks, AI turns)'}\n"
                       f"(counted minus declared moved; bisect with XYL_AUDIT=1 XYL_AUDIT_FROM={c - QUARTER} "
                       f"in simulate_playtest, or reload this crash snapshot)")
         if c % args.every == 0:
@@ -193,6 +224,7 @@ def main() -> None:
                 f.write(json.dumps(line, default=str) + "\n")
             save(kernel, snap)
             base = residual(kernel)            # a save/load round trip may re-baseline declared totals
+            blame.clear()
             print(f"cycle {c}: {line['people']:,} people on {line['worlds']} worlds, {line['cyc_per_s']}/s",
                   flush=True)
         if args.cycles and c - start_cycle >= args.cycles:
