@@ -70,6 +70,18 @@ class TestLiquidityAndCarry(unittest.TestCase):
         self.assertGreater(fee, 0.0)
         self.assertLess(fee, 1.0)
 
+    def test_a_hyperinflating_moneys_fee_rises_by_itself(self):
+        k = self.k
+        cur = next(c for c in k.fx_market.pools if c in k.banking.banks)
+        liquidity.stats(k)["vol"][cur] = 0.05
+        k.fx_market.fees[cur] = 0.01
+        calm = [liquidity.price_service(k, cur, volume_q=50_000.0) for _ in range(30)][-1]
+        k.banking.banks[cur].policy_rate = 0.5                # its bank fights a hyperinflation
+        k.fx_market.fees[cur] = 0.01
+        hot = [liquidity.price_service(k, cur, volume_q=50_000.0) for _ in range(30)][-1]
+        self.assertGreater(hot, calm)
+        self.assertLess(hot, 1.0)
+
     def test_inflation_makes_idle_cash_cost_something(self):
         st = prices._st(self.k)
         st["hist"]["SOL"] = [1.0, 1.02, 1.04, 1.06, 1.08]
