@@ -541,18 +541,23 @@ class SurfaceManager:
         attacker_losses = 0
         defender_losses = 0
 
-        # Each round resolves exchange of fire
-        attacker_effective = committed * random.uniform(0.85, 1.25)
-        defender_effective = defender_force * random.uniform(0.90, 1.30)
+        # Lanchester's square law: the expected outcome of the exchange (occupation.lanchester)
+        from xylarium.kernel import occupation
+        fight = occupation.lanchester(float(committed), float(defender_force))
+        attacker_effective, defender_effective = float(committed), float(defender_force)
 
-        if attacker_effective > defender_effective:
-            # Attacker victory
+        if fight["won"]:
+            # Attacker victory: the survivors garrison the world
             defender_losses = target_planet.garrison_troops
-            target_planet.garrison_troops = max(5, int(committed * 0.3))
-            attacker_losses = min(committed, int(defender_effective * 0.5))
-            attacker.troops -= attacker_losses
+            left = int(fight["attacker_left"])
+            attacker_losses = committed - left
+            target_planet.garrison_troops = max(1, left)
+            attacker.troops -= committed
 
             old_owner = target_planet.owner_id
+            from xylarium.kernel import ledger
+            if ledger.ACTIVE_KERNEL is not None:
+                occupation.conquer(ledger.ACTIVE_KERNEL, target_planet, attacker, "ground invasion")
             target_planet.owner_id = attacker.id
 
             # Plunder 40% of treasury
@@ -564,8 +569,8 @@ class SurfaceManager:
             # Possible collateral damage to one district
             demolished_district = None
             occupied_tiles = [t for t in grid.tiles if t.district != DistrictType.EMPTY]
-            if occupied_tiles and random.random() < 0.40:
-                casualty_tile = random.choice(occupied_tiles)
+            if occupied_tiles and defender_effective * 2 > attacker_effective:      # a close fight levels a district
+                casualty_tile = occupied_tiles[0]
                 demolished_district = casualty_tile.district.name
                 casualty_tile.district = DistrictType.EMPTY
                 target_planet.surface_grid = grid.to_dict()

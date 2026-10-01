@@ -501,8 +501,9 @@ class CombatManager:
         logs.append(f"ORBITAL STRIKE: {attacker.name} enters high orbit around {planet.name} (Governor: {planet.owner_id})!")
         logs.append(f">> Planetary Shields: {planet.shields}/{planet.max_shields} | Defense Fighters: {planet.fighters}")
 
-        att_power = int(attacker.ship.fighters * random.uniform(9.0, 15.0)) + random.randint(20, 50)
-        def_power = int(planet.fighters * random.uniform(8.0, 13.0)) + random.randint(15, 30)
+        # each side's expected volley (the means of the old salvo spreads: 12 MW a fighter + 35, 10.5 + 22)
+        att_power = int(attacker.ship.fighters * 12.0) + 35
+        def_power = int(planet.fighters * 10.5) + 22
         if planet.society.get("degraded"):
             # A world that cannot fuel its defences fights at half its readiness-weighted strength
             r = float(planet.society.get("readiness", 0.0))
@@ -550,6 +551,9 @@ class CombatManager:
         # 3. Check for Planet Conquest
         if planet.shields <= 0 and planet.fighters <= 0:
             old_owner = planet.owner_id
+            if kernel is not None:
+                from xylarium.kernel import occupation
+                occupation.conquer(kernel, planet, attacker, "orbital assault")   # its people stay who they are
             planet.owner_id = attacker.id
             plunder = planet.treasury
             planet.treasury = 0

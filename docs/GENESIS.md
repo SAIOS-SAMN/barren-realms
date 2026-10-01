@@ -105,6 +105,16 @@ misjudgement. The largest peoples domesticate first.
   year (an atmosphere's mixing time) times mastery; priced per e-fold per Earth-area at what the same land would
   cost enclosed. Giants have no ground to give. Terraform an empty world, then seed it.
 
+## Taking worlds, and holding them (occupation.py)
+
+A world taken by force keeps its people - their biology, staple and genome stay under the new flag. Holding it is a
+cost: resistance is what the occupier and occupied do not understand of each other (their minds' channel overlap,
+growing over a generation of living together), policing is ~20 per 1000 inhabitants (Quinlivan) x resistance at
+what a head of that world produces, paid from its treasury each quarter, and the resisting share withholds its work.
+Unpaid policing becomes unrest; unrest that reaches a quarter's whole need throws the occupier out, and the world
+is its people's own again. Orbital assaults fire their expected volleys and ground invasions resolve by Lanchester's
+square law - no dice in either.
+
 ## The human at genesis: from TradeWars console to a people's steward
 
 A primordial start changes what the player *is*. There is no ship to fly for the first two decades - so the human

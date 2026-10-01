@@ -55,6 +55,9 @@ def metabolism_of(kernel: Any, planet: Any) -> str:
     civ = getattr(planet, "civilization", None)
     if civ is not None and getattr(civ, "metabolism", None):
         return civ.metabolism
+    kept = (getattr(planet, "society", None) or {}).get("people_metab")
+    if kept:
+        return kept                                    # a people taken by force keeps its biology (occupation.py)
     owner = kernel.captains.get(planet.owner_id) if (kernel is not None and planet.owner_id) else None
     return (getattr(owner, "metabolism", None) if owner is not None else None) or "biotic"
 

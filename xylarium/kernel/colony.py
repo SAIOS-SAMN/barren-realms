@@ -689,10 +689,11 @@ class ColonyManager:
         withdraw = ledger.policy_factor(planet.currency)
         share = HOUSEHOLD_INCOME_SHARE
         from xylarium.kernel.fertility import tax_factor
-        from xylarium.kernel import energy, ways
+        from xylarium.kernel import energy, occupation, ways
         earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor * tax_factor(planet) \
             * energy.output_factor(planet) \
-            * ways.taxable(planet)                            # no state, no tax and no money (ways.py)
+            * ways.taxable(planet) \
+            * (occupation.compliance(kernel, planet) if "occupation" in soc else 1.0)   # the occupied withhold work
         household_income = int(earnings * share)
         if household_income > 0:
             ledger.mint("colony_tax", household_income, planet.currency)
