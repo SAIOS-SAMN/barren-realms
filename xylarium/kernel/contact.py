@@ -71,7 +71,7 @@ def protocol(kernel: Any, people: str) -> str:
 
 def intelligibility(kernel: Any, a: Optional[str], b: Optional[str], by: Optional[Dict[str, List[Any]]] = None) -> float:
     """0..1: how well peoples a and b understand each other now."""
-    if not a or not b or a == b or kernel is None or "contact" not in getattr(kernel, "state", {}):
+    if not a or not b or a == b or kernel is None or not hasattr(kernel, "state"):
         return 1.0
     by = by if by is not None else _by(kernel)
     ch = channel(_temperature(kernel, a, by.get(a)), _temperature(kernel, b, by.get(b)))
