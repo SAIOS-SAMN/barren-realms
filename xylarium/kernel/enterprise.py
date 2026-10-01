@@ -302,24 +302,12 @@ def receivership(kernel: Any, ticker: str, rec: Dict[str, Any]) -> str:
                 r["plant"] += rec["plant"]
                 sold = buyer.name
                 break
-    payout = _pay_out(kernel, comp, max(0, comp.home_cash), rec)
-    left = comp.home_cash                                           # unsold float's part: to the home world
-    if planet is not None and left > 0:
-        planet.treasury += left
-        comp.home_cash = 0
-    if comp.treasury > 0 and planet is not None:                    # SOL raised on the ISSE, to its holders too
-        for cap, n in _holders(kernel, comp):
-            share = comp.treasury * n // max(1, comp.total_shares)
-            cap.credits += share
-            comp.treasury -= share
-        kernel.federal_reserve.treasury += comp.treasury            # the residue escheats to the Reserve
-        comp.treasury = 0
-    for cap in kernel.captains.values():
-        (getattr(cap, "portfolio", {}) or {}).pop(ticker, None)
-    for ex in getattr(mm, "executives", {}).values():
-        if getattr(ex, "company_ticker", None) == ticker:
-            ex.active = False
-    del mm.companies[ticker]
+    from xylarium.kernel import liquidation
+    founder = (planet, rec.get("founder_shares", 0)) if (planet is not None and rec.get("founder") == "people") \
+        else None
+    wound = liquidation.liquidate(kernel, ticker, "receivership", founder=founder,
+                                  auction=f"plant to {sold}" if sold else "plant scrapped")
+    payout = wound["paid_out_sol"]
     st["firms"].pop(ticker, None)
     st["bankrupt"] += 1
     for why in rec.get("history", []):
@@ -328,10 +316,10 @@ def receivership(kernel: Any, ticker: str, rec: Dict[str, Any]) -> str:
     if chron is not None:
         chron.record(kernel, "RECEIVERSHIP", ticker, comp.name, f"The Fall of {comp.name}",
                      f"Four quarters it made {rec['process']} at a loss. Its plant went "
-                     + (f"to {sold}" if sold else "for scrap") + f"; {payout:,} {comp.home_currency} went back to "
+                     + (f"to {sold}" if sold else "for scrap") + f"; {payout:,.0f} SOL's worth went back to "
                      f"those who had trusted it.", tags=["enterprise", "receivership"])
     return f"[ENTERPRISE] {comp.name} ({ticker}) is in receivership: plant " + \
-        (f"auctioned to {sold}" if sold else "scrapped") + f", {payout:,} {comp.home_currency} paid out."
+        (f"auctioned to {sold}" if sold else "scrapped") + f", {payout:,.0f} SOL's worth paid out."
 
 
 # ---------------------------------------------------------------------- founding and growth

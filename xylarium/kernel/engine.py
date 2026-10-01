@@ -128,7 +128,7 @@ from xylarium.kernel import genome as genome_mod  # noqa: F401  (registers its s
 from xylarium.kernel import introspect as introspect_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import enterprise as enterprise_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import chemistry as chemistry_mod  # noqa: F401  (registers its seasonal hook)
-from xylarium.kernel import waystations as waystations_mod  # noqa: F401  (registers its seasonal hook)
+from xylarium.kernel import waystations as waystations_mod, liquidation as liquidation_mod  # noqa: F401  (register)
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
