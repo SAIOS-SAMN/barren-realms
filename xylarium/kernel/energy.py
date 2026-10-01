@@ -314,8 +314,10 @@ def _trade(kernel: Any, sb: Dict[str, Any], bb: Dict[str, Any], meu: int, loss: 
     fxm = kernel.fx_market
     v_sell_in_buyer = (fxm.to_sol_value(s.currency, v_sell) if s.currency != "SOL" else v_sell) * \
         (fxm.rate(b.currency) if b.currency != "SOL" else 1.0)
-    if v_buy * (1.0 - loss) <= v_sell_in_buyer:
-        return 0                                                   # after the beam's losses it is worth more where it is
+    from xylarium.kernel import contact
+    trust = contact.intelligibility(kernel, _people(s), _people(b))   # a contract half understood is half kept
+    if v_buy * (1.0 - loss) * trust <= v_sell_in_buyer:
+        return 0                                                   # after losses and doubt it is worth more where it is
     price = 0.5 * (v_buy + v_sell_in_buyer)
     paid = _pay(kernel, b, s, price * arrive / MILLI)
     if paid <= 0:

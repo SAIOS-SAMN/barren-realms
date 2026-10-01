@@ -215,14 +215,32 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
         return None
     if plunder:
         from xylarium.config import COMMODITY_CONFIG, PRICE_LEVEL, SURFACE_TROOP_RECRUIT_COST
-        from xylarium.kernel import decide
+        from xylarium.kernel import contact, decide
         want = avail
         level = PRICE_LEVEL.get(planet.currency, 1.0)
         gain = attack / (attack + defend) * avail * COMMODITY_CONFIG.get(food, {}).get("base_price", 20) * level
         loss = 0.1 * defend * SURFACE_TROOP_RECRUIT_COST * level
-        m = decide.mind_of_planet(kernel, planet)
-        if decide.choose(kernel, [decide.option("plunder", loss, gain)], m, planet.id, "plunder") is None:
+        them_people = people_of(victim) if victim is not None else None
+        understood = contact.intelligibility(kernel, people_of(planet), them_people)
+        m = contact.misread(decide.mind_of_planet(kernel, planet), understood)
+        options = [decide.option("plunder", loss, gain)]
+        if victim is not None:
+            # parley: offer the victim protection for tribute instead - worth the tribute it would pay, as far as
+            # the offer can be understood
+            by = relations._peoples(kernel)
+            t = relations._terms(kernel, them_people, people_of(planet), by, relations._pressed_share(kernel))
+            if t is not None:
+                rate = kernel.fx_market.rate(planet.currency) if planet.currency != "SOL" else 1.0
+                options.append(decide.option("parley", 0.0, understood * t["tribute"] * rate))
+        pick = decide.choose(kernel, options, m, planet.id, "plunder")
+        if pick is None:
             return None
+        if pick["name"] == "parley":
+            contact.stats(kernel)["parleys"] += 1
+            log = relations.offer(kernel, them_people, people_of(planet), relations._peoples(kernel))
+            return log
+        if loss > gain:
+            contact.stats(kernel)["misread_raids"] += 1          # it would not have, had it understood its target
         st["plunders"] = st.get("plunders", 0) + 1
     st["raid_attempts_q"] = st.get("raid_attempts_q", 0) + 1
     by = st.setdefault("raids_by", {})

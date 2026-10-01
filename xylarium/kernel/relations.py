@@ -274,9 +274,24 @@ def _consider(kernel: Any, sub: str, by: Dict[str, List[Any]], base: float) -> O
             best = (sup, t)
     if best is None:
         return None
-    sup, t = best
-    patron_cap = _capital(by[sup])
-    ms, mp = decide.mind_of_planet(kernel, cap), decide.mind_of_planet(kernel, patron_cap)
+    return offer(kernel, sub, best[0], by, best[1])
+
+
+def offer(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], t: Optional[Dict[str, float]] = None,
+          base: Optional[float] = None) -> Optional[str]:
+    """`sup` offers `sub` protection for tribute: both judge their own side - through how well they understand
+    each other (contact.misread) - and the tie stands only if both accept."""
+    from xylarium.kernel import contact, decide
+    if sub in ties(kernel) or sub not in by or sup not in by or root(kernel, sup) == sub:
+        return None
+    if t is None:
+        t = _terms(kernel, sub, sup, by, _pressed_share(kernel) if base is None else base)
+        if t is None:
+            return None
+    cap, patron_cap = _capital(by[sub]), _capital(by[sup])
+    understood = contact.intelligibility(kernel, sub, sup, by)
+    ms = contact.misread(decide.mind_of_planet(kernel, cap), understood)
+    mp = contact.misread(decide.mind_of_planet(kernel, patron_cap), understood)
     sub_side = decide.option("accept_protection", decide.worth(kernel, t["tribute"], ms),
                              decide.worth(kernel, t["value"], ms))
     sup_side = decide.option("extend_protection", decide.worth(kernel, t["cost"], mp),
