@@ -2952,6 +2952,11 @@ class TerminalRenderer:
   - Captains' logs, planetary annals, field notes, decrees and manifestos are written as history
     happens. Browse them at any starport; WRITE files your own entry.
 
+{c_cyan("MARKETS ($ or MARKETS):")}
+  - One hub for every market, a tab per ledger: [1] Energy [2] Commodities [3] Elementals [4] Equities [5] FX.
+  - Every tab reads the same way: LEDGER (the galaxy) - LOCAL (where you stand) - BRIDGED (what you can reach:
+    allied and aligned grids, nearby ports, the exchange's pools) - YOURS - ACTIONS (the desks that trade it).
+
 {c_cyan("MONEY, CURRENCIES & THE ISSE FX DESK:")}
   - Federation space settles in SOL, the Borderlands in Frontier Scrip (FRN), Anarchy space
     in Void Marks (VOID), Imperial space in Throne Crowns (THR). Ports price and pay in local money; SOL auto-converts on purchase.

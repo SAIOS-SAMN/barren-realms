@@ -253,6 +253,7 @@ class TerminalClient:
         ]
 
         print(f"\n{bold(c_cyan('Command Dispatch:'))} " + " │ ".join(opts))
+        print(c_gray("  Markets: ") + c_gold("$ MARKETS") + c_gray(" (energy │ commodities │ elementals │ equities │ FX)"))
         print(c_gray("  Deep space & money: SCAN │ MINE │ SALVAGE │ SENTRY │ RECALL │ FX (currency desk)"))
         print(c_gray("  Archaeology: RUINS (survey) │ DIG │ SHORE (dig + shoring) │ ARTIFACTS │ PERMIT (at Sol)"))
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))

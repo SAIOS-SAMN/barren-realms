@@ -367,3 +367,12 @@ SCREENS: Dict[str, Callable[[Any], None]] = {
     "CHARTER": prompt_stations,
     "PEOPLES": prompt_peoples,
 }
+
+
+def _markets(cli: Any) -> None:
+    from xylarium.client.markets import prompt_markets
+    prompt_markets(cli)
+
+
+for _word in ("MARKETS", "MARKET", "MKT", "$"):
+    SCREENS[_word] = _markets
