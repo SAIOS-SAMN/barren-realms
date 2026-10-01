@@ -49,8 +49,8 @@ class MatterLedger:
         return dict(out)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"sources": [[k, c, v] for (k, c), v in self.sources.items()],
-                "sinks": [[k, c, v] for (k, c), v in self.sinks.items()]}
+        return {"sources": [[k, c, v] for (k, c), v in sorted(self.sources.items())],
+                "sinks": [[k, c, v] for (k, c), v in sorted(self.sinks.items())]}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "MatterLedger":

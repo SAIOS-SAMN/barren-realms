@@ -1,0 +1,65 @@
+# The universal clock
+
+One time for the whole universe - the cycle, 100 to a standard year - and everything that moves under the same
+physics moves in lockstep with it.
+
+## Three kinds of motion
+
+| Kind | What | How it advances | Where |
+|---|---|---|---|
+| **Clockwork** | orbits, spins, seasons, local calendars, insolation | closed-form functions of time; never stepped. Any moment of any body costs the same to compute (`clock.ephemeris(kernel, t)`, exact rational phases) | `clock.py`, `physics.orbital_phase` |
+| **Integrators** | food, births, taxes, energy, the seasons' books | stepped at their natural cadence: the cycle (colonies, ports, markets) and the fiscal quarter (`subsystem.SEASON`) | `engine.tick_simulation` |
+| **Events** | what minds decide | at each mind's own pace, from a persisted priority queue | `scheduler.py` |
+
+## Orbital velocity, measured
+
+`clock.velocity_of(kernel, planet)` gives a body's year (cycles), phase rate (1/year), angular velocity
+(deg/cycle), orbital speed (AU per standard year, 2 pi a / P with a = q^2) and spin rate. `clock.measure()` gives the
+galaxy's spread of them; it is in every observation (`observations.jsonl` as `clock.orbits`).
+
+## Minds at their own pace
+
+A captain's next turn comes `1/speed` cycles after its last, where speed is its substrate's kinetic pace
+(`laws.cognition`): a biotic mind every cycle, a plasmic one ~6 times a cycle, a cryogenic one less often. Minds
+first wake at their own phase within their pace (not synchronised). A turn that changes nothing - no move, money,
+cargo, turns or research - doubles the wait, up to a fiscal quarter; any turn that does something resets it.
+`config.AI_TURN_BUDGET` caps minds per cycle; the overflow is first in line the next cycle. Time within a cycle is
+counted in `scheduler.MOMENTS` (1000).
+
+## Locked-in chance
+
+Minds stay probabilistic, but every roll is drawn from a stream fixed by (universe seed, what acts, when):
+`scheduler.lock(kernel, *parts)` seeds the dice
+
+* at the start of each cycle (`"cycle"`),
+* before each mind's turn (`"mind", captain, moment`),
+* for the rest of the cycle after the minds (`"world"`),
+* before each season (`"season", name, cycle`).
+
+So one mind's choices never shift another's luck, the caller's random state never leaks in, and dictionary or set
+order (PYTHONHASHSEED) does not matter. `scheduler.rng(kernel, *parts)` gives a private `random.Random` on the
+same streams.
+
+## Velocity
+
+How many cycles pass per wall-second - a throttle on the runner, never on the physics. The same seed makes the same
+universe at any velocity.
+
+    python3 tools/live.py --seed 7 --velocity 20      # 20 cycles/s (12 universe-years a minute)
+    echo 0 > runs/seed7/velocity                     # change it while it runs: 0 = as fast as the machine allows
+
+The velocity is saved with the universe: a resumed run keeps it until `--velocity` or the file changes it.
+The runner prints cycles/s and universe-years per wall-minute at each observation.
+
+## Checking lockstep
+
+    python3 tools/lockstep.py --seed 7 --genesis primordial --cycles 200
+    python3 tools/lockstep.py --from runs/seed1337/snapshot.json --cycles 50
+
+runs the universe twice under different PYTHONHASHSEEDs and compares the saved states; it prints the first
+diverging paths, or `LOCKSTEP: ... identical`.
+
+## Where the time goes (settled seed 1337, cycle 209000, 172 AI captains)
+
+Seasons ~37% (intellect's crystal reads, tourism, sustenance), AI turns ~27% (`cognition.think`, ~17 ms a turn),
+colony ticks ~13%, markets ~10%. Primordial universes run ~10-50 cycles/s early (no captains).

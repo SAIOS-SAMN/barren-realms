@@ -131,6 +131,7 @@ from xylarium.kernel import chemistry as chemistry_mod  # noqa: F401  (registers
 from xylarium.kernel import waystations as waystations_mod, liquidation as liquidation_mod  # noqa: F401  (register)
 from xylarium.kernel import observation as observation_mod, primordial as primordial_mod, relations as relations_mod, prices as prices_mod  # noqa: F401
 from xylarium.kernel import harvest as harvest_mod, energy as energy_mod, mirror as mirror_mod, contact as contact_mod, cohabit as cohabit_mod  # noqa: F401
+from xylarium.kernel import clock as clock_mod, scheduler as scheduler_mod  # noqa: F401
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
@@ -2298,6 +2299,7 @@ class GameKernel:
         """Advance world simulation by one tick."""
         self.cycle_count += 1
         self.activate()
+        scheduler_mod.lock(self, "cycle", self.cycle_count)      # every roll this cycle is the universe's own
         if getattr(self, "matter_audit", False):
             matter_mod.audit(self)
 
@@ -2331,14 +2333,9 @@ class GameKernel:
         if self.cycle_count % CHRONICLE_ERA_INTERVAL == 0:
             chronicle_mod.galactic_history(self)
 
-        # 1. AI Rival turns (beyond the engine's compute budget they act in rotation)
-        from xylarium.config import AI_TURN_BUDGET
-        ais = [c for c in self.captains.values() if c.is_ai]
-        if len(ais) > AI_TURN_BUDGET:
-            start = (self.cycle_count * AI_TURN_BUDGET) % len(ais)
-            ais = (ais + ais)[start:start + AI_TURN_BUDGET]
-        for ai_cap in ais:
-            AIManager.execute_turn(self, ai_cap)
+        # 1. AI Rival turns: each mind at its own pace, its dice locked to it (scheduler.py)
+        scheduler_mod.minds(self)
+        scheduler_mod.lock(self, "world", self.cycle_count)
 
         # 2. Ports economic drift
         for sec in self.sectors.values():

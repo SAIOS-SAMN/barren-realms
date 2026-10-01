@@ -74,7 +74,7 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
         "fx": {c: round(kernel.fx_market.rate(c), 3) for c in kernel.fx_market.pools},
         "m_over_mstar": {c: round(supply[c] / t, 3) for c, t in pol.current.items() if t and c in supply},
     }
-    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest", "mirror", "contact", "cohabit"):
+    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest", "mirror", "contact", "cohabit", "clock", "scheduler"):
         if name in sums:
             obs[name] = sums[name]
     g = kernel.state.get("genesis") or {}
@@ -146,6 +146,8 @@ def main() -> None:
     ap.add_argument("--cycles", type=int, default=0, help="stop after this many cycles (0: run forever)")
     ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--show", type=int, default=0)
+    ap.add_argument("--velocity", type=float, default=None,
+                    help="cycles per wall-second (0: as fast as the machine allows); also read live from <dir>/seedN/velocity")
     ap.add_argument("--genesis", default="settled", choices=("settled", "primordial"),
                     help="primordial: every people on its homeworld, nothing spacefaring (no bots)")
     args = ap.parse_args()
@@ -184,6 +186,23 @@ def main() -> None:
     signal.signal(signal.SIGTERM, lambda *_: stop.update(now=True))
     signal.signal(signal.SIGINT, lambda *_: stop.update(now=True))
 
+    from xylarium.kernel import clock
+    if args.velocity is not None:
+        clock.set_velocity(kernel, args.velocity)
+    pace, vel_path = clock.Pace(kernel), os.path.join(home, "velocity")
+
+    def steer() -> None:
+        """The universe's velocity may be changed while it runs: write cycles/second to <home>/velocity."""
+        try:
+            with open(vel_path) as f:
+                v = float(f.read().strip() or 0)
+        except (OSError, ValueError):
+            return
+        if v != clock.velocity(kernel):
+            clock.set_velocity(kernel, v)
+            pace.reset()
+            print(f"velocity: {v or 'unthrottled'} cycles/s", flush=True)
+
     base = residual(kernel)
     start_cycle, t0 = kernel.cycle_count, time.perf_counter()
     win_t, win_c = t0, kernel.cycle_count
@@ -209,7 +228,9 @@ def main() -> None:
         except Exception:
             crash(f"exception at cycle {kernel.cycle_count}\n{traceback.format_exc()}")
         c = kernel.cycle_count
+        pace.step()
         if c % QUARTER == 0:
+            steer()
             d = moved(base, residual(kernel))
             if d:
                 crash(f"conservation broken in the quarter ending cycle {c}: {d}\n"
@@ -225,7 +246,8 @@ def main() -> None:
             save(kernel, snap)
             base = residual(kernel)            # a save/load round trip may re-baseline declared totals
             blame.clear()
-            print(f"cycle {c}: {line['people']:,} people on {line['worlds']} worlds, {line['cyc_per_s']}/s",
+            print(f"cycle {c}: {line['people']:,} people on {line['worlds']} worlds, {line['cyc_per_s']}/s "
+                  f"({line['cyc_per_s'] * 0.6:.1f} years/min)",
                   flush=True)
         if args.cycles and c - start_cycle >= args.cycles:
             break

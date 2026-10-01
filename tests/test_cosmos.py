@@ -154,7 +154,7 @@ class TestNativesAndPrimeDirective(unittest.TestCase):
         res = self.kernel.dispatch("envoy", ActionType.NATIVE_INTERACT, sub_action="observe")
         self.assertTrue(res.success, res.message)
         self.assertGreater(len(self.kernel.chronicle.entries), before)
-        self.assertEqual(self.kernel.chronicle.entries[-1]["kind"], "FIELD_NOTES")
+        self.assertIn("FIELD_NOTES", [e["kind"] for e in self.kernel.chronicle.entries[before:]])
 
     def test_federation_interdicts_contact_with_pre_atomic_peoples(self):
         sec, planet = _natives_world(self.kernel, zone=lambda s, p: True)

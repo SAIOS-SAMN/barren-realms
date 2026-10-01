@@ -72,6 +72,9 @@ class TestCosmicAnomalies(unittest.TestCase):
     def setUp(self):
         self.kernel = GameKernel(seed=202)
         self.player = self.kernel.register_player("explorer", "Explorer Jane")
+        for c in self.kernel.captains.values():       # the AI crews rest: these tests are the player's own moves
+            if c.is_ai:
+                c.turns_left = 0
 
     def test_initial_anomalies_seeded_in_anarchy(self):
         """Initial precursor anomalies are seeded across deep void sectors."""
@@ -143,6 +146,9 @@ class TestFrontierObservationLaw(unittest.TestCase):
     def setUp(self):
         self.kernel = GameKernel(seed=303)
         self.player = self.kernel.register_player("navigator", "Navigator Jack")
+        for c in self.kernel.captains.values():       # the AI crews rest: these tests are the player's own moves
+            if c.is_ai:
+                c.turns_left = 0
 
     def test_mint_cluster_2_perseus_veil(self):
         """Observation Law mints Cluster 2 (The Perseus Veil, Sectors 201-240; 101-199 are reserved for ghost sectors)."""

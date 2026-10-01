@@ -51,8 +51,12 @@ def run_season(kernel: Any) -> None:
         sub = REGISTRY.get(name)
         if sub is None or sub.season is None:
             continue
+        scheduler.lock(kernel, "season", name, kernel.cycle_count)    # each season rolls its own dice
         for line in sub.season(kernel) or []:
             kernel.action_logs.append(line)
+
+
+from xylarium.kernel import scheduler  # noqa: E402
 
 
 def run_genesis(kernel: Any) -> None:
