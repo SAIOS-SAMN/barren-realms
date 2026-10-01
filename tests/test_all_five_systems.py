@@ -120,6 +120,9 @@ class TestAllFiveSystems(unittest.TestCase):
         from xylarium.kernel import knowledge
         self.kernel.activate()
         knowledge.learn(self.kernel, knowledge.holder_of_captain(self.player), "materials", 50)
+        from xylarium.kernel import chemistry                 # and a people that has dug far enough to know them
+        chemistry.known(self.kernel, knowledge.holder_of_captain(self.player)).extend(
+            ["Fe", "Ti", "U", "cryogenite", "H2O", "Xe", "Pt", "Si", "C", "H", "He-3"])
         self.player.ship.cargo.elements["Fe"] = 10
         self.player.ship.cargo.elements["Ti"] = 10
         self.player.ship.cargo.elements["U"] = 5
@@ -144,6 +147,9 @@ class TestAllFiveSystems(unittest.TestCase):
         from xylarium.kernel import knowledge
         self.kernel.activate()
         knowledge.learn(self.kernel, knowledge.holder_of_captain(self.player), "materials", 50)
+        from xylarium.kernel import chemistry                 # and a people that has dug far enough to know them
+        chemistry.known(self.kernel, knowledge.holder_of_captain(self.player)).extend(
+            ["Fe", "Ti", "U", "cryogenite", "H2O", "Xe", "Pt", "Si", "C", "H", "He-3"])
         self.player.ship.cargo.elements["Fe"] = 20
         self.player.ship.cargo.elements["Ti"] = 20
         self.player.ship.cargo.elements["U"] = 5

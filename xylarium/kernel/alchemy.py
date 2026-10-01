@@ -158,9 +158,21 @@ class AlchemyManager:
     def get_available_recipes(self, captain: Captain) -> List[TransmutationRecipe]:
         available = []
         for r in ALCHEMY_RECIPES.values():
-            if self.mastery(captain, r) > 0:
+            if self.mastery(captain, r) > 0 and not self.unknown_elements(captain, r):
                 available.append(r)
         return available
+
+    @staticmethod
+    def unknown_elements(captain: Captain, recipe: "TransmutationRecipe") -> list:
+        """Elements of a recipe (inputs and catalyst) the captain's people has not yet understood (chemistry.py)."""
+        from xylarium.kernel import chemistry, knowledge, ledger
+        k = ledger.active_kernel()
+        if k is None:
+            return []
+        parts = dict(recipe.inputs)
+        if recipe.catalyst:
+            parts[recipe.catalyst] = 1
+        return chemistry.missing_for(k, knowledge.holder_of_captain(captain), parts)
 
     @staticmethod
     def mastery(captain: Captain, recipe: "TransmutationRecipe") -> float:
@@ -217,6 +229,10 @@ class AlchemyManager:
             return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE, f"Unknown transmutation recipe '{recipe_id}'.")
 
         # 1. Tech requirement check
+        unknown = self.unknown_elements(captain, recipe)
+        if unknown:
+            return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE,
+                                f"Your people do not yet understand {', '.join(unknown)}: find it, hold it, study it.")
         if self.mastery(captain, recipe) <= 0:
             from xylarium.config import LEGACY_TECH_PROCESS, PROCESSES
             dom = PROCESSES.get(LEGACY_TECH_PROCESS.get(recipe.required_tech, ""), {}).get("domain", "materials")

@@ -669,23 +669,9 @@ class CivilizationIntelligenceEngine:
                 research_gain //= 2
             civ.research_points += research_gain
 
-            if civ.research_points >= 100:
-                civ.research_points -= 100
-                # Discover new element
-                all_elems = PeriodicTable.all_canonical()
-                undiscovered = [e for e in all_elems if e.element_id not in civ.discovered_elements]
-                if undiscovered:
-                    new_elem = random.choice(undiscovered)
-                    civ.discovered_elements.append(new_elem.element_id)
-                    new_element_discovered = new_elem.name
-                    from xylarium.kernel import fertility, ledger
-                    if ledger.active_kernel() is not None:
-                        fertility.discovered(ledger.active_kernel(), planet=planet)   # news that lifts a people
-                    # Also seed deposit on planet
-                    found = random.randint(20, 50)
-                    deposits[new_elem.element_id] = deposits.get(new_elem.element_id, 0) + found
-                    matter.source("prospecting", new_elem.element_id, found)   # ground newly surveyed
-
+            # Elements are not handed out here: a people discovers what its worlds actually hold, by digging
+            # (chemistry.py). Its era turns as its understanding of the table deepens.
+            if True:
                 # Era advancement check
                 if len(civ.discovered_elements) >= (civ.era_index + 1) * 3:
                     if civ.era_index < len(ERA_PROGRESSION) - 1:

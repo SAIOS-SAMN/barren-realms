@@ -12,7 +12,8 @@ temperature). Each quarter a world adds to its people's stocks:
 
 and directs it where its people's own troubles are - hunger and failing births to biology, a dying crust or empty
 ore silo to materials, a degraded grid to energy, trade to information - over a floor of curiosity, plus any focus
-its rulers set. Dogma can freeze it; the Imperium permits half. Every stock depreciates 15% a year (R&D capital).
+its rulers set. Its society can impede it (impedance: dogma, conflict, darkness); the Imperium permits half. Every
+stock depreciates 15% a year (R&D capital).
 
 A capability is a process (config PROCESSES) whose cost falls along Wright's learning curve as the people's
 knowledge in its domain grows: mastery = 1 - (1 + K / KNOWLEDGE_UNIT)^-b, b = -log2(0.8). Nothing unlocks; a jump
@@ -133,11 +134,31 @@ def effort(kernel: Any, planet: Any) -> float:
     e = planet.population / 1000.0 * free * leisure * depth
     civ = getattr(planet, "civilization", None)
     faction = getattr(planet, "faction_id", None) or (getattr(civ, "faction_id", None) if civ is not None else None)
-    if civ is not None and float(getattr(civ, "dogma", 0.0) or 0.0) > ZEALOT_RD_FREEZE_DOGMA:
-        return 0.0                          # inquiry branded heresy
     if faction == "IMPERIUM":
         e *= 0.5                            # only the sanctioned sciences of the ancient rites
-    return e
+    return e * impedance(kernel, planet)
+
+
+def impedance(kernel: Any, planet: Any) -> float:
+    """What a society's own state puts in the way of its inquiry, 0 .. 1, read from that state:
+        dogma        inquiry falls as dogma rises, to nothing at the point a priesthood brands it heresy
+        conflict     each war over food it is fighting, and a siege at its gates, divide its attention
+        darkness     a people turned to the Dark inquires at up to half its rate
+    """
+    from xylarium.config import ZEALOT_RD_FREEZE_DOGMA
+    civ = getattr(planet, "civilization", None)
+    dogma = float(getattr(civ, "dogma", 0.0) or 0.0) if civ is not None else 0.0
+    i_dogma = max(0.0, 1.0 - dogma / ZEALOT_RD_FREEZE_DOGMA) if ZEALOT_RD_FREEZE_DOGMA > 0 else 1.0
+    wars = 0
+    if kernel is not None and hasattr(kernel, "state") and "sustenance" in kernel.state:
+        holder = holder_of_planet(planet)
+        wars = sum(1 for w in kernel.state["sustenance"]["wars"].values() if holder in (w["a"], w["b"]))
+    i_conflict = 1.0 / (1.0 + wars + (1 if getattr(planet, "siege", None) else 0))
+    owner = kernel.captains.get(planet.owner_id) if (kernel is not None and planet.owner_id) else None
+    a = float(getattr(owner, "cosmic_alignment", 0.0) if owner is not None
+              else (getattr(civ, "alignment", 0.0) if civ is not None else 0.0) or 0.0)
+    i_dark = 1.0 - max(0.0, -a) / 2.0
+    return i_dogma * i_conflict * i_dark
 
 
 def quarter(kernel: Any) -> List[str]:

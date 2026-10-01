@@ -72,7 +72,7 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
         "fx": {c: round(kernel.fx_market.rate(c), 3) for c in kernel.fx_market.pools},
         "m_over_mstar": {c: round(supply[c] / t, 3) for c, t in pol.current.items() if t and c in supply},
     }
-    for name in ("sustenance", "fertility", "nursery", "knowledge", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise"):
+    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise"):
         if name in sums:
             obs[name] = sums[name]
     return obs

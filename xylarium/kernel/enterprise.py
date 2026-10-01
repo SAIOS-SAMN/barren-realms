@@ -185,7 +185,9 @@ def operate(kernel: Any, comp: Any, rec: Dict[str, Any]) -> float:
     if port is None:
         return 0.0
     out = rec["process"]
-    econ = unit_economics(kernel, planet, port, out)
+    from xylarium.kernel import chemistry, knowledge
+    econ = unit_economics(kernel, planet, port, out) if chemistry.can_make(
+        kernel, knowledge.holder_of_planet(planet), out) else None
     # capital raised on the ISSE (SOL) is put to work in the home money when operating cash runs short
     need = (econ["cost"] * rec["plant"]) if econ else 0.0
     if comp.treasury > 0 and comp.home_cash < need:
@@ -333,8 +335,12 @@ def receivership(kernel: Any, ticker: str, rec: Dict[str, Any]) -> str:
 
 # ---------------------------------------------------------------------- founding and growth
 def best_recipe(kernel: Any, planet: Any, port: Any) -> Optional[Tuple[str, Dict[str, float]]]:
+    from xylarium.kernel import chemistry, knowledge
+    holder = knowledge.holder_of_planet(planet)
     best = None
     for out in RECIPES:
+        if not chemistry.can_make(kernel, holder, out):
+            continue                                  # a people makes only what its chemistry reaches
         econ = unit_economics(kernel, planet, port, out)
         if econ is None or econ["margin"] <= 0 or econ["shelves"] <= 0:
             continue
