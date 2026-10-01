@@ -127,6 +127,10 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
         for d in getattr(sec, "debris", []):
             for comm, n in d.get("cargo", {}).items():
                 add(comm, "debris", n)
+    banking = getattr(kernel, "banking", None)
+    for bank in (getattr(banking, "banks", {}) or {}).values():
+        for comm, n in getattr(bank, "warehouse", {}).items():
+            add(comm, "bank_warehouses", n)
     mm = getattr(kernel, "market_manager", None)
     if mm is not None:
         for h in getattr(mm, "trade_haulers", {}).values():

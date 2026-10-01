@@ -200,6 +200,9 @@ class FXMarket:
                 return False, f"Unknown currency '{c}'. Listed: {', '.join(CURRENCIES)}.", 0
         if balance(captain, from_cur) < amount:
             return False, f"Insufficient {from_cur}: you hold {balance(captain, from_cur):,}.", 0
+        from xylarium.kernel import ledger, regimes
+        if regimes.controlled(ledger.active_kernel(), from_cur):
+            return False, f"The {from_cur} is under capital controls: its exchange is closed to holders.", 0
         debit(captain, from_cur, amount)
         out, venue = self.convert(from_cur, to_cur, amount)
         credit(captain, to_cur, out)
@@ -261,6 +264,9 @@ class FXMarket:
         for cur, amt in list(captain.fx_wallet.items()):
             if keep and cur in keep:
                 continue
+            from xylarium.kernel import regimes
+            if regimes.controlled(kernel, cur):
+                continue                                   # the exchange is closed to its holders
             if kernel is not None:
                 amt = int(amt * self.share_to_convert(kernel, captain, cur))
             if cur in self.pools and amt > 0 and self.to_sol_value(cur, amt) > threshold_sol:

@@ -120,6 +120,9 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
         for cur, bank in banking.banks.items():
             if cur != "SOL" and bank.reserves:          # SOL's central bank is the Federal Reserve (counted above)
                 add(cur, "central_banks", bank.reserves)
+            for other, amt in getattr(bank, "fx_reserves", {}).items():
+                if amt:
+                    add(other, "central_banks", amt)
     factions = getattr(kernel, "factions", None)
     if factions is not None:
         for f in factions.factions.values():
@@ -272,10 +275,18 @@ class MonetaryPolicy:
             colony_net = earned - self.services_q.get(cur, 0.0) + self.transfer_q.get(cur, 0.0)
             other = (m - last_m) - colony_net if last_m is not None else 0.0
             self.last_supply[cur] = m
+            from xylarium.kernel import regimes
+            self.transfer_q[cur] = 0.0
+            if not regimes.steers(kernel, cur):
+                # this polity chose not to steer its money: services keep the share they had when it chose
+                frozen = regimes.stats(kernel).get("frozen_factor", {}).get(cur, self.factors.get(cur, 1.0))
+                self.factors[cur] = frozen
+                self.history.setdefault(cur, []).append(round(frozen, 3))
+                self.history[cur] = self.history[cur][-40:]
+                continue
             gap = (target - m) / 4.0                        # a quarter of the gap per season
             needed = gap - other                            # the colony circuit must also offset the rest
             withdraw = earned - needed                      # what services must burn for that net injection
-            self.transfer_q[cur] = 0.0
             if withdraw >= 0:
                 self.factors[cur] = round(withdraw / gov, 4) if gov > 0 else 1.0
             else:

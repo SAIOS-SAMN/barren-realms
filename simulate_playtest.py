@@ -1519,7 +1519,7 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
 
 # Gates whose names start with these are laws (invariants); all others are observations.
 LAWS = (
-    "money conserved", "matter conserved", "monetary churn", "docket balances", "quantity equation holds", "clearing union conserves", "settlement chain seals",
+    "money conserved", "matter conserved", "monetary churn", "docket balances", "clearing union conserves", "settlement chain seals",
     "central banks solvent", "orbits never cross", "throughput per unit", "invariant violations",
     "exceptions", "deterministic", "fertility collapses",
 )

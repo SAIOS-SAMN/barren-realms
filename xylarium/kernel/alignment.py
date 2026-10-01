@@ -122,11 +122,14 @@ def scales(kernel: Any) -> Dict[str, float]:
 
 
 def measure(kernel: Any, harmed_sol: float = 0.0, helped_sol: float = 0.0, lives_lost: float = 0.0,
-            lives_saved: float = 0.0) -> float:
+            lives_saved: float = 0.0, relative_to: Optional[float] = None) -> float:
     """The shift an act's consequences earn: ALIGNMENT_ACT_SCALE x tanh(net lives / a typical world's people +
-    net SOL / a typical captain's purse). Saturating: no act weighs more than the gravest."""
+    net SOL / a typical captain's purse). Saturating: no act weighs more than the gravest. An act on a whole
+    people's wealth (a money's debasement) is weighed against what they held (`relative_to`): taking 1% of
+    everyone's purchasing power is a 1% harm, however rich they were."""
     sc = scales(kernel)
-    x = (lives_saved - lives_lost) / max(1.0, sc["lives"]) + (helped_sol - harmed_sol) / max(1.0, sc["sol"])
+    sol_scale = relative_to if relative_to else sc["sol"]
+    x = (lives_saved - lives_lost) / max(1.0, sc["lives"]) + (helped_sol - harmed_sol) / max(1.0, sol_scale)
     return ALIGNMENT_ACT_SCALE * math.tanh(x)
 
 

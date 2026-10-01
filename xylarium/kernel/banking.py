@@ -96,6 +96,8 @@ class CentralBank:
     policy_rate: float = POLICY_RATE_BASE           # per fiscal quarter
     stats: Dict[str, int] = field(default_factory=dict)
     paid_rate: float = 0.0                          # what deposits actually earned last quarter
+    fx_reserves: Dict[str, int] = field(default_factory=dict)   # other moneys it holds (SOL lent by a neighbour...)
+    warehouse: Dict[str, int] = field(default_factory=dict)     # commodity reserves behind a reserve-backed money
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + int(amount)
@@ -108,14 +110,17 @@ class CentralBank:
         return {"currency": self.currency, "name": self.name, "federation": self.federation,
                 "governor": self.governor, "alignment": self.alignment, "reserves": self.reserves,
                 "loans": {k: dict(v) for k, v in self.loans.items()}, "policy_rate": self.policy_rate,
-                "stats": dict(self.stats), "paid_rate": self.paid_rate}
+                "stats": dict(self.stats), "paid_rate": self.paid_rate, "fx_reserves": dict(self.fx_reserves),
+                "warehouse": dict(self.warehouse)}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "CentralBank":
         b = cls(currency=d["currency"], name=d["name"], federation=d["federation"], governor=d["governor"],
                 alignment=float(d["alignment"]), reserves=int(d.get("reserves", 0)),
                 policy_rate=float(d.get("policy_rate", POLICY_RATE_BASE)),
-                paid_rate=float(d.get("paid_rate", 0.0)))
+                paid_rate=float(d.get("paid_rate", 0.0)),
+                fx_reserves={k: int(v) for k, v in d.get("fx_reserves", {}).items()},
+                warehouse={k: int(v) for k, v in d.get("warehouse", {}).items()})
         b.loans = {k: {kk: int(vv) for kk, vv in v.items()} for k, v in d.get("loans", {}).items()}
         b.stats = {k: int(v) for k, v in d.get("stats", {}).items()}
         return b
@@ -251,7 +256,10 @@ class BankingSystem:
         return round(rate, 5)
 
     def _credit(self, kernel: Any, bank: CentralBank, receipts: Any) -> None:
-        bank.policy_rate = self.rate_for(bank)
+        from xylarium.kernel import regimes
+        bank.policy_rate = regimes.rate(kernel, bank, self.rate_for(bank))
+        if not regimes.lends(kernel, bank.currency):
+            return
         for sec in kernel.sectors.values():
             port = sec.port
             if port is None or port.currency != bank.currency:
@@ -309,7 +317,8 @@ class BankingSystem:
         the excess on public works across its federation's populated worlds (vaults, pro rata population),
         returning trapped liquidity to circulation. A transfer - nothing is minted.
         """
-        if bank.currency == "SOL":
+        from xylarium.kernel import regimes
+        if bank.currency == "SOL" or not regimes.spends(kernel, bank.currency):
             return  # the Federal Reserve's treasury also underwrites insurance, bounties and relief
         ceiling = int(supply_total * CENTRAL_BANK_RESERVE_CEILING)
         excess = self.reserves(kernel, bank) - max(ceiling, self.reserve_floor(bank))
@@ -367,7 +376,8 @@ class BankingSystem:
         logs: List[str] = []
         supply = money_supply(kernel)
         for bank in self.banks.values():
-            self._intervene(kernel, bank, receipts)
+            # (no pool interventions toward genesis depth: what a pool holds is what its traders and providers
+            # leave in it - regimes.py governs what each polity chooses to do instead)
             self._credit(kernel, bank, receipts)
             self._deposit_interest(kernel, bank)
             self._public_works(kernel, bank, supply.get(bank.currency, {}).get("total", 0), receipts)
