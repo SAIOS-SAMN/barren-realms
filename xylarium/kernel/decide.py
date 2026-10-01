@@ -19,7 +19,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 from xylarium.kernel import laws
 
-BASE_HORIZON_QUARTERS = 40      # a mind at Earth's temperature plans a decade ahead
+# How far ahead a mind plans: across its own people's generation (the span in which its choices come back to the
+# choosers - fertility.generation_years: its strategy's ceiling, at its substrate's pace), shortened as its
+# forecasts blur with its thermal noise. No people's decade is anyone else's.
 JUDGEMENT_ERROR = 0.1           # at noise 1, an agent misjudges an option's net worth by about a tenth of the best
 
 
@@ -27,8 +29,20 @@ def _rng(*parts: Any) -> random.Random:
     return random.Random(zlib.crc32(":".join(str(p) for p in parts).encode()))
 
 
-def mind(kernel: Any, metabolism: Optional[str], temperature_factor: float = 1.0) -> Dict[str, float]:
-    return laws.cognition(metabolism or "biotic", temperature_factor)
+def mind(kernel: Any, metabolism: Optional[str], temperature_factor: float = 1.0,
+         strat: Optional[str] = None) -> Dict[str, float]:
+    from xylarium.config import METABOLISM_STRATEGY
+    from xylarium.kernel import fertility
+    m = laws.cognition(metabolism or "biotic", temperature_factor)
+    strat = strat or METABOLISM_STRATEGY.get(metabolism or "biotic", "K")
+    m["horizon_q"] = 4.0 * fertility.generation_years(strat, m["speed"])
+    return m
+
+
+def horizon(m: Dict[str, float]) -> float:
+    """Quarters this mind plans ahead: its people's generation, over its noise."""
+    from xylarium.kernel import fertility
+    return laws.horizon(m["noise"], m.get("horizon_q") or 4.0 * fertility.generation_years())
 
 
 def _steadied(kernel: Any, m: Dict[str, float], holder: Optional[str]) -> Dict[str, float]:
@@ -43,7 +57,9 @@ def _steadied(kernel: Any, m: Dict[str, float], holder: Optional[str]) -> Dict[s
 
 def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
     from xylarium.kernel import biosphere, genome, knowledge
-    m = mind(kernel, biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))
+    from xylarium.kernel import fertility
+    m = mind(kernel, biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet),
+             strat=fertility.strategy(kernel, planet))
     return _steadied(kernel, m, knowledge.holder_of_planet(planet))
 
 
@@ -59,7 +75,7 @@ def rate(kernel: Any, currency: str) -> float:
 
 def worth(kernel: Any, flow_per_quarter: float, m: Dict[str, float], currency: str = "SOL") -> float:
     """A flow's present worth to this mind: discounted at its money's rate over its planning horizon."""
-    return laws.present_value(flow_per_quarter, laws.horizon(m["noise"], BASE_HORIZON_QUARTERS), rate(kernel, currency))
+    return laws.present_value(flow_per_quarter, horizon(m), rate(kernel, currency))
 
 
 def option(name: str, cost: float, value: float, act: Optional[Callable[[], Any]] = None, **data: Any) -> Dict[str, Any]:

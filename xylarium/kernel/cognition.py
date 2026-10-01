@@ -1054,7 +1054,7 @@ class SeatSurvive:
         from xylarium.kernel import decide, fertility, laws
         from xylarium.kernel.colony import ColonyManager
         m = decide.mind_of_captain(kernel, captain)
-        horizon = laws.horizon(m["noise"], decide.BASE_HORIZON_QUARTERS)
+        horizon = decide.horizon(m)
         rate = decide.rate(kernel, "SOL")
         options = []
         # A. a world of one's own: its tax at full growth, from when its colonists have half filled it

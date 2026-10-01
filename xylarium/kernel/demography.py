@@ -217,7 +217,7 @@ def value_of_room(kernel: Any, planet: Any, extra: float, m: Dict[str, float]) -
     now = max(1, planet.population)
     r = fertility.birth_share_quarter() * max(0.05, min(1.0, f))
     fill = 0.0 if now >= have else math.log(have / now) / r
-    horizon = laws.horizon(m["noise"], decide.BASE_HORIZON_QUARTERS)
+    horizon = decide.horizon(m)
     if fill >= horizon:
         return 0.0
     rate = decide.rate(kernel, planet.currency)
@@ -280,8 +280,11 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
     planet.citadel_level = nxt
     planet.works_ready_cycle = kernel.cycle_count + CITADEL_BUILD_QUARTERS_PER_TIER * nxt * _quarter_len()
     st["citadels"] += 1
-    from xylarium.kernel import primordial
+    from xylarium.kernel import primordial, sustenance
     primordial.first(kernel, f"citadel_{nxt}", planet.name)
+    if nxt == DAUGHTER_CITADEL_TIER:                        # each people's own first yards (mirror.py)
+        yards = state.of(kernel, "demography").setdefault("first_yards", {})
+        yards.setdefault(sustenance.people_of(planet) or planet.id, round(kernel.cycle_count / 100.0, 2))
     if getattr(kernel, "event_bus", None):
         civ = getattr(planet, "civilization", None)
         who = civ.name if (civ is not None and planet.owner_id is None) else planet.name

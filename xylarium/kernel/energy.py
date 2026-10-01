@@ -1,23 +1,30 @@
 """
 Xylarium energy: every unit of energy comes from somewhere, goes somewhere, and is traded where it is made.
 
-UNITS. One energy unit (EU) is a millionth of the sunlight Terra receives in a season (1 AU, a solar luminosity, an
-Earth's surface). Everything is calibrated by Earth's own ratios: its core-mantle heat flow is 10 TW of 173,000 TW
-of sunlight (~58 EU a season for an Earth-mass world); a modern industrial people uses 1.1e-4 of its world's
-sunlight (~110 EU a season for Terra's 120,000 at the third tier). The ledger is kept in integer milli-EU (mEU) so
-that it balances exactly.
+UNITS. One energy unit (EU) is a millionth of the sunlight a world at 1 AU from a solar-luminosity star receives
+on an Earth's area in a season - a ruler, as the AU and the Earth mass are rulers. A person is the other ruler: one
+person's tools draw PERSON_EU a season before its people has learned anything of energy. Nothing else about Earth
+is assumed - not how much energy its peoples use, not what they burn first, not how much heat its core can spare.
+The ledger is kept in integer milli-EU (mEU) so that it balances exactly.
 
 THE LEDGER (as matter.py for goods, ledger.py for money). Stocks are the energy held in worlds' grids. Every change
 is a declared source (combustion, collected sunlight, core heat drawn, beamed array power) or a declared sink (what
 a people uses, what is lost in transmission, what is packed into fuel, what is dissipated as waste heat). For every
 world and in total: the change in stored energy equals sources minus sinks. tools/live.py audits it every quarter.
 
-NEED. A pre-industrial people runs on muscle, fire and its biosphere - outside the ledger. From the first citadel
-tier, industry needs energy: per person, doubling with every tier (9.2e-4 EU a season at the third). A world short
-of energy loses that share of its industrial output (its tax take): industry is 1 - 2^-tier of an economy.
+NEED. A pre-industrial people runs on muscle and its biosphere - outside the ledger. What a world needs is what its
+own people does, derived from its physics and its knowledge:
+  * industry - the industrial share of its economy (1 - 2^-tier: a citadel tier halves the share still worked by
+    hand) x a person's ruler draw x its people's efficiency, which improves along the learning curve with what it
+    knows of energy (laws.wright): a people that has learned much does the same work on a fraction of the energy;
+  * life support - holding its people at the temperature its biology is tuned to on a world that is not: the
+    thermal gap |ln(T_world / T_tuned)| (a quarter of the light mismatch its genome has not closed) per person.
+    On the world a people evolved for it is nothing; on a hostile colony it can exceed its industry.
+A world short of energy loses the share of its industrial output it could not power.
 
 SUPPLY (harvest.py builds the installations, each people to its own design):
-  * combustion - the carbon a world has refined (1 EU a unit), the first fire of industry;
+  * combustion - the carbon a world has refined (1 EU a unit) - only where a biosphere has made the oxidiser to burn
+    it in (carbon life, under air): a cryogenic or lithic people never meets fire, a plasmic one never needs it;
   * surface collectors - fields of 1e-4 of an Earth's surface: light x area x efficiency, halved by night and
     dimmed by air;
   * core taps - each draws a twentieth of the world's core heat flow through a heat engine;
@@ -44,7 +51,7 @@ from xylarium.config import COMMODITY_CONFIG, PRICE_LEVEL
 MILLI = 1000                       # the ledger counts milli-EU
 TERRA_INSOLATION = 1_000_000       # EU a season: the unit's definition
 EARTH_CORE_FLOW = TERRA_INSOLATION * 10 / 173_000      # EU a season through an Earth-mass core-mantle boundary
-PER_CAPITA_T3 = 9.2e-4             # EU a season per person at the third industrial tier (Earth's own ratio)
+PERSON_EU = 1.05e-3                # the ruler: EU a season one person's tools draw before any mastery of energy
 CARBON_EU = 1.0                    # EU a unit of refined carbon burned
 ELECTROLYSIS_EU = 2.0              # EU to split a unit of water into a unit of hydrogen fuel
 ANTIMATTER_EU = 1000.0             # EU packed into a unit of antimatter
@@ -100,13 +107,44 @@ def tier(planet: Any) -> int:
     return int(getattr(planet, "citadel_level", 0) or 0)
 
 
-def per_capita(planet: Any) -> float:
+def _k(kernel: Any = None) -> Any:
+    if kernel is not None:
+        return kernel
+    from xylarium.kernel import ledger
+    return ledger.active_kernel()
+
+
+def efficiency(kernel: Any, planet: Any) -> float:
+    """The share of the ruler draw a person's tools need, at what its people knows of energy (Wright's curve)."""
+    from xylarium.kernel import knowledge, laws
+    from xylarium.config import KNOWLEDGE_UNIT
+    k = _k(kernel)
+    if k is None or "knowledge" not in getattr(k, "state", {}):
+        return 1.0
+    return laws.wright(knowledge.experience(k, knowledge.holder_of_planet(planet), "energy"), KNOWLEDGE_UNIT)
+
+
+def thermal_gap(kernel: Any, planet: Any) -> float:
+    """|ln(T_world / T_tuned)|: a quarter of the light mismatch its people's genome has not closed (T ~ flux^1/4)."""
+    from xylarium.kernel import genome
+    k = _k(kernel)
+    if k is None:
+        return 0.0
+    x0 = genome._flux_ratio(k, planet)
+    if x0 is None or x0 <= 0:
+        return 0.0
+    return abs(math.log(x0) - genome.value(planet, "light")) / 4.0
+
+
+def per_capita(planet: Any, kernel: Any = None) -> float:
     t = tier(planet)
-    return 0.0 if t <= 0 else PER_CAPITA_T3 * 2.0 ** (t - 3)
+    if t <= 0:
+        return 0.0
+    return PERSON_EU * (industry_share(planet) * efficiency(kernel, planet) + thermal_gap(kernel, planet))
 
 
-def need_eu(planet: Any) -> float:
-    return planet.population * per_capita(planet)
+def need_eu(planet: Any, kernel: Any = None) -> float:
+    return planet.population * per_capita(planet, kernel)
 
 
 def industry_share(planet: Any) -> float:
@@ -155,13 +193,19 @@ def _alignment(kernel: Any, planet: Any) -> float:
     return sustenance._alignment(kernel, planet)
 
 
+def burns(kernel: Any, planet: Any) -> bool:
+    """Fire needs an oxidiser, and only a photosynthetic biosphere under air makes one."""
+    from xylarium.kernel import biosphere, geology
+    return biosphere.metabolism_of(kernel, planet) in ("biotic", "umbral") and not geology.airless(planet)
+
+
 def supply(kernel: Any, planet: Any) -> Dict[str, int]:
     """This season's generation at a world, in mEU, by source (harvest.py's installations, the world's carbon)."""
     from xylarium.kernel import harvest
     out = {k: int(v * MILLI) for k, v in harvest.generation(kernel, planet).items() if v > 0}
-    need = need_eu(planet)
+    need = need_eu(planet, kernel)
     short = need - sum(out.values()) / MILLI
-    if short > 0 and tier(planet) >= 1:
+    if short > 0 and tier(planet) >= 1 and burns(kernel, planet):
         burn = min(int(math.ceil(short / CARBON_EU)), int(planet.element_reserves.get("C", 0)))
         if burn > 0:
             from xylarium.kernel import matter
@@ -183,7 +227,7 @@ def season(kernel: Any) -> List[str]:
         for kind, meu in gen.items():
             source(kernel, kind, meu)
         grid = int(p.society.get("grid_meu", 0)) + sum(gen.values())
-        need = int(need_eu(p) * MILLI)
+        need = int(need_eu(p, kernel) * MILLI)
         book[p.id] = {"planet": p, "grid": grid, "need": need, "used": 0}
     # stellar arrays beam to their owners' worlds in their own systems first (no loss), then over the lanes
     for (owner, sid), meu in arrays.items():

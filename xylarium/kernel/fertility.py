@@ -109,10 +109,25 @@ def discovered(kernel: Any, planet: Any = None, captain: Any = None) -> None:
 
 
 # ---------------------------------------------------------------------- meaning
-def generation_years() -> float:
-    """A generation: the years a people takes to replace itself at its full natural increase (1 / BIRTH_RATE)."""
+CEILING = {"r": FERTILITY_R_MAX, "K": FERTILITY_K_SECURE[1], "lithic": 1.6, "cryo": FERTILITY_CRYO_MAX,
+           "plasmic": 1.5}                 # each strategy's own fertility ceiling (natural(): its terms at their best)
+
+
+def generation_years(strat: Optional[str] = None, speed: float = 1.0) -> float:
+    """A generation: the years a people takes to replace itself at its strategy's full natural increase, run at
+    its substrate's kinetic pace (laws.cognition speed: a hot people lives fast, a cold one slow). With no people
+    named, the galaxy's ruler: 1 / BIRTH_RATE."""
     from xylarium.config import BIRTH_RATE
-    return 1.0 / eval_fraction(BIRTH_RATE)
+    base = 1.0 / eval_fraction(BIRTH_RATE)
+    if strat is None:
+        return base
+    return base / max(1e-6, CEILING.get(strat, 1.0)) / max(1e-6, speed)
+
+
+def generation_of(kernel: Any, planet: Any) -> float:
+    from xylarium.kernel import genome, laws, biosphere
+    m = laws.cognition(biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))
+    return generation_years(strategy(kernel, planet), m["speed"])
 
 
 def birth_share_quarter() -> float:

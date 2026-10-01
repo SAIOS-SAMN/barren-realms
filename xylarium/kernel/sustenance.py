@@ -225,6 +225,8 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
             return None
         st["plunders"] = st.get("plunders", 0) + 1
     st["raid_attempts_q"] = st.get("raid_attempts_q", 0) + 1
+    by = st.setdefault("raids_by", {})
+    by[people_of(planet) or "?"] = by.get(people_of(planet) or "?", 0) + 1
     # both sides bleed in proportion to the other's strength (Lanchester's linear law, a tenth per raid)
     planet.garrison_troops = max(0, planet.garrison_troops - int(0.1 * defend))
     if victim is not None:

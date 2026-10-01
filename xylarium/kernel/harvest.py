@@ -5,11 +5,13 @@ Three ways, one physics, as many designs as there are peoples:
 
   FIELDS   collectors on a world's surface, 1e-4 of an Earth's area each: its star's light x the field's area x the
            design's efficiency, halved by night and dimmed by an atmosphere. Clean; bounded by the world's light.
-  TAPS     bores into a rocky world's core, each drawing a twentieth of its core-mantle heat flow (Earth's 10 TW,
-           scaled by the world's mass and volcanism) through a heat engine. Cheap and local - but a core convects,
-           and its dynamo runs, only while enough heat crosses its boundary: divert more than DYNAMO_MARGIN of it
-           (Earth's own estimated margin, ~40%) and the dynamo weakens; without its field the solar wind strips the
-           air, and the world feeds fewer people every season. The harm is measured - the people the world can no
+  TAPS     bores into a rocky world's core, each drawing a twentieth of its core-mantle heat flow (scaled by the
+           world's mass and volcanism) through a heat engine. Cheap and local - but a core convects, and its dynamo
+           runs, only while more heat crosses its boundary than its iron can conduct away unaided. That margin is
+           the world's own: conduction's share grows as the core shrinks (~ m^-1/3) and falls as its heat rises, so
+           an Earth-sized world can spare ~40% of its flow, a hot volcanic one more, and a Mars-sized one nothing -
+           its dynamo is already dead. Divert more than the margin and the dynamo weakens; without its field the
+           solar wind strips the air, and the world feeds fewer people every season. The harm is measured - the people the world can no
            longer feed - and alignment follows from it, as from any act (alignment.measure). Nothing forbids it.
   ARRAYS   collector modules in orbit at the star's inner edge (1e-5 of an Earth's area each, at up to fifty times
            Earth's light), beamed to their owners' worlds (energy.py). Costly, and only for a people with yards.
@@ -40,7 +42,7 @@ ORE_PER = {"field": 2, "tap": 4, "array": 6}
 FIELD_AREA = 1e-4                  # of an Earth's surface
 ARRAY_MODULE_AREA = 1e-5           # of an Earth's surface
 CORE_TAP_SHARE = 0.05              # of the core's heat flow a tap draws
-DYNAMO_MARGIN = 0.4                # of the core's heat flow that can be diverted before its convection stalls
+CONDUCTION_SHARE = 0.6             # of an iron core's heat flow its conduction carries at an Earth's size and heat
 AREA_RATIO = 1.8e-9                # (Earth's radius / 1 AU)^2: an Earth's area as a share of the 1 AU sphere
 NOUN = {"field": "sunfields", "tap": "core bores", "array": "orbital array"}
 MAKE = {"biotic": "grown", "mineral": "forged", "plasmic": "woven", "cryogenic": "frozen", "umbral": "shadowed"}
@@ -135,6 +137,16 @@ def field_output(kernel: Any, planet: Any, eff: float) -> float:
     fl = float(physics.planet_flux(sec, planet)) if sec is not None else 1.0
     day = 0.5 * (1.0 if geology.airless(planet) else 0.7)
     return fl * FIELD_AREA * energy.TERRA_INSOLATION * eff * day
+
+
+def dynamo_margin(planet: Any) -> float:
+    """The share of a rocky world's core heat flow it can lose before its dynamo stalls (its own core's physics)."""
+    from xylarium.kernel import geology, physics
+    if not geology.rocky(planet):
+        return 0.0
+    m = max(1e-6, float(physics.body(planet).get("mass", 1)))
+    hotness = geology.heat(planet) / m                         # 2 on a volcanic world, 1 otherwise
+    return max(0.0, 1.0 - CONDUCTION_SHARE * m ** (-1.0 / 3.0) / hotness)
 
 
 def tap_output(planet: Any, eff: float) -> float:
@@ -295,12 +307,12 @@ def _endow(kernel: Any) -> None:
         return
     for s in kernel.sectors.values():
         for p in s.planets:
-            if p.population <= 0 or getattr(p, "natives", None) or energy.need_eu(p) <= 0:
+            if p.population <= 0 or getattr(p, "natives", None) or energy.need_eu(p, kernel) <= 0:
                 continue
             one = field_output(kernel, p, BASE_EFF["field"])
             if one <= 0:
                 continue
-            n = int(math.ceil(energy.need_eu(p) / one))
+            n = int(math.ceil(energy.need_eu(p, kernel) / one))
             w = works(p)
             if w.get("field", 0) < n:
                 w["field_eff"] = float(w.get("field_eff", 0.0)) + (n - w.get("field", 0)) * BASE_EFF["field"]
@@ -320,11 +332,14 @@ def _cores(kernel: Any) -> List[str]:
             soc = p.society
             if not taps and soc.get("dynamo", 1.0) >= 1.0:
                 continue
+            margin = dynamo_margin(p)
+            if margin <= 0:
+                continue                                     # no dynamo to stall: its core was quiet before anyone bored it
             stress = taps * CORE_TAP_SHARE
             d = float(soc.get("dynamo", 1.0))
             was = d
-            if stress > DYNAMO_MARGIN:
-                d = max(0.0, d - (stress - DYNAMO_MARGIN))
+            if stress > margin:
+                d = max(0.0, d - (stress - margin))
             else:
                 d = min(1.0, d + 0.02)                       # convection recovers slowly once the bores ease
             soc["dynamo"] = round(d, 4)

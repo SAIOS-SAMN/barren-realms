@@ -287,7 +287,7 @@ class FXMarket:
         seen = adv + _r.Random(f"fx:{captain.id}:{getattr(kernel, 'cycle_count', 0)}").gauss(0.0, m["noise"] * vol)
         if seen >= 0:
             return 0.0
-        horizon = laws.horizon(m["noise"], decide.BASE_HORIZON_QUARTERS)
+        horizon = decide.horizon(m)
         lost = laws.present_value(-seen, horizon, 0.0)            # what a unit held loses over the horizon
         fee = self.fee(cur)
         return 0.0 if lost <= fee else 1.0 - _m.exp(-(lost - fee) / max(1e-3, fee))
