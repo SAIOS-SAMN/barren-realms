@@ -185,15 +185,40 @@ unique to it and its own. **Integrity** is the share of its worlds still craftin
 gave them; peoples that value it demand a greater market premium before selling out.
 
 ### Enterprise (`enterprise.py`)
-Laid over the listed companies, the ISSE and their dividends, **process firms** run the economy's own recipes
-(equipment, superconductors, biosphere packs, engine manifolds, warp cores) at their home port: they buy inputs
-from their own world's surplus first and the port second, burn a unit of their world's fuel a batch, pay wages
-into their world's households, make in lots - stopping when the next lot no longer pays or the port cannot pay for
-it - and sell back. Materials knowledge cuts their waste. A council founds one where a quarter's profit on the
-plant, as its mind discounts it at the policy rate, beats the plant's cost - sized to its share of the market;
-profitable firms reinvest; firms short of inputs post import orders for captains to haul. Four losing quarters
-and a firm goes into **receivership**: its orders are cancelled, its plant auctioned to a rival or scrapped, its
-cash paid to its shareholders, and it is struck from the exchange - every unit of money moved, none lost.
+Every listed company is a **process firm** running one of the economy's recipes (equipment, superconductors,
+biosphere packs, engine manifolds, warp cores) at its home port, as far as its people's chemistry can express it:
+it buys inputs from its own world's surplus first and the port second, burns a unit of its world's fuel a batch,
+pays wages into its world's households, makes in lots - stopping when the next lot no longer pays or the port
+cannot pay for it - sells back, and keeps its plant up. Materials knowledge cuts its waste.
+
+Ports measure their **offtake** - what their region uses up and captains buy off the shelves each quarter - and
+that is the market a maker sells into. A council founds a firm where the residual demand (offtake beyond the plant
+already supplying that port) pays: a quarter's margin less upkeep, as its mind discounts it at the policy rate,
+must beat the plant and a quarter's working cash. Profitable firms pay dividends and grow toward residual demand;
+firms short of inputs post import orders for captains to haul. After genesis no company is created any other way.
+
+### Solvency and liquidation (`liquidation.py`)
+One test covers every company. Its **liquidation value** is its cash in both monies, its plant at auction and the
+margin loans it is owed; its **going-concern value** adds its earnings, discounted by its world's council. Share
+prices follow the greater, per share - a failing firm's price falls toward its estate, so holders can leave and
+short sellers can bet on its end before it comes.
+
+  * **Sound -> distressed** after two losing quarters, or at once for a company that makes nothing (a dormant
+    shell). Distress is announced; the margin desk stops lending against it; it pays no dividends and receives
+    nothing it has not earned.
+  * **Ways out.** A shell may convert - invest its own cash in a plant where a recipe pays at its home port,
+    keeping its ticker and holders. A distressed firm may be rescued: a sound rival of its process takes the plant
+    the port's demand can use, at half its replacement cost, if its council judges the margin worth the price.
+  * **Wind-up** after four losing quarters (receivership) or four dormant ones. The estate is priced per share;
+    the margin loans against its shares are called (the pledged shares seized first, then the borrower's cash,
+    then a default at law and a ruined name); open shorts are bought back at the liquidation price and their
+    collateral released by the margin desk - a short against a failing firm is where its fall pays someone; what
+    is left goes pro rata to every share, captains and the founding people alike, in both monies, the residue
+    home or to the Reserve. Every step is a transfer.
+
+AI captains trade on the same figures: they sell holdings worth less than their price, short distressed companies
+priced above their estate and cover when the bet is spent. A company making a market in its own shares draws on
+its cash beyond what it needs to run a quarter - never its working capital.
 
 ### Fertility (`fertility.py`)
 How many children a people wants depends on its biology:
@@ -314,10 +339,11 @@ fill with what passing captains sell it; half its treasury's growth beyond that 
 year. Busier lanes draw more docks, and docks sharing traffic share income - the value of a visit falls as they
 multiply.
 
-### Companies, freight and credit (`market.py`, `credit.py`)
-Worlds and captains found companies that post freight contracts (escrowed), pay dividends in their home money and
-list on the ISSE (buy, sell, short, take over, poison pills, proxy fights). Captains borrow on margin against
-their portfolios; defaults are filed at law.
+### The exchange, freight and credit (`market.py`, `credit.py`)
+Companies list on the ISSE (buy, sell, short, take over, poison pills, proxy fights) and post freight contracts
+(escrowed). Captains borrow on margin against their portfolios - a company's idle cash lent against its own
+shares; margin calls sell the pledge back; defaults are filed at law (see Solvency for what happens to these
+claims when the company itself is wound up).
 
 ---
 
