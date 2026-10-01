@@ -201,6 +201,9 @@ def upkeep(kernel: Any, planet: Any) -> Optional[str]:
     if not n or planet.population <= 0:
         return None
     st = stats(kernel)
+    now = strategy(kernel, planet)
+    if n.get("kind") != now:
+        n["kind"] = now               # its people changed how they bear young: the halls are refitted for that
     d = NURSERIES.get(n.get("kind")) or design(kernel, planet)
     need = planet.population / 1000.0 * d["per_thousand"] * _multiplier(kernel, planet, n.get("kind"))
     got = supply(kernel, planet, d["inputs"], need, "nursery")

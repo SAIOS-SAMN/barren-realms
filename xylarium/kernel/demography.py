@@ -418,6 +418,9 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     if best is None:
         st["no_room"] += 1
         frontier_state(kernel)["pressure"] += 1
+        if escrow > 0:                    # no fleet can sail: what was set aside for it goes back to the vault
+            planet.treasury += escrow
+            planet.diaspora_escrow = 0
         return None
     planet.last_daughter_quarter = quarter_now
     daughter, k_daughter, domes = best

@@ -69,6 +69,16 @@ def value(planet: Any, axis: str) -> float:
 
 def inherit(parent: Any, daughter: Any) -> None:
     daughter.society["genome"] = dict(of(parent))
+    if parent.society.get("lineage"):
+        daughter.society["lineage"] = parent.society["lineage"]     # a strain's daughters are of its strain
+
+
+def deme(kernel: Any, planet: Any) -> Optional[str]:
+    """The interbreeding population a world belongs to: its people, or the strain of it the world became."""
+    from xylarium.kernel import knowledge
+    h = knowledge.holder_of_planet(planet)
+    lineage = planet.society.get("lineage")
+    return f"{h}|{lineage}" if (h and lineage) else h
 
 
 # ---------------------------------------------------------------------- what the genome changes
@@ -207,7 +217,7 @@ def _people_means(kernel: Any) -> Dict[str, Dict[str, Any]]:
             h = knowledge.holder_of_planet(p)
             if not h:
                 continue
-            rec = out.setdefault(h, {"n": 0, "sum": {a: 0.0 for a in AXES}, "worlds": []})
+            rec = out.setdefault(deme(kernel, p), {"n": 0, "sum": {a: 0.0 for a in AXES}, "worlds": [], "holder": h})
             g = of(p)
             rec["n"] += p.population
             for a in AXES:
@@ -234,16 +244,22 @@ def speciate(kernel: Any, planet: Any, parent_holder: str) -> Optional[str]:
             data["light_optimum"] = str(fraction(float(F(civ.light_optimum)) * math.exp(g["light"])))
         new = Civilization.from_dict(data)
         planet.civilization = new
+        planet.society.pop("lineage", None)
         planet.society["genome"] = {a: (0.0 if a == "light" else g[a]) for a in AXES}
         new_holder = knowledge.holder_of_planet(planet)
         knowledge.stocks(kernel, new_holder).update(dict(knowledge.stocks(kernel, parent_holder)))  # it remembers
         intellect.stats(kernel)["vocab"][new_holder] = list(intellect.vocabulary(kernel, parent_holder))
         who = new.name
     else:
+        # a strain under its captain's rule: the same people, but a deme of its own from now on - it is measured
+        # against its own kind (its daughters inherit the lineage), not the people it left
         strain = planet.society.get("strain", 0) + 1
         planet.society["strain"] = strain
+        planet.society["lineage"] = f"{planet.id}.{strain}"
         who = f"strain {strain} of {planet.name}"
     st["speciations"] += 1
+    born = st.setdefault("born_of", {})
+    born[parent_holder] = born.get(parent_holder, 0) + 1
     st["events"].append({"cycle": kernel.cycle_count, "world": planet.id, "from": parent_holder, "as": who})
     del st["events"][:-40]
     chron = getattr(kernel, "chronicle", None)
@@ -318,12 +334,12 @@ def quarter(kernel: Any) -> List[str]:
                 log = _consider_editing(kernel, p)
                 if log:
                     logs.append(log)
-    for holder, rec in _people_means(kernel).items():
+    for rec in _people_means(kernel).values():
         if len(rec["worlds"]) < 2:
             continue                              # a people of one world is its own mean
         for p in rec["worlds"]:
             if distance(of(p), rec["mean"]) > SPECIATION_SD:
-                log = speciate(kernel, p, holder)
+                log = speciate(kernel, p, rec["holder"])
                 if log:
                     logs.append(log)
     return logs

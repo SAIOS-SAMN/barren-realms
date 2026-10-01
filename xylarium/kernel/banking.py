@@ -218,6 +218,7 @@ class BankingSystem:
         """A regional central bank pays its policy rate on the balances captains hold in its money, out of its
         reserves above the floor (pro rata when they fall short): a transfer, nothing minted. This is how a
         bank defends its currency - a high rate pays people to hold it."""
+        bank.paid_rate = 0.0                          # a quarter that pays nothing earned nothing
         if bank.currency == "SOL" or bank.policy_rate <= 0:
             return
         holders = [(c, c.fx_wallet.get(bank.currency, 0)) for c in kernel.captains.values()

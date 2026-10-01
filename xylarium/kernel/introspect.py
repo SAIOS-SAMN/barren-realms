@@ -114,7 +114,7 @@ def gauges(kernel: Any, holder: str, worlds: List[Any], creative: float) -> Dict
                           * min(1.0, float((p.society.get("fertility_parts") or {}).get("meaning", 1.0)))),
         "knowledge": laws.mastery(sum(knowledge.stocks(kernel, holder).values()), 4 * KNOWLEDGE_UNIT),
         "intellect": intellect.fluid(kernel, holder),
-        "creativity": math.tanh(creative),
+        "creativity": creative,
         "prosperity": _mean(worlds, lambda p: min(1.0, float(p.society.get("lux_access", 0.0) or 0.0))),
         "peace": 1.0 / (1.0 + wars),
         "integrity": integrity(worlds),
@@ -151,7 +151,7 @@ def _creative_output(kernel: Any, holder: str, worlds: List[Any], vocabs: Dict[s
     st = stats(kernel)
     rec = st["peoples"].setdefault(holder, {})
     seen = rec.setdefault("seen", {"species": 0, "crystals": 0, "signatures": []})
-    births = sum(1 for e in genome.stats(kernel)["events"] if e["from"] == holder)
+    births = genome.stats(kernel).get("born_of", {}).get(holder, 0)
     crystals = _novel_crystals(kernel, holder, vocabs)
     mine = {v[1] for k, v in all_sigs.get(holder, {}).items() if v[2]}            # authentic signatures
     theirs = {v[1] for h, s in all_sigs.items() if h != holder for v in s.values()}
@@ -203,8 +203,12 @@ def quarter(kernel: Any) -> List[str]:
     vocabs = {h: set(intellect.vocabulary(kernel, h)) for h in peoples}
     sigs = {h: _signatures(kernel, ws) for h, ws in peoples.items()}
     logs = []
+    # creativity is measured against the universe's own rate of novelty: a people creating at the mean rate of
+    # all peoples stands at one half, one creating nothing at zero
+    outputs = {h: _creative_output(kernel, h, ws, vocabs, sigs) for h, ws in peoples.items()}
+    rate = sum(outputs.values()) / max(1, len(outputs))
     for holder, worlds in peoples.items():
-        creative = _creative_output(kernel, holder, worlds, vocabs, sigs)
+        creative = outputs[holder] / (outputs[holder] + rate) if rate > 0 else 0.0
         g = gauges(kernel, holder, worlds, creative)
         w = aspirations(kernel, holder, worlds, g)
         rec = st["peoples"].setdefault(holder, {})

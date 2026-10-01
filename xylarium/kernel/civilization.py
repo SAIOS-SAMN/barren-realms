@@ -601,12 +601,10 @@ class CivilizationIntelligenceEngine:
         for elem_id in list(deposits.keys()):
             elem = PeriodicTable.get_element(elem_id)
             if elem:
-                # If civ has discovered it or tech level covers refines_at
+                # a people refines what it has dug its way to (chemistry.py keeps discovered_elements) and its
+                # tech level can reach
                 max_refine_line = civ.tech_level + 2
-                if elem.line <= max_refine_line:
-                    if elem_id not in civ.discovered_elements:
-                        civ.discovered_elements.append(elem_id)
-
+                if elem.line <= max_refine_line and elem_id in civ.discovered_elements:
                     deposit_qty = deposits[elem_id]
                     if deposit_qty > 0:
                         # Extract 1-3 units

@@ -25,6 +25,7 @@ generators (crystals) it holds (a Schreier table of the group they generate). A 
 cannot express a flip, however long it thinks; a people with a richer vocabulary writes shorter addresses.
 """
 
+import functools
 import hashlib
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -78,6 +79,7 @@ def _mirror(g: Grid) -> Grid:
     return tuple(tuple(reversed(row)) for row in g)
 
 
+@functools.lru_cache(maxsize=1 << 17)
 def apply_frame(a: Tuple[int, int], g: Grid) -> Grid:
     k, m = a
     if m:
@@ -107,6 +109,7 @@ def relabel(g: Grid) -> Tuple[Grid, Tuple[int, ...]]:
 
 
 # ---------------------------------------------------------------------- canonical frames (crystals)
+@functools.lru_cache(maxsize=1 << 16)
 def canonical(g: Grid) -> Tuple[Grid, Tuple[int, int]]:
     """A grid's crystal: its colour-free form in the canonical orientation (the least of its frame orbit), and the
     frame that carries it there. Eight fixed coordinates of the group act on it - an orbit, not a search."""
@@ -121,12 +124,18 @@ def canonical(g: Grid) -> Tuple[Grid, Tuple[int, int]]:
 
 def stabilizer(g: Grid) -> List[Tuple[int, int]]:
     """The frames that leave a grid's colour-free form unchanged (its own symmetry)."""
+    return list(_stabilizer(g))
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def _stabilizer(g: Grid) -> Tuple[Tuple[int, int], ...]:
+    # a grid's symmetry is a fact about it: read once, held (the same layer is met under every alignment)
     form, _ = relabel(g)
-    return [a for a in D4 if relabel(apply_frame(a, g))[0] == form]
+    return tuple(a for a in D4 if relabel(apply_frame(a, g))[0] == form)
 
 
 # ---------------------------------------------------------------------- reading a coordinate off a pair
-def read_pair(i: Grid, o: Grid) -> Optional[List[Tuple[Tuple[int, int], Tuple[int, ...]]]]:
+def read_pair(i: Grid, o: Grid) -> Optional[Tuple[Tuple[Tuple[int, int], Tuple[int, ...]], ...]]:
     """Every (frame, colour map) that carries input i onto output o: canonical(o) = canonical(i) fixes the frame
     up to i's own symmetry (the coset frame(i)^-1 . stab . frame(o)), and the colour map is read cell by cell."""
     ci, ai = canonical(i)
@@ -152,7 +161,7 @@ def read_pair(i: Grid, o: Grid) -> Optional[List[Tuple[Tuple[int, int], Tuple[in
             for h, t in fixed.items():
                 cmap[h] = t
             out.append((a, tuple(cmap)))
-    return out or None
+    return tuple(out) or None
 
 
 def read(pairs: Iterable[Tuple[Grid, Grid]]) -> Optional[Tuple[Tuple[int, int], Tuple[int, ...]]]:

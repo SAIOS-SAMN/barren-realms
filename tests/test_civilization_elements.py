@@ -240,11 +240,16 @@ class TestCivilizationIntelligenceLoop(unittest.TestCase):
         self.assertNotEqual(civ.current_project, "Solar Mirror Array")
 
     def test_elemental_vein_extraction(self):
-        """Civilizations autonomously prospect and extract periodic elements from veins."""
+        """Civilizations extract the periodic elements they have dug their way to - and only those."""
         civ = self.planet.civilization
         self.planet.element_deposits["stelalith"] = 100
         self.planet.element_reserves["stelalith"] = 5
         civ.tech_level = 3  # High enough to refine line 3 elements
+        civ.discovered_elements = [e for e in civ.discovered_elements if e != "stelalith"]
+        unknown = CivilizationIntelligenceEngine.tick_civilization(civ, self.planet)
+        self.assertNotIn("stelalith", unknown["extracted_elements"])
+        self.assertNotIn("stelalith", civ.discovered_elements)
+        civ.discovered_elements.append("stelalith")
 
         civ_res = CivilizationIntelligenceEngine.tick_civilization(civ, self.planet)
         self.assertIn("stelalith", civ_res["extracted_elements"])

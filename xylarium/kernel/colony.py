@@ -596,6 +596,17 @@ class ColonyManager:
         - Planetary spaceflight (Civiligenesis) when citadel tier >= 2, pop >= 10k, vault >= 15k Cr.
         """
         civ_intel = None
+        if (planet.population > 0 and not planet.owner_id and getattr(planet, "civilization", None) is None
+                and not getattr(planet, "natives", None)):
+            # settlers left with no one to answer to (no captain, no nation - a banner alone is not a people) are a
+            # people of their own, and live or starve as one
+            from xylarium.kernel import biosphere
+            planet.faction_id = None
+            planet.civilization = CivilizationIntelligenceEngine.create_civilization({
+                "name": f"Free {planet.name.split()[0]}", "species_name": "settlers", "clade": "unknown",
+                "class_code": 1, "sigil": "✧",
+                "metabolism": biosphere.metabolism_of(kernel, planet), "disposition": "industry",
+                "motto": "no one came back for us", "station": "unseated", "tech_level": 2})
         if getattr(planet, "civilization", None):
             civ_intel = CivilizationIntelligenceEngine.tick_civilization(
                 planet.civilization, planet, event_bus
@@ -637,14 +648,17 @@ class ColonyManager:
             if kernel is not None:
                 from xylarium.kernel import fertility
                 fertility.mark(planet, "famine", kernel.cycle_count)
-            famine_loss = min(planet.population - 100, max(5, deficit * 200))
-            planet.population = max(100, planet.population - famine_loss)
+            famine_loss = max(0, min(planet.population - 100, max(5, deficit * 200)))
+            planet.population -= famine_loss          # down to a last hundred, never up from below it
             planet.morale = max(10, planet.morale - 15)
             pop_growth = -famine_loss
-            if is_indigenous:
-                from xylarium.kernel.archaeology import ArchaeologyManager
-                if ArchaeologyManager.check_collapse(planet, True, kernel):
-                    return {"planet_id": planet.id, "collapsed": True}
+            # a remnant its own land cannot feed (its measured harvest short of even its need) does not linger:
+            # it dies, and its town is ruins. A colony not yet measured is still bringing in its first harvest.
+            from xylarium.kernel.archaeology import ArchaeologyManager
+            fed = soc.get("self_sufficiency")
+            if (is_indigenous or (fed is not None and float(fed) < 1.0)) and \
+                    ArchaeologyManager.check_collapse(planet, True, kernel):
+                return {"planet_id": planet.id, "collapsed": True}
 
         # 1b. Housing crowding & diaspora threshold tracking
         from xylarium.kernel import demography

@@ -525,7 +525,7 @@ class CombatManager:
             fighters_lost = min(planet.fighters, max(1, att_power // 20))
             planet.fighters -= fighters_lost
             pop_loss = min(planet.population // 4, max(5, att_power // 10))
-            planet.population = max(100, planet.population - pop_loss)
+            planet.population -= pop_loss                 # a quarter at most: bombs kill, they do not create
             if kernel is not None:
                 from xylarium.kernel import fertility
                 fertility.mark(planet, "bombarded", kernel.cycle_count)

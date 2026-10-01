@@ -492,6 +492,9 @@ def quarter(kernel: Any) -> List[str]:
         if minted > 0:
             knowledge.learn(kernel, holder, "information", minted, "useful_work")
         st["stats"]["solved"] += len(proofs)
+    for gone in [h for h in st["gauge"] if h not in peoples]:      # a people that is no more proves nothing
+        st["gauge"].pop(gone, None)
+        st["proofs"].pop(gone, None)
     return []
 
 

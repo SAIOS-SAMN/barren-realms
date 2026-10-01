@@ -820,15 +820,16 @@ class MarketManager:
         from xylarium.config import PORT_RETAIL_MARKUP, PORT_RETAIL_RADIUS, PORT_RETAIL_VAULT_SHARE
         for sec in kernel.sectors.values():
             port = sec.port
-            if port is None or not port.consumed:
+            if port is None:
                 continue
             value = 0
-            for comm, units in port.consumed.items():
+            for comm, units in (port.consumed or {}).items():
                 buy_p, _ = EconomyManager.get_unit_prices(port, comm)
                 value += units * buy_p
             port.consumed = {}
             bill = int(value * PORT_RETAIL_MARKUP)
-            buyers = [p for p in cls._regional_worlds(kernel, sec.id, port.currency, PORT_RETAIL_RADIUS) if p.treasury > 0]
+            buyers = [p for p in cls._regional_worlds(kernel, sec.id, port.currency, PORT_RETAIL_RADIUS)
+                      if p.treasury > 0] if bill > 0 else []
             income = 0
             if bill > 0 and buyers:
                 pop = sum(p.population for p in buyers) or 1
@@ -894,7 +895,11 @@ class MarketManager:
         from xylarium.kernel.economy import EconomyManager
         from xylarium.kernel.fx import ACTIVE_FX
         from xylarium.kernel.colony import ColonyManager
-        for comp in self.companies.values():
+        from xylarium.kernel import enterprise
+        firms = enterprise.stats(kernel)["firms"]
+        for ticker, comp in self.companies.items():
+            if ticker in firms:
+                continue          # a process firm buys, pays wages and keeps its plant up itself (enterprise.operate)
             # Operating books in the home money: last season's takings are spent at the home region's starport
             home = kernel.get_planet(comp.planet_id) if getattr(comp, "planet_id", None) else None
             if comp.home_cash > 0 and home is not None:
@@ -3222,7 +3227,11 @@ class MarketManager:
             self._company_operating_spend(kernel)
             self._port_operating_costs(kernel)
             # (ISSE reserve disorder is now corrected by the federations' central banks - banking.py)
+            from xylarium.kernel import enterprise
+            firms = enterprise.stats(kernel)["firms"]
             for ticker, comp in self.companies.items():
+                if ticker in firms:
+                    continue      # a process firm earns what it sells, not a transfer from its world's vault
                 # Operating income is real: the home colony buys the company's goods & services
                 # (a transfer from the colony vault). quarterly_revenue stays a reporting figure.
                 home = kernel.get_planet(comp.planet_id) if getattr(comp, "planet_id", None) else None

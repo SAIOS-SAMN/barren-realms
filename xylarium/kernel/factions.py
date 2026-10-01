@@ -721,8 +721,10 @@ class FactionManager:
     def _purge(self, kernel: Any, f: Faction, worlds: List[Planet]) -> str:
         lost = 0
         for w in worlds:
-            loss = int(w.population * ZEALOT_PURGE_LOSS)
-            w.population = max(100, w.population - loss)
+            if w.population <= 100:
+                continue                      # nothing left to purge: the Pyre takes from the living only
+            loss = min(int(w.population * ZEALOT_PURGE_LOSS), w.population - 100)
+            w.population -= loss
             lost += loss
             w.morale = max(10, w.morale - 20)
         f.dogma = max(0.2, f.dogma - 0.3)

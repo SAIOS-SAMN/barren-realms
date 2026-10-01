@@ -198,8 +198,8 @@ def operate(kernel: Any, comp: Any, rec: Dict[str, Any]) -> float:
     LOT = 5
     # make in lots, re-pricing as its own buying and selling move the port: stop when the next lot no longer pays
     while econ is not None and econ["margin"] > 0 and batches < int(rec["plant"]):
-        lot = min(LOT, int(rec["plant"]) - batches, econ["shelves"])
-        if lot <= 0 or comp.home_cash < econ["cost"] * lot:
+        lot = min(LOT, int(rec["plant"]) - batches, econ["shelves"], int(comp.home_cash // max(1e-9, econ["cost"])))
+        if lot <= 0:
             break
         spent = 0
         for comm, q in RECIPES[out].items():
@@ -234,7 +234,8 @@ def operate(kernel: Any, comp: Any, rec: Dict[str, Any]) -> float:
     profit -= upkeep
     rec["profit_q"] = round(profit, 1)
     rec["batches_q"] = batches
-    why = ("made" if batches > 0 else "no_margin" if (econ is None or econ["margin"] <= 0)
+    why = ("made" if batches > 0 else "no_plant" if int(rec["plant"]) < 1
+           else "no_margin" if (econ is None or econ["margin"] <= 0)
            else "no_shelves" if econ["shelves"] <= 0 else "no_cash")
     hist = rec.setdefault("history", [])
     hist.append(why)

@@ -104,8 +104,14 @@ class ArchaeologyManager:
     def check_collapse(planet: Planet, famine: bool, kernel: Any = None) -> Optional[str]:
         """A starving civilization that falls below the viability threshold dies; its world becomes ruins."""
         civ = getattr(planet, "civilization", None)
-        if civ is None or not famine or planet.population > ARCH_COLLAPSE_POPULATION:
+        if not famine or planet.population > ARCH_COLLAPSE_POPULATION:
             return None
+        if civ is None:                       # a colony of no nation starves the same way: its settlers' town
+            from types import SimpleNamespace
+            from xylarium.kernel import biosphere
+            civ = SimpleNamespace(name=f"Settlers of {planet.name}", clade="unknown", tech_level=3,
+                                  metabolism=biosphere.metabolism_of(kernel, planet) if kernel is not None
+                                  else "biotic", discovered_elements=[])
         rng = random.Random(zlib.crc32(f"{planet.id}:{getattr(kernel, 'cycle_count', 0)}".encode()))
         cycle = getattr(kernel, "cycle_count", 0)
         planet.ruins = bury(planet, _new_ruins(
@@ -121,6 +127,7 @@ class ArchaeologyManager:
         planet.population = 0
         planet.civilization = None
         planet.owner_id = None
+        planet.faction_id = None                  # a dead world is no one's
         planet.morale = 0
         msg = (f"CIVILIZATION LOST: famine has ended the {planet.ruins['culture']} on {planet.name}. "
                f"Its cities are silent; archaeologists may now survey the ruins.")
