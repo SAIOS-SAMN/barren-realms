@@ -97,11 +97,18 @@ class ColonyManager:
         if kernel is None:
             return None
         from xylarium.kernel import cache, topology
-        sid = cache.memo(kernel, "contractor_port", planet.id,
-                         lambda: topology.nearest(kernel, planet.sector_id, 3,
-                                                  lambda sec: sec.port is not None and sec.port.currency == planet.currency),
-                         max_age=500)
-        return kernel.sectors[sid].port if sid is not None else None
+
+        def find():
+            return topology.nearest(kernel, planet.sector_id, 3,
+                                    lambda sec: sec.port is not None and sec.port.currency == planet.currency)
+        sid = cache.memo(kernel, "contractor_port", planet.id, find, max_age=500)
+        port = kernel.sectors[sid].port if sid is not None else None
+        if port is not None and port.currency != planet.currency:
+            # the remembered port has since come to trade in another money (a dock rehomed): find one that pays
+            sid = find()
+            cache._bucket(kernel, "contractor_port", None, 500)[planet.id] = sid
+            port = kernel.sectors[sid].port if sid is not None else None
+        return port if (port is not None and port.currency == planet.currency) else None
 
     @classmethod
     def claim_requirements(cls, captain: Captain, planet: Planet, sector: Optional[Any] = None,

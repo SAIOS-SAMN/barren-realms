@@ -114,6 +114,17 @@ class TestAuditFixes(unittest.TestCase):
         self.assertEqual(m0, money(k))
         self.assertGreater(hunter.credits, before)
 
+    def test_a_remembered_port_that_changed_money_is_not_paid_in_the_old_one(self):
+        k = fresh()
+        from xylarium.kernel.colony import ColonyManager
+        from xylarium.kernel import demography
+        w = next(p for p in civ_worlds(k) if ColonyManager._contractor_port(p, k) is not None)
+        port = ColonyManager._contractor_port(w, k)
+        port.currency = next(c for c in ("FRN", "THR", "VOID", "SOL") if c != w.currency)   # the dock rehomed
+        again = ColonyManager._contractor_port(w, k)
+        self.assertTrue(again is None or again.currency == w.currency)
+        self.assertTrue(all(p.currency == w.currency for p in demography._markets(k, w)))
+
     def test_port_income_decays_when_nothing_is_bought(self):
         k = fresh()
         port = next(s.port for s in k.sectors.values() if s.port is not None)

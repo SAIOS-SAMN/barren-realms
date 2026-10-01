@@ -490,7 +490,9 @@ def _markets(kernel: Any, planet: Any) -> List[Any]:
         return [sid for sid in topology.reach(kernel, planet.sector_id, HOUSEHOLD_RADIUS)
                 if kernel.sectors[sid].port is not None and kernel.sectors[sid].port.currency == planet.currency]
     sids = cache.memo(kernel, "household_markets", planet.id, survey, max_age=250)
-    return [kernel.sectors[sid].port for sid in sids if kernel.sectors[sid].port is not None]
+    # a remembered port may since have come to trade in another money (a dock rehomed): only those of its money
+    return [kernel.sectors[sid].port for sid in sids if kernel.sectors[sid].port is not None
+            and kernel.sectors[sid].port.currency == planet.currency]
 
 
 def households(kernel: Any) -> None:

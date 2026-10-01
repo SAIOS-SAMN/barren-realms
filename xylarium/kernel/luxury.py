@@ -183,7 +183,9 @@ def export_ports(kernel: Any, planet: Any) -> List[Any]:
                 if sid not in local and kernel.sectors[sid].port is not None
                 and kernel.sectors[sid].port.currency == planet.currency]
     sids = cache.memo(kernel, "luxury_export_ports", planet.id, survey, max_age=250)
-    return [kernel.sectors[sid].port for sid in sids if kernel.sectors[sid].port is not None]
+    # a remembered port may since have come to trade in another money (a dock rehomed): only those of its money
+    return [kernel.sectors[sid].port for sid in sids if kernel.sectors[sid].port is not None
+            and kernel.sectors[sid].port.currency == planet.currency]
 
 
 def provided_for(kernel: Any, planet: Any) -> bool:
