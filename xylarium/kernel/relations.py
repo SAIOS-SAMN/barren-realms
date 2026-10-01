@@ -17,10 +17,24 @@ around the peoples whose strength reaches furthest.
                to the tributary: the threat it removes. Cost to the patron: the troops it expects to lose standing
                in the line (Lanchester's linear law, a tenth of the attack, in proportion to its share of the
                defence). The tribute splits the surplus between them evenly.
-  FAMILY       A people does not raid its patron, its tributaries, or anyone under the same root.
+  FAMILY       A people does not raid its patron, its tributaries, its pact partners, or anyone in the same bloc
+               (ties and pacts joined).
+  LAW          Inside a bloc, contracts are enforced by its strongest member's strength where they are made: trade
+               between members is trusted at least as far as that strength reaches (enforcement()), however poorly
+               the two understand each other. Joining is worth that market to a people - the share of its output that
+               rides on contracts with the bloc, made safe - besides protection.
+  AUTONOMY     A tributary takes its root's protocol (contact.py): it loses the understanding it had with its
+               own-protocol contacts and its people relearn - a measured cost it weighs against the gains.
+  ORDER        Defending a member h jumps from home takes (1 + h)^2 times the strength (the loss-of-strength
+               gradient): order across distance is dear, and a far empire's members are worth less to it.
+  PACTS        Equals within reach of each other may federate: each gains the other's strength against its threats
+               and expects to lose troops defending the other; the pact stands while both still gain.
+  COERCION     A tributary a year in arrears is released - or, where the patron's strength reaches it and the tribute
+               is worth the garrison, subjugated: it pays without protection, and rebels when its own strength and its
+               pact partners' outweigh the patron's there.
   REVIEW       Every year the terms are re-read; when protection no longer leaves both better off (a grown tributary
-               no longer needs it, a costly one is not worth defending) the tie ends, and a tributary that cannot pay
-               is let go. A contract does not end on a passing misjudgement.
+               no longer needs it, a costly one is not worth defending) the tie ends. A contract does not end on a
+               passing misjudgement.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -60,9 +74,70 @@ def root(kernel: Any, people: Optional[str]) -> Optional[str]:
     return people
 
 
+def pacts(kernel: Any) -> Dict[str, Dict[str, Any]]:
+    return stats(kernel).setdefault("pacts", {})
+
+
+def _pair(a: str, b: str) -> str:
+    return f"{a}|{b}" if a < b else f"{b}|{a}"
+
+
+def partners(kernel: Any, people: str) -> List[str]:
+    out = []
+    for k in pacts(kernel):
+        a, _, b = k.partition("|")
+        if people == a:
+            out.append(b)
+        elif people == b:
+            out.append(a)
+    return out
+
+
+def bloc(kernel: Any, people: Optional[str]) -> Optional[str]:
+    """The bloc a people belongs to: ties and pacts joined (a union of their roots)."""
+    if not people or kernel is None or "relations" not in getattr(kernel, "state", {}):
+        return people
+    from xylarium.kernel import cache
+
+    def build() -> Dict[str, str]:
+        parent: Dict[str, str] = {}
+
+        def find(x: str) -> str:
+            parent.setdefault(x, x)
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        for sub, tie in ties(kernel).items():
+            parent[find(sub)] = find(tie["patron"])
+        for k in pacts(kernel):
+            a, _, b = k.partition("|")
+            parent[find(a)] = find(b)
+        return {x: find(x) for x in list(parent)}
+    m = cache.memo(kernel, "relations_bloc", (kernel.cycle_count, len(ties(kernel)), len(pacts(kernel))), build,
+                   max_age=1)
+    return m.get(people, people)
+
+
 def family(kernel: Any, a: Optional[str], b: Optional[str]) -> bool:
-    """Two peoples under one root (or one the other's patron): they do not raid each other."""
-    return bool(a and b and root(kernel, a) == root(kernel, b))
+    """Two peoples in one bloc (a tie or a pact between them, or both inside one): they do not raid each other."""
+    return bool(a and b and bloc(kernel, a) == bloc(kernel, b))
+
+
+def enforcement(kernel: Any, a: Optional[str], b: Optional[str], by: Optional[Dict[str, List[Any]]] = None) -> float:
+    """0..1: how far a contract between a and b is enforced by their bloc's law - its strongest member's strength
+    where a lives, against the strength either party could bring to break it."""
+    if not family(kernel, a, b) or a == b:
+        return 0.0
+    by = by if by is not None else _peoples(kernel)
+    if a not in by or b not in by:
+        return 0.0
+    members = [p for p in by if bloc(kernel, p) == bloc(kernel, a)]
+    where = _capital(by[a]).sector_id
+    law = max(projected(kernel, by[p], where) / max(1, guarded(kernel, p, by)) for p in members)
+    from xylarium.kernel.sustenance import _strength
+    rogue = max(_strength(_capital(by[a])), _strength(_capital(by[b])))
+    return law / (law + rogue) if law + rogue > 0 else 0.0
 
 
 # ---------------------------------------------------------------------- strength and threat
@@ -101,8 +176,11 @@ def projected(kernel: Any, worlds: List[Any], sector_id: int) -> float:
 
 
 def guarded(kernel: Any, sup: str, by: Dict[str, List[Any]]) -> int:
-    """How many worlds a patron's strength must already stand behind: its own and its direct tributaries'."""
-    return len(by.get(sup, [])) + sum(len(by.get(t, [])) for t, tie in ties(kernel).items() if tie["patron"] == sup)
+    """How many worlds a people's strength must already stand behind: its own, its protected tributaries' and its
+    pact partners'."""
+    return len(by.get(sup, [])) + sum(len(by.get(t, [])) for t, tie in ties(kernel).items()
+                                      if tie["patron"] == sup and tie.get("kind") != "subjugated") \
+        + sum(len(by.get(q, [])) for q in partners(kernel, sup))
 
 
 def shield(kernel: Any, planet: Any) -> float:
@@ -120,8 +198,13 @@ def shield(kernel: Any, planet: Any) -> float:
         seen.add(up)
         if by is None:
             by = _peoples(kernel)
-        extra += projected(kernel, by.get(up, []), planet.sector_id) / max(1, guarded(kernel, up, by))
+        if (ties(kernel).get(people) or {}).get("kind") != "subjugated" or up != patron_of(kernel, people):
+            extra += projected(kernel, by.get(up, []), planet.sector_id) / max(1, guarded(kernel, up, by))
         up = patron_of(kernel, up)
+    for ally in partners(kernel, people):                  # a pact partner stands in the line too
+        if by is None:
+            by = _peoples(kernel)
+        extra += projected(kernel, by.get(ally, []), planet.sector_id) / max(1, guarded(kernel, ally, by))
     return extra
 
 
@@ -187,14 +270,62 @@ def _terms(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], base: floa
     own = sum(projected(kernel, worlds, w.sector_id) for w in worlds) or 1.0
     share = sum(extra.values()) / (sum(extra.values()) + own)
     troop = SURFACE_TROOP_RECRUIT_COST * PRICE_LEVEL.get(_capital(guard).currency, 1.0)
-    cost = 0.1 * attacks * share * troop
-    if value <= cost:
+    hops = _hops_between(kernel, _capital(guard), _capital(worlds))
+    cost = 0.1 * attacks * share * troop * (1.0 + hops) ** 2        # order across distance: (1 + h)^2 the strength
+    market = _market_value(kernel, sub, sup, by)
+    kept, retrain = _autonomy(kernel, sub, sup, by)
+    autonomy = kept * _output_sol(kernel, worlds)
+    if value + market <= cost:
         return None
-    tribute = cost + (value - cost) / 2.0
-    payable = _income_sol(kernel, worlds)                     # no more than it earns a season
+    tribute = cost + (value + market - cost) / 2.0
+    payable = _income_sol(kernel, worlds)                     # no more than it takes in tax a season
     if payable < cost:
         return None
-    return {"value": value, "cost": cost, "tribute": min(tribute, payable)}
+    return {"value": value, "market": market, "cost": cost, "tribute": min(tribute, payable),
+            "autonomy": autonomy, "retrain": retrain}
+
+
+def _hops_between(kernel: Any, a: Any, b: Any) -> int:
+    if a.sector_id == b.sector_id:
+        return 0
+    from xylarium.kernel import topology
+    return topology.hops(kernel, a.sector_id, 12).get(b.sector_id, 12)
+
+
+def _output_sol(kernel: Any, worlds: List[Any]) -> float:
+    from xylarium.kernel.demography import _tax_per_head_quarter
+    return sum(_to_sol(kernel, w.currency, w.population * _tax_per_head_quarter(w)) for w in worlds)
+
+
+def _market_value(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]]) -> float:
+    """What the bloc's law would be worth to `sub` a season: the share of its output riding on contracts with the
+    bloc's members (its contacts among them), made as safe as the bloc's strength can make them."""
+    from xylarium.kernel import contact
+    others = contact.contacts(kernel, by).get(sub, {})
+    total = sum(others.values())
+    if total <= 0:
+        return 0.0
+    target = bloc(kernel, sup)
+    members = [p for p in by if bloc(kernel, p) == target]
+    where = _capital(by[sub]).sector_id
+    law = max(projected(kernel, by[p], where) / max(1, guarded(kernel, p, by)) for p in members)
+    from xylarium.kernel.sustenance import _strength
+    gain = 0.0
+    for b, n in others.items():
+        if b in by and bloc(kernel, b) == target:
+            rogue = max(_strength(_capital(by[sub])), _strength(_capital(by[b])))
+            e = law / (law + rogue) if law + rogue > 0 else 0.0
+            gain += n * max(0.0, e - contact.intelligibility(kernel, sub, b, by))
+    return _output_sol(kernel, by[sub]) * gain / total
+
+
+def _autonomy(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]]) -> Tuple[float, float]:
+    """(share of output whose understanding it would lose a season, the retraining in SOL) for taking its root's
+    protocol."""
+    from xylarium.kernel import contact
+    kept, retrain_local = contact.switch_terms(kernel, sub, contact.protocol(kernel, root(kernel, sup)), by)
+    cap = _capital(by[sub])
+    return kept, _to_sol(kernel, cap.currency, retrain_local)
 
 
 def _income_sol(kernel: Any, worlds: List[Any]) -> float:
@@ -229,22 +360,30 @@ def _set_aside(kernel: Any, worlds: List[Any], tribute_sol: float) -> None:
 def _clear_aside(worlds: List[Any]) -> None:
     for w in worlds:
         w.society.pop("tribute_tick", None)
+        left = int(w.society.pop("tribute_escrow", 0))
+        if left:
+            w.treasury += left                         # a tie that ends returns what it had set aside to the vault
 
 
 def _pay(kernel: Any, sub_worlds: List[Any], sup_cap: Any, amount_sol: float) -> float:
     """Tribute from the tributary's vaults (each in its own money, in proportion to what it holds) to the patron's
     capital, through the exchange: a transfer. Returns what was paid, in SOL."""
-    have = [(w, _to_sol(kernel, w.currency, max(0, w.treasury))) for w in sub_worlds]
+    # what was set aside as it was collected first (tribute escrow), then the vault for any arrears
+    def held(w: Any) -> int:
+        return int(w.society.get("tribute_escrow", 0)) + max(0, w.treasury)
+    have = [(w, _to_sol(kernel, w.currency, held(w))) for w in sub_worlds]
     total = sum(v for _, v in have)
     if total <= 0 or amount_sol <= 0:
         return 0.0
     part = min(1.0, amount_sol / total)
     paid = 0.0
     for w, v in have:
-        local = int(max(0, w.treasury) * part)
+        local = int(held(w) * part)
         if local <= 0:
             continue
-        w.treasury -= local
+        from_escrow = min(local, int(w.society.get("tribute_escrow", 0)))
+        w.society["tribute_escrow"] = int(w.society.get("tribute_escrow", 0)) - from_escrow
+        w.treasury -= local - from_escrow
         if w.currency == sup_cap.currency:
             sup_cap.treasury += local
         else:
@@ -292,13 +431,16 @@ def offer(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], t: Optional
     understood = contact.intelligibility(kernel, sub, sup, by)
     ms = contact.misread(decide.mind_of_planet(kernel, cap), understood)
     mp = contact.misread(decide.mind_of_planet(kernel, patron_cap), understood)
-    sub_side = decide.option("accept_protection", decide.worth(kernel, t["tribute"], ms),
-                             decide.worth(kernel, t["value"], ms))
+    sub_side = decide.option("accept_protection",
+                             decide.worth(kernel, t["tribute"] + t.get("autonomy", 0.0), ms) + t.get("retrain", 0.0),
+                             decide.worth(kernel, t["value"] + t.get("market", 0.0), ms))
     sup_side = decide.option("extend_protection", decide.worth(kernel, t["cost"], mp),
                              decide.worth(kernel, t["tribute"], mp))
     if not decide.agree(kernel, sub_side, sup_side, ms, mp, sub, sup):
         return None
-    ties(kernel)[sub] = {"patron": sup, "tribute_sol": round(t["tribute"], 2), "since": kernel.cycle_count, "paid": 0.0}
+    ties(kernel)[sub] = {"patron": sup, "tribute_sol": round(t["tribute"], 2), "since": kernel.cycle_count, "paid": 0.0,
+                         "kind": "protected"}
+    contact.stats(kernel)["protocol"][sub] = contact.protocol(kernel, root(kernel, sup))   # it takes the root's tongue
     st = stats(kernel)
     st["formed"] += 1
     from xylarium.kernel import primordial
@@ -308,12 +450,62 @@ def offer(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], t: Optional
     return f"[RELATIONS] {_name(kernel, sub)} accepts the protection of {_name(kernel, sup)} for a tribute."
 
 
+def _garrison_q(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]]) -> float:
+    """What holding a people by force costs a season: its own strength bled a tenth a season by the garrison that
+    keeps it down, at the patron's troop price, across the distance ((1 + h)^2)."""
+    from xylarium.kernel.sustenance import _strength
+    cap, home = _capital(by[sub]), _capital(by[sup])
+    troop = SURFACE_TROOP_RECRUIT_COST * PRICE_LEVEL.get(home.currency, 1.0)
+    return 0.1 * sum(_strength(w) for w in by[sub]) * troop * (1.0 + _hops_between(kernel, home, cap)) ** 2
+
+
+def _subjugate(kernel: Any, sub: str, tie: Dict[str, Any], by: Dict[str, List[Any]]) -> bool:
+    """A patron owed a year's tribute may hold the debtor by force - where its strength reaches beyond the debtor's
+    own, and when the tribute is worth the garrison to its mind."""
+    from xylarium.kernel import decide
+    from xylarium.kernel.sustenance import _strength
+    sup = tie["patron"]
+    where = _capital(by[sub]).sector_id
+    held = projected(kernel, by[sup], where)
+    if held <= sum(_strength(w) for w in by[sub] if w.sector_id == where):
+        return False                                       # it cannot reach far enough to hold it
+    mp = decide.mind_of_planet(kernel, _capital(by[sup]))
+    hold = decide.option("subjugate", decide.worth(kernel, _garrison_q(kernel, sub, sup, by), mp),
+                         decide.worth(kernel, tie.get("tribute_sol", 0.0), mp))
+    if decide.choose(kernel, [hold], mp, sub, sup, "subjugate") is None:
+        return False
+    tie.update(kind="subjugated", arrears=0.0, since_held=kernel.cycle_count)
+    stats(kernel)["subjugated"] = stats(kernel).get("subjugated", 0) + 1
+    from xylarium.kernel import primordial
+    primordial.first(kernel, "first_subjugation", f"{sub} held by {sup}")
+    return True
+
+
+def _rebels(kernel: Any, sub: str, tie: Dict[str, Any], by: Dict[str, List[Any]]) -> bool:
+    """A held people rises when its own strength and its pact partners' outweigh the patron's where it lives."""
+    from xylarium.kernel.sustenance import _strength
+    where = _capital(by[sub]).sector_id
+    own = sum(_strength(w) for w in by[sub] if w.sector_id == where)
+    own += sum(projected(kernel, by.get(q, []), where) for q in partners(kernel, sub))
+    return own > projected(kernel, by[tie["patron"]], where)
+
+
 def _review(kernel: Any, sub: str, tie: Dict[str, Any], by: Dict[str, List[Any]], base: float) -> Optional[str]:
     from xylarium.kernel import decide
     sup = tie["patron"]
     if sub not in by or sup not in by:
         ties(kernel).pop(sub, None)
         stats(kernel)["ended"] += 1
+        return None
+    if tie.get("kind") == "subjugated":
+        if _rebels(kernel, sub, tie, by):
+            _clear_aside(by[sub])
+            ties(kernel).pop(sub, None)
+            stats(kernel)["ended"] += 1
+            stats(kernel)["rebellions"] = stats(kernel).get("rebellions", 0) + 1
+            from xylarium.kernel import primordial
+            primordial.first(kernel, "first_rebellion", f"{sub} throws off {sup}")
+            return f"[RELATIONS] {_name(kernel, sub)} rises and throws off {_name(kernel, sup)}."
         return None
     t = _terms(kernel, sub, sup, by, base, existing=True)
     # a contract is a commitment: it stands while it still leaves both sides better off on expectation - neither
@@ -354,7 +546,10 @@ def quarter(kernel: Any) -> List[str]:
         tie["paid"] += paid
         stats(kernel)["tribute_sol"] += paid
         tie["arrears"] = max(0.0, due - paid)
-        if tie["arrears"] > 4 * tie.get("tribute_sol", 0.0):          # a year behind: the patron lets it go
+        if tie["arrears"] > 4 * tie.get("tribute_sol", 0.0):          # a year behind: release it, or hold it
+            if tie.get("kind") != "subjugated" and _subjugate(kernel, sub, tie, by):
+                logs.append(f"[RELATIONS] {_name(kernel, sup)} will not let {_name(kernel, sub)} go: it is held by force.")
+                continue
             _clear_aside(by[sub])
             ties(kernel).pop(sub, None)
             stats(kernel)["ended"] += 1
@@ -373,7 +568,65 @@ def quarter(kernel: Any) -> List[str]:
         log = _consider(kernel, sub, by, base)
         if log:
             logs.append(log)
+    logs += _pacts(kernel, by, base)
     return logs
+
+
+def _pact_terms(kernel: Any, a: str, b: str, by: Dict[str, List[Any]], base: float) -> Optional[Tuple[float, float]]:
+    """(what a gains a season from b's strength at its side, what a expects to spend defending b) - in SOL."""
+    wa, wb = by.get(a, []), by.get(b, [])
+    if not wa or not wb:
+        return None
+    extra = {w.sector_id: projected(kernel, wb, w.sector_id) / max(1, guarded(kernel, b, by) + len(wa)) for w in wa}
+    if not any(v > 0 for v in extra.values()):
+        return None
+    bare, _ = threat(kernel, a, wa, by, {}, base)
+    covered, _ = threat(kernel, a, wa, by, extra, base)
+    _, attacks_b = threat(kernel, b, wb, by, {}, base)
+    own = sum(projected(kernel, wa, w.sector_id) for w in wb) or 0.0
+    defend = sum(projected(kernel, wb, w.sector_id) for w in wb) or 1.0
+    share = own / (own + defend)
+    troop = SURFACE_TROOP_RECRUIT_COST * PRICE_LEVEL.get(_capital(wa).currency, 1.0)
+    cost = 0.1 * attacks_b * share * troop * (1.0 + _hops_between(kernel, _capital(wa), _capital(wb))) ** 2
+    return bare - covered, cost
+
+
+def _pacts(kernel: Any, by: Dict[str, List[Any]], base: float) -> List[str]:
+    """Equals federate: each pair in reach of each other that is not yet one bloc may make a mutual-defence pact
+    when each gains more from the other than it expects to spend; pacts that no longer pay both are dissolved."""
+    from xylarium.kernel import contact, decide
+    logs: List[str] = []
+    st = stats(kernel)
+    for k in list(pacts(kernel)):
+        a, _, b = k.partition("|")
+        ta, tb = _pact_terms(kernel, a, b, by, base), _pact_terms(kernel, b, a, by, base)
+        if ta is None or tb is None or ta[0] <= ta[1] or tb[0] <= tb[1]:
+            pacts(kernel).pop(k, None)
+            st["pacts_ended"] = st.get("pacts_ended", 0) + 1
+    met = contact.contacts(kernel, by)
+    for a in sorted(by):
+        if a.startswith("captain:") and not _ai(kernel, a):
+            continue
+        for b in sorted(met.get(a, {})):
+            if b <= a or b not in by or family(kernel, a, b) or (b.startswith("captain:") and not _ai(kernel, b)):
+                continue
+            ta, tb = _pact_terms(kernel, a, b, by, base), _pact_terms(kernel, b, a, by, base)
+            if ta is None or tb is None or ta[0] <= ta[1] or tb[0] <= tb[1]:
+                continue
+            understood = contact.intelligibility(kernel, a, b, by)
+            ma = contact.misread(decide.mind_of_planet(kernel, _capital(by[a])), understood)
+            mb = contact.misread(decide.mind_of_planet(kernel, _capital(by[b])), understood)
+            if not decide.agree(kernel, decide.option("pact", decide.worth(kernel, ta[1], ma), decide.worth(kernel, ta[0], ma)),
+                                decide.option("pact", decide.worth(kernel, tb[1], mb), decide.worth(kernel, tb[0], mb)),
+                                ma, mb, a, b, "pact"):
+                continue
+            pacts(kernel)[_pair(a, b)] = {"since": kernel.cycle_count}
+            st["pacts_formed"] = st.get("pacts_formed", 0) + 1
+            from xylarium.kernel import primordial
+            primordial.first(kernel, "first_pact", _pair(a, b))
+            logs.append(f"[RELATIONS] {_name(kernel, a)} and {_name(kernel, b)} make a pact of mutual defence.")
+    return logs
+
 
 
 def summary(kernel: Any) -> Dict[str, Any]:
@@ -398,6 +651,9 @@ def summary(kernel: Any) -> Dict[str, Any]:
             "defaulted": st.get("defaulted", 0), "dissolved": st.get("dissolved", 0),
             "median_tie_years": ages[len(ages) // 2] if ages else 0.0,
             "tribute_sol": round(st["tribute_sol"]), "empires": len(empires),
+            "subjugated": sum(1 for t in st["ties"].values() if t.get("kind") == "subjugated"),
+            "rebellions": st.get("rebellions", 0), "pacts": len(st.get("pacts", {})),
+            "pacts_formed": st.get("pacts_formed", 0), "pacts_ended": st.get("pacts_ended", 0),
             "largest": [{"root": r, **v} for r, v in empires[:3]],
             "independent": sum(1 for v in trees.values() if v["peoples"] == 1)}
 

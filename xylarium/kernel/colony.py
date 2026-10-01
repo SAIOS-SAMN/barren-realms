@@ -719,7 +719,6 @@ class ColonyManager:
             services_due = int(services_due * (1.0 - COUNCIL_WORKS_SHARE))
         # Tribute owed to a patron is paid out of tax ahead of services (relations.py sets it aside here)
         services_due = max(0, services_due - int(soc.get("tribute_tick", 0)))
-        soc["fiscal_acc"] = soc.get("fiscal_acc", 0) + tax_yield            # the season's tax take (relations)
         # Withdrawal takes what the budget can bear (this cycle's tax and a tenth of savings); it does not
         # push a solvent colony into arrears - the authority sees the shortfall and asks again next season
         services_due = min(services_due, max(0, tax_yield + planet.treasury // 10 - upkeep_credits))
@@ -727,6 +726,7 @@ class ColonyManager:
         upkeep_paid = (tax_yield + planet.treasury >= spending) and planet.ore_silo >= upkeep["ore"]
         if upkeep_paid:
             matter.consume(planet, "ore_silo", "ORE", upkeep["ore"], "citadel_upkeep")
+            soc["fiscal_acc"] = soc.get("fiscal_acc", 0) + tax_yield        # the tax it actually took (relations)
             # Taxes and public services are the fiscal pair (declared mint / burn) ...
             net = tax_yield - services_due
             if net >= 0:
@@ -736,6 +736,10 @@ class ColonyManager:
             planet.treasury += net
             # ... while citadel upkeep is paid to contractors: the region's starport, not the void
             planet.treasury -= upkeep_credits
+            aside = min(int(soc.get("tribute_tick", 0)), max(0, planet.treasury))
+            if aside > 0:                                 # tribute leaves the vault as it is collected: not the council's
+                planet.treasury -= aside
+                soc["tribute_escrow"] = soc.get("tribute_escrow", 0) + aside
             contractor = cls._contractor_port(planet, kernel)
             if contractor is not None:
                 contractor.treasury += upkeep_credits

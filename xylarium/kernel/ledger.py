@@ -91,6 +91,9 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
                 add(getattr(p, "currency", "SOL"), "diaspora_escrow", p.diaspora_escrow)
             if getattr(p, "household_purse", 0):
                 add(getattr(p, "currency", "SOL"), "households", p.household_purse)
+            owed = (getattr(p, "society", None) or {}).get("tribute_escrow", 0)
+            if owed:
+                add(getattr(p, "currency", "SOL"), "tribute_escrow", owed)
             ruins = getattr(p, "ruins", None)
             if ruins and ruins.get("hoard"):
                 add(ruins.get("hoard_currency") or "SOL", "buried_hoards", ruins["hoard"])

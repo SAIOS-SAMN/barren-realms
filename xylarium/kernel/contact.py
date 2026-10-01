@@ -101,6 +101,11 @@ def _by(kernel: Any) -> Dict[str, List[Any]]:
 
 def contacts(kernel: Any, by: Dict[str, List[Any]]) -> Dict[str, Dict[str, int]]:
     """people -> {other people: how many of the other's worlds its ships reach} (either way round counts)."""
+    from xylarium.kernel import cache
+    return cache.memo(kernel, "contact_map", kernel.cycle_count, lambda: _contacts(kernel, by), max_age=1)
+
+
+def _contacts(kernel: Any, by: Dict[str, List[Any]]) -> Dict[str, Dict[str, int]]:
     from xylarium.kernel import relations
     where: Dict[int, List[str]] = {}
     for people, worlds in by.items():
@@ -197,6 +202,21 @@ def _standards(kernel: Any, by: Dict[str, List[Any]], met: Dict[str, Dict[str, i
         primordial.first(kernel, "first_shared_standard", f"{a} adopts {best}'s protocol")
         logs.append(f"[CONTACT] {a.split(':', 1)[-1]} adopts the protocol of {best.split(':', 1)[-1]}.")
     return logs
+
+
+def switch_terms(kernel: Any, a: str, new: str, by: Dict[str, List[Any]]) -> Tuple[float, float]:
+    """(share of its output whose understanding a people would lose a season by leaving its protocol for `new`,
+    a year of everyone's learning in its own money)."""
+    from xylarium.kernel.demography import _tax_per_head_quarter
+    others = contacts(kernel, by).get(a, {})
+    mine = protocol(kernel, a)
+    if new == mine or a not in by:
+        return 0.0, 0.0
+    total = max(1, sum(others.values()))
+    kept = sum((1.0 - _channel_only(kernel, a, b, by)) * n for b, n in others.items()
+               if protocol(kernel, b) == mine) / total
+    output_q = sum(p.population * _tax_per_head_quarter(p) for p in by[a])
+    return kept, 4.0 * output_q * (1.0 - _information(kernel, a))
 
 
 def summary(kernel: Any) -> Dict[str, Any]:

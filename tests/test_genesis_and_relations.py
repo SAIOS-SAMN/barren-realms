@@ -128,6 +128,37 @@ class TestRelations(unittest.TestCase):
         self.assertEqual(m0, money(k))
         self.assertGreater(relations.ties(k)[a]["paid"], 0)
 
+    def test_a_pact_makes_two_peoples_one_bloc(self):
+        k = self.k
+        by = relations._peoples(k)
+        a, b = list(by)[:2]
+        self.assertFalse(relations.family(k, a, b))
+        relations.pacts(k)[relations._pair(a, b)] = {"since": 0}
+        self.assertTrue(relations.family(k, a, b))
+        self.assertIn(b, relations.partners(k, a))
+
+    def test_tribute_set_aside_is_money_and_comes_home_when_a_tie_ends(self):
+        k = self.k
+        by = relations._peoples(k)
+        w = by[list(by)[0]][0]
+        m0 = money(k)
+        w.treasury -= 500
+        w.society["tribute_escrow"] = 500                      # set aside as it was collected
+        self.assertEqual(m0, money(k))
+        relations._clear_aside([w])
+        self.assertEqual(m0, money(k))
+        self.assertNotIn("tribute_escrow", w.society)
+
+    def test_a_held_people_rises_when_it_outweighs_its_holder(self):
+        k = self.k
+        by = relations._peoples(k)
+        a, b = list(by)[:2]
+        tie = {"patron": b, "tribute_sol": 10.0, "since": 0, "paid": 0.0, "kind": "subjugated"}
+        relations.ties(k)[a] = tie
+        for w in by[a]:
+            w.garrison_troops = 10 ** 6
+        self.assertTrue(relations._rebels(k, a, tie, by))
+
 
 if __name__ == "__main__":
     unittest.main()
