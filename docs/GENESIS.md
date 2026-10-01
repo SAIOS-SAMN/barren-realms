@@ -28,6 +28,33 @@ carries it each reading), so a run *is* the baseline.
 | Wars | hunger (pressed worlds raid) and plunder (a fed people with ships raids the weak when the take beats the losses) |
 | Tributaries and empires | protection-for-tribute contracts both minds accept (relations.py) - see below |
 
+## The baseline (three seeds, primordial genesis)
+
+Years from genesis to each first, per seed (7 / 1337 / 42):
+
+| First | pre-energy kernel | energy era (yards gated by knowledge) |
+|---|---|---|
+| citadel 1 | 0 / 0 / 0 | 0 / 0 / 0 |
+| sunfields, core bores | - | 1 / 1 / 1 |
+| shipyards, starship, starport | 9 / 9 / 9 | 13 / 21 / 17 |
+| war, first tributary, first empire | 9-10 everywhere | same year as the first starship |
+| orbital arrays | - | 14 / 22 / 18 |
+| first firm | 17 / 19 / 17 | 16 / 35 / 30 |
+| first daughter world | 57 / 69 / 82 | 51 / 35 / 32 |
+| first multi-world realm | 230 / 102 / 215 | 329 / 176 / 338 |
+
+* In the pre-energy kernel spaceflight came at year 9 in every universe - set by the citadel build lock and
+  fixed costs, not by anything peoples knew. Yards are now orbital construction (cost / mastery): spaceflight
+  arrives with materials knowledge, and its date differs from universe to universe.
+* The first people with ships becomes the first patron the same year: the threat it poses is what its weak
+  neighbours buy off. Empires reach 25-33 peoples and ~60-105 worlds by year 400-500.
+* Core boring is chosen freely and costs real worlds: by year 400-500, 5-11 worlds per universe had stalled
+  their dynamos, and 0.6-1.7 million people could no longer be fed - each counted as harm in alignment.
+* Each universe runs 40-80 distinct harvest designs; crude ore works dominate where peoples hold none of the
+  materials they know, element-rich peoples build Stelalith-Ferrolattice and Pyrosite sunfields and arrays.
+* What still needs no prepopulation: everything above. What does: worlds, peoples at their pre-industrial
+  capacity, natives and ruins, and the money institutions' founding stakes.
+
 ## When hierarchies emerge (the answer to "under what circumstances")
 
 Measured, not assumed:

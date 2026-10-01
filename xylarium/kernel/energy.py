@@ -30,9 +30,9 @@ What a system cannot use is then bridged - beamed over the lanes to the systems 
 galaxy's own spread), losing 1 - 1/(1+hops)^2 on the way. Payment is a transfer between treasuries through the
 exchange.
 
-FUEL. What is still left after the markets is packed into fuel: hydrogen by electrolysis of water (2 EU a unit, a
-declared conversion H2O -> H), and - for a people that has learned it - antimatter (1000 EU a unit, a declared
-source of AM), the fuel of the deepest drives. Fuel is sold through the ports like any good. The rest is waste
+FUEL. What is still left after the markets is packed into fuel: hydrogen by electrolysis of water first (2 EU a
+unit, a declared conversion H2O -> H), then antimatter (1000 EU a unit at full mastery of pair production, dearer
+the less a people knows; a declared source of AM), the fuel of the deepest drives. Fuel is sold through the ports like any good. The rest is waste
 heat.
 """
 
@@ -78,8 +78,9 @@ def sink(kernel: Any, kind: str, meu: int) -> None:
 
 
 def stored(kernel: Any) -> int:
-    """Every milli-EU held: the worlds' grids."""
-    return sum(int(p.society.get("grid_meu", 0)) for s in kernel.sectors.values() for p in s.planets)
+    """Every milli-EU held: the worlds' grids and the charge building in their antimatter traps."""
+    return sum(int(p.society.get("grid_meu", 0)) + int(p.society.get("am_charge_meu", 0))
+               for s in kernel.sectors.values() for p in s.planets)
 
 
 def declared(kernel: Any) -> int:
@@ -269,8 +270,8 @@ def _trade(kernel: Any, sb: Dict[str, Any], bb: Dict[str, Any], meu: int, loss: 
     fxm = kernel.fx_market
     v_sell_in_buyer = (fxm.to_sol_value(s.currency, v_sell) if s.currency != "SOL" else v_sell) * \
         (fxm.rate(b.currency) if b.currency != "SOL" else 1.0)
-    if v_buy <= v_sell_in_buyer:
-        return 0                                                   # the energy is worth more where it is
+    if v_buy * (1.0 - loss) <= v_sell_in_buyer:
+        return 0                                                   # after the beam's losses it is worth more where it is
     price = 0.5 * (v_buy + v_sell_in_buyer)
     paid = _pay(kernel, b, s, price * arrive / MILLI)
     if paid <= 0:
@@ -340,21 +341,13 @@ def _bridge(kernel: Any, book: Dict[str, Dict[str, Any]]) -> None:
 
 
 def _pack_fuel(kernel: Any, planet: Any, meu: int) -> int:
-    """Spare energy packed into fuel: antimatter where the people knows how, else hydrogen from its water."""
+    """Spare energy packed into fuel: hydrogen from the world's water first (it is worth more per EU), then what is
+    still spare into antimatter - at ANTIMATTER_EU / mastery a unit: any people that has begun to learn pair
+    production can make it, the less it knows the dearer."""
     from xylarium.kernel import knowledge, matter
     used = 0
-    holder = knowledge.holder_of_planet(planet)
-    if knowledge.mastery(kernel, holder, "antimatter") > 0.5:
-        n = int(meu // int(ANTIMATTER_EU * MILLI))
-        if n > 0:
-            planet.element_reserves["AM"] = planet.element_reserves.get("AM", 0) + n
-            matter.source("pair_production", "AM", n)
-            spend = n * int(ANTIMATTER_EU * MILLI)
-            sink(kernel, "antimatter", spend)
-            used += spend
-            stats(kernel)["antimatter"] += n
     water = int(planet.element_reserves.get("H2O", 0))
-    n = min(int((meu - used) // int(ELECTROLYSIS_EU * MILLI)), water)
+    n = min(int(meu // int(ELECTROLYSIS_EU * MILLI)), water)
     if n > 0:
         planet.element_reserves["H2O"] = water - n
         planet.element_reserves["H"] = planet.element_reserves.get("H", 0) + n
@@ -364,6 +357,20 @@ def _pack_fuel(kernel: Any, planet: Any, meu: int) -> int:
         sink(kernel, "electrolysis", spend)
         used += spend
         stats(kernel)["hydrogen"] += n
+    mastered = knowledge.mastery(kernel, knowledge.holder_of_planet(planet), "antimatter")
+    if mastered > 1e-6 and meu - used > 0:
+        # the spare builds a charge in the world's trap, season over season, until a unit can be made
+        per = int(ANTIMATTER_EU / mastered * MILLI)
+        charge = int(planet.society.get("am_charge_meu", 0)) + (meu - used)
+        used = meu
+        n = charge // per
+        if n > 0:
+            planet.element_reserves["AM"] = planet.element_reserves.get("AM", 0) + n
+            matter.source("pair_production", "AM", n)
+            sink(kernel, "antimatter", n * per)
+            charge -= n * per
+            stats(kernel)["antimatter"] += n
+        planet.society["am_charge_meu"] = int(charge)
     return used
 
 
