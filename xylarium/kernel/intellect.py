@@ -419,6 +419,8 @@ def _learn(kernel: Any, holder: str, rec: Dict[str, Any], neighbours: List[str])
         if gap <= 0:
             continue
         for crystal in vocabulary(kernel, other):
+            if not grounded(crystal, held):
+                continue                              # what cannot yet be understood cannot be taught
             if crystal not in held and rng.random() < gap:
                 v.append(crystal)
                 held.add(crystal)
@@ -455,12 +457,19 @@ def _neighbours(kernel: Any, peoples: Dict[str, Dict[str, Any]]) -> Dict[str, Li
     return out
 
 
+def grounded(crystal: Any, held: set) -> bool:
+    """A fourth axis cannot be understood - discovered, taught or read from a relic - before the third."""
+    return RANK_OF.get(crystal, 2) < 4 or all(s in held for s in C.STACK_OPS)
+
+
 def relic_crystal(kernel: Any, holder: str, relic_id: str) -> Optional[Any]:
-    """A relic carries the crystal its makers last wrote: a discoverable one, by the relic's own hash."""
+    """A relic carries the crystal its makers last wrote: a discoverable one, by the relic's own hash - legible
+    only to a people with the foundations to read it."""
     choices = sorted(DISCOVERABLE, key=str)
     crystal = choices[zlib.crc32(str(relic_id).encode()) % len(choices)]
     v = stats(kernel)["vocab"].setdefault(holder, list(BASE))
-    if crystal in {norm(x) for x in v}:
+    held = {norm(x) for x in v}
+    if crystal in held or not grounded(crystal, held):
         return None
     v.append(crystal)
     stats(kernel)["stats"]["from_relics"] += 1
@@ -489,14 +498,15 @@ def quarter(kernel: Any) -> List[str]:
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     g = st["gauge"]
-    top = sorted(g.items(), key=lambda kv: -(kv[1].get("2", 0) + kv[1].get("3", 0)))[:5]
+    top = sorted(g.items(), key=lambda kv: -sum(kv[1].get(r, 0) for r in ("2", "3", "4")))[:5]
     by_kind: Dict[str, List[float]] = {}
-    for h, v in g.items():
-        by_kind.setdefault(h.partition(":")[0], []).append((v.get("2", 0) + v.get("3", 0)) / (2.0 * TOP))
+    for h in g:
+        by_kind.setdefault(h.partition(":")[0], []).append(fluid(kernel, h))
     vocab_sizes = [len(v) for v in st["vocab"].values()]
     return {"peoples": len(g), "top": {h: v for h, v in top},
             "mean_fluid": {k: round(sum(v) / len(v), 3) for k, v in by_kind.items()},
             "volumetric_peoples": sum(1 for v in g.values() if v.get("3", 0) > 0),
+            "fourth_axis_proven": sum(1 for v in g.values() if v.get("4", 0) > 0),
             "interdimensional_peoples": sum(1 for h in st["vocab"] if any(norm(c) in C.HYPER_OPS
                                                                             for c in st["vocab"][h])),
             "vocab_mean": round(sum(vocab_sizes) / len(vocab_sizes), 2) if vocab_sizes else 0,

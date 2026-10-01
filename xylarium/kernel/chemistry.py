@@ -103,8 +103,10 @@ def stats(kernel: Any) -> Dict[str, Any]:
 def ladder(sector: Any) -> int:
     """How deep into the table a system's nebula was enriched: by its star's lineage."""
     label = (getattr(sector, "star_type", None) or "G-class").lower()
-    if any(w in label for w in ("dwarf", "precursor", "neutron", "remnant", "pulsar")):
-        return 7 if "brown" not in label else 3            # remnants seeded everything; failed stars nothing deep
+    if "brown dwarf" in label:
+        return 3                                           # a failed star made nothing deep
+    if any(w in label for w in ("white dwarf", "precursor", "neutron", "remnant", "pulsar")):
+        return 7                                           # a dead star's lineage seeded everything
     from xylarium.kernel import physics
     m = float(physics.star(sector)["mass"])
     return 3 if m < 0.5 else 4 if m < 0.9 else 5 if m < 1.4 else 6 if m < 2.5 else 7

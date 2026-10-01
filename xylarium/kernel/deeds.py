@@ -102,6 +102,8 @@ def _before_scan(kernel, captain, sector, kwargs, pre):
 @after(ActionType.MOVE)
 def _jumped(kernel, captain, sector, action, kwargs, result, pre):
     chronicle_mod.note_jump(kernel, captain)
+    from xylarium.kernel import waystations
+    waystations.arrive(kernel, captain.sector_id)          # traffic is what calls docks into being
 
 
 @after(ActionType.TRADE)

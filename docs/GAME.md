@@ -103,8 +103,9 @@ There is no tech tree. Each people holds knowledge in four domains - energy, mat
 knowledge units (a thousand minds' year of free thought). A world adds to it each quarter: its people x the labour
 its harvest frees (1 - 1/self-sufficiency) x leisure (1 + luxury access) x the **depth** of its minds, directed at
 its own troubles (hunger and failing births to biology, a mined-out crust to materials, a degraded grid to energy,
-trade to information) over a floor of curiosity, plus its rulers' focus (`RESEARCH <domain>`). Dogma freezes it, the
-Imperium halves it, and every stock depreciates 15% a year. Relics teach materials, anomalies their precursors'
+trade to information) over a floor of curiosity, plus its rulers' focus (`RESEARCH <domain>`). Its own society can stand in the way - **impedance**, the product
+of dogma (thought falls to nothing as dogma reaches the zealots' threshold), conflict (1 / (1 + wars + siege))
+and dark alignment (down to half at -1) - and the Imperium halves it. Every stock depreciates 15% a year. Relics teach materials, anomalies their precursors'
 domain, watching natives biology.
 
 A capability is a process mastered along **Wright's learning curve** (cost x 0.8 for each doubling of
@@ -139,6 +140,28 @@ Crystals are learned: every mind starts with the quarter turn; reflections come 
 recolouring with biology, the stack operators with energy; a composite written three times becomes one crystal
 (abstraction); neighbours teach the less knowing; relics carry their makers' crystals; peoples forget what few of
 their worlds hold, less where households have leisure to teach.
+
+**The fourth axis.** A third ladder runs over 4-volumes: hyper flips and cycles act on the order of whole volumes
+(a dihedral group of its own), and stack operators can be applied to every volume at once. Peoples think first in
+the dimensions they were born into - those of gas giants and oceans find the stack twice as readily, surface-dwellers
+the mirror - and no people can conceive, be taught, or read from a relic a hyper operator before it holds both
+stack operators; discovering one takes mastery of energy *and* information. Folding space (`JUMP`) needs a hyper
+crystal in its people's vocabulary: without one the fold cannot be written, however rich the captain.
+
+### Chemistry (`chemistry.py`)
+There is one periodic table for the universe - real elements with their mass, density, condensation temperature,
+cosmic abundance and place (period and group), plus the netstratum exotics placed by their own axes. Every world
+holds what its formation let it keep, and records why it lacks the rest: elements its star's lineage **never made**
+(the ladder of nucleosynthesis climbs with stellar mass - brown dwarfs stop at period 3, remnants reach 7), those
+that **escaped** (too light for its gravity at its temperature), those too volatile to condense (**too hot**), and
+heavy ones **sunk** into the core (gas giants keep their metals out of reach). Surveyed deposits are declared to
+the matter ledger.
+
+No people starts with the table. Each digs into what its own crust holds - thought x mastery of materials at the
+element's depth (its period), easier beside an element of the same group already known - and the table it uncovers
+is its homeworld's. A recipe (a firm's or an alchemist's) can be made only by a
+people that knows every element in it and can hold enough parts at once: two, plus one for every three planar rungs
+of its fluid intelligence. What a world lacks must be found elsewhere - and that is what makes trade routes.
 
 ### Genomes (`genome.py`)
 Every peopled world carries its deme's genome on six heritable axes - light (its tuned optimum), tolerance (how
@@ -280,6 +303,16 @@ fabricate from held inputs (fabrication leaves slag, recycled into ore and taili
 and pay their regions' households. Commodities include ore, organics, equipment, water, hydrogen, helium-3, the
 periodic elements, exotic minerals, manufactured components (superconductors, biosphere packs, engine manifolds,
 warp cores) and the four luxuries.
+
+### Waystations (`waystations.py`)
+Genesis gave most systems a starport; from then on ports are founded by the economy. Every arrival is counted
+where it lands. Each year, for every portless system with traffic, the worth of a dock is measured off the docks
+that exist (the median retail income per visit) times the traffic it would serve. A council of a peopled world
+there, or an AI captain passing through, founds one when that worth, discounted by its own mind at its money's
+policy rate, beats the dock's cost. The founder's capital becomes the dock's treasury; its shelves open empty and
+fill with what passing captains sell it; half its treasury's growth beyond that capital is paid to the founder each
+year. Busier lanes draw more docks, and docks sharing traffic share income - the value of a visit falls as they
+multiply.
 
 ### Companies, freight and credit (`market.py`, `credit.py`)
 Worlds and captains found companies that post freight contracts (escrowed), pay dividends in their home money and
