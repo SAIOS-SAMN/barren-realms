@@ -18,7 +18,13 @@ Reproductive strategy is set by clade (config REPRODUCTIVE_STRATEGY), else by me
   * Plasmic peoples shear off in coronal flares: their fertility follows their star's luminosity and the
     hydrogen well they live in, not their purse.
 
-Every strategy collapses under famine or bombardment: f falls to FERTILITY_STRESS of itself for a season.
+Meaning (mu) is a people's collective momentum against the satiation of comfort: an open frontier, a fresh
+discovery, the rebound after a crisis lift it; a comfortable world with nothing new, no struggle and no one
+leaving sees it decay toward its floor. It weighs on births as much as a strategy's births are a choice
+(config MEANING_*).
+
+Every strategy collapses under famine, bombardment or plague: f falls to FERTILITY_STRESS of itself for a season.
+Each strategy's biological ceiling can be lifted by its nursery (nursery.py) while the nursery is fed.
 Dogma (the Pyre's tensor) multiplies it; natal policy cards (config NATAL_POLICIES) shape it:
   * Edict of Propagation: f x 1.4, households taxed less (family subsidies), food eaten x 1.25.
   * Ascetic Mandate: f capped at replacement; +20% productivity, +10% luxury demand, content crowds.
@@ -27,6 +33,7 @@ Dogma (the Pyre's tensor) multiplies it; natal policy cards (config NATAL_POLICI
 Councils of AI and indigenous worlds choose their card each quarter; players choose theirs by command.
 """
 
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import (
@@ -40,6 +47,18 @@ from xylarium.config import (
     HATCHING_FOOD_PER_RECRUIT,
     LIGHT_OPTIMUM,
     LITHIC_METAL_PER_THOUSAND,
+    MEANING_CEIL,
+    MEANING_DISCOVERY,
+    MEANING_DISCOVERY_YEARS,
+    MEANING_FLOOR,
+    MEANING_FRONTIER,
+    MEANING_FRONTIER_HOPS,
+    MEANING_REBOUND,
+    MEANING_REBOUND_YEARS,
+    MEANING_STAGNATION_YEARS,
+    MEANING_STAGNATION_LUXURY,
+    MEANING_WEIGHT,
+    NURSERIES,
     METABOLISM_STRATEGY,
     NATAL_POLICIES,
     REPRODUCTIVE_STRATEGY,
@@ -71,16 +90,74 @@ def _season_cycles() -> int:
 
 
 def stressed(kernel: Any, planet: Any) -> bool:
-    """Famine or bombardment within the last FERTILITY_STRESS_SEASONS seasons."""
-    soc = planet.society
+    """Famine, bombardment or plague within the last FERTILITY_STRESS_SEASONS seasons."""
     window = FERTILITY_STRESS_SEASONS * _season_cycles()
-    last = max(soc.get("famine_cycle", -10 ** 9), soc.get("bombarded_cycle", -10 ** 9))
-    return kernel.cycle_count - last <= window
+    return kernel.cycle_count - _last_crisis(planet) <= window
+
+
+def _last_crisis(planet: Any) -> int:
+    soc = planet.society
+    return max(soc.get("famine_cycle", -10 ** 9), soc.get("bombarded_cycle", -10 ** 9),
+               soc.get("blight_cycle", -10 ** 9))
 
 
 def mark(planet: Any, what: str, cycle: int) -> None:
-    """A blow that stops a people having children: 'famine' or 'bombarded'."""
+    """A blow that stops a people having children: 'famine', 'bombarded' or 'blight'."""
     planet.society[f"{what}_cycle"] = cycle
+
+
+def discovered(kernel: Any, planet: Any = None, captain: Any = None) -> None:
+    """A breakthrough, a new element, a decoded relic: news that lifts a people's meaning. A captain's discovery
+    reaches every world it governs."""
+    worlds = [planet] if planet is not None else []
+    if captain is not None:
+        worlds += kernel.get_planets_owned_by(captain.id)
+    for p in worlds:
+        p.society["discovery_cycle"] = kernel.cycle_count
+
+
+# ---------------------------------------------------------------------- meaning
+def meaning(kernel: Any, planet: Any) -> Tuple[float, Dict[str, float]]:
+    """mu = 1 + frontier + discovery + rebound, decayed toward the floor by stagnation; clamped to its range."""
+    from xylarium.config import DAUGHTER_CITADEL_TIER, DAUGHTER_MIN_HABITABILITY
+    from xylarium.kernel import biosphere, demography, topology
+    from xylarium.kernel.universe import habitability
+    soc = planet.society
+    now = kernel.cycle_count
+    q = _season_cycles()
+    lo, hi = MEANING_FRONTIER
+    frontier = 0.0
+    if now - int(soc.get("emigrated_cycle", -10 ** 9)) <= 2 * q:
+        frontier = hi                                  # its own settler fleet is still news
+    else:
+        metab = biosphere.metabolism_of(kernel, planet)
+        domes = planet.citadel_level >= DAUGHTER_CITADEL_TIER
+        n = 0
+        for sid in topology.reach(kernel, planet.sector_id, MEANING_FRONTIER_HOPS):
+            for c in kernel.sectors[sid].planets:
+                if demography.free_world(c) and (habitability(metab, c.planet_type) >= DAUGHTER_MIN_HABITABILITY
+                                                 or (domes and c.planet_type != "GAS_GIANT")):
+                    n += 1
+        if n:
+            frontier = lo + (hi - lo) * min(1.0, (n - 1) / 3.0)
+    from xylarium.kernel.physics import CYCLES_PER_STANDARD_YEAR as year
+    age = now - int(soc.get("discovery_cycle", -10 ** 9))
+    d0, d1 = MEANING_DISCOVERY
+    window = MEANING_DISCOVERY_YEARS * year
+    discovery = d0 + (d1 - d0) * age / window if 0 <= age <= window else 0.0
+    rebound = MEANING_REBOUND if now <= int(soc.get("rebound_until", -10 ** 9)) else 0.0
+    mu = 1.0 + frontier + discovery + rebound
+    quiet = now - max(int(soc.get("discovery_cycle", -10 ** 9)), _last_crisis(planet),
+                      int(soc.get("emigrated_cycle", -10 ** 9)), int(soc.get("founded_cycle", 0)))
+    stagnant = 0.0
+    sated = MEANING_STAGNATION_YEARS * year
+    if float(soc.get("lux_access", 0.0)) >= MEANING_STAGNATION_LUXURY and quiet > sated:
+        keep = math.exp(-(quiet - sated) / sated)
+        stagnant = (mu - MEANING_FLOOR) * (1.0 - keep)
+        mu -= stagnant
+    mu = min(MEANING_CEIL, max(MEANING_FLOOR, mu))
+    return mu, {"frontier": round(frontier, 3), "discovery": round(discovery, 3), "rebound": rebound,
+                "stagnation": round(stagnant, 3)}
 
 
 # ---------------------------------------------------------------------- the biology of each strategy
@@ -94,6 +171,10 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
     k = max(1, demography.housing_cap(planet, kernel))
     urban = min(1.0, planet.population / k)
     parts: Dict[str, float] = {"comfort": round(comfort, 3), "luxury": round(lux, 3), "urban": round(urban, 3)}
+    n = soc.get("nursery")
+    lifted = bool(n) and bool(n.get("online")) and n.get("kind") == strat
+    if lifted:
+        parts["nursery"] = 1.0
     if strat == "r":
         stores = 4 * _season_cycles() * biosphere.consumption(planet)
         food = min(1.0, planet.organics_silo / max(1, stores))
@@ -101,22 +182,25 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
         parts["food"] = round(food, 3)
     elif strat == "K":
         lo, hi = FERTILITY_K_SECURE
-        f = (lo + (hi - lo) * comfort) * (1.0 - FERTILITY_K_LUXURY_COMPRESSION * lux
-                                          - FERTILITY_K_URBAN_COMPRESSION * urban)
+        relief = 1.0 - NURSERIES["K"]["relief"] if lifted else 1.0     # artificial wombs
+        f = (lo + (hi - lo) * comfort) * (1.0 - relief * (FERTILITY_K_LUXURY_COMPRESSION * lux
+                                                          + FERTILITY_K_URBAN_COMPRESSION * urban))
     elif strat == "lithic":
         res = planet.element_reserves
         metal = res.get("Fe", 0) + res.get("Ti", 0) + planet.ore_silo // 10
         need = max(1.0, planet.population / 1000.0 * LITHIC_METAL_PER_THOUSAND)
-        metal_fit = min(1.0, metal / need)
+        metal_fit = 1.0 if lifted else min(1.0, metal / need)          # the foundry nursery feeds them metal
         tectonic = min(1.0, float(physics.body(planet).get("mass", 1)))
+        if lifted:
+            tectonic = max(tectonic, NURSERIES["lithic"]["heat"])          # ...and its heat
         f = 0.4 + 0.8 * metal_fit + 0.4 * tectonic
         parts.update(metal=round(metal_fit, 3), tectonic=round(tectonic, 3))
     elif strat == "cryo":
         sec = kernel.sectors.get(planet.sector_id)
         fl = float(physics.planet_flux(sec, planet)) if sec is not None else 1.0
         opt = float(eval_fraction(LIGHT_OPTIMUM.get("cryogenic", "1/8")))
-        cold = min(1.0, 2.0 / (1.0 + fl / opt))
-        warmth = 0.5 * comfort + 0.5 * lux                  # ambient wealth is heat to a Stillcold mind
+        cold = 1.0 if lifted else min(1.0, 2.0 / (1.0 + fl / opt))      # the deep-cold vault
+        warmth = (0.5 * comfort + 0.5 * lux) * (0.5 if lifted else 1.0)   # ambient wealth is heat to a Stillcold mind
         f = FERTILITY_CRYO_MAX * cold * (1.0 - 0.5 * warmth)
         parts["cold"] = round(cold, 3)
     else:   # plasmic
@@ -124,6 +208,8 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
         lum = float(physics.star(sec)["luminosity"]) if sec is not None else 1.0
         flare = min(2.0, lum)
         well = 1.0 if physics.body(planet).get("giant") or planet.planet_type == "GAS_GIANT" else 0.5
+        if lifted:                                          # the confinement ring is a star and a well of its own
+            flare, well = max(flare, 1.0), 1.0
         f = 0.5 + 0.5 * flare * well
         parts.update(flare=round(flare, 3), well=well)
     return max(0.0, f), parts
@@ -135,9 +221,12 @@ def eval_fraction(s: str) -> float:
 
 
 def fertility(kernel: Any, planet: Any) -> Tuple[float, Dict[str, Any]]:
-    """This season's fertility: biology x dogma x natal policy x stress."""
+    """This season's fertility: biology x meaning x dogma x natal policy x stress."""
     strat = strategy(kernel, planet)
     f, parts = natural(kernel, planet, strat)
+    mu, why = meaning(kernel, planet)
+    f *= 1.0 + MEANING_WEIGHT.get(strat, 1.0) * (mu - 1.0)
+    parts.update(meaning=round(mu, 3), meaning_parts=why)
     civ = getattr(planet, "civilization", None)
     dogma = float(getattr(civ, "dogma", 0.0) or 0.0) if civ is not None else 0.0
     if dogma > 0:
@@ -219,6 +308,16 @@ def quarter(kernel: Any) -> List[str]:
             if planet.population <= 0 or getattr(planet, "natives", None):
                 continue
             soc = planet.society
+            from xylarium.kernel import nursery
+            log = nursery.upkeep(kernel, planet)
+            if log:
+                logs.append(log)
+            if strategy(kernel, planet) == "r":
+                log = nursery.blight(kernel, planet)
+                if log:
+                    logs.append(log)
+            if planet.population <= 0:
+                continue
             f_nat, _ = natural(kernel, planet)
             card = choose_natal(kernel, planet, f_nat)
             if card != soc.get("natal"):
@@ -229,9 +328,17 @@ def quarter(kernel: Any) -> List[str]:
                     st["natal_changes"] += 1
                     if card != "hatching":
                         logs.append(f"[NATAL] {planet.name} proclaims the {NATAL_POLICIES[card]['name']}.")
+            if soc.get("was_stressed") and not stressed(kernel, planet):
+                from xylarium.kernel.physics import CYCLES_PER_STANDARD_YEAR
+                soc["rebound_until"] = kernel.cycle_count + MEANING_REBOUND_YEARS * CYCLES_PER_STANDARD_YEAR
             f, parts = fertility(kernel, planet)
             soc["fertility"] = round(f, 4)
             soc["fertility_parts"] = parts
+            soc["was_stressed"] = parts["stressed"]
+            nursery.track_viability(planet)
+            log = nursery.consider(kernel, planet)
+            if log:
+                logs.append(log)
             if parts["stressed"]:
                 st["stressed_quarters"] += 1
                 ratio = f / parts["unstressed"] if parts["unstressed"] > 0 else 0.0
@@ -240,12 +347,14 @@ def quarter(kernel: Any) -> List[str]:
                 planet.morale = min(100, planet.morale + 2)           # no crowding unrest
             if soc.get("natal") == "hatching":
                 _hatch(kernel, planet, st)
-            b = by.setdefault(parts["strategy"], {"worlds": 0, "people": 0, "f_sum": 0.0})
+            b = by.setdefault(parts["strategy"], {"worlds": 0, "people": 0, "f_sum": 0.0, "mu_sum": 0.0})
             b["worlds"] += 1
             b["people"] += planet.population
             b["f_sum"] += f * planet.population
+            b["mu_sum"] += parts["meaning"] * planet.population
     st["by_strategy"] = {k: {"worlds": v["worlds"], "people": v["people"],
-                             "fertility": round(v["f_sum"] / max(1, v["people"]), 3)} for k, v in by.items()}
+                             "fertility": round(v["f_sum"] / max(1, v["people"]), 3),
+                             "meaning": round(v["mu_sum"] / max(1, v["people"]), 3)} for k, v in by.items()}
     return logs
 
 

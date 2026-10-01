@@ -222,7 +222,7 @@ def _society_census(kernel: GameKernel) -> Dict[str, Any]:
     total = sum(p.population for p in worlds)
     daughters = sum(p.population for p in worlds if p.metropole_id)
     sums = subsystem.summaries(kernel)
-    return {"fertility": sums["fertility"], "luxury": sums["luxury"],
+    return {"fertility": sums["fertility"], "luxury": sums["luxury"], "nursery": sums.get("nursery", {}),
             "tourism": sums["tourism"], "gdp_sol": round(gdp),
             "daughter_share": round(daughters / total, 4) if total else 0.0}
 
@@ -1230,6 +1230,10 @@ class RunStats:
             "fx_rates": {cur: round(kernel.fx_market.rate(cur), 4) for cur in kernel.fx_market.pools},
             "policy": dict(kernel.monetary_policy.factors),
             "policy_targets": dict(getattr(kernel.monetary_policy, "current", {})),
+            "output_by_currency": {cur: round(kernel.monetary_policy.annual_output(cur))
+                                   for cur in kernel.monetary_policy.output_seasons},
+            "people_by_currency": dict(sum((Counter({p.currency: p.population}) for p in planets
+                                            if p.population > 0 and not p.natives), Counter())),
             "ports": len(ports),
             "ports_illiquid": sum(1 for p in ports if p.treasury < 1000 * PRICE_LEVEL.get(p.currency, 1.0)),
             # Ports with an economic loop: populated worlds of their money within retail range
@@ -1913,6 +1917,12 @@ def print_report(r: Dict[str, Any]) -> None:
             fz, lx, tu = so["fertility"], so["luxury"], so["tourism"]
             print(f"  fertility by strategy: {fz['by_strategy']}; natal cards {fz['natal_cards']}; "
                   f"{fz['stressed_quarters']} stressed world-seasons; {fz['recruits']:,} hatched fanatics")
+            nu = so.get("nursery") or {}
+            if nu:
+                print(f"  nurseries: {nu.get('nurseries')} (built {nu.get('built', 0)}, dark world-quarters "
+                      f"{nu.get('dark_quarters', 0)}, relit {nu.get('relit', 0)}, brood lost {nu.get('brood_lost', 0):,}); "
+                      f"blights {nu.get('blights', 0)} ({nu.get('blight_dead', 0):,} dead); settler fleets gated "
+                      f"for viability {nu.get('gated', 0)}, seeding kits {nu.get('kits', 0)}")
             print(f"  luxury: crafted {lx['crafted']}, bought {lx['bought']}, own use {lx['own_use']:,}, spoiled "
                   f"{lx['spoiled']:,}; wants met {lx['access']:.0%}; signatures {lx['signatures']}")
             if lx["examples"]:

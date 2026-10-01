@@ -172,6 +172,25 @@ def worlds(kernel: Any, captain: Any) -> List[Dict[str, Any]]:
         if unmet:
             out.append(_op("world", f"{p.name} has gone without {', '.join(t[4:].lower() for t in unmet)}",
                            "its council is bidding up the price: haul some in", "TRADE", 0.0))
+        from xylarium.kernel import nursery
+        fp = soc.get("fertility_parts") or {}
+        n = soc.get("nursery")
+        name = nursery.design(kernel, p)["name"]
+        if n and not n.get("online"):
+            out.append(_op("world", f"{p.name}'s {name} is dark",
+                           "its inputs ran out and its brood was lost; stock them (or let the port's traders) to relight it",
+                           "POPULATION", 0.0, urgent=True))
+        elif fp.get("strategy") == "r" and not n and nursery.r0(kernel, p) > 1.0:
+            out.append(_op("world", f"{p.name} is crowded past the blight threshold (R0 {nursery.r0(kernel, p):.2f})",
+                           f"a plague may kill and rot its granary; {name} lowers transmission",
+                           "POPULATION (World # NURSERY)", 0.0, urgent=True))
+        elif fp.get("strategy") != "r" and not n and float(fp.get("unstressed", 1.0)) < 1.0:
+            why = nursery.why_not(kernel, p)
+            out.append(_op("world", f"{p.name}'s people are below replacement (fertility {fp.get('unstressed', 0):.2f}, "
+                                    f"meaning {fp.get('meaning', 1.0):.2f})",
+                           f"a {name} lifts its biology" + (f" - {why}" if why else " and it can be built now")
+                           + "; a frontier, discoveries or a natal card also help",
+                           "POPULATION (World # NURSERY)" if why is None else "RESEARCH XENOGENESIS", 0.0))
         eq = demography.equilibrium(p, kernel)
         if p.citadel_level >= 2 and not p.growth_policy and eq and p.population >= eq * demography.SETTLE_PRESSURE:
             out.append(_op("world", f"{p.name}'s people are ready to choose",

@@ -346,6 +346,9 @@ class ArchaeologyManager:
             if captain.research_progress >= cfg.get("cost_research", 10 ** 9):
                 captain.technologies.append(captain.active_research)
                 msg_extra = f" Breakthrough: {cfg.get('name', captain.active_research)} reconstructed from the relic!"
+                if kernel is not None:
+                    from xylarium.kernel import fertility
+                    fertility.discovered(kernel, captain=captain)
                 captain.research_progress = 0
                 captain.active_research = None
         for elem in relic.get("elements", [])[:1]:

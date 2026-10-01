@@ -115,6 +115,7 @@ class TestTheChoice(unittest.TestCase):
         if target is None:
             self.skipTest("no free habitable world in reach on this seed")
         pop = w.population
+        w.society["viable_quarters"] = 8                     # a people sustaining itself (nursery.viable)
         before = totals(self.kernel)
         demography.send_settlers(self.kernel, w)
         daughters = [p for s in self.kernel.sectors.values() for p in s.planets if p.metropole_id == w.id]
@@ -196,6 +197,7 @@ class TestHouseholdsAndFrontier(unittest.TestCase):
         self.assertGreater(w.diaspora_escrow, 0)
         # Fund settler ship from escrow
         w.diaspora_escrow = 20_000
+        w.society["viable_quarters"] = 8
         before_settle = totals(self.kernel)
         log = demography.send_settlers(self.kernel, w)
         self.assertIsNotNone(log)
@@ -236,6 +238,7 @@ class TestDomedSettlement(unittest.TestCase):
         home.citadel_level, home.population = 3, 200_000
         home.treasury, home.ore_silo = 500_000, 5_000
         home.last_daughter_quarter = -10 ** 6
+        home.society["viable_quarters"] = 8
         m0 = {c: b["total"] for c, b in money_supply(k).items()}
         t0, n0 = matter.totals(k), k.matter.net()
         log = demography.send_settlers(k, home)

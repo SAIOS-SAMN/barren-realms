@@ -25,7 +25,6 @@ from xylarium.kernel import cache, matter, topology
 
 from xylarium.config import (
     CITADEL_CONFIG,
-    COLONY_KIT_ORGANICS,
     DAUGHTER_CITADEL_TIER,
     DAUGHTER_COOLDOWN_QUARTERS,
     DAUGHTER_EMIGRANT_SHARE,
@@ -322,11 +321,15 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
         pass
     else:
         return None
+    from xylarium.kernel import biosphere, nursery
+    if not nursery.viable(planet):
+        nursery.stats(kernel)["gated"] += 1      # a people not sustaining itself does not send fleets
+        return None
+    metab = metabolism_of(kernel, planet)
     emigrants = min(DAUGHTER_EMIGRANTS_MAX, int(planet.population * DAUGHTER_EMIGRANT_SHARE))
+    emigrants = nursery.kit_room(kernel, planet, metab, emigrants)    # no more than its seeding kit can stock
     if emigrants < DAUGHTER_EMIGRANTS_MIN:
         return None
-    from xylarium.kernel import biosphere
-    metab = metabolism_of(kernel, planet)
     radius = settler_reach(kernel, planet)
     best = None
     # Settlers take the nearest ring that holds a world to feed them; a diaspora (crowded, escrow-funded)
@@ -376,12 +379,12 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
         st["domed_daughters"] = st.get("domed_daughters", 0) + 1
     planet.population -= emigrants
     planet.crowded_cycles = 0
+    planet.society["emigrated_cycle"] = kernel.cycle_count
+    daughter.society["founded_cycle"] = kernel.cycle_count
     daughter.population = emigrants
     daughter.habitability = hab
     daughter.owner_id = planet.owner_id
-    kit = min(COLONY_KIT_ORGANICS, planet.organics_silo)      # the fleet's stores come out of the home granary
-    planet.organics_silo -= kit
-    daughter.organics_silo += kit
+    nursery.stock_kit(kernel, planet, daughter, metab, emigrants)  # the clade's seeding kit sails with them
     daughter.morale = max(daughter.morale, 80)
     daughter.growth_policy = None
     if planet.owner_id is None and getattr(planet, "civilization", None) is not None:

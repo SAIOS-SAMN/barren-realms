@@ -678,6 +678,9 @@ class CivilizationIntelligenceEngine:
                     new_elem = random.choice(undiscovered)
                     civ.discovered_elements.append(new_elem.element_id)
                     new_element_discovered = new_elem.name
+                    from xylarium.kernel import fertility, ledger
+                    if ledger.active_kernel() is not None:
+                        fertility.discovered(ledger.active_kernel(), planet=planet)   # news that lifts a people
                     # Also seed deposit on planet
                     found = random.randint(20, 50)
                     deposits[new_elem.element_id] = deposits.get(new_elem.element_id, 0) + found

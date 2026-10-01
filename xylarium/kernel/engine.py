@@ -115,6 +115,7 @@ from xylarium.kernel import propulsion as propulsion_mod
 from xylarium.kernel import law as law_mod
 from xylarium.kernel import crime as crime_mod
 from xylarium.kernel import fertility as fertility_mod
+from xylarium.kernel import nursery as nursery_mod
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
@@ -1659,12 +1660,16 @@ class GameKernel:
 
     def _handle_population_policy(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
         """Sets a governed world's population policy: EXPAND (settler fleets) or STEADY (population controls),
-        or its natal card: NATAL=PROPAGATION / ASCETIC / NONE."""
+        or its natal card: NATAL=PROPAGATION / ASCETIC / NONE, or raises its nursery (NURSERY=1)."""
         planet = self.get_planet(kwargs.get("planet_id", ""))
         if planet is None:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message="No such world.")
         try:
-            if kwargs.get("natal") is not None:
+            if kwargs.get("nursery"):
+                if planet.owner_id != captain.id:
+                    raise ValueError(f"You do not govern {planet.name}.")
+                msg = nursery_mod.build(self, planet)
+            elif kwargs.get("natal") is not None:
                 msg = fertility_mod.set_natal(self, captain, planet, kwargs.get("natal", ""))
             else:
                 msg = demography_mod.set_policy(self, captain, planet, kwargs.get("policy", ""))

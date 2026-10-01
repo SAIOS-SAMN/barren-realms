@@ -75,15 +75,46 @@ How many children a people wants depends on its biology:
   fertility below it (the demographic transition), so rich worlds settle below what their land could carry.
 - **Lithic** peoples bud from structural metal and tectonic heat; **cryocoherent** peoples fission in the cold and
   are chilled out of it by warmth and wealth; **plasmic** peoples follow their star's flares.
-Famine and bombardment cut every people's fertility to a quarter (a law). Dogma multiplies it. Councils and
+Famine, bombardment and plague cut every people's fertility to a quarter (a law). Dogma multiplies it. Councils and
 players play **natal cards**: the Edict of Propagation, the Ascetic Mandate, and the Pyre's Sacred Hatching.
+
+**Meaning** (mu, 0.5 .. 2.0) is a people's momentum against the satiation of comfort: free worlds it could live on
+within two jumps, or its own settler fleet still in the news (+0.15 .. +0.30); a fresh discovery - a breakthrough,
+a new element, a decoded relic (+0.25 fading to +0.10 over a year); the baby boom after a crisis lifts (+0.30
+for two years). A comfortable world (luxury access >= 50%) with no discovery, crisis or emigration for ten years
+sees mu decay toward its floor. It weighs on births as much as they are a choice: fully for K peoples, half for
+the Stillcold, a quarter for lithic and plasmic peoples, not at all for r clutches.
+
+### Nurseries and blight (`nursery.py`)
+Each strategy has a technological leap past its biology - a district a Tier-3 citadel can build (Tier 2 with the
+**Applied Xenogenesis** research; tech level 3 for an indigenous people), at a habitat's price and ore:
+
+| Strategy | Nursery | What it lifts | Fed each quarter with |
+|---|---|---|---|
+| K | Fertility Centre (artificial wombs) | half the luxury and crowding compression | organics |
+| Lithic | Foundry Nursery | metal to bud from, and heat for tectonics | Fe / Ti, or ore at 10:1 |
+| Cryo | Deep-Cold Vault | full cold, and wealth's warmth halved | water ice, or the world's fuel |
+| Plasmic | Confinement Ring | a star and a well of its own | H / He-3, or the world's fuel |
+| r | Sanitation Works | blight transmission down a fifth | equipment, or ore |
+
+A nursery buys its inputs from the world's holdings or its contractor port. Unfed for a quarter it goes dark and
+its brood is lost (a quarter's births): high-tech fertility is only as sound as the supply chain behind it.
+Councils build theirs when their people fall below replacement (r peoples: when blight threatens); players use
+`POPULATION` then `World # NURSERY`.
+
+r peoples breed freely; their ceiling is **blight**. Density sets a pathogen's reproduction number,
+R0 = (P/K) / 0.85. Each quarter an introduction takes off with chance 1 - 1/R0, infects the share z solving
+z = 1 - exp(-R0 z), kills a tenth of the infected and rots z/2 of the granary.
 
 ### Demography (`demography.py`)
 Crowded worlds build: citadels (which are also the yards that build settler ships) and sub-surface habitats.
-Past the inflection of its growth, a people with yards chooses: **expand** (settler fleets found daughter worlds)
+Past the inflection of its growth, a people with yards chooses (once it is **viable** - fertility at least 1.05 for
+eight straight quarters; a dying people sends no fleets): **expand** (settler fleets found daughter worlds)
 or **enough** (population controls, stewardship, the Covenant of Enough). A settler fleet's reach is its yards'
 range times the square root of its fuel cell's exhaust velocity; a fleet that finds no world to feed it in the
-open raises domes (enclosed habitats - bigger yards carry bigger kits) on any solid world. Worlds crowded for
+open raises domes (enclosed habitats - bigger yards carry bigger kits) on any solid world. Each fleet carries its
+clade's **seeding kit** (food for biotic settlers, structural metal for lithic ones, ice or fuel for the Stillcold
+and plasmic), and sails no larger than its kit can stock. Worlds crowded for
 long divert part of their tax to a diaspora escrow that funds expeditions. Households buy a basket of goods from the
 regional starports and export their surplus harvest and ore.
 

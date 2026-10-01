@@ -438,18 +438,33 @@ class TerminalClient:
                      " (domes on hostile worlds), or STEADY adopts population controls (content people, the Light's regard)."))
         print(c_gray("  Natal cards: NATAL PROPAGATION (x1.4 fertility, family subsidies, more food eaten) │ NATAL ASCETIC "
                      "(replacement at most, +20% productivity) │ NATAL NONE"))
+        print(c_gray("  NURSERY raises your people's leap past its biology (citadel T3, or T2 with Applied Xenogenesis); "
+                     "it buys its inputs each quarter and goes dark - losing its brood - when they run out."))
+        from xylarium.kernel import nursery
+        from xylarium.config import NURSERIES, VIABILITY_FERTILITY, VIABILITY_QUARTERS
         for p in worlds:
             soc = p.society
             fp = soc.get("fertility_parts") or {}
-            print(c_gray(f"     {p.name[:22]:<22} fertility {soc.get('fertility', 1.0):.2f} ({fp.get('strategy', '?')}-strategist)"
-                         f" natal {soc.get('natal') or '-'}  luxury wants met {soc.get('lux_access', 0):.0%}"))
+            strat = fp.get("strategy") or nursery.strategy(self.kernel, p)
+            nur = soc.get("nursery")
+            nur_txt = ("-" if not nur else NURSERIES[nur["kind"]]["name"] + (" (on)" if nur.get("online") else " (DARK)"))
+            print(c_gray(f"     {p.name[:22]:<22} fertility {soc.get('fertility', 1.0):.2f} ({strat}-strategist)"
+                         f" meaning {fp.get('meaning', 1.0):.2f}  natal {soc.get('natal') or '-'}"
+                         f"  luxury wants met {soc.get('lux_access', 0):.0%}"))
+            print(c_gray(f"     {'':<22} nursery {nur_txt}  viable {min(soc.get('viable_quarters', 0), VIABILITY_QUARTERS)}"
+                         f"/{VIABILITY_QUARTERS} quarters at fertility >= {VIABILITY_FERTILITY}"
+                         + (f"  blight R0 {nursery.r0(self.kernel, p):.2f}" if strat == "r" else "")))
         try:
-            raw = input(c_gold("World # and EXPAND/STEADY or NATAL <card> (Enter to exit) > ")).strip().split()
+            raw = input(c_gold("World # and EXPAND/STEADY, NATAL <card> or NURSERY (Enter to exit) > ")).strip().split()
         except (KeyboardInterrupt, EOFError):
             return
         if len(raw) < 2 or not raw[0].isdigit() or not (1 <= int(raw[0]) <= len(worlds)):
             return
         target = worlds[int(raw[0]) - 1].id
+        if raw[1].upper() == "NURSERY":
+            self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
+                                                    planet_id=target, nursery=1))
+            return
         if raw[1].upper() == "NATAL" and len(raw) == 3:
             self._print_result(self.kernel.dispatch(self.player_id, ActionType.POPULATION_POLICY,
                                                     planet_id=target, natal=raw[2]))

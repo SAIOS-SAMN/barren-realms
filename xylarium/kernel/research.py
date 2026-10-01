@@ -56,6 +56,16 @@ TECH_TREE: Dict[str, Dict[str, Any]] = {
         "cost_element_amount": 10,
         "icon": "🧬",
     },
+    "XENOGENESIS": {
+        "name": "Applied Xenogenesis",
+        "description": "Your people's own biology, understood well enough to build past it: a Tier-2 world may raise "
+                       "its nursery (artificial wombs, foundry nursery, deep-cold vault, confinement ring, or "
+                       "sanitation works) without a Tier-3 citadel's engineering.",
+        "cost_research": 90,
+        "cost_element": "chitinium",
+        "cost_element_amount": 10,
+        "icon": "🥚",
+    },
     "ORBITAL_FOUNDRY": {
         "name": "Zero-G Orbital Megafoundry",
         "description": "Automated zero-gravity assembly arrays boost colony equipment and tax yields by +35% and cuts fighter recruitment cost in half.",
@@ -225,6 +235,8 @@ class ResearchManager:
                             owner.research_progress = 0
                             owner.active_research = None
                             owner.score += 500
+                            from xylarium.kernel import fertility
+                            fertility.discovered(kernel, captain=owner)
 
                             # Add to planet technologies
                             if not hasattr(planet, "technologies"):
@@ -343,6 +355,9 @@ class ResearchManager:
                 if anom.reward_tech not in captain.technologies:
                     captain.technologies.append(anom.reward_tech)
                     tech_info = TECH_TREE.get(anom.reward_tech, {})
+                    if kernel is not None:
+                        from xylarium.kernel import fertility
+                        fertility.discovered(kernel, captain=captain)
                     unlocked_tech_msg = f" Discovered ancient blueprint for '{tech_info.get('name', anom.reward_tech)}'!"
 
             # Deposit exotic elements into cargo hold if space permits
