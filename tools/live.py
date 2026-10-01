@@ -72,9 +72,15 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
         "fx": {c: round(kernel.fx_market.rate(c), 3) for c in kernel.fx_market.pools},
         "m_over_mstar": {c: round(supply[c] / t, 3) for c, t in pol.current.items() if t and c in supply},
     }
-    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations"):
+    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices"):
         if name in sums:
             obs[name] = sums[name]
+    g = kernel.state.get("genesis") or {}
+    obs["genesis"] = g.get("mode", "settled")
+    if g.get("firsts") is not None:
+        obs["firsts"] = g["firsts"]
+    obs["ports"] = sum(1 for s in kernel.sectors.values() if s.port is not None)
+    obs["citadels"] = {str(t): sum(1 for p in worlds if p.citadel_level == t) for t in sorted({p.citadel_level for p in worlds})}
     return obs
 
 
@@ -109,6 +115,8 @@ def main() -> None:
     ap.add_argument("--cycles", type=int, default=0, help="stop after this many cycles (0: run forever)")
     ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--show", type=int, default=0)
+    ap.add_argument("--genesis", default="settled", choices=("settled", "primordial"),
+                    help="primordial: every people on its homeworld, nothing spacefaring (no bots)")
     args = ap.parse_args()
     home = os.path.join(args.dir, f"seed{args.seed}")
     os.makedirs(os.path.join(home, "crash"), exist_ok=True)
@@ -125,15 +133,16 @@ def main() -> None:
     if kernel is None:
         if args.fresh and os.path.exists(obs_path):
             os.replace(obs_path, obs_path + f".{int(time.time())}")
-        kernel = GameKernel(seed=args.seed)
-        print(f"genesis of seed {args.seed}", flush=True)
+        kernel = GameKernel(seed=args.seed, genesis=args.genesis)
+        print(f"genesis ({args.genesis}) of seed {args.seed}", flush=True)
     kernel.activate()
     # the bots are captains of this universe: a resumed universe already holds them
     real_register = kernel.register_player
     kernel.register_player = lambda pid, *a, **kw: kernel.captains.get(pid) or real_register(pid, *a, **kw)
     rng = random.Random(args.seed * 7919 + kernel.cycle_count)
     random.seed(args.seed * 7919 + kernel.cycle_count)
-    bots = harness.make_players(kernel, rng)
+    primordial = (kernel.state.get("genesis") or {}).get("mode") == "primordial"
+    bots = [] if primordial else harness.make_players(kernel, rng)      # nothing to trade with yet: we watch
     kernel.register_player = real_register
     stats = harness.RunStats()
     tick = kernel.tick_simulation

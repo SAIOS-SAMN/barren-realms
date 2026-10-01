@@ -861,7 +861,7 @@ AI_CAPTAINS_CONFIG = [
 ]
 
 # Galactic Spawning & Speciation Pipeline Constants
-MAX_AI_CAPTAINS = 24  # Maximum concurrent AI captains to preserve simulation throughput
+AI_TURN_BUDGET = 48                    # Engine compute, not a law of the universe: AI turns per cycle; beyond it captains act in rotation
 CLEAVE_BASIS_THRESHOLD = 25  # Minimum grown basis crystals required for cognitive cleaving
 CLEAVE_ENDOWMENT_CREDITS = 5000  # Capital invested by parent captain into offshoot
 CLEAVE_MIN_PARENT_CREDITS = 8000  # Minimum credits parent captain must have to afford cleaving
@@ -1489,10 +1489,6 @@ DIASPORA_CROWDED_CYCLES = 50            # Cycles at crowding threshold before ta
 DIASPORA_TAX_SHARE = 0.20               # Share of government tax diverted to expeditionary colony escrow
 STASIS_POD_COST = 5000                  # Cost to install Stasis Pod cryogenic containment module
 # Frontier: the charted galaxy grows when its peoples run out of room (space : people : resources in balance)
-FRONTIER_FREE_WORLDS_RATIO = 0.35            # Open a cluster when free habitable worlds < 35% of populated worlds...
-FRONTIER_PRESSURE_QUARTERS = 12              # ...or when this many settler fleets found no world in reach
-FRONTIER_MIN_INTERVAL = 2000                 # Cycles between new clusters
-FRONTIER_MAX_CLUSTERS = 6
 # Households: populations buy a basket of goods from their regional starports each fiscal quarter
 HOUSEHOLD_BASKET = {"ORGANICS": 0.3, "EQUIPMENT": 0.15, "H2O": 0.2}   # units per 1,000 people per quarter
 HOUSEHOLD_RADIUS = 3                         # Warps a household will shop across (same money)

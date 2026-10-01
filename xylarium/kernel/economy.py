@@ -195,10 +195,8 @@ class EconomyManager:
     def regional_factor(port: Port, category: str) -> float:
         """Price level of the port's currency x remoteness gradient (manufactures dearer, raw goods cheaper)."""
         cur = getattr(port, "currency", "SOL")
-        level = PRICE_LEVEL.get(cur, 1.0)
-        if cur != "SOL" and fx.ACTIVE_FX is not None:
-            # Partial pass-through: a depreciating local currency raises local prices (inflation)
-            level *= fx.ACTIVE_FX.price_level_drift(cur) ** FX_PRICE_PASS_THROUGH
+        from xylarium.kernel import prices
+        level = prices.level(cur)             # MV = PY, sticky (prices.py)
         hops = getattr(port, "remoteness", 0)
         if category == "MANUFACTURED":
             gradient = min(GRADIENT_MANUFACTURED_MAX, 1.0 + GRADIENT_MANUFACTURED_PER_HOP * hops)

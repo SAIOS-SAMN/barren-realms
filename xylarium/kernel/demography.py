@@ -9,9 +9,8 @@ Xylarium: demography - peoples grow on their worlds, and then decide what to bec
     worlds within reach (the multi-planetary drive). Others adopt population controls: they hold their
     numbers below housing, are content for it, and the Light notices (stewardship). AI houses choose by
     temperament and alignment, indigenous civilizations by their own alignment, players by command.
-  * Space : people : resources stay in balance. When the charted galaxy runs short of free worlds, or
-    settler fleets keep finding nothing in reach, the frontier opens a new star cluster (declared new
-    territory: new worlds, belts, ports and their capital).
+  * Space is as large as it has been seen to be: a world whose settler fleets reach the charted edge sees the
+    cluster beyond it (observation.py). Fleets that find nothing in reach are counted as the frontier's pressure.
   * Households are consumers. Every fiscal quarter each populated world buys a basket of goods from its
     regional starports - organics, water, equipment - from their household purse (their share of what the
     colony earns) to the port treasury, goods out of the warehouse; savings beyond need go to the vault.
@@ -39,10 +38,6 @@ from xylarium.config import (
     DEMOGRAPHY_COUNCIL_RESERVE,
     DEMOGRAPHY_PRESSURE,
     DIASPORA_CROWDED_CYCLES,
-    FRONTIER_FREE_WORLDS_RATIO,
-    FRONTIER_MAX_CLUSTERS,
-    FRONTIER_MIN_INTERVAL,
-    FRONTIER_PRESSURE_QUARTERS,
     CITADEL_BUILD_QUARTERS_PER_TIER,
     HABITAT_BUILD_QUARTERS,
     HABITAT_COST,
@@ -139,10 +134,7 @@ def quarter(kernel: Any) -> List[str]:
                 logs.append(log)
     households(kernel)
     exports(kernel)
-    log = frontier(kernel)
-    if log:
-        logs.append(log)
-    return logs
+    return logs                       # the frontier opens as it is observed (observation.py)
 
 
 def _pay_contractor(kernel: Any, planet: Any, amount: int, from_escrow: bool = False) -> None:
@@ -251,14 +243,15 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
         if planet.treasury - cost >= keep and planet.ore_silo >= cfg["upgrade_ore"]:
             gain = biosphere.carrying_capacity(kernel, planet, citadel=nxt) - k_now
             options.append(decide.option("raise_citadel", cost + cfg["upgrade_ore"] * ore_price,
-                                         value_of_room(kernel, planet, gain, m), tier=nxt, cash=cost,
+                                         value_of_room(kernel, planet, gain, m), tier=nxt, cash=cost, currency=planet.currency,
                                          ore=cfg["upgrade_ore"]))
     if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
         cost = HABITAT_COST * level * (1 + planet.habitats)
         if planet.treasury - cost >= keep and planet.ore_silo >= HABITAT_ORE:
             gain = biosphere.carrying_capacity(kernel, planet, habitats=planet.habitats + 1) - k_now
             options.append(decide.option("dig_habitat", cost + HABITAT_ORE * ore_price,
-                                         value_of_room(kernel, planet, gain, m), cash=cost))
+                                         value_of_room(kernel, planet, gain, m), cash=cost,
+                                         currency=planet.currency))
     if not nursery.has(planet) and nursery.why_not(kernel, planet) is None and \
             planet.treasury - nursery.cost(planet, kernel) >= keep:
         a = nursery.appraise(kernel, planet)
@@ -281,6 +274,8 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
     planet.citadel_level = nxt
     planet.works_ready_cycle = kernel.cycle_count + CITADEL_BUILD_QUARTERS_PER_TIER * nxt * _quarter_len()
     st["citadels"] += 1
+    from xylarium.kernel import primordial
+    primordial.first(kernel, f"citadel_{nxt}", planet.name)
     if getattr(kernel, "event_bus", None):
         civ = getattr(planet, "civilization", None)
         who = civ.name if (civ is not None and planet.owner_id is None) else planet.name
@@ -355,7 +350,10 @@ def settler_reach(kernel: Any, planet: Any) -> int:
 
 def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     from xylarium.kernel.universe import habitability
+    from xylarium.kernel import sustenance
     st = stats(kernel)
+    if not sustenance.yards(planet):
+        return None                       # no yards, no settler ships: however crowded, a people stays on its world
     quarter_now = kernel.cycle_count // max(1, _quarter_len())
     is_diaspora = getattr(planet, "crowded_cycles", 0) > DIASPORA_CROWDED_CYCLES
     cooldown = 4 if is_diaspora else DAUGHTER_COOLDOWN_QUARTERS
@@ -451,6 +449,8 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     daughter.citadel_level = max(daughter.citadel_level, DAUGHTER_FOUNDING_TIER)   # the fleet raises a redoubt
     st["daughters"] += 1
     st["emigrants"] += emigrants
+    from xylarium.kernel import primordial
+    primordial.first(kernel, "first_daughter_world", f"{planet.name} -> {daughter.name}")
     chron = getattr(kernel, "chronicle", None)
     civ = getattr(planet, "civilization", None)
     people = getattr(civ, "name", None) or planet.name
@@ -475,39 +475,6 @@ def _quarter_len() -> int:
 # ---------------------------------------------------------------------- frontier
 def frontier_state(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "demography")["frontier"]
-
-
-def frontier(kernel: Any) -> Optional[str]:
-    """Open a new star cluster when the galaxy's peoples run out of room."""
-    st = stats(kernel)
-    rm = getattr(kernel, "research_manager", None)
-    if rm is None:
-        return None
-    if kernel.cycle_count - st["last_cluster_cycle"] < FRONTIER_MIN_INTERVAL:
-        return None
-    if len(rm.minted_clusters) >= FRONTIER_MAX_CLUSTERS:
-        return None
-    from xylarium.kernel.universe import habitability
-    populated = free = 0
-    for sec in kernel.sectors.values():
-        for p in sec.planets:
-            if p.population > 0:
-                populated += 1
-            elif free_world(p) and max(habitability(m, p.planet_type) for m in ("biotic", "mineral", "plasmic", "cryogenic")) >= DAUGHTER_MIN_HABITABILITY:
-                free += 1
-    fs = frontier_state(kernel)
-    crowded = free < FRONTIER_FREE_WORLDS_RATIO * max(1, populated)
-    if not crowded and fs["pressure"] < FRONTIER_PRESSURE_QUARTERS:
-        return None
-    index = 2 if 2 not in rm.minted_clusters else (3 if 3 not in rm.minted_clusters else max(rm.minted_clusters) + 1)
-    ok, msg, new_ids = rm.mint_frontier_cluster(kernel, index)
-    if not ok:
-        return None
-    fs["pressure"] = 0
-    st["last_cluster_cycle"] = kernel.cycle_count
-    st["clusters_opened"].append({"cycle": kernel.cycle_count, "cluster": index, "sectors": len(new_ids),
-                                  "reason": "crowded" if crowded else "settler pressure"})
-    return f"[FRONTIER] {msg}"
 
 
 # ---------------------------------------------------------------------- households

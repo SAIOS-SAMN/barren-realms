@@ -11,12 +11,8 @@ from xylarium.kernel.ai import AIManager
 from xylarium.kernel.colony import ColonyManager
 from xylarium.kernel.civilization import CivilizationIntelligenceEngine, FOUNDING_POLITIES
 from xylarium.config import (
-    MAX_AI_CAPTAINS,
     CLEAVE_BASIS_THRESHOLD,
     CLEAVE_ENDOWMENT_CREDITS,
-    PLANETARY_SPACEFLIGHT_CITADEL_TIER,
-    PLANETARY_SPACEFLIGHT_POPULATION,
-    PLANETARY_SPACEFLIGHT_VAULT,
     PLANETARY_SPACEFLIGHT_COST,
     CORPORATE_ENFORCER_TREASURY,
     CORPORATE_ENFORCER_COST,
@@ -77,10 +73,19 @@ class TestGalacticSpawningPipeline(unittest.TestCase):
                     break
 
         self.assertIsNotNone(planet)
-        # Configure planet to meet civiligenesis thresholds
-        planet.citadel_level = PLANETARY_SPACEFLIGHT_CITADEL_TIER
-        planet.population = PLANETARY_SPACEFLIGHT_POPULATION + 2000
-        planet.treasury = PLANETARY_SPACEFLIGHT_VAULT + 5000
+        # A world with yards, a surplus worth carrying, and its council in session
+        import zlib
+        from xylarium.config import DAUGHTER_CITADEL_TIER
+        planet.citadel_level = DAUGHTER_CITADEL_TIER
+        planet.population = 12000
+        planet.treasury = PLANETARY_SPACEFLIGHT_COST + 20000
+        planet.ore_silo = 50000
+        planet.natives = None
+        self.kernel.cycle_count = zlib.crc32(planet.id.encode()) % 25
+        for sec in self.kernel.sectors.values():          # shipyards enough to keep another hull in service
+            for p in sec.planets:
+                if p.population > 0 and not p.natives:
+                    p.citadel_level = max(p.citadel_level, DAUGHTER_CITADEL_TIER)
 
         # Assign an indigenous civilization (e.g. Stillcold)
         pol_spec = FOUNDING_POLITIES[5]  # Stillcold (cryocoherens-still, biotic)
@@ -143,6 +148,11 @@ class TestGalacticSpawningPipeline(unittest.TestCase):
         malakor = self.kernel.captains["ai_malakor"]
         self.assertEqual(malakor.personality, AIPersonality.PIRATE)
 
+        from xylarium.config import DAUGHTER_CITADEL_TIER
+        for sec in self.kernel.sectors.values():          # shipyards enough to keep another hull in service
+            for p in sec.planets:
+                if p.population > 0 and not p.natives:
+                    p.citadel_level = max(p.citadel_level, DAUGHTER_CITADEL_TIER)
         # Remove any existing marshals
         for cid, c in list(self.kernel.captains.items()):
             if "Marshal" in c.name or "Hunter" in c.name:
@@ -159,8 +169,9 @@ class TestGalacticSpawningPipeline(unittest.TestCase):
         self.assertEqual(marshal_cap.metabolism, "plasmic")
 
     def test_spawning_cap_safeguard(self):
-        """Simulation honors MAX_AI_CAPTAINS cap to preserve execution throughput."""
-        # Artificially fill captain roster up to MAX_AI_CAPTAINS
+        """No more autonomous captains than the galaxy's shipyards keep in service."""
+        from xylarium.kernel import populace
+        cap_now = populace.ai_capacity(self.kernel)
         dummy_ship = Ship(
             ship_type="Scout Ship",
             cargo=CargoHold(capacity=30),
@@ -168,7 +179,7 @@ class TestGalacticSpawningPipeline(unittest.TestCase):
             max_shields=100,
             fighters=10,
         )
-        for i in range(len(self.kernel.captains), MAX_AI_CAPTAINS + 5):
+        for i in range(len(self.kernel.captains), len(self.kernel.captains) + cap_now + 5):
             cid = f"dummy_cap_{i}"
             self.kernel.captains[cid] = Captain(
                 id=cid,
@@ -181,7 +192,7 @@ class TestGalacticSpawningPipeline(unittest.TestCase):
                 turns_left=100,
             )
 
-        self.assertGreaterEqual(len(self.kernel.captains), MAX_AI_CAPTAINS)
+        self.assertFalse(populace.room_for_ai(self.kernel))
 
         # Vector 1 should refuse
         vane = self.kernel.captains["ai_vane"]

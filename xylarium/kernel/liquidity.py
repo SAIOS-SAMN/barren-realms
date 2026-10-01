@@ -13,7 +13,12 @@ policy rate) and withdraws when it falls short - judged by the one decision rule
 volatile pool pays well and draws depth; depth lowers both volatility and yield until providing earns just the
 rate. Nobody sets the depth.
 
-The genesis reserves belong to the exchange itself ("isse"). Money only moves between holders and pools: a
+The genesis reserves belong to the money authorities (held as "isse": the Reserve's SOL and each regional central
+bank's own money), and they too are a provider: when providing pays less than waiting they withdraw their stake to
+the Reserve and the bank, and put it back when a pool's yield draws it. No fee floor or ceiling: a pool's price is
+what its providers need in its two monies, but never more than the traders' other road - turning money into goods
+and back at the ports' own spreads. A hyperinflating money's bank rate and widening spreads drive its fee up by
+themselves; a deep idle pool's providers leave until what remains earns its keep at the fee traders will pay. Money only moves between holders and pools: a
 deposit or withdrawal is a transfer, never a mint or burn.
 """
 
@@ -23,7 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from xylarium.kernel import decide, fx as fx_mod, laws
 
 ISSE = "isse"
-PROVIDE_SHARE = 0.25          # of a provider's spare it commits to one pool in a quarter (a position, not all-in)
+PROVIDE_SHARE = 0.25          # of a provider's spare (or position) it moves in one pool in a quarter: not all at once
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -53,22 +58,59 @@ def position_value_sol(kernel: Any, holder: str) -> float:
 
 
 # ---------------------------------------------------------------------- reading the pools
-FEE_FLOOR = 0.003      # the exchange's own cost of a swap (its desk, its ledger): it never prices below it
-FEE_CEILING = 0.05     # past a twentieth, traders route around it (the cross pairs, goods themselves)
+def hurdle(kernel: Any, cur: str) -> float:
+    """What a provider of the SOL/cur pool could earn a quarter by waiting instead: half its capital is in each
+    money, each earning its own bank's rate."""
+    return 0.5 * (decide.rate(kernel, "SOL") + decide.rate(kernel, cur))
+
+
+def spread(kernel: Any, cur: str) -> Optional[float]:
+    """What turning this money into goods and back costs at its own ports: the median bid-ask spread over the goods
+    its ports trade (1 - bid/ask). None where no port trades in it."""
+    from xylarium.kernel.economy import EconomyManager
+    spreads = []
+    for sec in kernel.sectors.values():
+        port = sec.port
+        if port is None or port.currency != cur:
+            continue
+        for comm, sells in list((port.sells or {}).items()):
+            if not sells:
+                continue
+            bid, ask = EconomyManager.get_unit_prices(port, comm)
+            if bid > 0 and ask > 0:
+                spreads.append(max(0.0, 1.0 - bid / ask))
+    if not spreads:
+        return None
+    spreads.sort()
+    return spreads[len(spreads) // 2]
+
+
+def goods_route(kernel: Any, cur: str) -> Optional[float]:
+    """A trader's alternative to swapping SOL for `cur`: buy goods in one money and sell them for the other - half
+    each money's spread. The exchange cannot charge more than this: past it, trade goes through the goods."""
+    a, b = spread(kernel, "SOL"), spread(kernel, cur)
+    if a is None or b is None:
+        return None
+    return 0.5 * (a + b)
 
 
 def price_service(kernel: Any, cur: str, volume_q: float) -> float:
     """The exchange prices a pool's swaps at what makes providing its liquidity break even - fee yield equal to the
-    bank rate plus the impermanent loss (sigma^2/8) - moving a quarter of the way (in log) each quarter, as
-    any seller feels out a price; within its own floor (cost) and ceiling (where it loses the trade)."""
+    providers' hurdle plus the impermanent loss (sigma^2/8) - moving a quarter of the way (in log) each quarter, as
+    any seller feels out a price. No floor and no ceiling: the local law (its rates) and the pool's own trade set it."""
     st = stats(kernel)
     fxm = kernel.fx_market
     sigma = st["vol"].get(cur, 0.0)
-    need = decide.rate(kernel, "SOL") + sigma * sigma / 8.0
-    breakeven = need * _value_sol(kernel, cur) / max(1.0, volume_q)
-    old = fxm.fee(cur)
-    new = math.exp(math.log(old) + 0.25 * (math.log(max(1e-6, breakeven)) - math.log(old)))
-    fxm.fees[cur] = round(min(FEE_CEILING, max(FEE_FLOOR, new)), 5)
+    need = hurdle(kernel, cur) + sigma * sigma / 8.0
+    charge = need * _value_sol(kernel, cur) / max(1.0, volume_q)       # per unit of value moved
+    breakeven = charge / (1.0 + charge)       # the same charge as a share of what a trader puts in: always below 1
+    route = goods_route(kernel, cur)
+    if route is not None:
+        breakeven = min(breakeven, route)     # what the traders' other road costs bounds it; depth adjusts to it
+    old = min(1.0 - 1e-9, max(1e-9, fxm.fee(cur)))
+    odds = math.log(old / (1.0 - old))        # felt out in log-odds, a quarter of the way each quarter
+    odds += 0.25 * (math.log(max(1e-9, breakeven) / max(1e-9, 1.0 - breakeven)) - odds)
+    fxm.fees[cur] = round(1.0 / (1.0 + math.exp(-odds)), 7)
     return fxm.fees[cur]
 
 
@@ -163,6 +205,16 @@ def _providers(kernel: Any) -> List[Tuple[str, Any, str]]:
 
 def _purse(kernel: Any, who: Any, kind: str, cur: str):
     """(sol available, local available, take_sol, take_local, give_sol, give_local) for a provider."""
+    if kind == "authority":
+        fed = kernel.federal_reserve
+        bank = kernel.banking.banks.get(cur)
+
+        def take_sol(n): fed.treasury -= n
+        def give_sol(n): fed.treasury += n
+        def take_local(n): bank.reserves -= n
+        def give_local(n): bank.reserves += n
+        local = max(0, bank.reserves - kernel.banking.reserve_floor(bank)) if bank is not None else 0
+        return max(0, fed.treasury), local, take_sol, take_local, give_sol, give_local
     if kind == "captain":
         def take_sol(n): who.credits -= n
         def give_sol(n): who.credits += n
@@ -182,6 +234,8 @@ def _purse(kernel: Any, who: Any, kind: str, cur: str):
 def _spare(kernel: Any, who: Any, kind: str) -> float:
     """SOL a provider can commit: a captain's cash beyond its working reserve, a company's beyond a quarter's
     operating needs (its last quarter's revenue)."""
+    if kind == "authority":
+        return float(max(0, kernel.federal_reserve.treasury))
     if kind == "captain":
         from xylarium.config import AI_INVEST_RESERVE
         from xylarium.kernel.cognition import temperament
@@ -193,17 +247,22 @@ def quarter(kernel: Any) -> List[str]:
     read(kernel)
     st = stats(kernel)
     fxm = kernel.fx_market
-    for holder, who, kind in _providers(kernel):
+    providers = _providers(kernel) + [(ISSE, None, "authority")]
+    for holder, who, kind in providers:
         m = decide.mind_of_captain(kernel, who) if kind == "captain" else decide.mind(kernel, "biotic")
         spare = _spare(kernel, who, kind)
         options = []
         for cur in fxm.pools:
-            excess = net_yield(kernel, cur) - decide.rate(kernel, "SOL")
+            if kind == "authority" and kernel.banking.banks.get(cur) is None:
+                continue
+            excess = net_yield(kernel, cur) - hurdle(kernel, cur)
             held = st["positions"][cur].get(holder, 0.0)
             if excess < 0 and held > 0:
                 # holding loses against waiting: the position's shortfall over the horizon is the reason to leave
                 loss = decide.worth(kernel, -excess * share_value_sol(kernel, cur, held), m)
-                options.append(decide.option(f"withdraw:{cur}", 0.0, loss, cur=cur, shares=held))
+                # positions unwind as they were built, a share a season: a pool is thinned, never emptied
+                options.append(decide.option(f"withdraw:{cur}", 0.0, loss * PROVIDE_SHARE, cur=cur,
+                                             shares=held * PROVIDE_SHARE))
             if excess > 0 and spare > 0:
                 sol_have, local_have, *_ = _purse(kernel, who, kind, cur)
                 rate = fxm.rate(cur)

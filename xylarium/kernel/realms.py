@@ -107,6 +107,10 @@ def found(kernel: Any, key: Tuple[str, str], worlds: List[Any], note: str = "") 
              "worlds": [w.id for w in worlds], "systems": [], "founded": kernel.cycle_count, "unrest": {}}
     realms(kernel)[rid] = realm
     stats(kernel)["founded"] += 1
+    from xylarium.kernel import primordial
+    primordial.first(kernel, "first_realm", realm["name"])
+    if len(worlds) > 1:
+        primordial.first(kernel, "first_multiworld_realm", realm["name"])
     chron = getattr(kernel, "chronicle", None)
     if chron is not None and kernel.cycle_count > 0:
         chron.record(kernel, "REALM", seat.id, realm["name"], f"The Founding of the {realm['name']}",
@@ -223,8 +227,9 @@ def genesis(kernel: Any) -> None:
     """The baseline board: every sovereign people is a realm from the first day, with historical borders - the
     systems within CHARTER_REACH jumps of its capital (the largest peoples draw theirs first), outside great powers'
     territory and the Federation's core."""
-    if not REALMS_AT_GENESIS:
-        return
+    from xylarium.kernel import primordial
+    if not REALMS_AT_GENESIS or primordial.is_primordial(kernel):
+        return                                   # a primordial galaxy draws its realms as they arise
     quarter(kernel, genesis=True)
     fm = kernel.factions
     taken = set(claims(kernel))

@@ -172,8 +172,8 @@ def _targets(kernel: Any, planet: Any, food: str) -> List[Tuple[float, Any, Any,
     for sid, d in hops.items():
         sec = kernel.sectors[sid]
         for w in sec.planets:
-            if w is planet or people_of(w) == me or getattr(w, "natives", None):
-                continue
+            if w is planet or people_of(w) == me or getattr(w, "natives", None) or relations.family(kernel, me, people_of(w)):
+                continue                          # nor its patron, its tributaries, or anyone under the same root
             n = staples.surplus(kernel, w, food)
             if n > 0:
                 out.append((n / (1.0 + d), w, None, n))
@@ -189,8 +189,9 @@ def _strength(planet: Any) -> int:
     return max(0, int(planet.garrison_troops or 0)) + max(0, int(planet.fighters or 0))
 
 
-def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None) -> Optional[str]:
-    """A hungry world takes its staple from the richest holder in its reach - if it wins the fight."""
+def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plunder: bool = False) -> Optional[str]:
+    """A hungry world takes its staple from the richest holder in its reach - if it wins the fight. A fed one may
+    plunder: when the take, at its odds, is worth more to its council than the troops it expects to lose."""
     from xylarium.kernel import law
     st = stats(kernel)
     food = staples.of(kernel, planet)
@@ -200,18 +201,30 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None) -> Op
         gap = biosphere.consumption(planet) * _quarter()
     want = int(gap * SUSTENANCE_RUNWAY_QUARTERS)
     targets = _targets(kernel, planet, food)
-    if not targets or want <= 0:
+    if not targets or (want <= 0 and not plunder):
         return None
     _, victim, port, avail = targets[0]
     attack = _strength(planet)
     if victim is not None:
-        defend = _strength(victim)
+        defend = _strength(victim) + int(relations.shield(kernel, victim))     # its patron stands in the line
         where = kernel.sectors[victim.sector_id]
     else:
         where = kernel.sectors[port.sector_id]
         defend = int(100 * law.presence(kernel, where)) + 10
     if attack <= 0:
         return None
+    if plunder:
+        from xylarium.config import COMMODITY_CONFIG, PRICE_LEVEL, SURFACE_TROOP_RECRUIT_COST
+        from xylarium.kernel import decide
+        want = avail
+        level = PRICE_LEVEL.get(planet.currency, 1.0)
+        gain = attack / (attack + defend) * avail * COMMODITY_CONFIG.get(food, {}).get("base_price", 20) * level
+        loss = 0.1 * defend * SURFACE_TROOP_RECRUIT_COST * level
+        m = decide.mind_of_planet(kernel, planet)
+        if decide.choose(kernel, [decide.option("plunder", loss, gain)], m, planet.id, "plunder") is None:
+            return None
+        st["plunders"] = st.get("plunders", 0) + 1
+    st["raid_attempts_q"] = st.get("raid_attempts_q", 0) + 1
     # both sides bleed in proportion to the other's strength (Lanchester's linear law, a tenth per raid)
     planet.garrison_troops = max(0, planet.garrison_troops - int(0.1 * defend))
     if victim is not None:
@@ -248,6 +261,8 @@ def _war(kernel: Any, planet: Any, me: str, them: str, food: str, take: int, sec
     if war is None:
         war = st["wars"][key] = {"a": me, "b": them, "since": kernel.cycle_count, "raids": 0, "seized": 0,
                                  "staple": food}
+        from xylarium.kernel import primordial
+        primordial.first(kernel, "first_war", key)
         st["wars_begun"] += 1
         chron = getattr(kernel, "chronicle", None)
         if chron is not None:
@@ -345,6 +360,20 @@ def quarter(kernel: Any) -> List[str]:
                 log = raid(kernel, planet, g)
                 if log:
                     logs.append(log)
+    # the fed may still prey on the weak where their ships reach - a choice, weighed like any other
+    from xylarium.kernel import introspect
+    for planet, g in gauges:
+        if g["state"] in HUNGRY or not yards(planet) or not _council(kernel, planet) or \
+                introspect.restrained(kernel, planet):
+            continue
+        log = raid(kernel, planet, g, plunder=True)
+        if log:
+            logs.append(log)
+    # the measured rate at which worlds attack, a season (what every people reads as its neighbours' threat)
+    hist = st.setdefault("raid_rate_hist", [])
+    hist.append(st.get("raid_attempts_q", 0) / max(1, len(gauges)))
+    del hist[:-4]
+    st["raid_attempts_q"] = 0
     logs += _peace(kernel)
     return logs
 
@@ -391,7 +420,7 @@ def summary(kernel: Any) -> Dict[str, Any]:
             "hungry_quarters": st["hungry_quarters"], "exodus": st["exodus"]}
 
 
-from xylarium.kernel import state  # noqa: E402
+from xylarium.kernel import relations, state  # noqa: E402
 from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
 
 register_subsystem(Subsystem(

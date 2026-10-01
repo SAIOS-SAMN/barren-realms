@@ -258,15 +258,13 @@ class FXMarket:
         return sol
 
     def expected_depreciation(self, kernel: Any, cur: str) -> float:
-        """A holder's forecast of how fast this money loses value against SOL a quarter: the mean log change of
-        its quarter-end rate over the last two years (liquidity.py reads them)."""
-        import math as _m
-        from xylarium.kernel import liquidity
-        hist = liquidity.stats(kernel)["rates"].get(cur, [])
-        if len(hist) < 2:
+        """A holder's forecast of how fast this money loses value against SOL a quarter: relative purchasing power -
+        the gap between its measured inflation and SOL's (prices.py). A reading of fundamentals, not of the rate's
+        own recent path, so a fall does not feed on itself."""
+        if kernel is None:
             return 0.0
-        steps = [_m.log(b / a) for a, b in zip(hist, hist[1:]) if a > 0 and b > 0]
-        return sum(steps) / len(steps) if steps else 0.0
+        from xylarium.kernel import prices
+        return prices.inflation(kernel, cur) - prices.inflation(kernel, SOL)
 
     def advantage(self, kernel: Any, cur: str) -> float:
         """Uncovered interest parity, as a holder sees it: what this money pays a quarter (its central bank's
@@ -276,17 +274,23 @@ class FXMarket:
         return kernel.banking.paid_rate(cur) - self.expected_depreciation(kernel, cur)
 
     def share_to_convert(self, kernel: Any, captain: Any, cur: str) -> float:
-        """How much of a balance a holder converts to SOL: none while holding pays; past that, a share growing with
-        the shortfall measured in its own judgement's error (laws.cognition noise x the money's volatility) - so
-        holders with different minds and seen through a noisy market do not all move at once."""
+        """How much of a balance a holder converts to SOL. Converting costs the pool's fee now; holding costs the
+        expected shortfall every quarter of the holder's own horizon. It converts nothing while holding is cheaper
+        and a share growing with how far it is past that - each mind seeing the shortfall through its own error,
+        so holders do not all move at once."""
         import math as _m
         import random as _r
-        from xylarium.kernel import laws, liquidity
+        from xylarium.kernel import decide, laws, liquidity
         adv = self.advantage(kernel, cur)
         vol = max(1e-4, liquidity.stats(kernel)["vol"].get(cur, 0.0)) if kernel is not None else 1.0
-        noise = laws.cognition(getattr(captain, "metabolism", None) or "biotic")["noise"]
-        seen = adv + _r.Random(f"fx:{captain.id}:{getattr(kernel, 'cycle_count', 0)}").gauss(0.0, noise * vol)
-        return 0.0 if seen >= 0 else 1.0 - _m.exp(seen / vol)
+        m = decide.mind_of_captain(kernel, captain) if kernel is not None else laws.cognition("biotic")
+        seen = adv + _r.Random(f"fx:{captain.id}:{getattr(kernel, 'cycle_count', 0)}").gauss(0.0, m["noise"] * vol)
+        if seen >= 0:
+            return 0.0
+        horizon = laws.horizon(m["noise"], decide.BASE_HORIZON_QUARTERS)
+        lost = laws.present_value(-seen, horizon, 0.0)            # what a unit held loses over the horizon
+        fee = self.fee(cur)
+        return 0.0 if lost <= fee else 1.0 - _m.exp(-(lost - fee) / max(1e-3, fee))
 
     def repatriate(self, captain: Any, threshold_sol: float, keep: Optional[set] = None, kernel: Any = None) -> int:
         """Converts foreign balances worth more than ``threshold_sol`` back into SOL - except the money of the

@@ -16,7 +16,6 @@ from xylarium.config import (
     SPECIALIZED_HULLS,
     VC_SYNDICATES,
     SHIP_CATALOG,
-    MAX_AI_CAPTAINS,
     CORPORATE_ENFORCER_TREASURY,
     CORPORATE_ENFORCER_COST,
     CORPORATE_ENFORCER_COOLDOWN,
@@ -942,11 +941,8 @@ class MarketManager:
     def _local_price_level(currency: str) -> float:
         """What goods cost in local money: genesis price level with damped inflation pass-through.
         Contracts are priced here, never at the live rate, so depreciation can't feed on itself."""
-        from xylarium.kernel.fx import ACTIVE_FX
-        level = PRICE_LEVEL.get(currency, 1.0)
-        if currency != "SOL" and ACTIVE_FX is not None:
-            level *= ACTIVE_FX.price_level_drift(currency) ** FX_PRICE_PASS_THROUGH
-        return level
+        from xylarium.kernel import prices
+        return prices.level(currency)         # MV = PY, sticky (prices.py)
 
     @staticmethod
     def _fx_rate(currency: str) -> float:
@@ -3416,7 +3412,7 @@ class MarketManager:
                 spawned_names.append(enforcer_name)
 
         # 2. Federal Bounty Hunter Response to Outlaws
-        if kernel.cycle_count > 0 and kernel.cycle_count % 150 == 0 and len(kernel.captains) < MAX_AI_CAPTAINS:
+        if kernel.cycle_count > 0 and kernel.cycle_count % 150 == 0 and populace.room_for_ai(kernel):
             pirates = [c for c in kernel.captains.values() if c.is_ai and c.personality == AIPersonality.PIRATE]
             hunters = [c for c in kernel.captains.values() if c.is_ai and ("Marshal" in c.name or "Hunter" in c.name)]
             if len(pirates) > len(hunters):

@@ -4,6 +4,7 @@ Modeled after Barren Realms Elite (BRE) and Solar Realms Elite (SRE).
 """
 
 import random
+import zlib
 from typing import Dict, Any, Optional
 from xylarium.config import (
     CITADEL_CONFIG,
@@ -11,12 +12,8 @@ from xylarium.config import (
     HOUSEHOLD_INCOME_SHARE,
     COUNCIL_WORKS_SHARE,
     SHIP_CATALOG,
-    MAX_AI_CAPTAINS,
-    PLANETARY_SPACEFLIGHT_CITADEL_TIER,
-    PLANETARY_SPACEFLIGHT_POPULATION,
-    PLANETARY_SPACEFLIGHT_VAULT,
+    PORT_START_TREASURY,
     PLANETARY_SPACEFLIGHT_COST,
-    PLANETARY_SPACEFLIGHT_COOLDOWN,
     CITADEL_UPKEEP,
     COLONY_TAX_PER_CAPITA,
     PRICE_LEVEL,
@@ -711,6 +708,9 @@ class ColonyManager:
         from xylarium.kernel import demography
         if demography.building(planet):
             services_due = int(services_due * (1.0 - COUNCIL_WORKS_SHARE))
+        # Tribute owed to a patron is paid out of tax ahead of services (relations.py sets it aside here)
+        services_due = max(0, services_due - int(soc.get("tribute_tick", 0)))
+        soc["fiscal_acc"] = soc.get("fiscal_acc", 0) + tax_yield            # the season's tax take (relations)
         # Withdrawal takes what the budget can bear (this cycle's tax and a tenth of savings); it does not
         # push a solvent colony into arrears - the authority sees the shortfall and asks again next season
         services_due = min(services_due, max(0, tax_yield + planet.treasury // 10 - upkeep_credits))
@@ -820,28 +820,52 @@ class ColonyManager:
     ) -> Optional[Captain]:
         """
         Vector 2: Planetary Spaceflight (Civiligenesis).
-        When a colony hits Citadel Tier >= 2, population >= 10,000, and treasury >= 15,000 Cr,
-        the civic council commissions an indigenous starship matching their clade taxon.
+        A world whose yards can build a starship (sustenance.yards) commissions one of its own when the trade it
+        would carry - its surplus out, its shortfalls in, at the carrier's share of their value that import
+        orders pay - is worth the hull to its council (decide.py). One hull in service per world.
         """
-        from xylarium.kernel import populace
-        if not kernel or not populace.room_for_captain(kernel):
+        from xylarium.kernel import populace, sustenance
+        if not kernel or getattr(planet, "natives", None) or not sustenance.yards(planet):
             return None
-
-        if planet.citadel_level < PLANETARY_SPACEFLIGHT_CITADEL_TIER:
-            return None
-        if planet.population < PLANETARY_SPACEFLIGHT_POPULATION:
-            return None
-        if planet.treasury < PLANETARY_SPACEFLIGHT_VAULT:
-            return None
-
-        last_launch = getattr(planet, "last_spaceflight_cycle", -999)
-        if kernel.cycle_count - last_launch < PLANETARY_SPACEFLIGHT_COOLDOWN:
-            return None
-
-        # Check if an active indigenous captain from this planet is already roaming
         active_id = getattr(planet, "active_indigenous_captain_id", None)
         if active_id and active_id in kernel.captains:
             return None
+        if not populace.room_for_ai(kernel) or planet.treasury < PLANETARY_SPACEFLIGHT_COST:
+            return None
+        if (kernel.cycle_count % 25) != (zlib.crc32(planet.id.encode()) % 25):
+            return None                                   # the council sits once a season
+        from xylarium.config import COLONY_IMPORT_UNIT_PREMIUM, COMMODITY_CONFIG, PRICE_LEVEL
+        from xylarium.kernel import decide, staples
+        level = PRICE_LEVEL.get(planet.currency, 1.0)
+        food = staples.of(kernel, planet)
+        moved = 0.0
+        for comm in {food, "ORE", *planet.element_reserves.keys()}:
+            base = COMMODITY_CONFIG.get(comm, {}).get("base_price", 0) * level
+            out = staples.surplus(kernel, planet, comm)
+            short = max(0, staples.reserve(kernel, planet, comm) - staples.held(planet, comm)) if comm == food else 0
+            moved += (out + short) * base
+        hull = SHIP_CATALOG.get("Merchant Cruiser", {}).get("holds", 60)
+        carried_q = min(moved, hull * 25 * level * 10)          # what one hull can move in a season
+        worth = decide.worth(kernel, carried_q * (COLONY_IMPORT_UNIT_PREMIUM - 1.0), decide.mind_of_planet(kernel, planet),
+                             planet.currency)
+        # a ship needs a dock: a system with none gets one with its first hull (waystations.found, a transfer)
+        from xylarium.kernel import primordial, waystations
+        sec = kernel.sectors.get(planet.sector_id)
+        dock_sol = 0.0
+        if sec is not None and sec.port is None:
+            rate_sol = kernel.fx_market.rate(planet.currency) if planet.currency != "SOL" else 1.0
+            dock_sol = PORT_START_TREASURY * level / max(1e-9, rate_sol) / 3
+        dock_local = dock_sol * (kernel.fx_market.rate(planet.currency) if planet.currency != "SOL" else 1.0)
+        if planet.treasury < PLANETARY_SPACEFLIGHT_COST + dock_local:
+            return None
+        if decide.choose(kernel, [decide.option("commission_ship", PLANETARY_SPACEFLIGHT_COST + dock_local, worth,
+                                                cash=PLANETARY_SPACEFLIGHT_COST + dock_local, currency=planet.currency)],
+                         decide.mind_of_planet(kernel, planet), planet.id, "ship") is None:
+            return None
+        if dock_sol > 0:
+            kernel.action_logs.append(waystations.found(kernel, sec, planet, dock_sol))
+            primordial.first(kernel, "first_starport", planet.name)
+        primordial.first(kernel, "first_starship", planet.name)
 
         # Deduct commissioning cost (local money). Part of it becomes the crew's operating float,
         # cleared into SOL through the ISSE FX desk; the rest is spent building the vessel.

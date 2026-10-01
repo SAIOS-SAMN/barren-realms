@@ -400,6 +400,10 @@ class ResearchManager:
         from xylarium.kernel.universe import furnish_sectors
         from xylarium.kernel import ledger
         furnish_sectors(kernel.sectors, new_sector_ids, rng, kernel.seed, found_polities=False, force_system=None)
+        from xylarium.kernel import primordial
+        if primordial.is_primordial(kernel):
+            for s_id in new_sector_ids:                 # a primordial cluster has no docks until its peoples build them
+                kernel.sectors[s_id].port = None
         for s_id in new_sector_ids:
             port = kernel.sectors[s_id].port
             if port is not None:
@@ -444,7 +448,7 @@ class ResearchManager:
         self.minted_clusters.append(cluster_index)
         # The frontier is peopled: its most advanced natives already sail its lanes
         from xylarium.kernel import populace
-        for log in populace.seed_cluster(kernel, new_sector_ids):
+        for log in ([] if primordial.is_primordial(kernel) else populace.seed_cluster(kernel, new_sector_ids)):
             if hasattr(kernel, "action_logs"):
                 kernel.action_logs.append(log)
         msg = f"OBSERVATION LAW ENCLOSED: Explorer has crossed the charted frontier! Minted new star cluster '{cluster_name}' (Sectors {start_id:03d}-{end_id:03d}) with {len(new_sector_ids)} sectors."
@@ -487,14 +491,9 @@ class ResearchManager:
                 message="Invalid destination sector coordinate.",
             )
 
-        # Check if destination requires minting the next frontier cluster
-        if destination > 200 and destination not in kernel.sectors:
-            if destination <= 240 and 2 not in self.minted_clusters:
-                self.mint_frontier_cluster(kernel, 2)
-            elif destination <= 280 and 3 not in self.minted_clusters:
-                if 2 not in self.minted_clusters:
-                    self.mint_frontier_cluster(kernel, 2)
-                self.mint_frontier_cluster(kernel, 3)
+        # A fold toward the next cluster's coordinates observes it; nothing further has been seen
+        from xylarium.kernel import observation
+        observation.folding_into(kernel, destination)
 
         if destination not in kernel.sectors:
             return ActionResult(

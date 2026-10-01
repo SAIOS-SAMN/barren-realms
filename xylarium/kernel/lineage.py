@@ -365,11 +365,12 @@ def npc_tick(kernel: Any) -> List[str]:
 
 def _void_breeds_corsairs(kernel: Any) -> Optional[str]:
     """When no outlaw house survives, the Deep Void breeds a new one: a salvaged hull and an empty purse."""
-    from xylarium.config import MAX_AI_CAPTAINS, SHIP_CATALOG
+    from xylarium.config import SHIP_CATALOG
+    from xylarium.kernel import populace
     from xylarium.kernel.models import AIPersonality, CargoHold, Captain, Ship
     alive_outlaws = [h for h in kernel.npc_lineages.values() if h["status"] == "ACTIVE" and h["creed"] == "outlaw"
                      and any(m in kernel.captains for m in h["members"])]
-    if alive_outlaws or sum(1 for c in kernel.captains.values() if c.is_ai) >= MAX_AI_CAPTAINS:
+    if alive_outlaws or not populace.room_for_ai(kernel):
         return None
     lairs = [s for s in kernel.sectors.values() if s.security.value == "ANARCHY" and s.kind == "NULL"
              and not kernel.factions.owner_of(s.id)]

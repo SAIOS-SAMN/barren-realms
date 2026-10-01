@@ -15,9 +15,9 @@ from typing import Any, Callable, Dict, List, Optional
 # and native worlds, the courts of arms and credit, the physical world, crime and law, the lanes, the peoples and
 # what they make and where they travel, and finally who governs what.
 SEASON = [
-    "monetary_policy", "federal_reserve", "banking", "fx_reanchor", "liquidity", "regimes", "alignment", "natives", "sieges",
+    "monetary_policy", "federal_reserve", "banking", "fx_reanchor", "prices", "liquidity", "regimes", "alignment", "natives", "sieges",
     "credit", "geology", "propulsion", "crime", "law", "fibres", "physics", "demography",
-    "fertility", "sustenance", "knowledge", "chemistry", "intellect", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "realms", "government",
+    "fertility", "sustenance", "relations", "knowledge", "chemistry", "intellect", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "observation", "realms", "government",
 ]
 
 

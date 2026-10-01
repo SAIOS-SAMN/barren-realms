@@ -1,9 +1,10 @@
 """
 Xylarium populace: the galaxy grows with the people who play it, and is never empty.
 
-  * AI to balance the humans. The galaxy is designed around a base company of human captains (BASE_HUMANS); every
-    human beyond it makes room for AI_PER_HUMAN more autonomous captains (houses, traders, corsairs), so the lanes
-    stay as busy per explorer as they were designed to be.
+  * Captains are commissioned by the worlds that can build them. Every world with shipyards can keep a hull of its
+    own in service, so the lanes are as busy as the galaxy's industry: few where peoples are still bound to their
+    homeworlds, many where they are spacefaring. Every human beyond the base company (BASE_HUMANS) makes room for
+    AI_PER_HUMAN more, so the lanes stay as busy per explorer as they are by themselves.
   * Room to explore. Every human past the base is owed SYSTEMS_PER_EXPLORER star systems of frontier: when the
     charted galaxy runs short, the next cluster is charted at its edge. New clusters attach to the periphery with
     new sector ids and new warps; no existing system, lane or sector id ever changes.
@@ -15,8 +16,6 @@ Xylarium populace: the galaxy grows with the people who play it, and is never em
 """
 
 from typing import Any, List
-
-from xylarium.config import MAX_AI_CAPTAINS
 
 BASE_HUMANS = 8                 # the human company the galaxy is designed around
 AI_PER_HUMAN = 2                # autonomous captains per human beyond it
@@ -32,14 +31,21 @@ def extra_humans(kernel: Any) -> int:
     return max(0, len(humans(kernel)) - BASE_HUMANS)
 
 
+def shipyards(kernel: Any) -> int:
+    """Peopled worlds whose yards can build and keep a starship (sustenance.yards)."""
+    from xylarium.kernel import sustenance
+    return sum(1 for s in kernel.sectors.values() for p in s.planets
+               if p.population > 0 and not getattr(p, "natives", None) and sustenance.yards(p))
+
+
 def ai_capacity(kernel: Any) -> int:
-    """How many autonomous captains the galaxy carries for the humans it has."""
-    return MAX_AI_CAPTAINS + AI_PER_HUMAN * extra_humans(kernel)
+    """How many autonomous captains the galaxy's industry keeps in service: a hull per shipyard world, and room
+    for the extra humans' company."""
+    return shipyards(kernel) + AI_PER_HUMAN * extra_humans(kernel)
 
 
 def captain_capacity(kernel: Any) -> int:
-    """Total captains (for checks that count everyone): the AI capacity plus the extra humans themselves."""
-    return ai_capacity(kernel) + extra_humans(kernel)
+    return ai_capacity(kernel) + len(humans(kernel))
 
 
 def room_for_ai(kernel: Any) -> bool:
@@ -47,7 +53,8 @@ def room_for_ai(kernel: Any) -> bool:
 
 
 def room_for_captain(kernel: Any) -> bool:
-    return len(kernel.captains) < captain_capacity(kernel)
+    """Room for one more autonomous captain (humans never count against the hulls the galaxy builds itself)."""
+    return room_for_ai(kernel)
 
 
 def systems(kernel: Any) -> int:

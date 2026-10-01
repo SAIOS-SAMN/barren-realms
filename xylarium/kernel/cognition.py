@@ -1101,7 +1101,7 @@ class SeatSurvive:
                 lot = min(cap, max(10, int(spare * min(0.6, share) // max(1, c.share_price))))
                 if lot * c.share_price <= spare:
                     options.append(decide.option("buy_shares", lot * c.share_price, lot * per_share,
-                                                 ticker=c.ticker, shares=lot))
+                                                 ticker=c.ticker, shares=lot, cash=lot * c.share_price))
         # D. what it holds and no longer believes in, it sells; a company in distress priced above its estate it
         #    may short; a short whose bet is spent it covers. Every holding is worth the greater of its dividends
         #    over the horizon and its share of the estate (liquidation.valuation) - the same figure the market reads.

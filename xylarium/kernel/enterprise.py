@@ -374,6 +374,8 @@ def found(kernel: Any, planet: Any, out: str, batches: int, founder: str = "peop
                            "founder_shares": int(shares * FOUNDER_SHARE), "since": kernel.cycle_count,
                            "losses": 0}
     st["founded"] += 1
+    from xylarium.kernel import primordial
+    primordial.first(kernel, "first_firm", name)
     return f"[ENTERPRISE] {name} ({ticker}) incorporated on {planet.name}: {batches} batches of {out} a quarter."
 
 
@@ -460,7 +462,8 @@ def convert(kernel: Any, comp: Any) -> Optional[str]:
         return None
     m = decide.mind_of_planet(kernel, planet)
     worth = decide.worth(kernel, econ["margin"] * batches - upkeep_q(planet, batches), m, planet.currency)
-    if decide.choose(kernel, [decide.option("convert_firm", 2 * plant_cost(planet, batches), worth)], m,
+    if decide.choose(kernel, [decide.option("convert_firm", 2 * plant_cost(planet, batches), worth,
+                                            cash=2 * plant_cost(planet, batches), currency=planet.currency)], m,
                      comp.ticker, "convert") is None:
         return None
     # committed: its cash, all of it in its world's money - what it holds abroad comes home through the exchange
@@ -550,7 +553,8 @@ def _consider_founding(kernel: Any, planet: Any) -> Optional[str]:
         return None
     m = decide.mind_of_planet(kernel, planet)
     worth = decide.worth(kernel, econ["margin"] * batches - upkeep_q(planet, batches), m, planet.currency)
-    if decide.choose(kernel, [decide.option("found_firm", capital, worth)], m, planet.id, "found") is None:
+    if decide.choose(kernel, [decide.option("found_firm", capital, worth, cash=capital, currency=planet.currency)],
+                     m, planet.id, "found") is None:
         return None
     return found(kernel, planet, out, batches)
 
@@ -571,7 +575,8 @@ def _consider_growth(kernel: Any, comp: Any, rec: Dict[str, Any]) -> None:
         return
     m = decide.mind_of_planet(kernel, planet)
     worth = decide.worth(kernel, econ["margin"] * add - upkeep_q(planet, add), m, planet.currency)
-    if decide.choose(kernel, [decide.option("grow_firm", cost, worth)], m, comp.ticker, "grow") is None:
+    if decide.choose(kernel, [decide.option("grow_firm", cost, worth, cash=cost, currency=planet.currency)], m,
+                     comp.ticker, "grow") is None:
         return
     from xylarium.kernel.colony import ColonyManager
     comp.home_cash -= int(cost)

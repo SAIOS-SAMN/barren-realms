@@ -129,6 +129,7 @@ from xylarium.kernel import introspect as introspect_mod  # noqa: F401  (registe
 from xylarium.kernel import enterprise as enterprise_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import chemistry as chemistry_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import waystations as waystations_mod, liquidation as liquidation_mod  # noqa: F401  (register)
+from xylarium.kernel import observation as observation_mod, primordial as primordial_mod, relations as relations_mod, prices as prices_mod  # noqa: F401
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
@@ -146,14 +147,14 @@ class GameKernel:
     Can be run locally, headless, or wrapped in network protocols.
     """
 
-    def __init__(self, seed: int = 42):
+    def __init__(self, seed: int = 42, genesis: str = "settled"):
         self.seed = seed
         self.sectors: Dict[int, Sector] = {}
         self.captains: Dict[str, Captain] = {}
         self.event_bus = EventBus()
         self.cycle_count: int = 0
         self.action_logs: deque[str] = deque(maxlen=20)
-        self.state: Dict[str, Any] = {}          # each subsystem's record (state.py), saved whole
+        self.state: Dict[str, Any] = {"genesis": {"mode": genesis}}   # each subsystem's record, saved whole
         self.caches: Dict[str, Any] = {}         # memoized derived values (cache.py), never saved
         self.graph_version: int = 0              # advances whenever the warp graph changes (topology.py)
         self.market_manager = MarketManager()
@@ -202,9 +203,13 @@ class GameKernel:
     def initialize_universe(self, seed: int = 42) -> None:
         """Bootstrap universe sectors, AI rivals, and initial economy."""
         self.sectors = generate_universe(total_sectors=TOTAL_SECTORS, seed=seed)
-        ai_captains = AIManager.create_ai_captains()
-        self.market_manager.spawn_population_enterprises(self)
-        self.market_manager.generate_freight_contracts(self)
+        primordial = primordial_mod.is_primordial(self)          # every people still on its homeworld
+        ai_captains = {} if primordial else AIManager.create_ai_captains()
+        if primordial:
+            primordial_mod.settle(self)
+        else:
+            self.market_manager.spawn_population_enterprises(self)
+            self.market_manager.generate_freight_contracts(self)
 
         for c_id, ai_cap in ai_captains.items():
             self.captains[c_id] = ai_cap
@@ -237,7 +242,8 @@ class GameKernel:
                         break
 
         # The great powers: the Aurelian Imperium and the Choir of the Pyre take their seats
-        self.factions.found_great_powers(self, seed)
+        if not primordial:
+            self.factions.found_great_powers(self, seed)
         self.governance_manager.bind(self, genesis=True)          # the federal treasury is the Federation's vault
         government_mod.enrol_founders(self)
         subsystem.run_genesis(self)                                # the baseline board's realms and their claims
@@ -503,15 +509,10 @@ class GameKernel:
             captain.zones_entered.append(zone)
             ExperienceManager.award(captain, "navigation", XP_RISKIER_ZONE, self)
 
-        # Observation Law: Approaching deep perimeter charters next star cluster
-        if destination in [98, 99, 100] and 2 not in self.research_manager.minted_clusters:
-            ok, mint_msg, _ = self.research_manager.mint_frontier_cluster(self, 2)
-            if ok:
-                logs.append(mint_msg)
-        elif destination in [238, 239, 240] and 3 not in self.research_manager.minted_clusters:
-            ok, mint_msg, _ = self.research_manager.mint_frontier_cluster(self, 3)
-            if ok:
-                logs.append(mint_msg)
+        # Observation: a ship on the charted edge sees the cluster beyond (observation.py)
+        seen = observation_mod.arrived(self, destination)
+        if seen:
+            logs.append(seen)
 
         # Check for sovereign sector customs tariff
         tariff_pct = 0
@@ -1731,6 +1732,9 @@ class GameKernel:
         so SOL keeps circulating instead of vanishing.
         """
         port = sector.port if sector is not None else None
+        if sol_amount > 0 and port is None:                  # no starport to earn it: the Reserve provides it
+            ledger_mod.pay_service(sol_amount, institution="unported_service")
+            return
         if port is None or sol_amount <= 0:
             return
         if port.currency != "SOL":
@@ -2326,10 +2330,14 @@ class GameKernel:
         if self.cycle_count % CHRONICLE_ERA_INTERVAL == 0:
             chronicle_mod.galactic_history(self)
 
-        # 1. AI Rival turns
-        for c_id, ai_cap in list(self.captains.items()):
-            if ai_cap.is_ai:
-                AIManager.execute_turn(self, ai_cap)
+        # 1. AI Rival turns (beyond the engine's compute budget they act in rotation)
+        from xylarium.config import AI_TURN_BUDGET
+        ais = [c for c in self.captains.values() if c.is_ai]
+        if len(ais) > AI_TURN_BUDGET:
+            start = (self.cycle_count * AI_TURN_BUDGET) % len(ais)
+            ais = (ais + ais)[start:start + AI_TURN_BUDGET]
+        for ai_cap in ais:
+            AIManager.execute_turn(self, ai_cap)
 
         # 2. Ports economic drift
         for sec in self.sectors.values():

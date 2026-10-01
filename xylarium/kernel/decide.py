@@ -70,7 +70,11 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     """The option worth most over its cost, as this mind judges it; None if nothing is worth doing."""
     if not options:
         return None
-    nets = [o["value"] - o["cost"] for o in options]
+    # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
+    # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
+    from xylarium.kernel import prices
+    nets = [o["value"] - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
+                                            o.get("currency", "SOL")) if o.get("cash") else 0.0) for o in options]
     scale = max(abs(n) for n in nets) or 1.0
     rng = _rng("decide", kernel.cycle_count, *salt)
     best, best_seen = None, 0.0
@@ -82,6 +86,13 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
         st = stats(kernel)
         st["chosen"][best["name"]] = st["chosen"].get(best["name"], 0) + 1
     return best
+
+
+def agree(kernel: Any, a: Dict[str, Any], b: Dict[str, Any], ma: Dict[str, float], mb: Dict[str, float],
+          *salt: Any) -> bool:
+    """A contract between two minds: each judges its own side (an option of what it gives and what it gets), and
+    the deal stands only if both, with their own errors of judgement, find it worth more than not dealing."""
+    return choose(kernel, [a], ma, "agree:a", *salt) is not None and choose(kernel, [b], mb, "agree:b", *salt) is not None
 
 
 def stats(kernel: Any) -> Dict[str, Any]:

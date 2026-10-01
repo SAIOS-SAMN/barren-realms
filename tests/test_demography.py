@@ -159,15 +159,20 @@ class TestHouseholdsAndFrontier(unittest.TestCase):
         self.assertGreater(w.household_purse, purse)                 # producers are paid
         self.assertEqual(before, totals(self.kernel))
 
-    def test_settler_pressure_opens_a_new_cluster(self):
-        rm = self.kernel.research_manager
-        rm.minted_clusters = [1, 2, 3] if 3 in rm.minted_clusters else rm.minted_clusters
-        sectors = len(self.kernel.sectors)
-        demography.frontier_state(self.kernel)["pressure"] = 99
-        demography.stats(self.kernel)["last_cluster_cycle"] = -10 ** 6
-        demography.frontier(self.kernel)
-        self.assertGreater(len(self.kernel.sectors), sectors)
-        self.assertEqual(demography.frontier_state(self.kernel)["pressure"], 0)
+    def test_the_universe_grows_only_as_it_is_observed(self):
+        from xylarium.kernel import observation
+        k = self.kernel
+        sectors = len(k.sectors)
+        for _ in range(3):
+            observation.arrived(k, 1)                         # deep in charted space: nothing new is seen
+        self.assertEqual(len(k.sectors), sectors)
+        rim = [s for s in observation.edge(k) if s in k.sectors]
+        self.assertTrue(rim)
+        nxt = observation.next_index(k)
+        self.assertIsNotNone(observation.arrived(k, rim[0]))  # a ship on the edge sees the next cluster
+        self.assertEqual(len(k.sectors), sectors + 40)
+        self.assertIn(nxt, k.research_manager.minted_clusters)
+        self.assertIsNone(observation.folding_into(k, observation.span(nxt + 5).start))   # unseen space stays unseen
 
     def test_players_choose_their_worlds_policy_and_it_persists(self):
         cap = self.kernel.register_player("gov", "Governor")
