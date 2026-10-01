@@ -192,8 +192,22 @@ to excavate.
 
 ### Currencies and the exchanges (`fx.py`, `banking.py`, `ledger.py`)
 Four currencies - SOL (the Federation), FRN (the Frontier), THR (the Imperium), VOID (the Deep Void) - trade
-through constant-product exchange pools and the Galactic ISSE cross pairs. Each region's central bank lends,
-absorbs and runs public works; a clearing union settles between them on a sealed settlement chain.
+through constant-product exchange pools and the Galactic ISSE cross pairs. Nobody holds the pools at a target:
+what they hold is what traders and liquidity providers leave in them, and each exchange prices its own swaps at
+what makes providing its liquidity break even (fee yield = the bank rate + sigma^2/8), between its cost and the
+point where traders route around it.
+
+### Monetary regimes (`regimes.py`) - the polities choose; we are agnostic
+Each currency's polity runs the regime it chooses: a **central bank** (a discretionary rate, deposit interest,
+credit, public works and the output-tracking authority), an **algorithmic** rule (the authority alone, a fixed
+rate), a **reserve** board (money as a claim on its ports' main commodity at par, issued and retired as ports
+arbitrage against it), or **free** money (nobody steers) - and may impose capital controls. Each year a governor
+weighs its regime against the others by what holding each has earned its holders (expected log growth, pooled
+across the universe; untried ways expected to do as money typically does), moving only when the gain clears the
+comparison's standard error. Nothing labels a path right: money grown beyond what output needs is measured as harm
+to the governor, against what its non-exiting holders held (controls make captains non-exiting); restoring it is
+help. A failing money may be helped: luminous neighbours holding SOL lend it, the borrower buys its money back and
+repays when it recovers.
 
 Regional central banks pay their policy rate on the balances captains hold in their money (from reserves above
 their floor), and captains convert regional money to SOL only as far as that rate fails to cover its expected

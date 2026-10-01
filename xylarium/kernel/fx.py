@@ -37,6 +37,7 @@ class FXMarket:
             cur: {"sol": float(s), "local": float(l)} for cur, (s, l) in FX_POOL_SEED.items()
         }
         self.volume_sol: Dict[str, float] = {cur: 0.0 for cur in self.pools}
+        self.fees: Dict[str, float] = {cur: FX_FEE for cur in self.pools}   # each exchange prices its own service
         self.fees_collected: Dict[str, float] = {cur: 0.0 for cur in self.pools}
         # Galactic ISSE: direct cross pairs between federation currencies (no SOL hop), seeded at parity
         from xylarium.config import CROSS_POOL_SEED_SOL_VALUE
@@ -77,30 +78,33 @@ class FXMarket:
         t = FX_TRACE.setdefault(cur, {})
         t[where] = t.get(where, 0.0) + sol_net
 
+    def fee(self, cur: str) -> float:
+        return self.fees.get(cur, FX_FEE)
+
     def swap_sol_to(self, cur: str, sol_in: int) -> int:
         if FX_TRACE is not None:
             self._trace(cur, sol_in)
         p = self.pools[cur]
         k = p["sol"] * p["local"]
-        eff = sol_in * (1 - FX_FEE)
+        eff = sol_in * (1 - self.fee(cur))
         out = int(math.floor(p["local"] - k / (p["sol"] + eff)))
         p["sol"] += sol_in
         p["local"] -= out
         self.volume_sol[cur] += sol_in
-        self.fees_collected[cur] += sol_in * FX_FEE
+        self.fees_collected[cur] += sol_in * self.fee(cur)
         return out
 
     def swap_to_sol(self, cur: str, local_in: int) -> int:
         p = self.pools[cur]
         k = p["sol"] * p["local"]
-        eff = local_in * (1 - FX_FEE)
+        eff = local_in * (1 - self.fee(cur))
         out = int(math.floor(p["sol"] - k / (p["local"] + eff)))
         if FX_TRACE is not None:
             self._trace(cur, -out)
         p["local"] += local_in
         p["sol"] -= out
         self.volume_sol[cur] += out
-        self.fees_collected[cur] += local_in * FX_FEE / self.rate(cur)
+        self.fees_collected[cur] += local_in * self.fee(cur) / self.rate(cur)
         return out
 
     def sol_needed_for(self, cur: str, local_out: int) -> Optional[int]:
@@ -109,7 +113,7 @@ class FXMarket:
             return None  # would drain the pool
         k = p["sol"] * p["local"]
         eff = k / (p["local"] - local_out) - p["sol"]
-        return int(math.ceil(eff / (1 - FX_FEE))) + 1
+        return int(math.ceil(eff / (1 - self.fee(cur)))) + 1
 
     # ------------------------------------------------------------------ Galactic ISSE cross pairs
     def _cross(self, from_cur: str, to_cur: str) -> Optional[Tuple[str, str, str]]:
@@ -131,12 +135,13 @@ class FXMarket:
 
     def quote_via_sol(self, from_cur: str, to_cur: str, amount: int) -> int:
         """What routing through the two federation exchanges (and SOL) would pay, without trading."""
-        def out_of(pool_in: float, pool_out: float, x: float) -> float:
-            return pool_out - pool_in * pool_out / (pool_in + x * (1 - FX_FEE))
-        sol = amount if from_cur == SOL else out_of(self.pools[from_cur]["local"], self.pools[from_cur]["sol"], amount)
+        def out_of(pool_in: float, pool_out: float, x: float, fee: float) -> float:
+            return pool_out - pool_in * pool_out / (pool_in + x * (1 - fee))
+        sol = amount if from_cur == SOL else out_of(self.pools[from_cur]["local"], self.pools[from_cur]["sol"], amount,
+                                                    self.fee(from_cur))
         if to_cur == SOL:
             return int(sol)
-        return int(out_of(self.pools[to_cur]["sol"], self.pools[to_cur]["local"], sol))
+        return int(out_of(self.pools[to_cur]["sol"], self.pools[to_cur]["local"], sol, self.fee(to_cur)))
 
     def swap_cross(self, from_cur: str, to_cur: str, amount: int) -> int:
         key, side_in, side_out = self._cross(from_cur, to_cur)
@@ -208,7 +213,8 @@ class FXMarket:
         credit(captain, to_cur, out)
         return True, (
             f"ISSE FX: exchanged {amount:,} {from_cur} for {out:,} {to_cur} on the {venue} "
-            f"(mid {self.rate(to_cur) / self.rate(from_cur):.4f} {to_cur}/{from_cur}, fee {FX_FEE:.1%})."
+            f"(mid {self.rate(to_cur) / self.rate(from_cur):.4f} {to_cur}/{from_cur}, "
+            f"fee {self.fee(to_cur if to_cur != SOL else from_cur):.2%})."
         ), out
 
     def ensure_local(self, captain: Any, cur: str, needed: int) -> bool:
@@ -303,6 +309,7 @@ class FXMarket:
     def to_dict(self) -> Dict[str, Any]:
         return {"pools": {c: dict(p) for c, p in self.pools.items()},
                 "volume_sol": dict(self.volume_sol), "fees_collected": dict(self.fees_collected),
+                "fees": dict(self.fees),
                 "cross_pools": {k: dict(p) for k, p in self.cross_pools.items()},
                 "cross_volume": dict(self.cross_volume)}
 
@@ -313,6 +320,7 @@ class FXMarket:
             fx.pools[c] = {"sol": float(p["sol"]), "local": float(p["local"])}
         fx.volume_sol.update({c: float(v) for c, v in data.get("volume_sol", {}).items()})
         fx.fees_collected.update({c: float(v) for c, v in data.get("fees_collected", {}).items()})
+        fx.fees.update({c: float(v) for c, v in data.get("fees", {}).items()})
         if "cross_pools" in data:
             fx.cross_pools = {k: {"ca": p["ca"], "cb": p["cb"], "a": float(p["a"]), "b": float(p["b"])}
                               for k, p in data["cross_pools"].items()}

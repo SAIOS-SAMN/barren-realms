@@ -53,11 +53,33 @@ def position_value_sol(kernel: Any, holder: str) -> float:
 
 
 # ---------------------------------------------------------------------- reading the pools
-def read(kernel: Any) -> None:
-    """Each quarter: every pool's fee yield and log-rate volatility, from what happened."""
+FEE_FLOOR = 0.003      # the exchange's own cost of a swap (its desk, its ledger): it never prices below it
+FEE_CEILING = 0.05     # past a twentieth, traders route around it (the cross pairs, goods themselves)
+
+
+def price_service(kernel: Any, cur: str, volume_q: float) -> float:
+    """The exchange prices a pool's swaps at what makes providing its liquidity break even - fee yield equal to the
+    bank rate plus the impermanent loss (sigma^2/8) - moving a quarter of the way (in log) each quarter, as
+    any seller feels out a price; within its own floor (cost) and ceiling (where it loses the trade)."""
     st = stats(kernel)
     fxm = kernel.fx_market
+    sigma = st["vol"].get(cur, 0.0)
+    need = decide.rate(kernel, "SOL") + sigma * sigma / 8.0
+    breakeven = need * _value_sol(kernel, cur) / max(1.0, volume_q)
+    old = fxm.fee(cur)
+    new = math.exp(math.log(old) + 0.25 * (math.log(max(1e-6, breakeven)) - math.log(old)))
+    fxm.fees[cur] = round(min(FEE_CEILING, max(FEE_FLOOR, new)), 5)
+    return fxm.fees[cur]
+
+
+def read(kernel: Any) -> None:
+    """Each quarter: every pool's fee yield and log-rate volatility, from what happened; the exchange re-prices."""
+    st = stats(kernel)
+    fxm = kernel.fx_market
+    last_vol = st.setdefault("last_volume", {})
     for cur in fxm.pools:
+        vol_now = float(fxm.volume_sol.get(cur, 0.0))
+        volume_q, last_vol[cur] = vol_now - last_vol.get(cur, vol_now), vol_now
         fees = float(fxm.fees_collected.get(cur, 0.0))
         earned = fees - st["last_fees"].get(cur, fees)
         st["last_fees"][cur] = fees
@@ -69,6 +91,8 @@ def read(kernel: Any) -> None:
             logs = [math.log(b / a) for a, b in zip(hist, hist[1:]) if a > 0 and b > 0]
             mean = sum(logs) / len(logs)
             st["vol"][cur] = round(math.sqrt(sum((x - mean) ** 2 for x in logs) / max(1, len(logs) - 1)), 6)
+        if volume_q > 0:
+            price_service(kernel, cur, volume_q)
 
 
 def net_yield(kernel: Any, cur: str) -> float:
@@ -199,7 +223,7 @@ def quarter(kernel: Any) -> List[str]:
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     fxm = kernel.fx_market
-    return {"depth_sol": {c: int(_value_sol(kernel, c)) for c in fxm.pools},
+    return {"depth_sol": {c: int(_value_sol(kernel, c)) for c in fxm.pools}, "fee": dict(fxm.fees),
             "fee_yield_q": dict(st["yield"]), "vol_q": dict(st["vol"]),
             "providers": {c: len([h for h in pos if h != ISSE]) for c, pos in st["positions"].items()},
             "isse_share": {c: round(pos.get(ISSE, 0.0) / max(1e-9, st["shares"][c]), 3)
