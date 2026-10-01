@@ -1537,6 +1537,26 @@ LITHIC_METAL_PER_THOUSAND = 20         # Fe/Ti (or ore/10) a thousand lithic peo
 FERTILITY_CRYO_MAX = 1.3               # Stillcold fission in cold, quiet isolation
 FERTILITY_STRESS = 0.25                # Famine or bombardment in the last season: fertility falls to a quarter
 FERTILITY_STRESS_SEASONS = 1           # ...for this many fiscal quarters after the blow
+# Knowledge (knowledge.py): stocks per people in four domains, in knowledge units - a thousand minds' year of free
+# thought at Earth's temperature. Capabilities are processes whose cost falls along Wright's learning curve with
+# the people's knowledge in their domain; KNOWLEDGE_UNIT is the experience of the first doubling. Nothing unlocks.
+KNOWLEDGE_UNIT = 10
+PROCESSES = {
+    "jump_drive": {"domain": "energy", "name": "Hyper-Dimensional Jump Drive"},
+    "cloaking": {"domain": "information", "name": "Umbral Cloaking Shroud"},
+    "nanite_repair": {"domain": "materials", "name": "Self-Replicating Nanite Drydock"},
+    "bio_synthesis": {"domain": "biology", "name": "Antisymmetric Bio-Synthesizer"},
+    "orbital_foundry": {"domain": "materials", "name": "Zero-G Orbital Megafoundry"},
+    "nursery_K": {"domain": "biology", "name": "artificial gestation"},
+    "nursery_r": {"domain": "biology", "name": "sanitation"},
+    "nursery_lithic": {"domain": "materials", "name": "foundry budding"},
+    "nursery_cryo": {"domain": "energy", "name": "deep refrigeration"},
+    "nursery_plasmic": {"domain": "energy", "name": "magnetic confinement"},
+}
+LEGACY_TECH_PROCESS = {"JUMP_DRIVE": "jump_drive", "CLOAKING_GRID": "cloaking", "NANITE_DRYDOCK": "nanite_repair",
+                       "BIO_SYNTHESIZER": "bio_synthesis", "ORBITAL_FOUNDRY": "orbital_foundry",
+                       "XENOGENESIS": "nursery_K"}
+RESEARCH_POINTS_PER_UNIT = 10          # old research points (relics, anomalies, natives) per knowledge unit
 # Staples: what each metabolism eats. Food is counted in energy-equivalent units - one unit of a people's staple
 # carries the metabolic energy one unit of organics carries a biotic people - so FOOD_PER_THOUSAND is the same need
 # for every people, and real output values every harvest at the price of organics (one food unit). Carbon life eats
@@ -1555,39 +1575,24 @@ FOOD_RAID_ALIGNMENT_SHIFT = 0.01       # each raid of necessity (a civilization'
 RELIEF_ALIGNMENT_SHIFT = 0.01          # shared abundance: giver and receiver each move toward the Light
 RELIEF_LIGHT_THRESHOLD = 0.3           # peoples at least this luminous send their surplus to hungry kin
 # Meaning (mu): a people's collective momentum against the satiation of comfort, a multiplier on fertility
-# in [MEANING_FLOOR, MEANING_CEIL]. mu = 1 + frontier + discovery + rebound, then decayed toward the floor by
-# stagnation. How much of it reaches births is how much a strategy's births are a choice (MEANING_WEIGHT):
+# in [MEANING_FLOOR, MEANING_CEIL], read from state (fertility.meaning: open land in reach, knowledge growth over a
+# generation, births a crisis deferred, comfort with nothing ahead). How much of it reaches births is how much a
+# strategy's births are a choice (MEANING_WEIGHT):
 # a K people decides its family size; an r clutch, a lithic bud or a coronal shearing mostly does not.
 MEANING_FLOOR, MEANING_CEIL = 0.5, 2.0
 MEANING_WEIGHT = {"K": 1.0, "cryo": 0.5, "lithic": 0.25, "plasmic": 0.25, "r": 0.0}
-MEANING_FRONTIER = (0.15, 0.30)        # free worlds this people could live on within MEANING_FRONTIER_HOPS (1 .. 4+),
-MEANING_FRONTIER_HOPS = 2              # ...or the top of the range while its own settler fleet is still news
-# Windows are in standard years (100 cycles): births answer circumstance over a gestation and a season, and a
-# society sates over a decade of comfort, not over a winter.
-MEANING_DISCOVERY = (0.25, 0.10)       # a breakthrough, a new element, a decoded relic: fresh, fading to the end of
-MEANING_DISCOVERY_YEARS = 1            # ...this window
-MEANING_REBOUND = 0.30                 # the baby boom after a famine, bombardment or plague lifts: the births the
-MEANING_REBOUND_YEARS = 2              # ...crisis deferred, recovered over this long
-MEANING_STAGNATION_LUXURY = 0.5        # a comfortable world (luxury access at least this) with no discovery, crisis
-MEANING_STAGNATION_YEARS = 10          # ...or emigration for this long sees mu decay toward the floor (e-folding
-                                       #    over the same span)
 # Nurseries: each strategy's technological leap past its biology - a district built like a habitat, that only
 # works while it is fed. Unfed for a quarter it goes dark and its brood fails (a quarter's births are lost).
 # Inputs in preference order as (commodity, units per unit of need); "FUEL" is the world's own fuel cell.
-# A Tier-3 citadel's engineering builds one; Applied Xenogenesis (research) lets a Tier-2 world build it;
-# an indigenous people needs tech level 3.
+# Nothing gates one: how far it lifts its people's biology is their mastery of the process (knowledge.py), and
+# its inputs fall along the same learning curve.
 NURSERIES = {
-    "K": {"name": "Fertility Centre", "inputs": [("ORGANICS", 1)], "per_thousand": 5,
-          "relief": 0.5},              # artificial wombs: half the luxury and crowding compression lifted
-    "lithic": {"name": "Foundry Nursery", "inputs": [("Fe", 1), ("Ti", 1), ("ORE", 10)], "per_thousand": 2,
-               "heat": 0.75},          # smelted metal to bud from, and the foundry's heat for tectonics
+    "K": {"name": "Fertility Centre", "inputs": [("ORGANICS", 1)], "per_thousand": 5},
+    "lithic": {"name": "Foundry Nursery", "inputs": [("Fe", 1), ("Ti", 1), ("ORE", 10)], "per_thousand": 2},
     "cryo": {"name": "Deep-Cold Vault", "inputs": [("H2O", 1), ("FUEL", 1)], "per_thousand": 1},
     "plasmic": {"name": "Confinement Ring", "inputs": [("H", 1), ("He-3", 1), ("FUEL", 1)], "per_thousand": 1},
-    "r": {"name": "Sanitation Works", "inputs": [("EQUIPMENT", 1), ("ORE", 4)], "per_thousand": 0.5,
-          "r0": 0.8},                  # pumps and filters: transmission falls by a fifth
+    "r": {"name": "Sanitation Works", "inputs": [("EQUIPMENT", 1), ("ORE", 4)], "per_thousand": 0.5},
 }
-NURSERY_CITADEL_TIER = 3
-NURSERY_CIV_TECH = 3
 # Viability: a people sends settler fleets only after sustaining fertility at least VIABILITY_FERTILITY for
 # VIABILITY_QUARTERS consecutive quarters; each fleet carries its clade's seeding kit (SEED_KIT per thousand
 # emigrants, scaled down to what the parent can stock)

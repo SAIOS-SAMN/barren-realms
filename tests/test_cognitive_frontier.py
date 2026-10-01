@@ -10,94 +10,60 @@ import os
 
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.models import ActionType, AIPersonality, SecurityLevel
-from xylarium.kernel.research import TECH_TREE, CosmicAnomaly
+from xylarium.kernel import knowledge
+from xylarium.kernel.research import CosmicAnomaly
 from xylarium.persistence.store import StatePersistence
 from xylarium.client.renderer import TerminalRenderer
 
 
-class TestCognitiveMetabolismAndTechTree(unittest.TestCase):
-    """Test Suite 1: Two-Tier Cognitive Economy & Breakthrough Unlocks."""
+class TestKnowledgeAndCapabilities(unittest.TestCase):
+    """Knowledge accumulates per people; capabilities are mastery along the learning curve - nothing unlocks."""
 
     def setUp(self):
         self.kernel = GameKernel(seed=101)
+        self.kernel.activate()
         self.player = self.kernel.register_player("tester", "Test Captain")
+        self.holder = knowledge.holder_of_captain(self.player)
 
-    def test_commission_active_research(self):
-        """Captains can commission active research breakthrough projects."""
+    def test_inquiry_is_directed_to_a_domain(self):
         res = self.kernel.dispatch(self.player.id, ActionType.RESEARCH_SELECT, tech_key="JUMP_DRIVE")
+        self.assertTrue(res.success)                       # an old capability name points at its domain
+        self.assertEqual(knowledge.stats(self.kernel)["focus"][self.holder], "energy")
+        res = self.kernel.dispatch(self.player.id, ActionType.RESEARCH_SELECT, tech_key="BIOLOGY")
         self.assertTrue(res.success)
-        self.assertEqual(self.player.active_research, "JUMP_DRIVE")
+        self.assertEqual(knowledge.stats(self.kernel)["focus"][self.holder], "biology")
+        self.assertFalse(self.kernel.dispatch(self.player.id, ActionType.RESEARCH_SELECT, tech_key="ALCHEMY?").success)
 
-        # Duplicate commission of already unlocked tech should fail once unlocked
-        self.player.technologies.append("JUMP_DRIVE")
-        res2 = self.kernel.dispatch(self.player.id, ActionType.RESEARCH_SELECT, tech_key="JUMP_DRIVE")
-        self.assertFalse(res2.success)
-
-    def test_planetary_deep_cognition_yields_research(self):
-        """Colonies with luxury element reserves enter Deep Cognition, advancing research."""
-        # Find a planet in the universe and colonize it
+    def test_deep_cognition_turns_a_luxury_into_knowledge(self):
         planet = next(p for s in self.kernel.sectors.values() for p in s.planets)
-        planet.owner_id = self.player.id
-        planet.population = 800
-        planet.morale = 90
-        # Tier 2 Exotic/Luxury elements: Cryogenite, Stelalith, Chitinium, etc.
+        planet.owner_id, planet.population, planet.morale = self.player.id, 800, 90
         planet.element_reserves = {"cryogenite": 5, "stelalith": 3}
-
-        # Commission research
-        self.player.active_research = "BIO_SYNTHESIZER"
-        self.player.research_progress = 0
-
-        # Advance cognitive metabolism
-        initial_cryo = planet.element_reserves["cryogenite"]
-        initial_stela = planet.element_reserves["stelalith"]
+        knowledge.focus(self.kernel, self.holder, "biology")
         self.kernel.research_manager.tick_cognitive_metabolism(self.kernel)
+        self.assertEqual(sum(planet.element_reserves.values()), 7)
+        self.assertAlmostEqual(knowledge.stocks(self.kernel, self.holder)["biology"], 1.5)
 
-        # 1 unit consumed, research advanced by +15 RP
-        curr_total = planet.element_reserves["cryogenite"] + planet.element_reserves["stelalith"]
-        self.assertEqual(curr_total, (initial_cryo + initial_stela) - 1)
-        self.assertEqual(self.player.research_progress, 15)
-
-    def test_research_completion_unlocks_technology(self):
-        """Reaching breakthrough threshold unlocks technology and resets active project."""
-        planet = next(p for s in self.kernel.sectors.values() for p in s.planets)
-        planet.owner_id = self.player.id
-        planet.population = 600
-        planet.morale = 80
-        planet.element_reserves = {"cryogenite": 10}
-
-        self.player.active_research = "BIO_SYNTHESIZER"
-        cost = TECH_TREE["BIO_SYNTHESIZER"]["cost_research"]
-        self.player.research_progress = cost - 10  # 1 tick will push it over
-
+    def test_capabilities_grow_with_mastery(self):
+        self.player.ship.shields, self.player.ship.max_shields = 50, 100
         self.kernel.research_manager.tick_cognitive_metabolism(self.kernel)
-
-        self.assertIn("BIO_SYNTHESIZER", self.player.technologies)
-        self.assertIn("BIO_SYNTHESIZER", planet.technologies)
-        self.assertIsNone(self.player.active_research)
-        self.assertEqual(self.player.research_progress, 0)
-
-    def test_passive_tech_effects(self):
-        """Unlocked technologies exert persistent metabolic and defense benefits."""
-        # 1. Nanite Drydock: repairs shields and replenishes fighters
-        self.player.technologies.append("NANITE_DRYDOCK")
-        self.player.ship.shields = 50
-        self.player.ship.max_shields = 100
-        self.player.ship.fighters = 5
-
+        self.assertEqual(self.player.ship.shields, 50)     # knowing nothing of nanites, nothing repairs
+        knowledge.learn(self.kernel, self.holder, "materials", 70)
+        m = knowledge.captain_mastery(self.kernel, self.player, "nanite_repair")
+        self.assertGreater(m, 0.4)
         self.kernel.research_manager.tick_cognitive_metabolism(self.kernel)
-        self.assertEqual(self.player.ship.shields, 65)  # +15 MW
-        self.assertEqual(self.player.ship.fighters, 6)   # +1 fighter
+        self.assertEqual(self.player.ship.shields, 50 + int(15 * m))
 
-        # 2. Bio-Synthesizer: converts surplus Ore to Organics on colonies
-        planet = next(p for s in self.kernel.sectors.values() for p in s.planets)
-        planet.owner_id = self.player.id
-        planet.ore_silo = 50
-        planet.organics_silo = 20
-        self.player.technologies.append("BIO_SYNTHESIZER")
+    def test_knowledge_fades_unless_renewed(self):
+        knowledge.learn(self.kernel, self.holder, "energy", 100)
+        knowledge.quarter(self.kernel)
+        self.assertLess(knowledge.stocks(self.kernel, self.holder)["energy"], 100)
 
-        self.kernel.research_manager.tick_cognitive_metabolism(self.kernel)
-        self.assertEqual(planet.ore_silo, 45)
-        self.assertEqual(planet.organics_silo, 25)
+    def test_cold_minds_think_deep_and_hot_minds_fast(self):
+        from xylarium.kernel import laws
+        cold, warm, hot = laws.cognition("umbral"), laws.cognition("biotic"), laws.cognition("plasmic")
+        self.assertGreater(cold["depth"], warm["depth"])
+        self.assertGreater(warm["depth"], hot["depth"])
+        self.assertGreater(hot["speed"], warm["speed"])
 
 
 class TestCosmicAnomalies(unittest.TestCase):
@@ -150,7 +116,8 @@ class TestCosmicAnomalies(unittest.TestCase):
         self.assertEqual(a101.status, "SOLVED")
         self.assertEqual(a101.solved_by, self.player.name)
         self.assertEqual(self.player.credits, initial_cr + a101.reward_credits)
-        self.assertIn(a101.reward_tech, self.player.technologies)
+        holder = knowledge.holder_of_captain(self.player)
+        self.assertGreater(knowledge.stocks(self.kernel, holder)[knowledge.discovery_domain(a101.reward_tech)], 0)
 
     def test_investigate_anomaly_catalyst_mode(self):
         """Computational catalyst probe spends credits to decrypt anomaly."""
@@ -167,7 +134,7 @@ class TestCosmicAnomalies(unittest.TestCase):
         )
         self.assertTrue(res.success)
         self.assertEqual(a102.status, "SOLVED")
-        self.assertIn("NANITE_DRYDOCK", self.player.technologies)
+        self.assertGreater(knowledge.captain_mastery(self.kernel, self.player, "nanite_repair"), 0)
 
 
 class TestFrontierObservationLaw(unittest.TestCase):
@@ -209,8 +176,9 @@ class TestFrontierObservationLaw(unittest.TestCase):
 
     def test_jump_warp_drive_navigation(self):
         """Jump Drive allows hyper-dimensional transit and auto-mints frontier space."""
-        self.player.technologies.append("JUMP_DRIVE")
-        self.player.credits = 1000
+        self.kernel.activate()
+        knowledge.learn(self.kernel, knowledge.holder_of_captain(self.player), "energy", 300)
+        self.player.credits = 5000
         self.player.sector_id = 1
 
         # Jump to charted sector 42
@@ -246,27 +214,13 @@ class TestAIMintVsRaid(unittest.TestCase):
         self.kernel = GameKernel(seed=404)
         self.player = self.kernel.register_player("human", "Human Trader")
 
-    def test_ai_captains_commission_personality_research(self):
-        """AI rivals commission breakthrough research tailored to their personality."""
-        voss = self.kernel.captains["ai_voss"]
-        malakor = self.kernel.captains["ai_malakor"]
-        vane = self.kernel.captains["ai_vane"]
-        ironclaw = self.kernel.captains["ai_ironclaw"]
-
-        # Run 1 simulation tick to trigger AI turns
+    def test_ai_captains_direct_inquiry_by_calling(self):
+        """AI rivals point their people's inquiry at the domain their calling lives by."""
         self.kernel.tick_simulation()
-
-        self.assertIsNotNone(voss.active_research)
-        self.assertIn(voss.active_research, ["ORBITAL_FOUNDRY", "BIO_SYNTHESIZER", "NANITE_DRYDOCK"])
-
-        self.assertIsNotNone(malakor.active_research)
-        self.assertIn(malakor.active_research, ["CLOAKING_GRID", "JUMP_DRIVE", "NANITE_DRYDOCK"])
-
-        self.assertIsNotNone(vane.active_research)
-        self.assertIn(vane.active_research, ["JUMP_DRIVE", "BIO_SYNTHESIZER", "ORBITAL_FOUNDRY"])
-
-        self.assertIsNotNone(ironclaw.active_research)
-        self.assertIn(ironclaw.active_research, ["NANITE_DRYDOCK", "CLOAKING_GRID", "JUMP_DRIVE"])
+        focus = knowledge.stats(self.kernel)["focus"]
+        self.assertEqual(focus.get("captain:ai_voss"), "materials")
+        self.assertEqual(focus.get("captain:ai_malakor"), "information")
+        self.assertEqual(focus.get("captain:ai_vane"), "energy")
 
     def test_ai_cracks_relic_in_sector(self):
         """AI captains investigate and solve anomalies when present in sector."""
@@ -287,9 +241,8 @@ class TestCognitiveFrontierPersistenceAndRenderer(unittest.TestCase):
         """ResearchManager, anomalies, and active breakthroughs persist across save/load."""
         kernel1 = GameKernel(seed=505)
         p = kernel1.register_player("persist_tester", "Captain Persist")
-        p.active_research = "CLOAKING_GRID"
-        p.research_progress = 45
-        p.technologies.append("JUMP_DRIVE")
+        kernel1.activate()
+        knowledge.learn(kernel1, knowledge.holder_of_captain(p), "information", 42)
         kernel1.research_manager.mint_frontier_cluster(kernel1, 2)
         kernel1.research_manager.anomalies["ANOM-101"].status = "SOLVED"
 
@@ -303,9 +256,8 @@ class TestCognitiveFrontierPersistenceAndRenderer(unittest.TestCase):
             kernel2 = StatePersistence.load_from_file(filepath)
             self.assertIsNotNone(kernel2)
             p2 = kernel2.get_player("persist_tester")
-            self.assertEqual(p2.active_research, "CLOAKING_GRID")
-            self.assertEqual(p2.research_progress, 45)
-            self.assertIn("JUMP_DRIVE", p2.technologies)
+            kernel2.activate()
+            self.assertAlmostEqual(knowledge.stocks(kernel2, knowledge.holder_of_captain(p2))["information"], 42)
             self.assertIn(2, kernel2.research_manager.minted_clusters)
             self.assertEqual(kernel2.research_manager.anomalies["ANOM-101"].status, "SOLVED")
             self.assertIn(201, kernel2.sectors)
@@ -326,7 +278,7 @@ class TestCognitiveFrontierPersistenceAndRenderer(unittest.TestCase):
         self.assertIn("Federation Core", sec_screen)
 
         tech_screen = TerminalRenderer.render_tech_tree_screen(view)
-        self.assertIn("COGNITIVE ECONOMY", tech_screen)
+        self.assertIn("KNOWLEDGE", tech_screen)
         self.assertIn("Hyper-Dimensional Jump Drive", tech_screen)
 
         a101 = kernel.research_manager.anomalies["ANOM-101"]

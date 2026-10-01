@@ -1499,7 +1499,7 @@ class SeatGrow:
         if not captain.artifacts:
             return None
         relics = [a for a in captain.artifacts if a["kind"] == "TECH_RELIC"]
-        if relics and getattr(captain, "active_research", None):
+        if relics:
             return CognitiveDeed(seat="GROW", action_type=ActionType.STUDY_ARTIFACT, deed_name="STUDY_TECH_RELIC",
                                  target_coordinate=relics[0]["id"], residual_magnitude=1.0,
                                  parameters={"artifact_id": relics[0]["id"]}, ration_cost=1)

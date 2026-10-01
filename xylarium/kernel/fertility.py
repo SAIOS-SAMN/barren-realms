@@ -18,10 +18,10 @@ Reproductive strategy is set by clade (config REPRODUCTIVE_STRATEGY), else by me
   * Plasmic peoples shear off in coronal flares: their fertility follows their star's luminosity and the
     hydrogen well they live in, not their purse.
 
-Meaning (mu) is a people's collective momentum against the satiation of comfort: an open frontier, a fresh
-discovery, the rebound after a crisis lift it; a comfortable world with nothing new, no struggle and no one
-leaving sees it decay toward its floor. It weighs on births as much as a strategy's births are a choice
-(config MEANING_*).
+Meaning (mu) is a people's collective momentum against the satiation of comfort, read from its state: the open
+land in its reach, how fast its knowledge grows over a generation, births a crisis deferred, and comfort with
+nothing ahead of it (meaning()). It weighs on births as much as a strategy's births are a choice
+(config MEANING_WEIGHT).
 
 Every strategy collapses under famine, bombardment or plague: f falls to FERTILITY_STRESS of itself for a season.
 Each strategy's biological ceiling can be lifted by its nursery (nursery.py) while the nursery is fed.
@@ -48,15 +48,7 @@ from xylarium.config import (
     LIGHT_OPTIMUM,
     LITHIC_METAL_PER_THOUSAND,
     MEANING_CEIL,
-    MEANING_DISCOVERY,
-    MEANING_DISCOVERY_YEARS,
     MEANING_FLOOR,
-    MEANING_FRONTIER,
-    MEANING_FRONTIER_HOPS,
-    MEANING_REBOUND,
-    MEANING_REBOUND_YEARS,
-    MEANING_STAGNATION_YEARS,
-    MEANING_STAGNATION_LUXURY,
     MEANING_WEIGHT,
     NURSERIES,
     METABOLISM_STRATEGY,
@@ -117,47 +109,67 @@ def discovered(kernel: Any, planet: Any = None, captain: Any = None) -> None:
 
 
 # ---------------------------------------------------------------------- meaning
-def meaning(kernel: Any, planet: Any) -> Tuple[float, Dict[str, float]]:
-    """mu = 1 + frontier + discovery + rebound, decayed toward the floor by stagnation; clamped to its range."""
-    from xylarium.config import DAUGHTER_CITADEL_TIER, DAUGHTER_MIN_HABITABILITY
-    from xylarium.kernel import biosphere, demography, topology
-    from xylarium.kernel.universe import habitability
-    soc = planet.society
-    now = kernel.cycle_count
-    q = _season_cycles()
-    lo, hi = MEANING_FRONTIER
-    frontier = 0.0
-    if now - int(soc.get("emigrated_cycle", -10 ** 9)) <= 2 * q:
-        frontier = hi                                  # its own settler fleet is still news
-    else:
+def generation_years() -> float:
+    """A generation: the years a people takes to replace itself at its full natural increase (1 / BIRTH_RATE)."""
+    from xylarium.config import BIRTH_RATE
+    return 1.0 / eval_fraction(BIRTH_RATE)
+
+
+def birth_share_quarter() -> float:
+    from xylarium.config import BIRTH_RATE
+    return eval_fraction(BIRTH_RATE) * _season_cycles() / 100.0
+
+
+def room(kernel: Any, planet: Any) -> float:
+    """The open land in this people's reach that it could eat on, as a share of all the land in reach: free worlds'
+    carrying capacity for its metabolism (under a dome where its yards can build one) against its own world's."""
+    from xylarium.config import DAUGHTER_FOUNDING_TIER
+    from xylarium.kernel import biosphere, cache, demography, sustenance, topology
+
+    def reckon() -> float:
         metab = biosphere.metabolism_of(kernel, planet)
-        domes = planet.citadel_level >= DAUGHTER_CITADEL_TIER
-        n = 0
-        for sid in topology.reach(kernel, planet.sector_id, MEANING_FRONTIER_HOPS):
+        domes = 1 if sustenance.yards(planet) else 0
+        open_k = 0
+        for sid in topology.reach(kernel, planet.sector_id, sustenance.reach(kernel, planet)):
             for c in kernel.sectors[sid].planets:
-                if demography.free_world(c) and (habitability(metab, c.planet_type) >= DAUGHTER_MIN_HABITABILITY
-                                                 or (domes and c.planet_type != "GAS_GIANT")):
-                    n += 1
-        if n:
-            frontier = lo + (hi - lo) * min(1.0, (n - 1) / 3.0)
-    from xylarium.kernel.physics import CYCLES_PER_STANDARD_YEAR as year
-    age = now - int(soc.get("discovery_cycle", -10 ** 9))
-    d0, d1 = MEANING_DISCOVERY
-    window = MEANING_DISCOVERY_YEARS * year
-    discovery = d0 + (d1 - d0) * age / window if 0 <= age <= window else 0.0
-    rebound = MEANING_REBOUND if now <= int(soc.get("rebound_until", -10 ** 9)) else 0.0
-    mu = 1.0 + frontier + discovery + rebound
-    quiet = now - max(int(soc.get("discovery_cycle", -10 ** 9)), _last_crisis(planet),
-                      int(soc.get("emigrated_cycle", -10 ** 9)), int(soc.get("founded_cycle", 0)))
-    stagnant = 0.0
-    sated = MEANING_STAGNATION_YEARS * year
-    if float(soc.get("lux_access", 0.0)) >= MEANING_STAGNATION_LUXURY and quiet > sated:
-        keep = math.exp(-(quiet - sated) / sated)
-        stagnant = (mu - MEANING_FLOOR) * (1.0 - keep)
-        mu -= stagnant
+                if demography.free_world(c):
+                    open_k += biosphere.carrying_capacity(kernel, c, citadel=DAUGHTER_FOUNDING_TIER, habitats=domes,
+                                                          metabolism=metab)
+        home = max(1, demography.housing_cap(planet, kernel))
+        return open_k / (open_k + home)
+    return cache.memo(kernel, "room", planet.id, reckon, max_age=4 * _season_cycles())
+
+
+def progress(kernel: Any, planet: Any) -> float:
+    """The people's knowledge growth, felt over a generation: tanh(generation x annual growth rate). Rising, a
+    people expects more of its children's world; falling, less."""
+    from xylarium.kernel import knowledge
+    g = knowledge.stats(kernel).get("growth", {}).get(knowledge.holder_of_planet(planet), 0.0)
+    return math.tanh(generation_years() * g)
+
+
+def meaning(kernel: Any, planet: Any) -> Tuple[float, Dict[str, float]]:
+    """mu = (1 + prospects + catch-up) x (1 - satiation / 2), in [MEANING_FLOOR, MEANING_CEIL].
+
+    prospects  the mean of room (open land in reach) and progress (knowledge growth over a generation)
+    catch-up   births a crisis deferred, made up at up to twice the natural rate until recovered
+    satiation  comfort without prospects: luxury access x (1 - prospects); a wholly sated people with nothing
+               ahead of it sits at half (the floor)
+    """
+    soc = planet.society
+    r, p = room(kernel, planet), progress(kernel, planet)
+    prospects = (r + p) / 2.0
+    share = birth_share_quarter()
+    catch_up = 0.0 if stressed(kernel, planet) else min(1.0, float(soc.get("deferred", 0.0)) / share)
+    satiation = laws_clamp(float(soc.get("lux_access", 0.0) or 0.0)) * (1.0 - max(0.0, min(1.0, prospects)))
+    mu = (1.0 + prospects + catch_up) * (1.0 - satiation / 2.0)
     mu = min(MEANING_CEIL, max(MEANING_FLOOR, mu))
-    return mu, {"frontier": round(frontier, 3), "discovery": round(discovery, 3), "rebound": rebound,
-                "stagnation": round(stagnant, 3)}
+    return mu, {"room": round(r, 3), "progress": round(p, 3), "catch_up": round(catch_up, 3),
+                "satiation": round(satiation, 3)}
+
+
+def laws_clamp(x: float) -> float:
+    return max(0.0, min(1.0, x))
 
 
 # ---------------------------------------------------------------------- the biology of each strategy
@@ -173,8 +185,11 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
     parts: Dict[str, float] = {"comfort": round(comfort, 3), "luxury": round(lux, 3), "urban": round(urban, 3)}
     n = soc.get("nursery")
     lifted = bool(n) and bool(n.get("online")) and n.get("kind") == strat
-    if lifted:
-        parts["nursery"] = 1.0
+    m = 0.0
+    if lifted and kernel is not None:
+        from xylarium.kernel import nursery
+        m = nursery.mastery(kernel, planet, strat)          # it lifts as far as the people knows how
+        parts["nursery"] = round(m, 3)
     if strat == "r":
         stores = 4 * _season_cycles() * biosphere.consumption(planet)
         from xylarium.kernel import staples
@@ -183,25 +198,23 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
         parts["food"] = round(food, 3)
     elif strat == "K":
         lo, hi = FERTILITY_K_SECURE
-        relief = 1.0 - NURSERIES["K"]["relief"] if lifted else 1.0     # artificial wombs
+        relief = 1.0 - m                                              # artificial wombs
         f = (lo + (hi - lo) * comfort) * (1.0 - relief * (FERTILITY_K_LUXURY_COMPRESSION * lux
                                                           + FERTILITY_K_URBAN_COMPRESSION * urban))
     elif strat == "lithic":
         res = planet.element_reserves
         metal = res.get("Fe", 0) + res.get("Ti", 0) + planet.ore_silo // 10
         need = max(1.0, planet.population / 1000.0 * LITHIC_METAL_PER_THOUSAND)
-        metal_fit = 1.0 if lifted else min(1.0, metal / need)          # the foundry nursery feeds them metal
-        tectonic = min(1.0, float(physics.body(planet).get("mass", 1)))
-        if lifted:
-            tectonic = max(tectonic, NURSERIES["lithic"]["heat"])          # ...and its heat
+        metal_fit = max(m, min(1.0, metal / need))                     # the foundry nursery feeds them metal
+        tectonic = max(m, min(1.0, float(physics.body(planet).get("mass", 1))))   # ...and its heat
         f = 0.4 + 0.8 * metal_fit + 0.4 * tectonic
         parts.update(metal=round(metal_fit, 3), tectonic=round(tectonic, 3))
     elif strat == "cryo":
         sec = kernel.sectors.get(planet.sector_id)
         fl = float(physics.planet_flux(sec, planet)) if sec is not None else 1.0
         opt = float(eval_fraction(LIGHT_OPTIMUM.get("cryogenic", "1/8")))
-        cold = 1.0 if lifted else min(1.0, 2.0 / (1.0 + fl / opt))      # the deep-cold vault
-        warmth = (0.5 * comfort + 0.5 * lux) * (0.5 if lifted else 1.0)   # ambient wealth is heat to a Stillcold mind
+        cold = max(m, min(1.0, 2.0 / (1.0 + fl / opt)))                 # the deep-cold vault
+        warmth = (0.5 * comfort + 0.5 * lux) * (1.0 - m / 2)             # ambient wealth is heat to a Stillcold mind
         f = FERTILITY_CRYO_MAX * cold * (1.0 - 0.5 * warmth)
         parts["cold"] = round(cold, 3)
     else:   # plasmic
@@ -209,8 +222,7 @@ def natural(kernel: Any, planet: Any, strat: Optional[str] = None) -> Tuple[floa
         lum = float(physics.star(sec)["luminosity"]) if sec is not None else 1.0
         flare = min(2.0, lum)
         well = 1.0 if physics.body(planet).get("giant") or planet.planet_type == "GAS_GIANT" else 0.5
-        if lifted:                                          # the confinement ring is a star and a well of its own
-            flare, well = max(flare, 1.0), 1.0
+        flare, well = max(flare, m), max(well, 0.5 + 0.5 * m)   # the confinement ring: a star and well of its own
         f = 0.5 + 0.5 * flare * well
         parts.update(flare=round(flare, 3), well=well)
     return max(0.0, f), parts
@@ -329,13 +341,15 @@ def quarter(kernel: Any) -> List[str]:
                     st["natal_changes"] += 1
                     if card != "hatching":
                         logs.append(f"[NATAL] {planet.name} proclaims the {NATAL_POLICIES[card]['name']}.")
-            if soc.get("was_stressed") and not stressed(kernel, planet):
-                from xylarium.kernel.physics import CYCLES_PER_STANDARD_YEAR
-                soc["rebound_until"] = kernel.cycle_count + MEANING_REBOUND_YEARS * CYCLES_PER_STANDARD_YEAR
             f, parts = fertility(kernel, planet)
             soc["fertility"] = round(f, 4)
             soc["fertility_parts"] = parts
-            soc["was_stressed"] = parts["stressed"]
+            share = birth_share_quarter()
+            if parts["stressed"]:                           # births the crisis defers, to be made up after it
+                soc["deferred"] = round(float(soc.get("deferred", 0.0)) + share * (1.0 - FERTILITY_STRESS), 6)
+            elif soc.get("deferred"):
+                made_up = share * parts["meaning_parts"]["catch_up"]
+                soc["deferred"] = round(max(0.0, float(soc["deferred"]) - made_up), 6)
             nursery.track_viability(planet)
             log = nursery.consider(kernel, planet)
             if log:

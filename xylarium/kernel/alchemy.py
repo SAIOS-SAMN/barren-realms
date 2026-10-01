@@ -158,9 +158,20 @@ class AlchemyManager:
     def get_available_recipes(self, captain: Captain) -> List[TransmutationRecipe]:
         available = []
         for r in ALCHEMY_RECIPES.values():
-            if not r.required_tech or r.required_tech in getattr(captain, "technologies", []):
+            if self.mastery(captain, r) > 0:
                 available.append(r)
         return available
+
+    @staticmethod
+    def mastery(captain: Captain, recipe: "TransmutationRecipe") -> float:
+        """How well the captain's people know the process a recipe rests on (1 for recipes that need none)."""
+        if not recipe.required_tech:
+            return 1.0
+        from xylarium.config import LEGACY_TECH_PROCESS
+        from xylarium.kernel import knowledge, ledger
+        k = ledger.active_kernel()
+        proc = LEGACY_TECH_PROCESS.get(recipe.required_tech)
+        return knowledge.captain_mastery(k, captain, proc) if (k is not None and proc) else 0.0
 
     def get_heat(self, captain_id: str) -> float:
         return self.heat_accumulated.get(captain_id, 0.0)
@@ -206,11 +217,13 @@ class AlchemyManager:
             return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE, f"Unknown transmutation recipe '{recipe_id}'.")
 
         # 1. Tech requirement check
-        if recipe.required_tech and recipe.required_tech not in getattr(captain, "technologies", []):
+        if self.mastery(captain, recipe) <= 0:
+            from xylarium.config import LEGACY_TECH_PROCESS, PROCESSES
+            dom = PROCESSES.get(LEGACY_TECH_PROCESS.get(recipe.required_tech, ""), {}).get("domain", "materials")
             return ActionResult(
                 False,
                 ActionType.ALCHEMY_TRANSMUTE,
-                f"LACKING TECHNOLOGY: Recipe requires '{recipe.required_tech}' blueprint unlocked in your Research Mint.",
+                f"Your people know nothing yet of this transmutation: it rests on {dom} knowledge.",
             )
 
         # 2. Credits cost

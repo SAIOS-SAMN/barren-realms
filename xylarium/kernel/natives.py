@@ -228,8 +228,10 @@ class NativeManager:
         detect = 0.03 if natives["stage"] >= 5 else 0.01
         natives["awareness"] = min(1.0, natives["awareness"] + detect)
         ExperienceManager.award(captain, "science", XP_OBSERVE, kernel, key=f"observe:{planet.id}")
-        if getattr(captain, "active_research", None):
-            captain.research_progress += 3 + natives["stage"]
+        from xylarium.config import RESEARCH_POINTS_PER_UNIT
+        from xylarium.kernel import knowledge             # watching another people live teaches biology
+        knowledge.learn(kernel, knowledge.holder_of_captain(captain), "biology",
+                        (3 + natives["stage"]) / RESEARCH_POINTS_PER_UNIT, "observation")
         align.deed(kernel, captain, "native_observed")
         facts = [
             f"Population about {natives['population']:,}; their cities {'glow at night' if natives['stage'] >= 4 else 'are lit by fire'}.",

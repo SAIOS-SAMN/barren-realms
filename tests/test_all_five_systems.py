@@ -117,7 +117,9 @@ class TestAllFiveSystems(unittest.TestCase):
     # =========================================================================
     def test_alchemy_recipe_synthesis(self):
         # Setup materials for ADAMANT_LODE (Fe: 3, Ti: 2, catalyst: U -> AdL: 1)
-        self.player.technologies.append("ORBITAL_FOUNDRY")
+        from xylarium.kernel import knowledge
+        self.kernel.activate()
+        knowledge.learn(self.kernel, knowledge.holder_of_captain(self.player), "materials", 50)
         self.player.ship.cargo.elements["Fe"] = 10
         self.player.ship.cargo.elements["Ti"] = 10
         self.player.ship.cargo.elements["U"] = 5
@@ -139,7 +141,9 @@ class TestAllFiveSystems(unittest.TestCase):
         self.assertGreater(heat, 0.0)
 
     def test_alchemy_cryo_cooling_and_reactor_overheat_containment(self):
-        self.player.technologies.append("ORBITAL_FOUNDRY")
+        from xylarium.kernel import knowledge
+        self.kernel.activate()
+        knowledge.learn(self.kernel, knowledge.holder_of_captain(self.player), "materials", 50)
         self.player.ship.cargo.elements["Fe"] = 20
         self.player.ship.cargo.elements["Ti"] = 20
         self.player.ship.cargo.elements["U"] = 5

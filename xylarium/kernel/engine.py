@@ -60,7 +60,8 @@ from xylarium.kernel.events import EventBus
 from xylarium.kernel.routes import TradeRouteOptimizer
 from xylarium.kernel.espionage import EspionageManager
 from xylarium.kernel.market import MarketManager
-from xylarium.kernel.research import ResearchManager, TECH_TREE
+from xylarium.kernel.research import ResearchManager, jump_cost as research_jump_cost
+from xylarium.config import PROCESSES
 from xylarium.kernel.cartography import CartographyManager
 from xylarium.kernel.ideology import IdeologyManager, TreatyType
 from xylarium.kernel.alchemy import AlchemyManager
@@ -118,6 +119,8 @@ from xylarium.kernel import fertility as fertility_mod
 from xylarium.kernel import nursery as nursery_mod
 from xylarium.kernel import staples as staples_mod
 from xylarium.kernel import sustenance as sustenance_mod
+from xylarium.kernel import knowledge as knowledge_mod
+from xylarium.kernel import decide as decide_mod  # noqa: F401  (registers its state)
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
@@ -1285,7 +1288,7 @@ class GameKernel:
 
     def _handle_research_select(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
         tech_key = kwargs.get("tech_key", "")
-        ok, msg = self.research_manager.select_research(captain, tech_key)
+        ok, msg = self.research_manager.select_research(captain, tech_key, kernel=self)
         return ActionResult(
             success=ok,
             action=ActionType.RESEARCH_SELECT,
@@ -2569,10 +2572,12 @@ class GameKernel:
             } if hasattr(self, "market_manager") else {},
             "specialized_hulls": SPECIALIZED_HULLS,
             "market": market_info,
-            "tech_tree": {k: dict(v) for k, v in TECH_TREE.items()},
-            "unlocked_techs": list(getattr(captain, "technologies", [])),
-            "active_research": getattr(captain, "active_research", None),
-            "research_progress": getattr(captain, "research_progress", 0),
+            "knowledge": knowledge_mod.stocks(self, knowledge_mod.holder_of_captain(captain)),
+            "capabilities": {p: {"name": spec["name"], "domain": spec["domain"],
+                                 "mastery": round(knowledge_mod.captain_mastery(self, captain, p), 3)}
+                             for p, spec in PROCESSES.items()},
+            "inquiry": knowledge_mod.stats(self)["focus"].get(knowledge_mod.holder_of_captain(captain)),
+            "jump_cost": research_jump_cost(self, captain),
             "anomalies": sector_anomalies,
             "minted_clusters": list(self.research_manager.minted_clusters),
             "cartography": {

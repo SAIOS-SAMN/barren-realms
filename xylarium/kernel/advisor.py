@@ -11,6 +11,7 @@ Nothing here changes the world: it is a read-only lens.
 
 from typing import Any, Dict, List, Optional
 
+from xylarium.config import PROCESSES
 from xylarium.kernel import hulls, topology
 
 TRADE_REACH = 3              # jumps within which a sale is worth planning from here
@@ -200,11 +201,14 @@ def worlds(kernel: Any, captain: Any) -> List[Dict[str, Any]]:
                            "POPULATION (World # NURSERY)", 0.0, urgent=True))
         elif fp.get("strategy") != "r" and not n and float(fp.get("unstressed", 1.0)) < 1.0:
             why = nursery.why_not(kernel, p)
+            a = nursery.appraise(kernel, p)
+            dom = PROCESSES[nursery.process(kernel, p)]["domain"]
             out.append(_op("world", f"{p.name}'s people are below replacement (fertility {fp.get('unstressed', 0):.2f}, "
                                     f"meaning {fp.get('meaning', 1.0):.2f})",
-                           f"a {name} lifts its biology" + (f" - {why}" if why else " and it can be built now")
-                           + "; a frontier, discoveries or a natal card also help",
-                           "POPULATION (World # NURSERY)" if why is None else "RESEARCH XENOGENESIS", 0.0))
+                           f"a {name} at your {nursery.mastery(kernel, p):.0%} mastery of {dom} is worth "
+                           f"~{a['worth']:,.0f} against ~{a['cost']:,.0f} {p.currency}" + (f" - {why}" if why else "")
+                           + f"; more {dom} knowledge makes it stronger and cheaper",
+                           "POPULATION (World # NURSERY)" if a["worth"] > a["cost"] else f"RESEARCH {dom.upper()}", 0.0))
         eq = demography.equilibrium(p, kernel)
         if p.citadel_level >= 2 and not p.growth_policy and eq and p.population >= eq * demography.SETTLE_PRESSURE:
             out.append(_op("world", f"{p.name}'s people are ready to choose",

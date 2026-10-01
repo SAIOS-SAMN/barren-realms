@@ -132,7 +132,8 @@ class TestArchaeology(unittest.TestCase):
         self.assertTrue(res.success)
         self.assertGreater(res.data["research_points"], 0)
         self.assertNotIn(relic, self.cap.artifacts)
-        self.assertTrue(self.cap.active_research or self.cap.technologies)
+        from xylarium.kernel import knowledge
+        self.assertGreater(knowledge.stocks(self.kernel, knowledge.holder_of_captain(self.cap))["materials"], 0)
 
     def test_antiquities_permit_is_paid_to_the_federal_reserve(self):
         _move(self.kernel, self.cap, 1)

@@ -2152,53 +2152,31 @@ class TerminalRenderer:
 
     @classmethod
     def render_tech_tree_screen(cls, view: Dict[str, Any]) -> str:
-        """Renders the Two-Tier Cognitive Economy & Breakthrough Tech Tree."""
-        tech_tree = view.get("tech_tree", {})
-        unlocked = set(view.get("unlocked_techs", []))
-        active_tech = view.get("active_research")
-        progress = view.get("research_progress", 0)
-
+        """Your people's knowledge and what it lets them do. Nothing unlocks: every capability grows cheaper and
+        stronger along Wright's learning curve as knowledge in its domain accumulates."""
+        stocks = view.get("knowledge", {}) or {}
+        caps = view.get("capabilities", {}) or {}
+        inquiry = view.get("inquiry")
         lines = [
             bold(c_cyan("╔══════════════════════════════════════════════════════════════════════════════╗")),
-            bold(c_cyan("║            TWO-TIER COGNITIVE ECONOMY & BREAKTHROUGH TECH TREE               ║")),
+            bold(c_cyan("║                     KNOWLEDGE & CAPABILITIES OF YOUR PEOPLE                  ║")),
             bold(c_cyan("╚══════════════════════════════════════════════════════════════════════════════╝")),
-            f"  {c_gold('Tier 1 (Rations - Ore & Organics):')} Powers basic biological survival and hull industry.",
-            f"  {c_magenta('Tier 2 (Leisure & Exotics):')} Refined elements (Cryogenite, Umbrite, Chitinium,",
-            f"  Stelalith, Ferrolattice) fuel Deep Cognition, generating Research Points (RP).\n",
+            c_gray("  Your colonies think with the hands their harvests free, more with leisure, at the depth their"),
+            c_gray("  species' minds allow. Relics, anomalies and watching other peoples teach too. Knowledge fades"),
+            c_gray("  15% a year unless renewed.\n"),
         ]
-
-        if active_tech and active_tech in tech_tree:
-            cfg = tech_tree[active_tech]
-            cost = cfg.get("cost_research", 100)
-            bar = _render_bar(progress, cost, length=18)
-            pct = int((progress / cost) * 100) if cost > 0 else 0
-            lines.append(f"  {bold(c_cyan('ACTIVE RESEARCH PROJECT:'))} {c_gold(cfg['name'])} ({cfg.get('icon', '⚡')})")
-            lines.append(f"    Progress: {c_cyan(bar)} {c_white(f'{progress}/{cost} RP ({pct}%)')}")
-            lines.append(f"    Catalyst Element: {c_magenta(cfg.get('cost_element', '').capitalize())}\n")
-        else:
-            lines.append(f"  {c_gray('ACTIVE RESEARCH: None commissioned. Select a breakthrough project below.')}\n")
-
-        lines.append(bold(c_white("  [ AVAILABLE BREAKTHROUGH TECHNOLOGIES ]")))
-        lines.append(c_gray("  " + "─" * 74))
-
-        for idx, (t_key, t_info) in enumerate(tech_tree.items(), 1):
-            icon = t_info.get("icon", "★")
-            t_name = t_info.get("name", t_key)
-            cost_rp = t_info.get("cost_research", 100)
-            elem = t_info.get("cost_element", "crystal").capitalize()
-            desc = t_info.get("description", "")
-
-            if t_key in unlocked:
-                status_tag = c_green("[UNLOCKED / ACTIVE]")
-            elif t_key == active_tech:
-                status_tag = c_cyan(f"[IN PROGRESS - {progress}/{cost_rp} RP]")
-            else:
-                status_tag = c_gold(f"[{idx}] COMMISSION ({cost_rp} RP, {elem})")
-
-            lines.append(f"  {c_magenta(icon)} {bold(c_white(t_name))} {status_tag}")
-            lines.append(f"     {c_gray(desc)}")
-            lines.append(c_gray("  " + "─" * 74))
-
+        domains = ["energy", "materials", "biology", "information"]
+        for i, d in enumerate(domains, 1):
+            tag = c_gold(" <- your inquiry") if d == inquiry else ""
+            lines.append(f"  {c_gold(f'[{i}]')} {d.upper():<12} {stocks.get(d, 0.0):>8.1f} units{tag}")
+        lines.append(bold(c_white("\n  [ CAPABILITIES - mastery along the learning curve ]")))
+        for proc, c in caps.items():
+            m = c.get("mastery", 0.0)
+            bar = _render_bar(int(m * 100), 100, length=18)
+            lines.append(f"  {c_white(c['name'][:32]):<44} {c_gray(c['domain'][:11]):<20} {c_cyan(bar)} {m:.0%}")
+        jc = view.get("jump_cost")
+        if jc and jc < 10 ** 8:
+            lines.append(c_gray(f"\n  A jump-drive fold costs you {jc:,} Cr (250 at full mastery)."))
         return "\n".join(lines)
 
     @classmethod

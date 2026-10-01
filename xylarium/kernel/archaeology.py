@@ -333,24 +333,16 @@ class ArchaeologyManager:
             return ActionResult(success=False, action=ActionType.STUDY_ARTIFACT, message="No tech relic to study.")
         relic = max(relics, key=lambda a: a["tech_level"] * a["condition"])
         captain.artifacts.remove(relic)
-        from xylarium.kernel.research import TECH_TREE
         points = int((6 + 3 * relic["tech_level"] + 4 * relic["stratum"]) * relic["condition"])
-        owned = set(getattr(captain, "technologies", []))
-        if not getattr(captain, "active_research", None):
-            candidates = [k for k in TECH_TREE if k not in owned]
-            captain.active_research = candidates[0] if candidates else None
         msg_extra = ""
-        if captain.active_research:
-            captain.research_progress += points
-            cfg = TECH_TREE.get(captain.active_research, {})
-            if captain.research_progress >= cfg.get("cost_research", 10 ** 9):
-                captain.technologies.append(captain.active_research)
-                msg_extra = f" Breakthrough: {cfg.get('name', captain.active_research)} reconstructed from the relic!"
-                if kernel is not None:
-                    from xylarium.kernel import fertility
-                    fertility.discovered(kernel, captain=captain)
-                captain.research_progress = 0
-                captain.active_research = None
+        if kernel is not None:
+            # a relic is someone else's materials science, read back out of the metal
+            from xylarium.config import RESEARCH_POINTS_PER_UNIT
+            from xylarium.kernel import fertility, knowledge
+            units = points / RESEARCH_POINTS_PER_UNIT
+            knowledge.learn(kernel, knowledge.holder_of_captain(captain), "materials", units, "relics")
+            fertility.discovered(kernel, captain=captain)
+            msg_extra = f" {units:.1f} units of materials knowledge recovered."
         for elem in relic.get("elements", [])[:1]:
             msg_extra += f" Metallurgical notes on {elem} recovered."
         ExperienceManager.award(captain, "science", XP_SCIENCE_ANOMALY, kernel, key=f"relic:{relic['culture']}")

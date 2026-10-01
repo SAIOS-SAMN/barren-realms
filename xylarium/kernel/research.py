@@ -22,59 +22,8 @@ from xylarium.kernel.models import (
 from xylarium.kernel.elements import PeriodicTable
 
 
-# Breakthrough Tech Tree
-TECH_TREE: Dict[str, Dict[str, Any]] = {
-    "JUMP_DRIVE": {
-        "name": "Hyper-Dimensional Jump Drive",
-        "description": "Bypasses standard wormhole corridors to cross charted frontiers and enter distant procedural clusters.",
-        "cost_research": 100,
-        "cost_element": "cryogenite",
-        "cost_element_amount": 10,
-        "icon": "⚡",
-    },
-    "CLOAKING_GRID": {
-        "name": "Umbral Cloaking Shroud",
-        "description": "Emits negative-phase tachyon fields, granting 60% evasion against pirate interdictions and hostile ambushes.",
-        "cost_research": 90,
-        "cost_element": "umbrite",
-        "cost_element_amount": 10,
-        "icon": "░",
-    },
-    "NANITE_DRYDOCK": {
-        "name": "Self-Replicating Nanite Drydock",
-        "description": "Nanite repair swarms restore +15 Shields and +2 Combat Fighters to ship every simulation cycle.",
-        "cost_research": 110,
-        "cost_element": "stelalith",
-        "cost_element_amount": 10,
-        "icon": "🛠",
-    },
-    "BIO_SYNTHESIZER": {
-        "name": "Antisymmetric Bio-Synthesizer",
-        "description": "Applies Δ_ij = -Δ_ji metabolic transposition, converting 5 surplus Ore into 5 Organics per cycle on owned colonies.",
-        "cost_research": 80,
-        "cost_element": "chitinium",
-        "cost_element_amount": 10,
-        "icon": "🧬",
-    },
-    "XENOGENESIS": {
-        "name": "Applied Xenogenesis",
-        "description": "Your people's own biology, understood well enough to build past it: a Tier-2 world may raise "
-                       "its nursery (artificial wombs, foundry nursery, deep-cold vault, confinement ring, or "
-                       "sanitation works) without a Tier-3 citadel's engineering.",
-        "cost_research": 90,
-        "cost_element": "chitinium",
-        "cost_element_amount": 10,
-        "icon": "🥚",
-    },
-    "ORBITAL_FOUNDRY": {
-        "name": "Zero-G Orbital Megafoundry",
-        "description": "Automated zero-gravity assembly arrays boost colony equipment and tax yields by +35% and cuts fighter recruitment cost in half.",
-        "cost_research": 120,
-        "cost_element": "ferrolattice",
-        "cost_element_amount": 10,
-        "icon": "🏭",
-    },
-}
+# There is no tech tree: capabilities are processes learned with knowledge (knowledge.py, config PROCESSES).
+from xylarium.config import LEGACY_TECH_PROCESS, PROCESSES, RESEARCH_POINTS_PER_UNIT  # noqa: E402
 
 
 @dataclass
@@ -175,17 +124,23 @@ class ResearchManager:
                     sec.anomalies = []
                 sec.anomalies.append(aid)
 
-    def select_research(self, captain: Captain, tech_key: str) -> Tuple[bool, str]:
-        """Select active research breakthrough project for captain/empire."""
-        tech_key = tech_key.upper().strip()
-        if tech_key not in TECH_TREE:
-            return False, f"Unknown technology: '{tech_key}'."
-
-        if tech_key in getattr(captain, "technologies", []):
-            return False, f"Technology '{TECH_TREE[tech_key]['name']}' is already unlocked!"
-
-        captain.active_research = tech_key
-        return True, f"RESEARCH COMMISSIONED: {TECH_TREE[tech_key]['name']} is now active! Allocate leisure and exotic element reserves to accelerate breakthroughs."
+    def select_research(self, captain: Captain, tech_key: str, kernel: Any = None) -> Tuple[bool, str]:
+        """Direct the inquiry of a captain's people: a domain (ENERGY, MATERIALS, BIOLOGY, INFORMATION), or the
+        domain of a named capability. Nothing is unlocked - knowledge in the domain grows faster."""
+        from xylarium.kernel import knowledge, ledger
+        key = (tech_key or "").strip()
+        domain = key.lower() if key.lower() in knowledge.DOMAINS else None
+        if domain is None:
+            proc = LEGACY_TECH_PROCESS.get(key.upper(), key.lower())
+            domain = PROCESSES.get(proc, {}).get("domain")
+        if domain is None:
+            return False, (f"Unknown inquiry '{tech_key}'. Direct your people's thinkers to a domain: "
+                           f"{', '.join(d.upper() for d in knowledge.DOMAINS)}.")
+        kernel = kernel or ledger.active_kernel()
+        knowledge.focus(kernel, knowledge.holder_of_captain(captain), domain)
+        captain.active_research = domain
+        return True, (f"INQUIRY DIRECTED: your colonies' thinkers turn to {domain.upper()}. Capabilities in that "
+                      f"domain grow cheaper and stronger as knowledge accumulates.")
 
     def tick_cognitive_metabolism(self, kernel: Any) -> List[str]:
         """
@@ -221,53 +176,29 @@ class ResearchManager:
                     chosen_elem = random.choice(luxury_candidates)
                     reserves[chosen_elem] -= 1
                     matter.sink("deep_cognition", chosen_elem, 1)     # a luxury used up in study
-                    research_boost = 15
+                    # study turns a luxury into knowledge for the owner's people, in their chosen domain
+                    from xylarium.kernel import knowledge
+                    holder = knowledge.holder_of_captain(owner)
+                    domain = knowledge.stats(kernel)["focus"].get(holder, "information")
+                    knowledge.learn(kernel, holder, domain, 15 / RESEARCH_POINTS_PER_UNIT, "deep_cognition")
 
-                    if getattr(owner, "active_research", None):
-                        owner.research_progress += research_boost
-                        active_tech = owner.active_research
-                        cfg = TECH_TREE.get(active_tech)
-                        if cfg and owner.research_progress >= cfg["cost_research"]:
-                            # Breakthrough unlocked!
-                            if not hasattr(owner, "technologies"):
-                                owner.technologies = []
-                            owner.technologies.append(active_tech)
-                            owner.research_progress = 0
-                            owner.active_research = None
-                            owner.score += 500
-                            from xylarium.kernel import fertility
-                            fertility.discovered(kernel, captain=owner)
-
-                            # Add to planet technologies
-                            if not hasattr(planet, "technologies"):
-                                planet.technologies = []
-                            planet.technologies.append(active_tech)
-
-                            msg = f"COGNITIVE TRANSCENDENCE: '{owner.name}' unlocked breakthrough technology '{cfg['name']}' ({cfg['icon']})!"
-                            logs.append(msg)
-                            if kernel.event_bus:
-                                kernel.event_bus.broadcast_radio(
-                                    sender="TECH-COUNCIL",
-                                    text=f"SCIENTIFIC MINT: {owner.name} has discovered {cfg['name']}! Galactic tech paradigm updated.",
-                                    channel="COMM-1",
-                                    sector_id=planet.sector_id,
-                                )
-
-                # Passive Tech Effect: BIO_SYNTHESIZER (Ore -> Organics transposition)
-                owner_techs = getattr(owner, "technologies", [])
-                if "BIO_SYNTHESIZER" in owner_techs and planet.ore_silo >= 5 and planet.organics_silo <= 4995:
-                    # a conversion: ore in, organics out
-                    matter.consume(planet, "ore_silo", "ORE", 5, "bio_synthesis")
-                    matter.produce(planet, "organics_silo", "ORGANICS", 5, "bio_synthesis")
+                # Bio-synthesis: ore transposed into organics, as fast as the owner's people have learned it
+                from xylarium.kernel import knowledge
+                units = int(5 * knowledge.captain_mastery(kernel, owner, "bio_synthesis"))
+                if units > 0 and planet.ore_silo >= units and planet.organics_silo <= 5000 - units:
+                    matter.consume(planet, "ore_silo", "ORE", units, "bio_synthesis")
+                    matter.produce(planet, "organics_silo", "ORGANICS", units, "bio_synthesis")
 
         # 2. Captain passive tech benefits
+        from xylarium.kernel import knowledge
         for cap in kernel.captains.values():
-            cap_techs = getattr(cap, "technologies", [])
-            # Passive: NANITE_DRYDOCK
-            if "NANITE_DRYDOCK" in cap_techs:
-                if cap.ship.shields < cap.ship.max_shields:
-                    cap.ship.shields = min(cap.ship.max_shields, cap.ship.shields + 15)
-                # Restores 1 combat fighter if below max capacity
+            # Nanite repair: swarms as capable as the captain's people's materials science
+            m = knowledge.captain_mastery(kernel, cap, "nanite_repair")
+            if m <= 0:
+                continue
+            if cap.ship.shields < cap.ship.max_shields:
+                cap.ship.shields = min(cap.ship.max_shields, cap.ship.shields + int(15 * m))
+            if random.Random(f"nanite:{cap.id}:{kernel.cycle_count}").random() < m:
                 cap.ship.fighters = min(100, cap.ship.fighters + 1)
 
         return logs
@@ -347,18 +278,15 @@ class ResearchManager:
             ExperienceManager.award(captain, "science", XP_SCIENCE_ANOMALY, kernel, key=f"anomaly:{anom.id}")
             captain.score += 750
 
-            # Unlock tech reward if present
+            # What the anomaly teaches: knowledge in the domain its precursors worked in
             unlocked_tech_msg = ""
-            if anom.reward_tech:
-                if not hasattr(captain, "technologies"):
-                    captain.technologies = []
-                if anom.reward_tech not in captain.technologies:
-                    captain.technologies.append(anom.reward_tech)
-                    tech_info = TECH_TREE.get(anom.reward_tech, {})
-                    if kernel is not None:
-                        from xylarium.kernel import fertility
-                        fertility.discovered(kernel, captain=captain)
-                    unlocked_tech_msg = f" Discovered ancient blueprint for '{tech_info.get('name', anom.reward_tech)}'!"
+            if kernel is not None:
+                from xylarium.kernel import fertility, knowledge
+                domain = knowledge.discovery_domain(anom.reward_tech)
+                units = (anom.reward_research + 100) / RESEARCH_POINTS_PER_UNIT
+                knowledge.learn(kernel, knowledge.holder_of_captain(captain), domain, units, "anomaly")
+                fertility.discovered(kernel, captain=captain)
+                unlocked_tech_msg = f" Its precursors' {domain} - {units:.0f} units of knowledge - is yours."
 
             # Deposit exotic elements into cargo hold if space permits
             for elem_name, qty in anom.reward_elements.items():
@@ -535,12 +463,14 @@ class ResearchManager:
         Bypasses standard adjacency, allowing instant warp to any charted sector
         or expanding into uncharted clusters!
         """
-        captain_techs = getattr(captain, "technologies", [])
-        if "JUMP_DRIVE" not in captain_techs:
+        # Folding space costs what the captain's people's energy science has not yet learned away
+        from xylarium.kernel import knowledge
+        m = knowledge.captain_mastery(kernel, captain, "jump_drive")
+        if m <= 0:
             return ActionResult(
                 success=False,
                 action=ActionType.JUMP_WARP,
-                message="Hyper-Dimensional Jump Drive not installed! Unlock JUMP_DRIVE technology first.",
+                message="Your people know nothing yet of folding space: build energy knowledge (RESEARCH ENERGY).",
             )
 
         if destination <= 0:
@@ -566,8 +496,7 @@ class ResearchManager:
                 message=f"Sector {destination} lies beyond current charted space.",
             )
 
-        # Jump drive cost: 200 Credits or 5 Cryogenite
-        cost_cr = 250
+        cost_cr = jump_cost(kernel, captain)
         if captain.credits < cost_cr:
             return ActionResult(
                 success=False,
@@ -613,3 +542,10 @@ class ResearchManager:
         mgr.next_anomaly_id = data.get("next_anomaly_id", 101)
         mgr.minted_clusters = list(data.get("minted_clusters", [1]))
         return mgr
+
+
+def jump_cost(kernel: Any, captain: Any) -> int:
+    """Capacitor charge for a fold: 250 Cr at full mastery of the drive, more as mastery falls (1 / mastery)."""
+    from xylarium.kernel import knowledge
+    m = knowledge.captain_mastery(kernel, captain, "jump_drive")
+    return int(250 / m) if m > 0 else 10 ** 9

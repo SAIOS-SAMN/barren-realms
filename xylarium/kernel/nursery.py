@@ -5,9 +5,12 @@ a fast breeder back.
 Every reproductive strategy (fertility.py) has a ceiling its biology sets: a K people's transition under comfort,
 a lithic people's metal and tectonic heat, a Stillcold people's light, a plasmic people's star. Each can build one
 district that lifts it (config NURSERIES) - artificial wombs, a foundry nursery, a deep-cold vault, a confinement
-ring - but only while it is fed: a nursery buys its inputs every quarter from the world's own stocks or its
-contractor port, and a quarter without them leaves it dark and its brood lost. High-tech fertility is only as
-sound as the supply chain behind it.
+ring. Nothing gates it: how much it lifts is the people's mastery of the process (knowledge.py - artificial
+gestation, foundry budding, deep refrigeration, magnetic confinement, sanitation), and its inputs fall along the
+same learning curve. A council builds one when the decision rule finds it worth more than it costs - the people it
+lets the world sustain (or the blight deaths it averts) at their tax value, over the council's horizon, against
+its price and its upkeep. It works only while fed: a nursery buys its inputs every quarter from the world's own
+stocks or its contractor port, and a quarter without them leaves it dark and its brood lost.
 
 r-strategists need no help to breed; their ceiling is disease. Density sets a pathogen's reproduction number, and
 past the threshold a blight takes off (sanitation works lower it).
@@ -27,19 +30,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from xylarium.config import (
     BLIGHT_DENSITY,
     BLIGHT_FATALITY,
+    COLONY_TAX_PER_CAPITA,
+    COMMODITY_CONFIG,
     HABITAT_COST,
     HABITAT_ORE,
     NURSERIES,
-    NURSERY_CITADEL_TIER,
-    NURSERY_CIV_TECH,
     PRICE_LEVEL,
     SEED_KIT,
     VIABILITY_FERTILITY,
     VIABILITY_QUARTERS,
 )
-from xylarium.kernel import matter
-
-TECH = "XENOGENESIS"
+from xylarium.kernel import laws, matter
 
 
 def _rng(*parts: Any) -> random.Random:
@@ -149,28 +150,36 @@ def online(planet: Any) -> bool:
     return bool(n) and bool(n.get("online"))
 
 
+def process(kernel: Any, planet: Any, strat: Optional[str] = None) -> str:
+    return f"nursery_{strat or strategy(kernel, planet)}"
+
+
+def mastery(kernel: Any, planet: Any, strat: Optional[str] = None) -> float:
+    """How much this people's nursery can lift its biology: its mastery of the process."""
+    from xylarium.kernel import knowledge
+    return knowledge.mastery(kernel, knowledge.holder_of_planet(planet), process(kernel, planet, strat))
+
+
+def _multiplier(kernel: Any, planet: Any, strat: Optional[str] = None) -> float:
+    from xylarium.kernel import knowledge
+    return knowledge.cost_multiplier(kernel, knowledge.holder_of_planet(planet), process(kernel, planet, strat))
+
+
 def why_not(kernel: Any, planet: Any) -> Optional[str]:
     """Why this world cannot build its nursery now (None: it can)."""
     if has(planet):
         return f"{planet.name} already has its {design(kernel, planet)['name']}."
     if planet.population <= 0:
         return f"{planet.name} has no people."
-    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
-    civ = getattr(planet, "civilization", None)
-    knows = (planet.citadel_level >= NURSERY_CITADEL_TIER
-             or (owner is not None and TECH in (getattr(owner, "technologies", None) or [])
-                 and planet.citadel_level >= NURSERY_CITADEL_TIER - 1)
-             or (owner is None and civ is not None and getattr(civ, "tech_level", 0) >= NURSERY_CIV_TECH))
-    if not knows:
-        return (f"a {design(kernel, planet)['name']} needs a Tier {NURSERY_CITADEL_TIER} citadel's engineering "
-                f"(or Applied Xenogenesis and Tier {NURSERY_CITADEL_TIER - 1}).")
-    if planet.treasury < cost(planet) or planet.ore_silo < HABITAT_ORE:
-        return f"it costs {cost(planet):,} {planet.currency} and {HABITAT_ORE} ore."
+    if planet.treasury < cost(planet, kernel) or planet.ore_silo < HABITAT_ORE:
+        return f"it costs {cost(planet, kernel):,} {planet.currency} and {HABITAT_ORE} ore."
     return None
 
 
-def cost(planet: Any) -> int:
-    return int(HABITAT_COST * PRICE_LEVEL.get(planet.currency, 1.0))
+def cost(planet: Any, kernel: Any = None) -> int:
+    """A habitat's price, falling along the learning curve of the people's knowledge of the process."""
+    mult = _multiplier(kernel, planet) if kernel is not None else 1.0
+    return int(HABITAT_COST * PRICE_LEVEL.get(planet.currency, 1.0) * mult)
 
 
 def build(kernel: Any, planet: Any) -> str:
@@ -179,7 +188,7 @@ def build(kernel: Any, planet: Any) -> str:
     if why is not None:
         raise ValueError(why)
     from xylarium.kernel.demography import _pay_contractor
-    _pay_contractor(kernel, planet, cost(planet))
+    _pay_contractor(kernel, planet, cost(planet, kernel))
     matter.consume(planet, "ore_silo", "ORE", HABITAT_ORE, "construction")
     planet.society["nursery"] = {"kind": strategy(kernel, planet), "built": kernel.cycle_count, "online": True}
     stats(kernel)["built"] += 1
@@ -193,7 +202,7 @@ def upkeep(kernel: Any, planet: Any) -> Optional[str]:
         return None
     st = stats(kernel)
     d = NURSERIES.get(n.get("kind")) or design(kernel, planet)
-    need = planet.population / 1000.0 * d["per_thousand"]
+    need = planet.population / 1000.0 * d["per_thousand"] * _multiplier(kernel, planet, n.get("kind"))
     got = supply(kernel, planet, d["inputs"], need, "nursery")
     if got + 1e-9 >= need:
         if not n.get("online"):
@@ -215,22 +224,62 @@ def upkeep(kernel: Any, planet: Any) -> Optional[str]:
     return f"[NURSERY] {planet.name}'s {d['name']} went dark for want of supply: {lost:,} of its brood were lost."
 
 
+def _tax_per_head_quarter(planet: Any) -> float:
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    return COLONY_TAX_PER_CAPITA * PRICE_LEVEL.get(planet.currency, 1.0) * FISCAL_QUARTER_CYCLES
+
+
+def _upkeep_per_quarter(kernel: Any, planet: Any) -> float:
+    d = design(kernel, planet)
+    comm = _resolve(kernel, planet, d["inputs"][0][0])
+    price = COMMODITY_CONFIG.get(comm, {}).get("base_price", 20) * PRICE_LEVEL.get(planet.currency, 1.0)
+    return planet.population / 1000.0 * d["per_thousand"] * _multiplier(kernel, planet) * price
+
+
+def gain(kernel: Any, planet: Any) -> float:
+    """People a quarter the nursery is worth to this world, at its people's mastery: the extra people it lets the
+    world sustain, or for an r people the expected blight deaths it averts."""
+    from xylarium.kernel import demography, fertility
+    strat = strategy(kernel, planet)
+    soc = planet.society
+    if strat == "r":
+        r_now = r0(kernel, planet, ignore_works=True)
+        r_with = r_now * (1.0 - mastery(kernel, planet, "r"))
+
+        def deaths(r: float) -> float:
+            return (1.0 - 1.0 / r) * final_size(r) * BLIGHT_FATALITY * planet.population if r > 1.0 else 0.0
+        return deaths(r_now) - deaths(r_with)
+    saved = soc.get("nursery")
+    soc["nursery"] = {"kind": strat, "online": True}
+    f_with, _ = fertility.fertility(kernel, planet)
+    soc.pop("nursery")
+    f_without, _ = fertility.fertility(kernel, planet)
+    if saved is not None:
+        soc["nursery"] = saved
+    cap = demography.housing_cap(planet, kernel)
+    return max(0.0, cap * (min(1.0, f_with) - min(1.0, f_without)))
+
+
+def appraise(kernel: Any, planet: Any) -> Dict[str, float]:
+    """What the nursery is worth to this world and what it costs, both in its money today."""
+    from xylarium.kernel import decide
+    m = decide.mind_of_planet(kernel, planet)
+    worth = decide.worth(kernel, gain(kernel, planet) * _tax_per_head_quarter(planet), m, planet.currency)
+    upkeep_pv = decide.worth(kernel, _upkeep_per_quarter(kernel, planet), m, planet.currency)
+    return {"worth": worth, "cost": cost(planet, kernel) + upkeep_pv, "mind": m}
+
+
 def consider(kernel: Any, planet: Any) -> Optional[str]:
-    """A council's choice: a people below replacement builds its nursery; an r people facing blight, its works."""
+    """A council's choice, by the one decision rule: build the nursery if it is worth more than it costs."""
     owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
     if owner is not None and not getattr(owner, "is_ai", False):
         return None                      # players build theirs by command
-    if has(planet) or planet.population <= 0:
+    if has(planet) or planet.population <= 0 or why_not(kernel, planet) is not None:
         return None
-    strat = strategy(kernel, planet)
-    if strat == "r":
-        if r0(kernel, planet, ignore_works=True) <= 1.0:
-            return None
-    elif float(planet.society.get("fertility_parts", {}).get("unstressed", 1.0)) >= 1.0:
-        return None
-    from xylarium.config import DEMOGRAPHY_COUNCIL_RESERVE
-    reserve = int(DEMOGRAPHY_COUNCIL_RESERVE * PRICE_LEVEL.get(planet.currency, 1.0))
-    if why_not(kernel, planet) is not None or planet.treasury < cost(planet) + reserve:
+    from xylarium.kernel import decide
+    a = appraise(kernel, planet)
+    pick = decide.choose(kernel, [decide.option("build_nursery", a["cost"], a["worth"])], a["mind"], planet.id)
+    if pick is None:
         return None
     return f"[NURSERY] {build(kernel, planet)}"
 
@@ -241,18 +290,12 @@ def r0(kernel: Any, planet: Any, ignore_works: bool = False) -> float:
     k = max(1, demography.housing_cap(planet, kernel))
     r = (planet.population / k) / BLIGHT_DENSITY
     if not ignore_works and online(planet) and planet.society["nursery"].get("kind") == "r":
-        r *= NURSERIES["r"]["r0"]
+        r *= 1.0 - mastery(kernel, planet, "r")           # sanitation as good as the people's biology
     return r
 
 
 def final_size(r: float) -> float:
-    """The share an epidemic infects: the root of z = 1 - exp(-R0 z) in (0, 1)."""
-    if r <= 1.0:
-        return 0.0
-    z = 1.0 - 1.0 / r
-    for _ in range(50):
-        z = 1.0 - math.exp(-r * z)
-    return z
+    return laws.final_size(r)
 
 
 def blight(kernel: Any, planet: Any) -> Optional[str]:

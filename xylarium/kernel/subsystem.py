@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 SEASON = [
     "monetary_policy", "federal_reserve", "banking", "fx_reanchor", "alignment", "natives", "sieges",
     "credit", "geology", "propulsion", "crime", "law", "fibres", "physics", "demography",
-    "fertility", "sustenance", "luxury", "tourism", "realms", "government",
+    "fertility", "sustenance", "knowledge", "luxury", "tourism", "realms", "government",
 ]
 
 

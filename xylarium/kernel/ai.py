@@ -145,7 +145,7 @@ class AIManager:
         if captain.personality == AIPersonality.INDUSTRIALIST:
             cls._execute_corporate_industrialist_loop(kernel, captain)
 
-        # 3. Cognitive Economy: Pick active research breakthrough project (Mint)
+        # 3. Cognitive Economy: point its people's inquiry where its calling needs knowledge
         if not getattr(captain, "active_research", None):
             cls._select_ai_research(kernel, captain)
 
@@ -356,10 +356,12 @@ class AIManager:
             return None
 
         grown_count = len(getattr(captain, "grown_basis", []))
-        tech_count = len(getattr(captain, "technologies", []))
+        from xylarium.config import PROCESSES
+        from xylarium.kernel import knowledge
+        learned = sum(knowledge.captain_mastery(kernel, captain, p) for p in PROCESSES)
 
-        # Must meet the cognitive tipping point
-        if grown_count < CLEAVE_BASIS_THRESHOLD and tech_count < 5:
+        # Must meet the cognitive tipping point (about five capabilities half-mastered)
+        if grown_count < CLEAVE_BASIS_THRESHOLD and learned < 2.5:
             return None
 
         # Must have adequate surplus capital to endow the offshoot without starving
@@ -505,21 +507,14 @@ class AIManager:
 
     @classmethod
     def _select_ai_research(cls, kernel: "GameKernel", captain: Captain) -> None:
-        """Assign active research project aligned with AI personality."""
-        unlocked = set(getattr(captain, "technologies", []))
-        available = [k for k in ["JUMP_DRIVE", "CLOAKING_GRID", "NANITE_DRYDOCK", "BIO_SYNTHESIZER", "ORBITAL_FOUNDRY"] if k not in unlocked]
-        if not available:
-            return
-
-        preference_map = {
-            AIPersonality.INDUSTRIALIST: ["ORBITAL_FOUNDRY", "BIO_SYNTHESIZER", "NANITE_DRYDOCK"],
-            AIPersonality.PIRATE: ["CLOAKING_GRID", "JUMP_DRIVE", "NANITE_DRYDOCK"],
-            AIPersonality.TRADER: ["JUMP_DRIVE", "BIO_SYNTHESIZER", "ORBITAL_FOUNDRY"],
-            AIPersonality.MERCENARY: ["NANITE_DRYDOCK", "CLOAKING_GRID", "JUMP_DRIVE"],
+        """Point the captain's people's inquiry at the domain its calling lives by (its character, not a list)."""
+        calling = {
+            AIPersonality.INDUSTRIALIST: "materials",      # foundries and repair swarms
+            AIPersonality.PIRATE: "information",           # veils and the knowledge of where prey sails
+            AIPersonality.TRADER: "energy",                # folding space shortens every route
+            AIPersonality.MERCENARY: "materials",
         }
-        prefs = preference_map.get(captain.personality, available)
-        chosen = next((t for t in prefs if t in available), available[0])
-        kernel.dispatch(captain.id, ActionType.RESEARCH_SELECT, tech_key=chosen)
+        kernel.dispatch(captain.id, ActionType.RESEARCH_SELECT, tech_key=calling.get(captain.personality, "information"))
 
     @classmethod
     def _handle_ai_anomaly_or_raid(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> bool:
@@ -561,9 +556,9 @@ class AIManager:
                         kernel.dispatch(captain.id, ActionType.ANOMALY_INVESTIGATE, anomaly_id=anom.id, solve_inputs={"mode": "catalyst"})
                         return True
 
-        # Check if captain has JUMP_DRIVE and wants to explore the frontier
-        cap_techs = getattr(captain, "technologies", [])
-        if "JUMP_DRIVE" in cap_techs and captain.credits >= 500:
+        # A captain whose people can fold space, and can afford the fold, explores the frontier
+        from xylarium.kernel.research import jump_cost
+        if captain.credits >= 2 * jump_cost(kernel, captain):
             if random.random() < 0.10:
                 all_anoms = [
                     a for a in kernel.research_manager.anomalies.values()

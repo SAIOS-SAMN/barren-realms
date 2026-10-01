@@ -229,7 +229,7 @@ class TerminalClient:
         in_fed_central = (sector.get("id") == 1)
 
         has_anom = len(sector.get("anomalies", [])) > 0
-        has_jump = "JUMP_DRIVE" in view.get("unlocked_techs", [])
+        has_jump = (view.get("jump_cost") or 10 ** 9) < 10 ** 8
 
         # Build options
         opts = [
@@ -441,7 +441,7 @@ class TerminalClient:
                      "(replacement at most, +20% productivity) │ NATAL NONE"))
         print(c_gray("  Each people eats its own staple (organics, ore, ice or hydrogen). HUNGRY worlds with yards and open"
                      " worlds send an exodus; PRESSED ones (nowhere to go) may RAID the richest holder in reach."))
-        print(c_gray("  NURSERY raises your people's leap past its biology (citadel T3, or T2 with Applied Xenogenesis); "
+        print(c_gray("  NURSERY raises your people's leap past its biology - as strong as their knowledge of it; "
                      "it buys its inputs each quarter and goes dark - losing its brood - when they run out."))
         from xylarium.kernel import nursery
         from xylarium.config import NURSERIES, VIABILITY_FERTILITY, VIABILITY_QUARTERS
@@ -1588,11 +1588,11 @@ class TerminalClient:
                     print(f"  ► {s_tag} {bold(c_white(a['name']))} [{c_gold(a['id'])}] - Target Freq: {a.get('puzzle_target')}")
 
             print(f"\n{bold(c_cyan('Cognitive Command:'))} "
-                  f"{c_gold('[1-5]')} Commission Project │ "
+                  f"{c_gold('[1-4]')} Direct inquiry to a domain │ "
                   f"{c_gold('[I]')}nvestigate Anomaly │ "
                   f"{c_gold('[B]')}ack to Bridge")
             try:
-                cmd = input(f"{bold(c_white('Research Action [1-5 / I / B] > '))}").strip().upper()
+                cmd = input(f"{bold(c_white('Research Action [1-4 / I / B] > '))}").strip().upper()
             except (KeyboardInterrupt, EOFError):
                 break
 
@@ -1600,7 +1600,7 @@ class TerminalClient:
                 self.clear_screen()
                 break
 
-            tech_keys = list(fresh_view.get("tech_tree", {}).keys())
+            tech_keys = ["ENERGY", "MATERIALS", "BIOLOGY", "INFORMATION"]
             if cmd.isdigit():
                 idx = int(cmd) - 1
                 if 0 <= idx < len(tech_keys):
@@ -1609,7 +1609,7 @@ class TerminalClient:
                     self._print_result(res)
                     input(c_gold("Press Enter to continue..."))
                 else:
-                    print(c_red("Invalid technology index."))
+                    print(c_red("Choose a domain 1-4."))
                     input(c_gold("Press Enter to continue..."))
 
             elif cmd in ["I", "ANOMALY", "INVESTIGATE"]:
@@ -1649,9 +1649,8 @@ class TerminalClient:
 
     def _prompt_jump_warp(self, view: Dict[str, Any]) -> None:
         """Hyper-dimensional Jump Drive transit across space & outer clusters."""
-        unlocked = view.get("unlocked_techs", [])
-        if "JUMP_DRIVE" not in unlocked:
-            print(c_red("Hyper-Dimensional Jump Drive is not installed. Commission and unlock JUMP_DRIVE in research [N]."))
+        if (view.get("jump_cost") or 10 ** 9) >= 10 ** 8:
+            print(c_red("Your people know nothing yet of folding space: direct inquiry to ENERGY in research [N]."))
             input(c_gold("Press Enter to continue..."))
             return
 

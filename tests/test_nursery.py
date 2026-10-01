@@ -8,7 +8,7 @@ import random
 import unittest
 
 from xylarium.config import MEANING_FLOOR, NURSERIES, VIABILITY_QUARTERS
-from xylarium.kernel import demography, fertility, matter, nursery
+from xylarium.kernel import demography, fertility, knowledge, matter, nursery
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.ledger import money_supply
 
@@ -43,32 +43,33 @@ class TestMeaning(unittest.TestCase):
         self.k = fresh()
         self.w = world_of(self.k, "K")
 
-    def test_discovery_lifts_and_fades(self):
-        w, k = self.w, self.k
+    def test_rising_knowledge_lifts_and_falling_lowers(self):
+        k, w = self.k, self.w
+        holder = knowledge.holder_of_planet(w)
+        knowledge.stats(k).setdefault("growth", {})[holder] = 0.0
         base, _ = fertility.meaning(k, w)
-        fertility.discovered(k, planet=w)
-        lifted, parts = fertility.meaning(k, w)
-        self.assertAlmostEqual(lifted - base, 0.25, places=3)
-        k.cycle_count += 1000
-        self.assertEqual(fertility.meaning(k, w)[1]["discovery"], 0.0)
+        knowledge.stats(k)["growth"][holder] = 0.05
+        self.assertGreater(fertility.meaning(k, w)[0], base)
+        knowledge.stats(k)["growth"][holder] = -0.05
+        self.assertLess(fertility.meaning(k, w)[0], base)
 
-    def test_comfortable_quiet_decays_toward_the_floor(self):
-        w, k = self.w, self.k
-        w.society["lux_access"] = 0.9
-        w.society["founded_cycle"] = 0
-        k.cycle_count = 5000
-        w.society["discovery_cycle"] = -10 ** 9
+    def test_comfort_with_nothing_ahead_sates(self):
+        k, w = self.k, self.w
+        holder = knowledge.holder_of_planet(w)
+        knowledge.stats(k).setdefault("growth", {})[holder] = 0.0
+        w.society["lux_access"] = 0.0
+        hungry_for_more, _ = fertility.meaning(k, w)
+        w.society["lux_access"] = 1.0
         mu, parts = fertility.meaning(k, w)
-        self.assertLess(mu, 1.0)
-        self.assertGreater(parts["stagnation"], 0)
+        self.assertLess(mu, hungry_for_more)
+        self.assertGreater(parts["satiation"], 0)
         self.assertGreaterEqual(mu, MEANING_FLOOR)
-        w.society["lux_access"] = 0.1                       # a poor world is not satiated
-        self.assertEqual(fertility.meaning(k, w)[1]["stagnation"], 0.0)
 
-    def test_the_rebound_after_a_crisis(self):
-        w, k = self.w, self.k
-        w.society["rebound_until"] = k.cycle_count + 200
-        self.assertEqual(fertility.meaning(k, w)[1]["rebound"], 0.30)
+    def test_births_a_crisis_deferred_are_made_up(self):
+        k, w = self.k, self.w
+        w.society["deferred"] = fertility.birth_share_quarter()
+        mu, parts = fertility.meaning(k, w)
+        self.assertEqual(parts["catch_up"], 1.0)
 
     def test_meaning_weighs_as_much_as_births_are_a_choice(self):
         k = self.k
@@ -76,7 +77,7 @@ class TestMeaning(unittest.TestCase):
         if r is None:
             self.skipTest("no r-strategist world on this seed")
         f0, _ = fertility.fertility(k, r)
-        fertility.discovered(k, planet=r)
+        knowledge.stats(k).setdefault("growth", {})[knowledge.holder_of_planet(r)] = 0.1
         f1, _ = fertility.fertility(k, r)
         self.assertAlmostEqual(f0, f1, places=6)            # a clutch is not a decision
 
@@ -86,7 +87,7 @@ class TestNursery(unittest.TestCase):
         k = fresh()
         w = world_of(k, "K")
         w.society.update(basket_fill=1.0, lux_access=1.0)
-        w.citadel_level = 3
+        knowledge.learn(k, knowledge.holder_of_planet(w), "biology", 100)   # artificial gestation, well studied
         w.treasury, w.ore_silo, w.organics_silo = 200_000, 5_000, 100_000
         before, _ = fertility.natural(k, w)
         m0, t0, n0 = money(k), matter.totals(k), k.matter.net()
@@ -95,7 +96,7 @@ class TestNursery(unittest.TestCase):
         self.assertTrue(nursery.online(w))
         after, parts = fertility.natural(k, w)
         self.assertGreater(after, before)
-        self.assertEqual(parts.get("nursery"), 1.0)
+        self.assertAlmostEqual(parts.get("nursery"), nursery.mastery(k, w), places=3)
         self.assertEqual(m0, money(k))
         self.assertEqual(undeclared(k, t0, n0), {})
 
@@ -115,15 +116,15 @@ class TestNursery(unittest.TestCase):
         self.assertLess(w.population, pop)
         self.assertEqual(fertility.natural(k, w)[1].get("nursery"), None)
 
-    def test_a_world_without_the_engineering_cannot_build(self):
+    def test_a_nursery_lifts_only_as_far_as_its_people_know_how(self):
         k = fresh()
         w = world_of(k, "K")
-        w.citadel_level = 1
-        if w.civilization is not None:
-            w.civilization.tech_level = 1
-        w.treasury, w.ore_silo = 10 ** 6, 10 ** 4
-        with self.assertRaises(ValueError):
-            nursery.build(k, w)
+        w.society.update(basket_fill=1.0, lux_access=1.0)
+        bare, _ = fertility.natural(k, w)
+        w.society["nursery"] = {"kind": "K", "built": 0, "online": True}
+        self.assertAlmostEqual(fertility.natural(k, w)[0], bare)      # knowing nothing, it lifts nothing
+        knowledge.learn(k, knowledge.holder_of_planet(w), "biology", 300)
+        self.assertGreater(fertility.natural(k, w)[0], bare)
 
     def test_a_foundry_nursery_feeds_lithic_budding(self):
         k = fresh()
@@ -135,8 +136,9 @@ class TestNursery(unittest.TestCase):
         w.ore_silo = 0
         before, _ = fertility.natural(k, w)
         w.society["nursery"] = {"kind": "lithic", "built": 0, "online": True}
+        knowledge.learn(k, knowledge.holder_of_planet(w), "materials", 300)
         after, parts = fertility.natural(k, w)
-        self.assertEqual(parts["metal"], 1.0)
+        self.assertGreater(parts["metal"], 0.5)
         self.assertGreater(after, before)
 
 
@@ -172,7 +174,8 @@ class TestBlight(unittest.TestCase):
         w.population = int(demography.housing_cap(w, k) * 0.95)
         bare = nursery.r0(k, w)
         w.society["nursery"] = {"kind": "r", "built": 0, "online": True}
-        self.assertAlmostEqual(nursery.r0(k, w), bare * NURSERIES["r"]["r0"])
+        knowledge.learn(k, knowledge.holder_of_planet(w), "biology", 300)
+        self.assertAlmostEqual(nursery.r0(k, w), bare * (1 - nursery.mastery(k, w, "r")))
         self.assertLess(nursery.r0(k, w), 1.0)
 
 

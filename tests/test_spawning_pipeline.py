@@ -34,7 +34,10 @@ class TestGalacticSpawningPipeline(unittest.TestCase):
         """Vector 1: High-tier AI captains with >= 25 grown basis crystals cleave offshoot junior captains."""
         vane = self.kernel.captains["ai_vane"]
         vane.credits = 15000
-        vane.technologies = ["JUMP_DRIVE", "CLOAKING_GRID", "NANITE_DRYDOCK", "BIO_SYNTHESIZER", "ORBITAL_FOUNDRY"]
+        self.kernel.activate()
+        from xylarium.kernel import knowledge                 # a people that has learned a great deal
+        for d in knowledge.DOMAINS:
+            knowledge.learn(self.kernel, knowledge.holder_of_captain(vane), d, 500)
         vane.grown_basis = [{"id": f"basis_{i}"} for i in range(CLEAVE_BASIS_THRESHOLD + 5)]
 
         initial_captain_count = len(self.kernel.captains)
