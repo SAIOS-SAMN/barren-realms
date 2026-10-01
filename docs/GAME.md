@@ -98,6 +98,26 @@ toward the Light. AI colonists read the land as farmers do - they settle the wor
 their own people - and ration and relieve their colonies in their staple. Players see the gauge on `POPULATION`
 and `PEOPLES`, and choose for themselves (`World # RAID`); their worlds never raid alone.
 
+### Knowledge and minds (`knowledge.py`, `laws.py`, `decide.py`)
+There is no tech tree. Each people holds knowledge in four domains - energy, materials, biology, information - in
+knowledge units (a thousand minds' year of free thought). A world adds to it each quarter: its people x the labour
+its harvest frees (1 - 1/self-sufficiency) x leisure (1 + luxury access) x the **depth** of its minds, directed at
+its own troubles (hunger and failing births to biology, a mined-out crust to materials, a degraded grid to energy,
+trade to information) over a floor of curiosity, plus its rulers' focus (`RESEARCH <domain>`). Dogma freezes it, the
+Imperium halves it, and every stock depreciates 15% a year. Relics teach materials, anomalies their precursors'
+domain, watching natives biology.
+
+A capability is a process mastered along **Wright's learning curve** (cost x 0.8 for each doubling of
+experience): the jump drive (a fold costs 250 / mastery), nanite repair, bio-synthesis, alchemy's recipes, every
+nursery. Nothing unlocks; things become worth having.
+
+Minds follow their substrate's temperature (radiative equilibrium at the light the people evolved under; plasma
+for plasmic life): depth ~ 1/sqrt(T) (Landauer's cost per bit over kinetic energy cycling), reaction speed and
+judgement noise ~ sqrt(T). Cold peoples think deep and slow, hot ones quick and noisy. Every agent that chooses -
+councils, AI captains, liquidity providers - uses one **decision rule**: the option worth most over its cost, worth
+discounted at its money's policy rate over a planning horizon that shrinks with its mind's noise, judged with an
+error that grows with it.
+
 ### Fertility (`fertility.py`)
 How many children a people wants depends on its biology:
 - **r-strategists** (mycotiforms, hexasocial swarms, hypobiotids): stored food becomes clutches - they boom.
@@ -108,28 +128,31 @@ How many children a people wants depends on its biology:
 Famine, bombardment and plague cut every people's fertility to a quarter (a law). Dogma multiplies it. Councils and
 players play **natal cards**: the Edict of Propagation, the Ascetic Mandate, and the Pyre's Sacred Hatching.
 
-**Meaning** (mu, 0.5 .. 2.0) is a people's momentum against the satiation of comfort: free worlds it could live on
-within two jumps, or its own settler fleet still in the news (+0.15 .. +0.30); a fresh discovery - a breakthrough,
-a new element, a decoded relic (+0.25 fading to +0.10 over a year); the baby boom after a crisis lifts (+0.30
-for two years). A comfortable world (luxury access >= 50%) with no discovery, crisis or emigration for ten years
-sees mu decay toward its floor. It weighs on births as much as they are a choice: fully for K peoples, half for
-the Stillcold, a quarter for lithic and plasmic peoples, not at all for r clutches.
+**Meaning** (mu, 0.5 .. 2.0) is a people's momentum against the satiation of comfort, read from its state:
+mu = (1 + prospects + catch-up) x (1 - satiation / 2), where prospects are the mean of *room* (the open land in its
+reach it could eat on, as a share of all the land in reach) and *progress* (tanh of a generation times its
+knowledge's annual growth rate); *catch-up* makes up births a crisis deferred, at up to twice the natural rate; and
+*satiation* is comfort with nothing ahead (luxury access x (1 - prospects)). It weighs on births as much as they are
+a choice: fully for K peoples, half for the Stillcold, a quarter for lithic and plasmic peoples, not at all for r
+clutches.
 
 ### Nurseries and blight (`nursery.py`)
-Each strategy has a technological leap past its biology - a district a Tier-3 citadel can build (Tier 2 with the
-**Applied Xenogenesis** research; tech level 3 for an indigenous people), at a habitat's price and ore:
+Each strategy has a technological leap past its biology - a district built like a habitat. Nothing gates it: it
+lifts the people's biology as far as their **mastery** of the process (knowledge.py), and its price and inputs fall
+along the same learning curve:
 
 | Strategy | Nursery | What it lifts | Fed each quarter with |
 |---|---|---|---|
-| K | Fertility Centre (artificial wombs) | half the luxury and crowding compression | organics |
-| Lithic | Foundry Nursery | metal to bud from, and heat for tectonics | Fe / Ti, or ore at 10:1 |
-| Cryo | Deep-Cold Vault | full cold, and wealth's warmth halved | water ice, or the world's fuel |
-| Plasmic | Confinement Ring | a star and a well of its own | H / He-3, or the world's fuel |
-| r | Sanitation Works | blight transmission down a fifth | equipment, or ore |
+| K | Fertility Centre (artificial gestation, biology) | the luxury and crowding compression, by mastery | organics |
+| Lithic | Foundry Nursery (foundry budding, materials) | metal to bud from, and heat for tectonics | Fe / Ti, or ore at 10:1 |
+| Cryo | Deep-Cold Vault (deep refrigeration, energy) | cold, and wealth's warmth | water ice, or the world's fuel |
+| Plasmic | Confinement Ring (magnetic confinement, energy) | a star and a well of its own | H / He-3, or the world's fuel |
+| r | Sanitation Works (sanitation, biology) | blight transmission, by mastery | equipment, or ore |
 
 A nursery buys its inputs from the world's holdings or its contractor port. Unfed for a quarter it goes dark and
 its brood is lost (a quarter's births): high-tech fertility is only as sound as the supply chain behind it.
-Councils build theirs when their people fall below replacement (r peoples: when blight threatens); players use
+Councils build theirs by the decision rule (decide.py) when the people it lets the world sustain - or, for r
+peoples, the blight deaths it averts - are worth more at their tax value than its price and upkeep; players use
 `POPULATION` then `World # NURSERY`.
 
 r peoples breed freely; their ceiling is **blight**. Density sets a pathogen's reproduction number,
@@ -171,6 +194,12 @@ to excavate.
 Four currencies - SOL (the Federation), FRN (the Frontier), THR (the Imperium), VOID (the Deep Void) - trade
 through constant-product exchange pools and the Galactic ISSE cross pairs. Each region's central bank lends,
 absorbs and runs public works; a clearing union settles between them on a sealed settlement chain.
+
+Regional central banks pay their policy rate on the balances captains hold in their money (from reserves above
+their floor), and captains convert regional money to SOL only as far as that rate fails to cover its expected
+depreciation (uncovered interest parity, judged with each mind's noise). Anyone holding both sides of a pool - AI
+captains and companies - may **provide liquidity** for a share of its fees when its fee yield beats the bank rate
+plus its impermanent loss (about sigma^2/8 a quarter) (`liquidity.py`).
 
 ### Monetary policy: M V = P Y
 Each currency's authority measures money's velocity at genesis and steers the supply toward what real output
@@ -286,6 +315,16 @@ Run it:
 ```bash
 python3 simulate_playtest.py --cycles 10000 --seed 7
 python3 -m unittest discover -s tests
+```
+
+**The living universe** (`tools/live.py`) runs seeds continuously instead: it checks money and matter conservation
+every quarter (the one hard law), saves a snapshot and appends an observation line every 500 cycles, and stops with
+a crash dump when a law breaks. A code change takes effect by restarting it: the universe resumes from its last
+snapshot and keeps living through the upgrade.
+
+```bash
+python3 tools/live.py --seed 7            # run or resume (runs/seed7/)
+python3 tools/live.py --seed 7 --show 10  # the last observations
 ```
 
 `XYL_AUDIT=1` (optionally `XYL_AUDIT_FROM=<cycle>`) makes the harness name the exact action, AI turn or seasonal

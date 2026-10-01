@@ -95,6 +95,7 @@ class CentralBank:
     loans: Dict[str, Dict[str, int]] = field(default_factory=dict)   # borrower id -> {"principal", "debt"}
     policy_rate: float = POLICY_RATE_BASE           # per fiscal quarter
     stats: Dict[str, int] = field(default_factory=dict)
+    paid_rate: float = 0.0                          # what deposits actually earned last quarter
 
     def bump(self, key: str, amount: int = 1) -> None:
         self.stats[key] = self.stats.get(key, 0) + int(amount)
@@ -107,13 +108,14 @@ class CentralBank:
         return {"currency": self.currency, "name": self.name, "federation": self.federation,
                 "governor": self.governor, "alignment": self.alignment, "reserves": self.reserves,
                 "loans": {k: dict(v) for k, v in self.loans.items()}, "policy_rate": self.policy_rate,
-                "stats": dict(self.stats)}
+                "stats": dict(self.stats), "paid_rate": self.paid_rate}
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "CentralBank":
         b = cls(currency=d["currency"], name=d["name"], federation=d["federation"], governor=d["governor"],
                 alignment=float(d["alignment"]), reserves=int(d.get("reserves", 0)),
-                policy_rate=float(d.get("policy_rate", POLICY_RATE_BASE)))
+                policy_rate=float(d.get("policy_rate", POLICY_RATE_BASE)),
+                paid_rate=float(d.get("paid_rate", 0.0)))
         b.loans = {k: {kk: int(vv) for kk, vv in v.items()} for k, v in d.get("loans", {}).items()}
         b.stats = {k: int(v) for k, v in d.get("stats", {}).items()}
         return b
@@ -205,6 +207,35 @@ class BankingSystem:
                 bank.bump("injected", amount)
                 receipts.add(kernel, "clearing_inject", bank.name, EXCHANGES.get(pool_cur, ISSE_MEMBER),
                              amount, bank.currency, f"{pool_cur} pool {side} side below band")
+
+    # ------------------------------------------------------------------ deposits
+    def _deposit_interest(self, kernel: Any, bank: CentralBank) -> None:
+        """A regional central bank pays its policy rate on the balances captains hold in its money, out of its
+        reserves above the floor (pro rata when they fall short): a transfer, nothing minted. This is how a
+        bank defends its currency - a high rate pays people to hold it."""
+        if bank.currency == "SOL" or bank.policy_rate <= 0:
+            return
+        holders = [(c, c.fx_wallet.get(bank.currency, 0)) for c in kernel.captains.values()
+                   if c.fx_wallet.get(bank.currency, 0) > 0]
+        owed = sum(int(b * bank.policy_rate) for _, b in holders)
+        can = max(0, bank.reserves - self.reserve_floor(bank))
+        if owed <= 0 or can <= 0:
+            return
+        scale = min(1.0, can / owed)
+        paid = 0
+        for cap, bal in holders:
+            amt = int(bal * bank.policy_rate * scale)
+            if amt > 0:
+                cap.fx_wallet[bank.currency] = bal + amt
+                paid += amt
+        bank.reserves -= paid
+        bank.bump("deposit_interest", paid)
+        bank.paid_rate = round(bank.policy_rate * scale, 5)
+
+    def paid_rate(self, currency: str) -> float:
+        """What holding this money actually earned last quarter (the policy rate, unless reserves fell short)."""
+        bank = self.banks.get(currency)
+        return float(getattr(bank, "paid_rate", 0.0) or 0.0) if bank is not None else 0.0
 
     # ------------------------------------------------------------------ credit
     def rate_for(self, bank: CentralBank) -> float:
@@ -338,6 +369,7 @@ class BankingSystem:
         for bank in self.banks.values():
             self._intervene(kernel, bank, receipts)
             self._credit(kernel, bank, receipts)
+            self._deposit_interest(kernel, bank)
             self._public_works(kernel, bank, supply.get(bank.currency, {}).get("total", 0), receipts)
         note = self._council(kernel)
         if note:

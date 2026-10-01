@@ -19,6 +19,8 @@ from typing import Any, Dict, Optional, Tuple
 from xylarium.config import CURRENCIES, FX_POOL_SEED, FX_FEE, PRICE_LEVEL
 
 SOL = "SOL"
+import os as _os
+FX_TRACE: Optional[Dict[str, Dict[str, float]]] = {} if _os.environ.get("XYL_FX_TRACE") else None
 
 
 def currency_for_security(security: Any) -> str:
@@ -65,7 +67,19 @@ class FXMarket:
         return self.rate(cur) / PRICE_LEVEL.get(cur, 1.0)
 
     # ------------------------------------------------------------------ swaps
+    def _trace(self, cur: str, sol_net: float) -> None:
+        """XYL_FX_TRACE=1: net SOL into each pool (+) or out of it (-), by the calling site (diagnostics only)."""
+        import sys
+        f = sys._getframe(2)
+        while f is not None and f.f_code.co_filename.endswith("fx.py"):
+            f = f.f_back
+        where = f"{f.f_code.co_filename.rsplit('/', 1)[-1]}:{f.f_code.co_name}" if f is not None else "?"
+        t = FX_TRACE.setdefault(cur, {})
+        t[where] = t.get(where, 0.0) + sol_net
+
     def swap_sol_to(self, cur: str, sol_in: int) -> int:
+        if FX_TRACE is not None:
+            self._trace(cur, sol_in)
         p = self.pools[cur]
         k = p["sol"] * p["local"]
         eff = sol_in * (1 - FX_FEE)
@@ -81,6 +95,8 @@ class FXMarket:
         k = p["sol"] * p["local"]
         eff = local_in * (1 - FX_FEE)
         out = int(math.floor(p["sol"] - k / (p["local"] + eff)))
+        if FX_TRACE is not None:
+            self._trace(cur, -out)
         p["local"] += local_in
         p["sol"] -= out
         self.volume_sol[cur] += out
@@ -206,13 +222,47 @@ class FXMarket:
         credit(captain, cur, self.swap_sol_to(cur, sol_in))
         return captain.fx_wallet.get(cur, 0) >= needed
 
-    def repatriate(self, captain: Any, threshold_sol: float, keep: Optional[set] = None) -> int:
+    def expected_depreciation(self, kernel: Any, cur: str) -> float:
+        """A holder's forecast of how fast this money loses value against SOL a quarter: the mean log change of
+        its quarter-end rate over the last two years (liquidity.py reads them)."""
+        import math as _m
+        from xylarium.kernel import liquidity
+        hist = liquidity.stats(kernel)["rates"].get(cur, [])
+        if len(hist) < 2:
+            return 0.0
+        steps = [_m.log(b / a) for a, b in zip(hist, hist[1:]) if a > 0 and b > 0]
+        return sum(steps) / len(steps) if steps else 0.0
+
+    def advantage(self, kernel: Any, cur: str) -> float:
+        """Uncovered interest parity, as a holder sees it: what this money pays a quarter (its central bank's
+        deposit rate) less what it is expected to lose against SOL."""
+        if kernel is None:
+            return -1.0
+        return kernel.banking.paid_rate(cur) - self.expected_depreciation(kernel, cur)
+
+    def share_to_convert(self, kernel: Any, captain: Any, cur: str) -> float:
+        """How much of a balance a holder converts to SOL: none while holding pays; past that, a share growing with
+        the shortfall measured in its own judgement's error (laws.cognition noise x the money's volatility) - so
+        holders with different minds and seen through a noisy market do not all move at once."""
+        import math as _m
+        import random as _r
+        from xylarium.kernel import laws, liquidity
+        adv = self.advantage(kernel, cur)
+        vol = max(1e-4, liquidity.stats(kernel)["vol"].get(cur, 0.0)) if kernel is not None else 1.0
+        noise = laws.cognition(getattr(captain, "metabolism", None) or "biotic")["noise"]
+        seen = adv + _r.Random(f"fx:{captain.id}:{getattr(kernel, 'cycle_count', 0)}").gauss(0.0, noise * vol)
+        return 0.0 if seen >= 0 else 1.0 - _m.exp(seen / vol)
+
+    def repatriate(self, captain: Any, threshold_sol: float, keep: Optional[set] = None, kernel: Any = None) -> int:
         """Converts foreign balances worth more than ``threshold_sol`` back into SOL - except the money of the
-        region the captain is working in (``keep``): a trader holds the local money while trading locally."""
+        region the captain is working in (``keep``), and - when the kernel is known - only the share its expected
+        return no longer justifies holding (share_to_convert)."""
         total = 0
         for cur, amt in list(captain.fx_wallet.items()):
             if keep and cur in keep:
                 continue
+            if kernel is not None:
+                amt = int(amt * self.share_to_convert(kernel, captain, cur))
             if cur in self.pools and amt > 0 and self.to_sol_value(cur, amt) > threshold_sol:
                 debit(captain, cur, amt)
                 sol = self.swap_to_sol(cur, amt)

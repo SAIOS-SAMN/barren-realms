@@ -461,13 +461,22 @@ class SeatSurvive:
         return captain.fx_wallet.get(cur, 0) + captain.credits * fxm.rate(cur) * (1 - 0.01)
 
     @staticmethod
-    def _pool_currencies(kernel: "GameKernel", captain: Captain, keep: str) -> None:
-        """Converts every other foreign balance straight into the counter's money (best route: a
-        Galactic ISSE cross pair, or the federation exchanges via SOL)."""
+    def _pool_currencies(kernel: "GameKernel", captain: Captain, keep: str, need: float = 0.0) -> None:
+        """Converts other foreign balances into the counter's money (best route: a Galactic ISSE cross pair, or
+        the federation exchanges via SOL) - only as much as the purchase needs, not everything held."""
         fxm = kernel.fx_market
+        short = max(0.0, need - captain.fx_wallet.get(keep, 0)) if need > 0 else None
         for cur, amt in list(captain.fx_wallet.items()):
-            if cur not in (keep, "SOL") and amt > 0:
-                fxm.exchange(captain, cur, keep, amt)
+            if cur in (keep, "SOL") or amt <= 0:
+                continue
+            if short is not None:
+                if short <= 0:
+                    break
+                # what this balance must give up to cover the shortfall, at the mid rate (plus the fee's margin)
+                amt = min(amt, int(short * fxm.rate(cur) / max(1e-9, fxm.rate(keep)) * 1.01) + 1)
+            _, _, got = fxm.exchange(captain, cur, keep, amt)
+            if short is not None:
+                short -= got
 
     @staticmethod
     def _liquidate_shares(kernel: "GameKernel", captain: Captain, need_local: float, cur: str) -> Optional["CognitiveDeed"]:
@@ -758,7 +767,7 @@ class SeatSurvive:
                         unit_price = max(1, int(round(base_price * EconomyManager.counterparty_factor(captain, port, "buy"))))
                         spendable = cls._spendable_local(kernel, captain, port.currency)
                         if spendable < unit_price * min(max_can_buy, 3):
-                            cls._pool_currencies(kernel, captain, port.currency)
+                            cls._pool_currencies(kernel, captain, port.currency, unit_price * max_can_buy)
                             spendable = cls._spendable_local(kernel, captain, port.currency)
                             if spendable < unit_price * min(max_can_buy, 3):
                                 raise_cash = cls._liquidate_shares(kernel, captain, unit_price * max_can_buy, port.currency)
@@ -1901,7 +1910,7 @@ class CognitiveOrgan:
         # in stays in hand to be spent there (the captain's own decision, not a script's sweep)
         fxm = getattr(kernel, "fx_market", None)
         if fxm is not None and captain.fx_wallet:
-            fxm.repatriate(captain, AI_FX_REPATRIATE_THRESHOLD, fxm.working_currencies(kernel, captain))
+            fxm.repatriate(captain, AI_FX_REPATRIATE_THRESHOLD, fxm.working_currencies(kernel, captain), kernel=kernel)
 
         # 0. CRYSTALLIZATION: when the cochain has pitched far enough and the invariants hold,
         # the lineage ascends. Checked periodically (evaluation prices the whole balance sheet).
