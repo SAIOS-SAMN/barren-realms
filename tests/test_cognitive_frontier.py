@@ -179,6 +179,11 @@ class TestFrontierObservationLaw(unittest.TestCase):
         self.kernel.activate()
         knowledge.learn(self.kernel, knowledge.holder_of_captain(self.player), "energy", 300)
         self.player.credits = 5000
+        refused = self.kernel.dispatch(self.player.id, ActionType.JUMP_WARP, destination=42)
+        self.assertFalse(refused.success)                  # no fourth axis, no fold
+        from xylarium.kernel import crystal, intellect
+        intellect.stats(self.kernel)["vocab"][knowledge.holder_of_captain(self.player)] = [
+            crystal.ROT90, crystal.HYPER_FLIP]             # a precursor relic's crystal
         self.player.sector_id = 1
 
         # Jump to charted sector 42

@@ -48,7 +48,11 @@ BASE = [C.ROT90]             # every mind can turn a thing around
 DISCOVERABLE = {             # crystal -> the domain whose knowledge reveals it
     C.FLIPH: "information", C.FLIPV: "information", C.TRANSPOSE: "information",
     C.RECOLOR: "biology", C.FLIP_STACK: "energy", C.CYCLE_LAYERS: "energy",
+    C.HYPER_FLIP: "energy", C.HYPER_CYCLE: "energy",
 }
+RANK_OF = {C.FLIPH: 2, C.FLIPV: 2, C.TRANSPOSE: 2, C.RECOLOR: 2, C.FLIP_STACK: 3, C.CYCLE_LAYERS: 3,
+           C.HYPER_FLIP: 4, C.HYPER_CYCLE: 4}
+VOLUMETRIC_WORLDS = ("GAS_GIANT", "OCEANIC")      # peoples born in volumes think in them first
 ABSTRACT_AFTER = 3           # a composite written this many times is crystallised into one generator
 
 # netstratum's rung ladders: level -> (tier, word length, shape, training pairs)
@@ -57,6 +61,9 @@ RUNGS = {
         5: (3, 3, (4, 4), 3), 6: (3, 4, (4, 4), 3), 7: (3, 5, (4, 5), 3), 8: (3, 6, (5, 5), 3)},
     3: {1: (1, 1, (2, 3, 3), 2), 2: (2, 2, (3, 3, 3), 2), 3: (2, 2, (3, 4, 4), 3), 4: (3, 3, (4, 4, 4), 3),
         5: (3, 3, (5, 4, 5), 3), 6: (3, 4, (5, 4, 5), 3), 7: (3, 5, (5, 5, 5), 3), 8: (3, 6, (5, 5, 5), 3)},
+    # rank 4 - the fourth axis: a stack of volumes (beyond netstratum's ladders, on the same progression)
+    4: {1: (1, 1, (2, 2, 3, 3), 2), 2: (2, 2, (2, 2, 3, 3), 2), 3: (2, 2, (2, 3, 3, 3), 3), 4: (3, 3, (3, 3, 3, 3), 3),
+        5: (3, 3, (3, 3, 3, 4), 3), 6: (3, 4, (3, 3, 4, 4), 3), 7: (3, 5, (3, 4, 4, 4), 3), 8: (3, 6, (4, 4, 4, 4), 3)},
 }
 
 
@@ -101,13 +108,21 @@ def forge(seed: str, holder: str, rank: int, level: int) -> Dict[str, Any]:
         return tuple(tuple(rng.choice(palette) for _ in range(cols)) for _ in range(rows))
 
     def make():
+        if rank == 4:
+            return tuple(tuple(grid(shape[2], shape[3]) for _ in range(shape[1])) for _ in range(shape[0]))
         return tuple(grid(shape[1], shape[2]) for _ in range(shape[0])) if rank == 3 else grid(*shape)
 
     # a word that comes back to where it started (a flip twice) is no task at all: draw again
     while True:
         word: List[Any] = []
         for _ in range(word_len):
-            if rank == 3 and rng.random() < 0.4:
+            if rank == 4 and rng.random() < 0.3:
+                word.append(rng.choice(C.HYPER_OPS))
+            elif rank == 4 and rng.random() < 0.4:
+                word.append(("per_volume", rng.choice(C.STACK_OPS)))
+            elif rank == 4:
+                word.append(("per_volume", ("per_layer", planar_op())))
+            elif rank == 3 and rng.random() < 0.4:
                 word.append(rng.choice(C.STACK_OPS))
             else:
                 op = planar_op()
@@ -168,38 +183,59 @@ def _chart(vocab: List[Any]) -> Dict[Tuple[int, int], List[Any]]:
     return table
 
 
+def _expand_op(op: Any) -> List[Any]:
+    if isinstance(op, tuple) and op and op[0] == "composite":
+        return [x for inner in op[1] for x in _expand_op(inner)]
+    if isinstance(op, tuple) and op and op[0] in ("per_layer", "per_volume"):
+        return [(op[0], x) for x in _expand_op(op[1])]
+    return [op]
+
+
 def expand(program: List[Any]) -> List[Any]:
-    """Composites unfold into the ops they name (the replay path speaks only netstratum's vocabulary)."""
-    out: List[Any] = []
-    for op in program:
-        if isinstance(op, tuple) and op and op[0] == "composite":
-            out.extend(op[1])
-        elif isinstance(op, tuple) and op and op[0] == "per_layer" and isinstance(op[1], tuple) \
-                and op[1] and op[1][0] == "composite":
-            out.extend(("per_layer", x) for x in op[1][1])
-        else:
-            out.append(op)
-    return out
+    """Composites unfold into the ops they name, at any depth of nesting (the replay path speaks only the
+    vocabulary itself)."""
+    return [x for op in program for x in _expand_op(op)]
+
+
+def _hyper_chart(vocab: List[Any], n: int) -> Dict[Tuple[int, int], List[Any]]:
+    """The fourth axis charted like the third: the people's hyper crystals over n volumes."""
+    as_stack = {C.HYPER_FLIP: C.FLIP_STACK, C.HYPER_CYCLE: C.CYCLE_LAYERS}
+    back = {v: k for k, v in as_stack.items()}
+    table = C.stack_chart([as_stack[g] for g in vocab if g in C.HYPER_OPS], n)
+    return {k: [back[w] for w in word] for k, word in table.items()}
+
+
+def _volumetric(vocab: List[Any], coord, layers: int) -> Optional[List[Any]]:
+    """A rank-3 coordinate written in a people's crystals (stack word, then the per-layer frame and colour)."""
+    shift, rev, (frame, cmap) = coord
+    st = C.stack_chart([g for g in vocab if g in C.STACK_OPS], layers).get((shift, rev))
+    fw = _chart(vocab).get(frame)
+    if st is None or fw is None:
+        return None
+    prog = list(st) + [("per_layer", op) for op in fw]
+    if tuple(cmap) != tuple(range(C.HUES)):
+        if C.RECOLOR not in vocab:
+            return None
+        prog.append(("per_layer", (C.RECOLOR, tuple(cmap))))
+    return prog
 
 
 def decompact(vocab: List[Any], task: Dict[str, Any]) -> Optional[List[Any]]:
     """The program a people writes for a task: read the coordinate, look up its address in its own chart."""
     recolors = C.RECOLOR in vocab
-    if task["rank"] == 3:
-        coord = C.read_stack(task["train"])
+    if task["rank"] == 4:
+        coord = C.read_hyper(task["train"])
         if coord is None:
             return None
-        shift, rev, (frame, cmap) = coord
-        st = C.stack_chart([g for g in vocab if g in C.STACK_OPS], len(task["test"])).get((shift, rev))
-        fw = _chart(vocab).get(frame)
-        if st is None or fw is None:
+        shift, rev, inner = coord
+        hw = _hyper_chart(vocab, len(task["test"])).get((shift, rev))
+        body = _volumetric(vocab, inner, len(task["test"][0]))
+        if hw is None or body is None:
             return None
-        prog = list(st) + [("per_layer", op) for op in fw]
-        if tuple(cmap) != tuple(range(C.HUES)):
-            if not recolors:
-                return None
-            prog.append(("per_layer", (C.RECOLOR, tuple(cmap))))
-        return prog
+        return list(hw) + [("per_volume", op) for op in body]
+    if task["rank"] == 3:
+        coord = C.read_stack(task["train"])
+        return None if coord is None else _volumetric(vocab, coord, len(task["test"]))
     coord = C.read(task["train"])
     if coord is None:
         return None
@@ -236,8 +272,8 @@ def _wire(program: List[Any]) -> List[Any]:
     def one(op):
         if isinstance(op, tuple) and op and op[0] == C.RECOLOR:
             return ["recolor", list(op[1])]
-        if isinstance(op, tuple) and op and op[0] == "per_layer":
-            return ["per_layer", one(op[1])]
+        if isinstance(op, tuple) and op and op[0] in ("per_layer", "per_volume"):
+            return [op[0], one(op[1])]
         if isinstance(op, tuple) and op and op[0] == "composite":
             return ["composite", [one(x) for x in op[1]]]
         return op
@@ -248,8 +284,8 @@ def _unwire(program: List[Any]) -> List[Any]:
     def one(op):
         if isinstance(op, list) and op and op[0] == "recolor":
             return (C.RECOLOR, tuple(op[1]))
-        if isinstance(op, list) and op and op[0] == "per_layer":
-            return ("per_layer", one(op[1]))
+        if isinstance(op, list) and op and op[0] in ("per_layer", "per_volume"):
+            return (op[0], one(op[1]))
         if isinstance(op, list) and op and op[0] == "composite":
             return ("composite", tuple(one(x) for x in op[1]))
         return op
@@ -294,7 +330,7 @@ def _peoples(kernel: Any) -> Dict[str, Dict[str, Any]]:
 
 
 def gauge(kernel: Any, holder: str) -> Dict[str, int]:
-    return stats(kernel)["gauge"].get(holder, {"2": 0, "3": 0})
+    return stats(kernel)["gauge"].get(holder, {"2": 0, "3": 0, "4": 0})
 
 
 def fluid(kernel: Any, holder: Optional[str]) -> float:
@@ -302,16 +338,16 @@ def fluid(kernel: Any, holder: Optional[str]) -> float:
     if not holder or kernel is None or not hasattr(kernel, "state") or "intellect" not in kernel.state:
         return 0.0
     g = gauge(kernel, holder)
-    return (g.get("2", 0) + g.get("3", 0)) / (2.0 * TOP)
+    return (g.get("2", 0) + g.get("3", 0) + g.get("4", 0)) / (3.0 * TOP)
 
 
 def _attempt(kernel: Any, holder: str, budget: float, seed: str) -> Tuple[Dict[str, int], List[Dict[str, Any]], float]:
     vocab = vocabulary(kernel, holder)
-    reached = {"2": 0, "3": 0}
+    reached = {"2": 0, "3": 0, "4": 0}
     proofs = []
     minted = 0.0
     st = stats(kernel)
-    for rank in (2, 3):
+    for rank in (2, 3, 4):
         for level in range(1, TOP + 1):
             task = forge(seed, holder, rank, level)
             program = decompact(vocab, task)
@@ -360,10 +396,20 @@ def _learn(kernel: Any, holder: str, rec: Dict[str, Any], neighbours: List[str])
     stocks = knowledge.stocks(kernel, holder)
     rng = _rng("crystals", holder, kernel.cycle_count)
     thought = 1.0 - math.exp(-rec["effort"])
+    # a people thinks first in the dimensions it was born into: volume-dwellers find the stack, surface-dwellers
+    # the mirror (its most populous world is its home)
+    home = max(rec["worlds"], key=lambda p: p.population) if rec["worlds"] else None
+    native = 3 if (home is not None and home.planet_type in VOLUMETRIC_WORLDS) else 2
     for crystal, domain in DISCOVERABLE.items():
         if crystal in held:
             continue
-        if rng.random() < laws.mastery(stocks.get(domain, 0.0), KNOWLEDGE_UNIT) * thought:
+        rank = RANK_OF.get(crystal, 2)
+        if rank == 4 and not all(s in held for s in C.STACK_OPS):
+            continue                                  # a fourth axis cannot be conceived before the third
+        chance = laws.mastery(stocks.get(domain, 0.0), KNOWLEDGE_UNIT) * thought * (2.0 if rank == native else 1.0)
+        if rank == 4:
+            chance *= laws.mastery(stocks.get("information", 0.0), KNOWLEDGE_UNIT)   # it takes both
+        if rng.random() < chance:
             v.append(crystal)
             held.add(crystal)
             st["stats"]["discovered"] += 1
@@ -451,6 +497,8 @@ def summary(kernel: Any) -> Dict[str, Any]:
     return {"peoples": len(g), "top": {h: v for h, v in top},
             "mean_fluid": {k: round(sum(v) / len(v), 3) for k, v in by_kind.items()},
             "volumetric_peoples": sum(1 for v in g.values() if v.get("3", 0) > 0),
+            "interdimensional_peoples": sum(1 for h in st["vocab"] if any(norm(c) in C.HYPER_OPS
+                                                                            for c in st["vocab"][h])),
             "vocab_mean": round(sum(vocab_sizes) / len(vocab_sizes), 2) if vocab_sizes else 0,
             **st["stats"]}
 

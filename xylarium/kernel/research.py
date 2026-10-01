@@ -466,6 +466,13 @@ class ResearchManager:
         # Folding space costs what the captain's people's energy science has not yet learned away
         from xylarium.kernel import knowledge
         m = knowledge.captain_mastery(kernel, captain, "jump_drive")
+        if not can_fold(kernel, captain):
+            return ActionResult(
+                success=False,
+                action=ActionType.JUMP_WARP,
+                message="Your people cannot yet conceive a fourth axis: folding space needs a hyper crystal "
+                        "(discover it with energy and information, learn it from neighbours, or find it in a relic).",
+            )
         if m <= 0:
             return ActionResult(
                 success=False,
@@ -544,8 +551,16 @@ class ResearchManager:
         return mgr
 
 
+def can_fold(kernel: Any, captain: Any) -> bool:
+    """Folding space is interdimensional: only a people whose minds hold the fourth axis (a hyper crystal) can
+    conceive the fold at all (intellect.py) - by discovery, by teaching, or from a precursor relic."""
+    from xylarium.kernel import crystal, intellect, knowledge
+    return any(c in crystal.HYPER_OPS for c in intellect.vocabulary(kernel, knowledge.holder_of_captain(captain)))
+
+
 def jump_cost(kernel: Any, captain: Any) -> int:
-    """Capacitor charge for a fold: 250 Cr at full mastery of the drive, more as mastery falls (1 / mastery)."""
+    """Capacitor charge for a fold: 250 Cr at full mastery of the drive, more as mastery falls (1 / mastery);
+    none at all without the mathematics of a fourth axis."""
     from xylarium.kernel import knowledge
     m = knowledge.captain_mastery(kernel, captain, "jump_drive")
-    return int(250 / m) if m > 0 else 10 ** 9
+    return int(250 / m) if (m > 0 and can_fold(kernel, captain)) else 10 ** 9

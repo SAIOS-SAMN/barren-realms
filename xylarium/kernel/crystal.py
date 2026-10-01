@@ -35,10 +35,13 @@ Volume = Tuple[Grid, ...]                          # layers
 # ---------------------------------------------------------------------- op codes (netstratum wire law)
 ROT90, ROT180, ROT270, FLIPH, FLIPV, TRANSPOSE, RECOLOR = 1, 2, 3, 4, 5, 6, 7
 FLIP_STACK, CYCLE_LAYERS = "flip_stack", "cycle_layers"
+HYPER_FLIP, HYPER_CYCLE = "hyper_flip", "hyper_cycle"      # rank 4: the fourth axis (a stack of volumes)
 NAMES = {ROT90: "rotate90", ROT180: "rotate180", ROT270: "rotate270", FLIPH: "flip_h", FLIPV: "flip_v",
-         TRANSPOSE: "transpose", RECOLOR: "recolor", FLIP_STACK: "flip_stack", CYCLE_LAYERS: "cycle_layers"}
+         TRANSPOSE: "transpose", RECOLOR: "recolor", FLIP_STACK: "flip_stack", CYCLE_LAYERS: "cycle_layers",
+         HYPER_FLIP: "hyper_flip", HYPER_CYCLE: "hyper_cycle"}
 FRAME_OPS = (ROT90, ROT180, ROT270, FLIPH, FLIPV, TRANSPOSE)
 STACK_OPS = (FLIP_STACK, CYCLE_LAYERS)
+HYPER_OPS = (HYPER_FLIP, HYPER_CYCLE)
 
 
 # ---------------------------------------------------------------------- the frame group D4
@@ -185,6 +188,36 @@ def read(pairs: Iterable[Tuple[Grid, Grid]]) -> Optional[Tuple[Tuple[int, int], 
     return a, tuple(cmap)
 
 
+def _orders(n: int):
+    """Every element of D_n acting on n positions: (shift, reversed, the order it reads them in)."""
+    for rev in (0, 1):
+        for shift in range(n):
+            order = [((n - 1 - j) if rev else j) for j in range(n)]
+            yield shift, rev, (order[-shift:] + order[:-shift] if shift else order)
+
+
+def read_hyper(pairs):
+    """Rank 4 (a stack of volumes): the hyper-stack element read from where each volume lands, and the rank-3
+    coordinate every aligned pair of volumes agrees on. None if no single coordinate fits."""
+    pairs = list(pairs)
+    if not pairs:
+        return None
+    n = len(pairs[0][0])
+    agreed = None
+    for xi, xo in pairs:
+        if len(xi) != n or len(xo) != n:
+            return None
+        found = set()
+        for shift, rev, order in _orders(n):
+            inner = read_stack([(xi[order[j]], xo[j]) for j in range(n)])
+            if inner is not None:
+                found.add((shift, rev, inner))
+        agreed = found if agreed is None else (agreed & found)
+        if not agreed:
+            return None
+    return min(agreed)
+
+
 def read_stack(pairs: Iterable[Tuple[Volume, Volume]]):
     """Volumes: the layer permutation (a D_L element: (shift, reversed)) and the per-layer coordinate, read from
     where each layer lands. None if no single stack element and planar coordinate fit every pair."""
@@ -286,10 +319,12 @@ def apply_op(op, g):
 def run(program: Sequence, x):
     """Apply a program to a grid or (with stack / per-layer ops) a volume."""
     for op in program:
-        if op == FLIP_STACK:
+        if op in (FLIP_STACK, HYPER_FLIP):
             x = tuple(reversed(x))
-        elif op == CYCLE_LAYERS:
+        elif op in (CYCLE_LAYERS, HYPER_CYCLE):
             x = (x[-1],) + tuple(x[:-1])
+        elif isinstance(op, tuple) and op and op[0] == "per_volume":
+            x = tuple(run([op[1]], v) for v in x)
         elif isinstance(op, tuple) and op and op[0] == "per_layer":
             x = tuple(apply_op(op[1], layer) for layer in x)
         else:
@@ -302,6 +337,8 @@ def describe(op) -> str:
         return "recolor[" + ",".join(str(h) for h in op[1]) + "]"
     if isinstance(op, tuple) and op and op[0] == "per_layer":
         return f"per_layer({describe(op[1])})"
+    if isinstance(op, tuple) and op and op[0] == "per_volume":
+        return f"per_volume({describe(op[1])})"
     return NAMES[op]
 
 
