@@ -1551,6 +1551,7 @@ PROCESSES = {
     "nursery_cryo": {"domain": "energy", "name": "deep refrigeration"},
     "nursery_plasmic": {"domain": "energy", "name": "magnetic confinement"},
     "genome_editing": {"domain": "biology", "name": "genome editing"},
+    "terraforming": {"domain": "materials", "name": "planetary engineering"},
     "solar_collectors": {"domain": "energy", "name": "light collection"},
     "stellar_arrays": {"domain": "energy", "name": "orbital collection and beaming"},
     "core_taps": {"domain": "materials", "name": "deep core boring"},

@@ -19,7 +19,7 @@ from typing import Any
 
 
 def is_primordial(kernel: Any) -> bool:
-    return ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("mode") == "primordial"
+    return ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("mode") in ("primordial", "forager")
 
 
 def settle(kernel: Any) -> None:
@@ -43,12 +43,15 @@ def settle(kernel: Any) -> None:
     mm.contracts.clear()
     kernel.captains.clear()
     kernel.state["genesis"]["firsts"] = {}
+    if kernel.state["genesis"].get("mode") == "forager":
+        from xylarium.kernel import ways
+        ways.forage(kernel)                            # and further back: foragers, before fields and states
 
 
 def first(kernel: Any, what: str, who: str) -> None:
     """Record the first time something happens in a primordial universe (the baseline the user asked for)."""
     g = (getattr(kernel, "state", None) or {}).get("genesis")
-    if not g or g.get("mode") != "primordial":
+    if not g or g.get("mode") not in ("primordial", "forager"):
         return
     firsts = g.setdefault("firsts", {})
     if what not in firsts:

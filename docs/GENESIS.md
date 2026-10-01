@@ -74,6 +74,37 @@ Measured, not assumed:
   lost at most once). They do not yet anticipate a rival's best response or value reputation: deterrence and
   balancing coalitions are the next layer.
 
+## Further back: the forager genesis
+
+`GameKernel(seed, genesis="forager")` (`tools/live.py --genesis forager`) starts before fields and states (ways.py):
+
+* every people forages: it numbers what its wild land feeds a link up the food chain - a tenth of what the same land
+  feeds farmed (Lindeman's ten-percent law); no state, no treasury, no taxes, no money, no works;
+* it learns by doing (a season's gathering teaches biology at its minds' depth, a thousand people-years to a unit),
+  and harvesting wild stands breeds the crops without meaning to - Lande's equation, `genome.VARIANCE` x its
+  mastery x how hard it presses its land, a crop generation a year;
+* it takes up farming when the room its half-wild crops would make outweighs the toil of farming unknowingly
+  (the population times what it has not learned) - its own elders judging (decide.choose);
+* farmers breed on purpose; a state forms when the surplus (1 - wild/farmed yield) can bear a state's share and the
+  room a citadel would buy is worth more over its horizon than what the state takes. From then on it is the
+  primordial genesis.
+
+Measured (seeds 7 and 42): with peoples of ~1,000 foragers, crop selection runs at ~0.1% of an e-fold a year -
+the forager age lasts centuries, longest for the smallest peoples; a hot, noisy mind sometimes farms early by
+misjudgement. The largest peoples domesticate first.
+
+## Making peoples, and making worlds for them
+
+* **Designer** (designer.py; `SPECIES_DESIGN` previews, `SPECIES_SEED` sets down): a metabolism, a body plan (its
+  reproductive strategy) and the six genome axes. What you get is your genome-editing mastery times what you ask;
+  every deviation costs. 500 founders (Franklin's 50/500 rule) on an empty world where the body has a niche and the
+  wild land feeds them; they begin as foragers with nothing learned, and the world selects them from then on.
+* **Terraforming** (terraform.py; councils choose it among their works, captains by `TERRAFORM`): the world is
+  processed toward the ground a biology fits best - every biology's fit moves toward its fit on that ground,
+  fit(t) = h* + (fit - h*) e^-t - so whoever else lives there loses room, counted as harm. At most an e-fold a
+  year (an atmosphere's mixing time) times mastery; priced per e-fold per Earth-area at what the same land would
+  cost enclosed. Giants have no ground to give. Terraform an empty world, then seed it.
+
 ## The human at genesis: from TradeWars console to a people's steward
 
 A primordial start changes what the player *is*. There is no ship to fly for the first two decades - so the human

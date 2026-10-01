@@ -807,3 +807,83 @@ def _charter_accept(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str,
     return ActionResult(success=True, action=action,
                         message=f"CHARTER {cid}: {c['party']} VIPs aboard, bound for {c['dest_name']} "
                                 f"(Sector {c['dest_sector']}). The fare is paid on arrival.")
+
+
+# ---------------------------------------------------------------------- designing and seeding peoples (designer.py)
+def _design_target(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any]) -> Any:
+    pid = kwargs.get("planet_id")
+    return next((p for p in current_sector.planets if p.id == pid or p.name == pid), None) if pid else None
+
+
+def _design_of(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    return {"name": kwargs.get("name"), "metabolism": kwargs.get("metabolism", "biotic"),
+            "body_plan": kwargs.get("body_plan", "bimaniform"), "genome": dict(kwargs.get("genome") or {}),
+            "motto": kwargs.get("motto"), "sigil": kwargs.get("sigil", "*")}
+
+
+@action(ActionType.SPECIES_DESIGN, turns=0)
+def _species_design(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any,
+                    player_id: str) -> ActionResult:
+    from xylarium.kernel import designer, knowledge
+    planet = _design_target(k, captain, current_sector, kwargs)
+    if planet is None:
+        return ActionResult(False, action, "Name a world in this sector to design for (planet_id).")
+    pv = designer.preview(k, knowledge.holder_of_captain(captain), _design_of(kwargs), planet)
+    msg = (f"DESIGN for {planet.name}: niche {pv['niche'] or 'none'}, its wild land would feed {pv['foragers_fed']:,} "
+           f"foragers; your editing mastery {pv['mastery']:.0%} builds {pv['genome']}; cost {pv['cost']:,} Cr."
+           + (f" Cannot seed: {pv['why_not']}." if pv["why_not"] else ""))
+    return ActionResult(True, action, msg, data=pv)
+
+
+@action(ActionType.SPECIES_SEED, turns=2)
+def _species_seed(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any,
+                  player_id: str) -> ActionResult:
+    from xylarium.kernel import designer, knowledge, ledger
+    planet = _design_target(k, captain, current_sector, kwargs)
+    if planet is None:
+        return ActionResult(False, action, "Name a world in this sector to seed (planet_id).")
+    holder = knowledge.holder_of_captain(captain)
+    design = _design_of(kwargs)
+    pv = designer.preview(k, holder, design, planet)
+    if pv["why_not"]:
+        return ActionResult(False, action, f"Cannot seed {planet.name}: {pv['why_not']}.", data=pv)
+    price = int(pv["cost"])
+    if captain.credits < price:
+        return ActionResult(False, action, f"Seeding costs {price:,} Cr (edits and founders' vats); you have "
+                                           f"{captain.credits:,}.", data=pv)
+    pv = designer.seed(k, holder, design, planet, captain.name)
+    captain.credits -= price
+    ledger.pay_service(price, current_sector.id)          # the gene-smiths and vat crews of this system
+    return ActionResult(True, action, f"SEEDED: {designer.FOUNDERS} {pv['seeded']} set down on {planet.name}. "
+                                      f"They forage now; what they become is theirs.", turns_spent=2, data=pv)
+
+
+@action(ActionType.TERRAFORM, turns=2)
+def _terraform(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any,
+               player_id: str) -> ActionResult:
+    """Process a world in this sector toward the ground a biology fits best: your own world, or an empty one you
+    mean to seed. A season's worth at your mastery (terraform.rate), paid now."""
+    from xylarium.kernel import knowledge, ledger, terraform
+    planet = _design_target(k, captain, current_sector, kwargs)
+    if planet is None:
+        return ActionResult(False, action, "Name a world in this sector to terraform (planet_id).")
+    if planet.owner_id not in (None, captain.id) or (planet.owner_id is None and planet.population > 0):
+        return ActionResult(False, action, f"{planet.name} is not yours to remake.")
+    if not terraform.can(planet):
+        return ActionResult(False, action, f"{planet.name} has no ground to process (a giant).")
+    metab = kwargs.get("metabolism") or getattr(captain, "metabolism", "biotic")
+    ground = terraform.ideal_ground(metab)
+    holder = knowledge.holder_of_captain(captain)
+    dt = terraform.rate(k, holder)
+    if dt <= 1e-4:
+        return ActionResult(False, action, "Your people know nothing yet of planetary engineering (terraforming).")
+    price = int(terraform.price(k, holder, planet, dt))
+    if captain.credits < price:
+        return ActionResult(False, action, f"A season of processing costs {price:,} Cr; you have {captain.credits:,}.")
+    captain.credits -= price
+    ledger.pay_service(price, current_sector.id)
+    r = terraform.step(k, planet, ground, dt, actor=captain)
+    return ActionResult(True, action, f"TERRAFORMING {planet.name} toward {ground.lower()} ground for {metab} life: "
+                                      f"{r['t']:.2f} e-folds so far" +
+                                      (f"; {r['displaced']:,} of its other life displaced." if r["displaced"] else "."),
+                        turns_spent=2, data=r)

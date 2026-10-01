@@ -227,7 +227,9 @@ def value_of_room(kernel: Any, planet: Any, extra: float, m: Dict[str, float]) -
 def _works(kernel: Any, planet: Any) -> Optional[str]:
     """The council's works, by the one decision rule: raise the citadel, dig a habitat, build the nursery - or
     nothing - whichever is worth most over its cost. Players raise their own citadels."""
-    from xylarium.kernel import biosphere, decide, nursery
+    from xylarium.kernel import biosphere, decide, nursery, ways
+    if ways.stateless(planet):
+        return None                                   # no state, no council's works
     st = stats(kernel)
     level = PRICE_LEVEL.get(planet.currency, 1.0)
     ore_price = COMMODITY_CONFIG["ORE"]["base_price"] * level
@@ -262,9 +264,19 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
             planet.treasury - nursery.cost(planet, kernel) >= keep:
         a = nursery.appraise(kernel, planet)
         options.append(decide.option("build_nursery", a["cost"], a["worth"]))
+    from xylarium.kernel import terraform
+    tf = terraform.option(kernel, planet, m)
+    if tf is not None and planet.treasury - tf["cost"] >= keep:
+        options.append(tf)
     pick = decide.choose(kernel, options, m, planet.id, "works")
     if pick is None:
         return None
+    if pick["name"] == "terraform":
+        _pay_contractor(kernel, planet, int(pick["cash"]))
+        r = terraform.step(kernel, planet, pick["ground"], pick["dt"])
+        return (f"[TERRAFORM] {planet.name} is made over toward {pick['ground'].lower()} ground "
+                f"({r['t']:.2f} e-folds; room for {r['gained']:,} more" +
+                (f", {r['displaced']:,} of other kinds displaced)" if r["displaced"] else ")"))
     if pick["name"] == "build_nursery":
         return f"[NURSERY] {nursery.build(kernel, planet)}"
     if pick["name"] == "dig_habitat":

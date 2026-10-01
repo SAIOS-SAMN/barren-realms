@@ -116,6 +116,9 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
     chemistry = F(1) if (civ is not None and civ.home_type == planet.planet_type) else _surface_fit(metab, planet.planet_type)
     if metabolism is None and chemistry < 1:
         chemistry = genome.fraction(genome.adapted_chemistry(float(chemistry), planet))   # a people adapts
+    if (getattr(planet, "society", None) or {}).get("terraform"):
+        from xylarium.kernel import terraform                  # ... or its world is made over (terraform.py)
+        chemistry = genome.fraction(terraform.reshape(float(chemistry), metab, planet))
     area = physics.surface_area(planet)
     if physics.body(planet).get("giant"):
         area = area * GIANT_LIVING_BAND        # life on a giant lives in a band of its clouds
@@ -138,7 +141,7 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     key = (tier, habs, metab, planet.planet_type, str(getattr(planet, "body", None)), planet.owner_id,
            getattr(civ, "light_optimum", None), tailings // 500,
            round(genome.value(planet, "light"), 3), round(genome.value(planet, "tolerance"), 3),
-           round(genome.value(planet, "chemistry"), 3))
+           round(genome.value(planet, "chemistry"), 3), str((getattr(planet, "society", None) or {}).get("terraform")))
     if citadel is None and habitats is None and metabolism is None and kernel is not None \
             and hasattr(kernel, "caches"):
         from xylarium.kernel import cache
@@ -165,8 +168,10 @@ def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, h
     """K: how many people this world can feed at its technology - less what a stripped atmosphere no longer
     shelters (harvest.py: a stalled dynamo lets the stars' wind take the air)."""
     k = _profile(kernel, planet, citadel, habitats, metabolism)["k"]
-    air = float(getattr(planet, "society", {}).get("atmosphere", 1.0)) if getattr(planet, "society", None) else 1.0
-    return k if air >= 1.0 else int(k * air)
+    soc = getattr(planet, "society", None) or {}
+    air = float(soc.get("atmosphere", 1.0))
+    way = float(soc.get("way_k", 1.0))                 # foragers live a link up the food chain (ways.py)
+    return k if (air >= 1.0 and way >= 1.0) else int(k * min(1.0, air) * min(1.0, way))
 
 
 def food_rate(kernel: Any, planet: Any) -> F:

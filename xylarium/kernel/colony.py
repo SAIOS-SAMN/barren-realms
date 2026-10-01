@@ -689,9 +689,10 @@ class ColonyManager:
         withdraw = ledger.policy_factor(planet.currency)
         share = HOUSEHOLD_INCOME_SHARE
         from xylarium.kernel.fertility import tax_factor
-        from xylarium.kernel import energy
+        from xylarium.kernel import energy, ways
         earnings = planet.population * COLONY_TAX_PER_CAPITA * level * tax_mult * morale_factor * tax_factor(planet) \
-            * energy.output_factor(planet)                    # industry runs on the energy it had last season
+            * energy.output_factor(planet) \
+            * ways.taxable(planet)                            # no state, no tax and no money (ways.py)
         household_income = int(earnings * share)
         if household_income > 0:
             ledger.mint("colony_tax", household_income, planet.currency)
@@ -707,7 +708,8 @@ class ColonyManager:
         if ledger.ACTIVE_POLICY is not None:
             ledger.ACTIVE_POLICY.record_earnings(planet.currency, household_income + diaspora_cut + tax_yield,
                                                  earnings * (1.0 - share))   # the base services are measured on
-        upkeep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])
+        upkeep = {"credits": 0, "ore": 0} if ways.stateless(planet) else \
+            CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])
         upkeep_credits = int(upkeep["credits"] * level)
         # Withdrawal is measured against the government's earnings before the vault taper: a full vault
         # pays no new tax, but it is exactly the savings the authority must be able to reach
@@ -769,7 +771,7 @@ class ColonyManager:
         soc["harvest_q"] = soc.get("harvest_q", 0) + food_harvested
         # Real output (the Y of M V = P Y): what was harvested (in food units) and mined, at base prices and
         # price level
-        if ledger.ACTIVE_POLICY is not None and not is_indigenous_natives(planet):
+        if ledger.ACTIVE_POLICY is not None and not is_indigenous_natives(planet) and not ways.stateless(planet):
             ledger.ACTIVE_POLICY.record_output(planet.currency, (food_harvested * staples.FOOD_UNIT_VALUE
                                                                  + ore_mined * _BASE_ORE) * level)
 
