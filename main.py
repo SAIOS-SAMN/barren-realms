@@ -15,7 +15,7 @@ from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.models import ActionType
 from xylarium.client.cli import TerminalClient
 from xylarium.persistence.store import StatePersistence
-from xylarium.client.ansi import c_cyan, c_gold, c_green, c_red, bold
+from xylarium.client.ansi import c_cyan, c_gold, c_gray, c_green, c_red, bold
 
 
 def main():
@@ -49,13 +49,27 @@ def main():
     if not kernel:
         print(f"Generating new deterministic universe (Seed: {args.seed})...")
         if single_player:
-            # Lineage Genesis: this save is bound to one lineage for its whole life
-            from xylarium.client.cli import lineage_genesis
-            kernel, player_id = lineage_genesis(args.seed, args.name)
+            # The first question of a new universe: which age to begin in (ages.py)
+            from xylarium.client import steward as steward_ui
+            key = steward_ui.choose_age()
+            if key == "spacefaring":
+                # Lineage Genesis: this save is bound to one lineage for its whole life
+                from xylarium.client.cli import lineage_genesis
+                kernel, player_id = lineage_genesis(args.seed, args.name)
+            else:
+                kernel = _begin_steward(args, key, player_id, save_file)
+                if kernel is None:
+                    return
         else:
             kernel = GameKernel(seed=args.seed)
             kernel.register_player(player_id=player_id, player_name=args.name)
     else:
+        from xylarium.kernel import ages
+        if single_player and ages.stats(kernel)["stewards"].get(player_id) and not kernel.get_player(player_id):
+            from xylarium.client import steward as steward_ui
+            if steward_ui.run(kernel, player_id, args.name, save=lambda: StatePersistence.save_to_file(
+                    kernel, save_file)) is None:
+                return
         player = kernel.get_player(player_id)
         if not player:
             human_caps = [c for c in kernel.captains.values() if not c.is_ai]
@@ -120,6 +134,30 @@ def main():
     # Start interactive terminal client
     client = TerminalClient(kernel=kernel, player_id=player_id, player_name=args.name, save_file=save_file)
     client.run()
+
+
+def _begin_steward(args, key, player_id, save_file):
+    """A universe at the start of a pre-spaceflight age, the player the steward of one people. Returns the kernel
+    once the steward takes ship (the console opens), or None if they saved and quit."""
+    from xylarium.client import steward as steward_ui
+    from xylarium.kernel import ages
+    age = ages.age(key)
+    print(c_gray(f"Making the universe of seed {args.seed} in the {age['name']}..."))
+
+    def progress(cycle, firsts):
+        if cycle % 1000 == 0:
+            print(c_gray(f"  year {cycle // 100}: {len(firsts)} firsts so far"), flush=True)
+    kernel = ages.begin(args.seed, key, progress)
+    handed = kernel.state["genesis"].get("handed_over")
+    if handed:
+        print(c_gray(f"  handed over in year {handed['cycle'] // 100}" +
+                     ("" if handed["reached"] else " (the milestone had not yet come)")))
+    planet = steward_ui.choose_people(kernel)
+    ages.bind(kernel, player_id, args.name, planet)
+    steward_ui.progenitor(kernel, player_id)
+    save = lambda: StatePersistence.save_to_file(kernel, save_file)
+    cap = steward_ui.run(kernel, player_id, args.name, save=save)
+    return kernel if cap is not None else None
 
 
 if __name__ == "__main__":

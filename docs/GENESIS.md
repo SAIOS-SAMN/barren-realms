@@ -146,11 +146,13 @@ everyone else's) look further. Firms, waystations, daughter worlds and realms ap
 it to weaker peoples, pays or collects tribute - the same contracts the AI peoples make, judged by the same rule.
 An empire is what a player's contracts add up to; so is a ruined people.
 
-**What this needs in the kernel (not yet built):**
-1. a steward registration: a human bound to a people's homeworld with no ship (today `register_player` issues a
-   ship at Sol);
-2. steward commands for the council's choices (citadel/habitat/nursery already exist as owner commands; research
-   focus and population policy exist; *commission ship* and *offer/accept protection* do not);
-3. a "wake me when" clock for the homeworld age;
-4. multiplayer: several humans are several peoples - their first contact may be decades in;
-5. the settled genesis remains the mode for players who want the console from the first minute.
+**Built (ages.py, xylarium/client/steward.py, main.py):** a new single-player universe first asks which age to begin
+in - the Age of Foragers (genesis "forager"), the Age of Fields (primordial), the Age of First Flight (primordial,
+run on the clock until the first starship, in whatever year it comes), or the Age of the Lanes (settled; the
+TradeWars console and lineage genesis as before). Before spaceflight the player picks a people (or shapes its
+genome at genesis - the Progenitor's hand) and stewards it: inquiry, growth, farming, a state, works - each only
+when its physics allows - or "wake me when" something happens to it. When its yards rise the steward may become its
+first captain, and the console opens. A saved steward resumes as a steward.
+
+Still to build: steward commands for commissioning a hull and offering/accepting protection, and several human
+stewards in one universe (multiplayer).
