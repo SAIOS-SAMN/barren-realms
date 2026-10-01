@@ -331,12 +331,21 @@ def _give_sol(kernel: Any, bank: Any, n: int) -> None:
 
 
 def distressed(kernel: Any, cur: str) -> bool:
-    """Its money is losing its holders and it has nothing of its own left to defend with."""
+    """Its money is failing its holders - early enough that help can still reach a working exchange:
+    its slide is real (depreciation beyond what it pays, by more than the rate's own quarterly noise), or its pool
+    has thinned to under a quarter of its two-year median depth (trade about to lock up), and it holds no SOL of
+    its own to defend with."""
     if cur == "SOL":
         return False
+    from xylarium.kernel import liquidity
     bank = kernel.banking.banks[cur]
-    falling = kernel.fx_market.expected_depreciation(kernel, cur) > kernel.banking.paid_rate(cur)
-    return falling and bank.reserves <= kernel.banking.reserve_floor(bank) * 1.5 and _sol_of(kernel, bank) <= 0
+    lq = liquidity.stats(kernel)
+    sigma = lq["vol"].get(cur, 0.0)
+    sliding = kernel.fx_market.expected_depreciation(kernel, cur) - kernel.banking.paid_rate(cur) > sigma
+    depths = lq.setdefault("depth_hist", {}).get(cur, [])
+    now = kernel.fx_market.pools[cur]["sol"]
+    thinning = len(depths) >= 4 and now < 0.25 * sorted(depths)[len(depths) // 2]
+    return (sliding or thinning) and _sol_of(kernel, bank) <= 0
 
 
 def _help(kernel: Any) -> List[str]:
@@ -416,7 +425,8 @@ def summary(kernel: Any) -> Dict[str, Any]:
                        for c, r in st["by_currency"].items()},
             "governors": {c: kernel.banking.banks[c].alignment for c in st["by_currency"]},
             "switches": st["switches"], "help_given": st["help_given"], "loans": dict(st["loans"]),
-            "debased_sol": dict(st["debased_sol"]), "issued": dict(st["issued"]), "retired": dict(st["retired"])}
+            "debased_sol": dict(st["debased_sol"]), "issued": dict(st["issued"]), "retired": dict(st["retired"]),
+            "smuggled_sol": st.get("smuggled_sol", 0)}
 
 
 from xylarium.kernel import state  # noqa: E402

@@ -1081,8 +1081,10 @@ def net_worth_sol(kernel: GameKernel, cap: Any) -> int:
     hull = hulls.spec(cap.ship).get("price", 0) * 0.6
     companies = kernel.market_manager.companies
     equity = sum(companies[t].share_price * n for t, n in getattr(cap, "portfolio", {}).items() if t in companies)
+    from xylarium.kernel import liquidity                 # liquidity provided is wealth, claimable at any time
+    lp = liquidity.position_value_sol(kernel, f"captain:{cap.id}")
     return int(liquid_sol(kernel, cap) + cargo_value + sum(a.get("appraisal_sol", 0) for a in cap.artifacts)
-               + hull + equity)
+               + hull + equity + lp)
 
 
 class RunStats:

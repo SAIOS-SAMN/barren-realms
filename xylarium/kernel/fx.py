@@ -231,6 +231,32 @@ class FXMarket:
         credit(captain, cur, self.swap_sol_to(cur, sol_in))
         return captain.fx_wallet.get(cur, 0) >= needed
 
+    def black_market(self, kernel: Any, captain: Any, cur: str, amt: int) -> int:
+        """Convert controlled money through smugglers: they charge what their own risk is worth - the law's
+        presence where the captain stands - paid to the relay port (the lawless one of that money nearest it);
+        the rest clears through the pool as any swap does. It is an offence, filed where it happened."""
+        from xylarium.kernel import law, topology
+        sector = kernel.sectors.get(captain.sector_id)
+        risk = min(0.9, law.presence(kernel, sector)) if sector is not None else 0.5
+        relay = None
+        for sid in sorted(topology.hops(kernel, captain.sector_id, 8).items(), key=lambda kv: kv[1]):
+            sec = kernel.sectors[sid[0]]
+            if sec.port is not None and sec.port.currency == cur and law.presence(kernel, sec) < 0.2:
+                relay = sec.port
+                break
+        if relay is None:
+            return 0                                       # no smugglers this side of the law
+        cut = int(amt * risk)
+        debit(captain, cur, amt)
+        relay.treasury += cut
+        sol = self.swap_to_sol(cur, amt - cut)
+        captain.credits += sol
+        law.file(kernel, "smuggling", captain, sector, int(sol), None, note=f"{amt:,} {cur} past controls")
+        from xylarium.kernel import regimes
+        rs = regimes.stats(kernel)
+        rs["smuggled_sol"] = rs.get("smuggled_sol", 0) + sol
+        return sol
+
     def expected_depreciation(self, kernel: Any, cur: str) -> float:
         """A holder's forecast of how fast this money loses value against SOL a quarter: the mean log change of
         its quarter-end rate over the last two years (liquidity.py reads them)."""
@@ -272,7 +298,11 @@ class FXMarket:
                 continue
             from xylarium.kernel import regimes
             if regimes.controlled(kernel, cur):
-                continue                                   # the exchange is closed to its holders
+                # the exchange is closed to its holders; a captain who has made its peace with the Dark finds
+                # the smugglers at the deep-void relays instead
+                if kernel is not None and getattr(captain, "cosmic_alignment", 0.0) < 0 and amt > 0:
+                    total += self.black_market(kernel, captain, cur, amt)
+                continue
             if kernel is not None:
                 amt = int(amt * self.share_to_convert(kernel, captain, cur))
             if cur in self.pools and amt > 0 and self.to_sol_value(cur, amt) > threshold_sol:
