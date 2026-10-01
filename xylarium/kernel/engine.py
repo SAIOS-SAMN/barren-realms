@@ -123,6 +123,7 @@ from xylarium.kernel import knowledge as knowledge_mod
 from xylarium.kernel import decide as decide_mod  # noqa: F401  (registers its state)
 from xylarium.kernel import liquidity as liquidity_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import regimes as regimes_mod  # noqa: F401  (registers its seasonal hook)
+from xylarium.kernel import intellect as intellect_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod

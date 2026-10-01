@@ -54,15 +54,20 @@ def stocks(kernel: Any, holder: Optional[str]) -> Dict[str, float]:
     return st.setdefault(holder, {d: 0.0 for d in DOMAINS})
 
 
+def experience(kernel: Any, holder: Optional[str], domain: str) -> float:
+    """What a people's knowledge is worth in practice: its stock, carried further by its fluid intelligence
+    (intellect.py) - a mind that solves harder problems learns more from the same experience."""
+    from xylarium.kernel import intellect
+    return stocks(kernel, holder).get(domain, 0.0) * (1.0 + intellect.fluid(kernel, holder))
+
+
 def mastery(kernel: Any, holder: Optional[str], process: str) -> float:
     """How far this people has learned a process, 0 .. 1."""
-    spec = PROCESSES[process]
-    return laws.mastery(stocks(kernel, holder).get(spec["domain"], 0.0), KNOWLEDGE_UNIT)
+    return laws.mastery(experience(kernel, holder, PROCESSES[process]["domain"]), KNOWLEDGE_UNIT)
 
 
 def cost_multiplier(kernel: Any, holder: Optional[str], process: str) -> float:
-    spec = PROCESSES[process]
-    return laws.wright(stocks(kernel, holder).get(spec["domain"], 0.0), KNOWLEDGE_UNIT)
+    return laws.wright(experience(kernel, holder, PROCESSES[process]["domain"]), KNOWLEDGE_UNIT)
 
 
 def captain_mastery(kernel: Any, captain: Any, process: str) -> float:

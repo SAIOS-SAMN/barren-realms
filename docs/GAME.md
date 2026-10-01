@@ -118,6 +118,28 @@ councils, AI captains, liquidity providers - uses one **decision rule**: the opt
 discounted at its money's policy rate over a planning horizon that shrinks with its mind's noise, judged with an
 error that grows with it.
 
+### Fluid intelligence and crystals (`crystal.py`, `intellect.py`)
+Knowledge is what a people has stored; **fluid intelligence** is what it can do with a problem it has never seen,
+measured the way netstratum's proof of useful work measures it. Each quarter, from the settlement chain's last seal,
+a task is forged for every people at every rung of two ladders - planar and volumetric (the "in and out" axis),
+mirroring netstratum's: a word over the transformation vocabulary (rotations, flips, transpose, recolour; stack
+flips and cycles for volumes), applied to forged grids.
+
+There is no search. Every word is a point on a lattice - (stack element, frame element in D4, colour map) - and
+reduces to that normal form whatever its length. Solving is **decompaction**: the coordinate is read off the
+training pairs by canonical frames and cell alignment, and the people writes it as its address in its own chart -
+the table of shortest words over the **crystals** (generators) it holds. A people without a mirror cannot express a
+reflection however hard it thinks; one with a richer vocabulary writes shorter programs. It climbs until a coordinate
+lies outside its chart or the work (cells x (frame orbit + address)) exceeds its thought this quarter. Every claim
+carries its program and a hash-chained certificate that anyone can verify by replay.
+
+A people's gauge is the rung it reaches on each ladder. Solved tasks mint knowledge (difficulty x scarcity); fluid
+intelligence carries it further along every learning curve and steadies its decisions (less noise, longer horizons).
+Crystals are learned: every mind starts with the quarter turn; reflections come with knowledge of information,
+recolouring with biology, the stack operators with energy; a composite written three times becomes one crystal
+(abstraction); neighbours teach the less knowing; relics carry their makers' crystals; peoples forget what few of
+their worlds hold, less where households have leisure to teach.
+
 ### Fertility (`fertility.py`)
 How many children a people wants depends on its biology:
 - **r-strategists** (mycotiforms, hexasocial swarms, hypobiotids): stored food becomes clutches - they boom.

@@ -343,6 +343,10 @@ class ArchaeologyManager:
             knowledge.learn(kernel, knowledge.holder_of_captain(captain), "materials", units, "relics")
             fertility.discovered(kernel, captain=captain)
             msg_extra = f" {units:.1f} units of materials knowledge recovered."
+            from xylarium.kernel import crystal, intellect       # and the crystal its makers last wrote
+            got = intellect.relic_crystal(kernel, knowledge.holder_of_captain(captain), relic.get("id", ""))
+            if got is not None:
+                msg_extra += f" Its makers' {crystal.NAMES.get(got, got)} crystal is yours."
         for elem in relic.get("elements", [])[:1]:
             msg_extra += f" Metallurgical notes on {elem} recovered."
         ExperienceManager.award(captain, "science", XP_SCIENCE_ANOMALY, kernel, key=f"relic:{relic['culture']}")

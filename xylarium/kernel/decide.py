@@ -31,13 +31,23 @@ def mind(kernel: Any, metabolism: Optional[str]) -> Dict[str, float]:
     return laws.cognition(metabolism or "biotic")
 
 
+def _steadied(kernel: Any, m: Dict[str, float], holder: Optional[str]) -> Dict[str, float]:
+    """A people's fluid intelligence (intellect.py) steadies its judgement: noise falls - and the planning horizon
+    lengthens - by its share of the ladders climbed."""
+    from xylarium.kernel import intellect
+    phi = intellect.fluid(kernel, holder)
+    if phi <= 0:
+        return m
+    return dict(m, noise=m["noise"] / (1.0 + phi), fluid=phi)
+
+
 def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
-    from xylarium.kernel import biosphere
-    return mind(kernel, biosphere.metabolism_of(kernel, planet))
+    from xylarium.kernel import biosphere, knowledge
+    return _steadied(kernel, mind(kernel, biosphere.metabolism_of(kernel, planet)), knowledge.holder_of_planet(planet))
 
 
 def mind_of_captain(kernel: Any, captain: Any) -> Dict[str, float]:
-    return mind(kernel, getattr(captain, "metabolism", None))
+    return _steadied(kernel, mind(kernel, getattr(captain, "metabolism", None)), f"captain:{captain.id}")
 
 
 def rate(kernel: Any, currency: str) -> float:
