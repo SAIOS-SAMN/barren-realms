@@ -89,9 +89,11 @@ Measured, not assumed:
   room a citadel would buy is worth more over its horizon than what the state takes. From then on it is the
   primordial genesis.
 
-Measured (seeds 7 and 42): with peoples of ~1,000 foragers, crop selection runs at ~0.1% of an e-fold a year -
-the forager age lasts centuries, longest for the smallest peoples; a hot, noisy mind sometimes farms early by
-misjudgement. The largest peoples domesticate first.
+Measured (seeds 7 / 42, 425 / 550 years): peoples of ~1,000 foragers breed their crops at ~0.1% of an e-fold a
+year, so the forager age lasts centuries. First fields at year 2 / 0.75 (a hot, noisy mind taking them up early, by
+misjudgement); the first states at year 340 / 444; by then 5 peoples farm and 2-3 are states, 16 of 21 still forage
+- the largest peoples domesticate first. Natives begin in their Stone Age too (natives.py still advances them on
+its own stage clock - the next thing to put on the same physics).
 
 ## Making peoples, and making worlds for them
 

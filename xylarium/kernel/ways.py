@@ -108,7 +108,11 @@ def forage(kernel: Any) -> None:
     from xylarium.kernel import biosphere
     for sec in kernel.sectors.values():
         for p in sec.planets:
-            if p.population <= 0 or getattr(p, "natives", None):
+            n = getattr(p, "natives", None)
+            if n:                                      # the natives too are in their Stone Age (natives.py stages)
+                n["stage"], n["progress"] = 0, 0.0
+                continue
+            if p.population <= 0:
                 continue
             p.society["way"] = "forage"
             _refresh(kernel, p)
