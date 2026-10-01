@@ -1046,8 +1046,7 @@ class ColonyManager:
             civ.civic_projects[completed_project] = civ.civic_projects.get(completed_project, 0) + 1
             CivilizationIntelligenceEngine._apply_project_effects(completed_project, planet)
             completed = True
-            all_projects = list(CIVIC_PROJECTS.keys())
-            civ.current_project = random.choice([p for p in all_projects if p != completed_project])
+            civ.current_project = CivilizationIntelligenceEngine.next_project(civ, planet, completed_project)
             civ.project_progress = 0
             captain.score += 200
             msg = (

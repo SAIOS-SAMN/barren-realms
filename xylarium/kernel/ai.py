@@ -183,8 +183,7 @@ class AIManager:
         from xylarium.kernel.cognition import CognitiveOrgan
         cog_res = CognitiveOrgan.think(captain, kernel)
         if cog_res.success:
-            if random.random() < 0.25:
-                cls._broadcast_chatter(kernel, captain, current_sector)
+            cls._maybe_chatter(kernel, captain, current_sector)
             cls.check_cognitive_cleaving(kernel, captain)
             return
 
@@ -203,9 +202,8 @@ class AIManager:
         # 6. Cognitive Cleaving check (Vector 1: iae::cleave)
         cls.check_cognitive_cleaving(kernel, captain)
 
-        # Occasional Radio Transmission
-        if random.random() < 0.25:
-            cls._broadcast_chatter(kernel, captain, current_sector)
+        # Radio: it speaks when it has news
+        cls._maybe_chatter(kernel, captain, current_sector)
 
     @classmethod
     def _restock_clones(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> bool:
@@ -226,9 +224,9 @@ class AIManager:
         exchanges when the triangle pays after fees. The trade itself pulls the cross rate back toward
         the rates the SOL hub implies.
         """
-        from xylarium.config import FINANCIER_ARBITRAGE_CHANCE, FINANCIER_ARBITRAGE_MIN_EDGE, AI_INVEST_RESERVE
+        from xylarium.config import FINANCIER_ARBITRAGE_MIN_EDGE, AI_INVEST_RESERVE
         from xylarium.kernel.cognition import temperament
-        if temperament(captain, kernel).get("calling") != "financier" or random.random() > FINANCIER_ARBITRAGE_CHANCE:
+        if temperament(captain, kernel).get("calling") != "financier":
             return
         fxm = kernel.fx_market
         budget = captain.credits - AI_INVEST_RESERVE
@@ -308,7 +306,7 @@ class AIManager:
     @classmethod
     def _handle_ai_natives(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> bool:
         worlds = [p for p in sector.planets if p.natives]
-        if not worlds or captain.faction_id or random.random() > 0.2:
+        if not worlds or captain.faction_id:
             return False
         from xylarium.kernel.natives import NativeManager
         planet = worlds[0]
@@ -336,8 +334,45 @@ class AIManager:
                 choices.append("observe")
         if not choices:
             return False
-        res = kernel.dispatch(captain.id, ActionType.NATIVE_INTERACT, sub_action=random.choice(choices), planet_id=planet.id)
+        from xylarium.kernel import motive
+        best = motive.pick(kernel, captain, [cls._native_option(kernel, captain, planet, sub) for sub in choices],
+                           "natives")
+        if best is None:
+            return False
+        res = kernel.dispatch(captain.id, ActionType.NATIVE_INTERACT, sub_action=best["name"], planet_id=planet.id)
         return bool(res.success)
+
+    @classmethod
+    def _native_option(cls, kernel: "GameKernel", captain: Captain, planet, sub: str) -> Dict:
+        """What a dealing with a native people is worth to this captain (natives.py's own yields), in Cr."""
+        from xylarium.config import (COMMODITY_CONFIG, NATIVE_EXPLOIT_YIELD, NATIVE_TRADE_UNITS,
+                                     RESEARCH_POINTS_PER_UNIT, HOSTILE_ACT_BOUNTY)
+        from xylarium.kernel import decide, motive
+        n = planet.natives
+        price = lambda g: COMMODITY_CONFIG.get(g, {}).get("base_price", 20)
+        deposits = {k: v for k, v in planet.element_deposits.items() if v > 0}
+        richest = max(deposits, key=deposits.get) if deposits else "ORGANICS"
+        wage = float(kernel.crew_wage(captain))
+        if sub == "observe":
+            units = (3 + n["stage"]) / RESEARCH_POINTS_PER_UNIT
+            return decide.option(sub, wage, units * motive.knowledge_price(kernel))
+        if sub == "contact":                      # it opens trade: a season of barter, over the captain's horizon
+            trade = (NATIVE_TRADE_UNITS + 2 * n["stage"]) * price(richest) - NATIVE_TRADE_UNITS * price("ORGANICS")
+            return decide.option(sub, 2 * wage, decide.worth(kernel, max(0.0, trade) / 4.0,
+                                                              motive.mind(kernel, captain)))
+        if sub == "trade":
+            got = (NATIVE_TRADE_UNITS + 2 * n["stage"]) * price(richest)
+            return decide.option(sub, wage + NATIVE_TRADE_UNITS * price("ORGANICS"), got)
+        if sub == "protect":                      # a tithe each quarter, over its horizon
+            tithe = sum(price(g) * q for g, q in (n.get("tribute") or {}).items()) or n["stage"] * price("ORGANICS")
+            return decide.option(sub, wage, decide.worth(kernel, tithe, motive.mind(kernel, captain)))
+        if sub == "collect":
+            return decide.option(sub, wage, sum(price(g) * q for g, q in (n.get("tribute") or {}).items()))
+        if sub == "exploit":                      # the ore, less the law's price where it is enforced
+            sector = kernel.sectors[planet.sector_id]
+            got = min(NATIVE_EXPLOIT_YIELD, sum(deposits.values())) * price(richest)
+            return decide.option(sub, wage + (HOSTILE_ACT_BOUNTY if sector.is_protected_space else 0), got)
+        return decide.option(sub, wage, 0.0)
 
     @classmethod
     def check_cognitive_cleaving(cls, kernel: "GameKernel", captain: Captain) -> Optional[Captain]:
@@ -378,7 +413,7 @@ class AIManager:
         cleaved_count = getattr(captain, "cleaved_count", 0) + 1
         captain.cleaved_count = cleaved_count
 
-        # Manifold Walk: Mutate personality and metabolism
+        # Manifold Walk: an offshoot inherits with variation - mutation is chance, not choice (the only dice here)
         p_map = {
             AIPersonality.TRADER: [AIPersonality.INDUSTRIALIST, AIPersonality.TRADER, AIPersonality.MERCENARY],
             AIPersonality.INDUSTRIALIST: [AIPersonality.TRADER, AIPersonality.INDUSTRIALIST],
@@ -417,13 +452,10 @@ class AIManager:
         child_name = f"{title} {parent_last} {cleaved_count}"
 
         # Ship class
-        if child_personality == AIPersonality.TRADER:
-            ship_class = "Merchant Cruiser" if random.random() < 0.6 else "Scout Ship"
-        elif child_personality == AIPersonality.INDUSTRIALIST:
+        # Ship class: the hull whose capacity its calling lives by (holds to trade, bays to fight)
+        if child_personality in (AIPersonality.TRADER, AIPersonality.INDUSTRIALIST):
             ship_class = "Merchant Cruiser"
-        elif child_personality == AIPersonality.PIRATE:
-            ship_class = "Star Frigate" if random.random() < 0.5 else "Scout Ship"
-        else:  # MERCENARY
+        else:
             ship_class = "Star Frigate"
 
         ship_cfg = SHIP_CATALOG.get(ship_class, SHIP_CATALOG["Scout Ship"])
@@ -535,9 +567,13 @@ class AIManager:
                 anom = unsolved[0]
                 # Pirate Dilemma: Raid other captains present, or if alone, plunder/crack the anomaly
                 if captain.personality == AIPersonality.PIRATE:
+                    from xylarium.kernel import motive
                     others = [c_id for c_id in sector.captains if c_id != captain.id and c_id in kernel.captains]
-                    if others and sector.security != SecurityLevel.FEDERATION:
-                        target = kernel.captains[random.choice(others)]
+                    best = motive.pick(kernel, captain, [motive.fight(kernel, captain, kernel.captains[c], sector)
+                                                         for c in others], "ambush") \
+                        if sector.security != SecurityLevel.FEDERATION else None
+                    if best is not None:
+                        target = kernel.captains[best["target"]]
                         CombatManager.resolve_ship_battle(captain, target, sector, kernel=kernel)
                         kernel.event_bus.broadcast_radio(
                             sender="RADAR-ALERT",
@@ -557,16 +593,16 @@ class AIManager:
 
         # A captain whose people can fold space, and can afford the fold, explores the frontier
         from xylarium.kernel.research import jump_cost
-        if captain.credits >= 2 * jump_cost(kernel, captain):
-            if random.random() < 0.10:
-                all_anoms = [
-                    a for a in kernel.research_manager.anomalies.values()
-                    if a.status != "SOLVED" and a.sector_id != captain.sector_id
-                ]
-                if all_anoms:
-                    dest = random.choice(all_anoms).sector_id
-                    kernel.dispatch(captain.id, ActionType.JUMP_WARP, destination=dest)
-                    return True
+        fold = jump_cost(kernel, captain)
+        if captain.credits >= 2 * fold:
+            from xylarium.kernel import decide, motive
+            opts = [decide.option(a.id, fold + motive.CATALYST_COST, motive.anomaly_worth(kernel, a), sid=a.sector_id)
+                    for a in kernel.research_manager.anomalies.values()
+                    if a.status != "SOLVED" and a.sector_id != captain.sector_id]
+            best = motive.pick(kernel, captain, opts, "frontier")
+            if best is not None:
+                kernel.dispatch(captain.id, ActionType.JUMP_WARP, destination=best["sid"])
+                return True
 
         return False
 
@@ -638,14 +674,12 @@ class AIManager:
         def deterred(t_id: str) -> bool:
             return sector.sentries.get(t_id, 0) >= captain.ship.fighters
 
+        from xylarium.kernel import motive
         prey = [c for c in other_captains if not deterred(c)]
-        engage = bool(prey) and sector.security != SecurityLevel.FEDERATION and (
-            sector.is_null_space or random.random() < 0.15
-        )
-        if engage:
-            # Richest-looking hull first: loaded holds make the best prizes
-            target_id = max(prey, key=lambda c: kernel.captains[c].ship.cargo.holds_used + random.random())
-            target = kernel.captains[target_id]
+        best = motive.pick(kernel, captain, [motive.fight(kernel, captain, kernel.captains[c], sector) for c in prey],
+                           "prey") if sector.security != SecurityLevel.FEDERATION else None
+        if best is not None:
+            target = kernel.captains[best["target"]]
             # Engage in combat!
             result = CombatManager.resolve_ship_battle(captain, target, sector, kernel=kernel)
             kernel.event_bus.broadcast_radio(
@@ -692,19 +726,9 @@ class AIManager:
                     cls._warp_captain(kernel, captain, path[1])
                     return
 
-        # 4. Prowl null-space shipping lanes and mining belts where prey travels unprotected
-        lanes = [w for w in sector.warps if kernel.sectors[w].is_null_space
-                 and kernel.sectors[w].security != SecurityLevel.FEDERATION
-                 and (kernel.sectors[w].captains or kernel.sectors[w].belts)]
-        if lanes and random.random() < 0.7:
-            cls._warp_captain(kernel, captain, max(lanes, key=lambda w: len(kernel.sectors[w].captains) + random.random()))
-            return
-
-        # 5. Otherwise move: favor moving deeper into Anarchy / Borderlands
-        if sector.warps:
-            # Sort warps to prefer higher sector numbers (Anarchy)
-            candidates = sorted(sector.warps, key=lambda s: kernel.sectors[s].security.value != SecurityLevel.ANARCHY.value)
-            dest = random.choice(candidates[:2]) if len(candidates) >= 2 else candidates[0]
+        # 4. Go where the prey worth taking is (or wait where it is: nothing in reach is worth the trip)
+        dest = motive.destination(kernel, captain, sector, "pirate")
+        if dest is not None:
             cls._warp_captain(kernel, captain, dest)
 
     @classmethod
@@ -774,10 +798,10 @@ class AIManager:
                     cls._warp_captain(kernel, captain, path[1])
                     return
 
-        # Otherwise warp to neighboring sector with a port
-        if sector.warps:
-            port_warps = [w for w in sector.warps if kernel.sectors[w].port is not None]
-            dest = random.choice(port_warps) if port_warps else random.choice(sector.warps)
+        # Otherwise toward the port whose prices are worth most to what it holds and has room for
+        from xylarium.kernel import motive
+        dest = motive.destination(kernel, captain, sector, "trader")
+        if dest is not None:
             cls._warp_captain(kernel, captain, dest)
 
     @classmethod
@@ -954,9 +978,10 @@ class AIManager:
                     ColonyManager.build_shields(captain, planet, 20)
                 return
 
-        # 3. Otherwise warp towards sectors with planets or trade ports
-        if sector.warps:
-            dest = random.choice(sector.warps)
+        # 3. Otherwise toward the worlds worth claiming or the treasuries worth collecting
+        from xylarium.kernel import motive
+        dest = motive.destination(kernel, captain, sector, "industrialist")
+        if dest is not None:
             cls._warp_captain(kernel, captain, dest)
 
     @classmethod
@@ -987,9 +1012,10 @@ class AIManager:
                     cls._warp_captain(kernel, captain, path[1])
                     return
 
-        # 3. Otherwise warp along borderland sectors
-        if sector.warps:
-            dest = random.choice(sector.warps)
+        # 3. Otherwise toward the bounties worth hunting
+        from xylarium.kernel import motive
+        dest = motive.destination(kernel, captain, sector, "mercenary")
+        if dest is not None:
             cls._warp_captain(kernel, captain, dest)
 
     @classmethod
@@ -1003,6 +1029,20 @@ class AIManager:
         new_sec = kernel.sectors[destination]
         if captain.id not in new_sec.captains:
             new_sec.captains.append(captain.id)
+
+    @classmethod
+    def _maybe_chatter(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> None:
+        """A captain talks on the radio when its credits moved since it last spoke (it has news), no more than
+        once a fiscal quarter."""
+        from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+        cd = captain.deed_cooldowns
+        last = cd.get("CHATTER_CREDITS")
+        if cd.get("CHATTER", -1) > kernel.cycle_count or last == captain.credits:
+            return
+        cd["CHATTER"] = kernel.cycle_count + FISCAL_QUARTER_CYCLES
+        cd["CHATTER_CREDITS"] = captain.credits
+        if last is not None:
+            cls._broadcast_chatter(kernel, captain, sector)
 
     @classmethod
     def _broadcast_chatter(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> None:

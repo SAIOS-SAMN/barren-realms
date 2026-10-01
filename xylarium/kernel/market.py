@@ -601,8 +601,23 @@ class MarketManager:
         if not real_planets:
             return []
 
-        for _ in range(needed):
-            company = random.choice(active_comps)
+        # Firms order what they are short of: each firm's inputs (by industry), the one its home port holds least of
+        # first; firms already waiting on a delivery do not order again. Bought from the nearest port that stocks it.
+        inputs = {"MINING": ["EQUIPMENT", "ORGANICS"], "AGRICULTURE": ["ORE", "EQUIPMENT"],
+                  "MANUFACTURING": ["ORE", "STELALITH"]}
+        waiting = {c.company_ticker for c in self.contracts.values() if c.status in ("OPEN", "ACCEPTED")}
+
+        def home_stock(comp: Any, comm: str) -> int:
+            sec = kernel.sectors.get(comp.sector_id)
+            return sec.port.stock.get(_STOCK_KEY.get(comm.upper(), comm), 0) if sec is not None and sec.port else 0
+
+        def shortage(comp: Any) -> Tuple[int, str]:
+            wants = inputs.get(comp.industry, commodities)
+            comm = min(wants, key=lambda c: (home_stock(comp, c), c))
+            return home_stock(comp, comm), comm
+
+        queue = sorted((c for c in active_comps if c.ticker not in waiting), key=lambda c: (shortage(c)[0], c.ticker))
+        for company in queue[:needed]:
             dest_sector = company.sector_id
             dest_planet_id = company.planet_id
             dest_name = company.planet_name
@@ -615,7 +630,7 @@ class MarketManager:
                         target_planet = p
                         break
             if not target_planet and real_planets:
-                target_planet = random.choice(real_planets)
+                target_planet = max(real_planets, key=lambda w: (w.population, w.id))   # its biggest customers
                 dest_sector = target_planet.sector_id
                 dest_planet_id = target_planet.id
                 dest_name = target_planet.name
@@ -623,15 +638,7 @@ class MarketManager:
                 company.planet_id = dest_planet_id
                 company.planet_name = dest_name
 
-            # Match commodity to industry demand
-            if company.industry == "MINING":
-                comm = random.choice(["EQUIPMENT", "ORGANICS"])
-            elif company.industry == "AGRICULTURE":
-                comm = random.choice(["ORE", "EQUIPMENT"])
-            elif company.industry == "MANUFACTURING":
-                comm = random.choice(["ORE", "STELALITH"])
-            else:
-                comm = random.choice(commodities)
+            _, comm = shortage(company)
 
             # The goods are bought where they are: an origin port (not the destination's) that stocks them
             key = _STOCK_KEY.get(comm.upper(), comm)
@@ -641,7 +648,9 @@ class MarketManager:
             sources = [p for p in ports if p.sector_id != dest_sector and stocked(p) >= 10]
             if not sources:
                 continue
-            origin_port = random.choice(sources)
+            from xylarium.kernel import topology
+            dist, _ = topology.tree(kernel, dest_sector, 30)
+            origin_port = min(sources, key=lambda p: (dist.get(p.sector_id, 99), p.sector_id))
 
             # Distance via BFS path
             path = kernel.find_path(origin_port.sector_id, dest_sector)
@@ -656,15 +665,15 @@ class MarketManager:
             elif hazard == "ANARCHY":
                 hazard_mult = 2.0
 
-            amount = random.randint(10, 25)
+            amount = max(10, min(25, stocked(origin_port) // 4))     # what the source can spare
             # Payout formula: base 100 Cr/hop + 20 Cr/unit * hazard multiplier
             payout = int((hops * 150 + amount * 35) * hazard_mult)
             # The issuing company escrows the payout from its own treasury (no minted freight wages)
             if company.treasury - payout < FREIGHT_ESCROW_MIN_COMPANY_TREASURY:
                 continue
             company.treasury -= payout
-            # Shares reward: 10-30 shares of the company
-            shares_bonus = random.randint(10, 25)
+            # Shares reward: a quarter of the payout again, in the company's own stock
+            shares_bonus = max(1, payout // max(1, 4 * company.share_price))
 
             cid = f"FRT-{self.next_contract_id}"
             self.next_contract_id += 1

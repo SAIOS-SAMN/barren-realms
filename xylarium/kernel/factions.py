@@ -919,8 +919,21 @@ class FactionManager:
                 return True
         patrol = [s for s in f.territory if s != cap.sector_id]
         if patrol:
-            return self._move(kernel, cap, random.choice(patrol))
+            return self._move(kernel, cap, self._beat(kernel, cap, patrol))
         return False
+
+    @staticmethod
+    def _beat(kernel: Any, cap: Any, patrol: List[int]) -> int:
+        """Where a patrol goes: the territory with the most wanted (bounties) on it, then the most traffic, then the
+        one this ship has been away from longest - a beat is walked, not drawn from a hat."""
+        seen = cap.deed_cooldowns
+        seen[f"PATROL_SEEN:{cap.sector_id}"] = kernel.cycle_count
+
+        def heat(s: int) -> tuple:
+            sec = kernel.sectors.get(s)
+            caps = [kernel.captains[c] for c in (sec.captains if sec else []) if c in kernel.captains]
+            return (sum(max(0, c.bounty) for c in caps), len(caps), -seen.get(f"PATROL_SEEN:{s}", -1), -s)
+        return max(patrol, key=heat)
 
     def _reclaim(self, kernel: Any, f: Faction, world: Planet, cap: Captain) -> None:
         """The Throne takes back a seceded world: the garrison lands, the old banners go back up."""
@@ -975,7 +988,7 @@ class FactionManager:
             heretics = [kernel.captains[c] for c in sec.captains if c != cap.id and c in kernel.captains]
             heretics = [h for h in heretics if self.is_heretic(h)]
             if heretics:
-                h = random.choice(heretics)
+                h = max(heretics, key=lambda x: (x.credits, x.id))   # the richest heretic first: tithe where it pays
                 if h.ship.fighters < cap.ship.fighters * 0.7 and h.credits > 500:
                     tribute = int(h.credits * ZEALOT_TRIBUTE_SHARE)
                     h.credits -= tribute
@@ -1011,7 +1024,7 @@ class FactionManager:
         # Consecration takes time: the faith absorbs one new world before reaching for the next.
         if kernel.cycle_count - f.last_expansion_cycle < ZEALOT_EXPANSION_COOLDOWN:
             patrol = [s for s in f.territory if s != cap.sector_id]
-            return bool(patrol) and self._move(kernel, cap, random.choice(patrol))
+            return bool(patrol) and self._move(kernel, cap, self._beat(kernel, cap, patrol))
         plan = cap.active_plan if (cap.active_plan or {}).get("kind") == "crusade" else None
         if plan is None or kernel.cycle_count - plan.get("since", 0) > 150:
             plan = self._crusade_target(kernel, cap)

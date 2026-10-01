@@ -644,8 +644,7 @@ class CivilizationIntelligenceEngine:
                     cls._apply_project_effects(civ.current_project, planet)
 
                     # Select next project
-                    all_projects = list(CIVIC_PROJECTS.keys())
-                    civ.current_project = random.choice([p for p in all_projects if p != project_completed])
+                    civ.current_project = CivilizationIntelligenceEngine.next_project(civ, planet, project_completed)
                     civ.project_progress = 0
 
                     if event_bus:
@@ -724,3 +723,34 @@ class CivilizationIntelligenceEngine:
             planet.treasury += bonus
             from xylarium.kernel import ledger
             ledger.mint("colony_tax", bonus, getattr(planet, "currency", "SOL"))
+
+    @classmethod
+    def next_project(cls, civ: Any, planet: Any, completed: Optional[str] = None) -> str:
+        """The civic project a people takes up next: the one whose effect is worth most to its world now, per unit
+        of work (what it lacks most, what threatens it, what it has to spare) - not drawn from a hat."""
+        from xylarium.config import COMMODITY_CONFIG, COLONY_TAX_PER_CAPITA
+        price = lambda c: COMMODITY_CONFIG.get(c, {}).get("base_price", 20)
+        urgent = getattr(civ, "trade_urgency", {}) or {}
+        year_of_tax = max(0, planet.population) * COLONY_TAX_PER_CAPITA * 100.0
+        siege = getattr(planet, "siege", None) or {}
+
+        def worth(effect: str) -> float:
+            if effect == "ore_bonus":
+                return 50 * price("ORE") * (1.0 + urgent.get("ORE", 0) / 10.0)
+            if effect == "organics_bonus":
+                return 50 * price("ORGANICS") * (1.0 + urgent.get("ORGANICS", 0) / 10.0) + \
+                    max(0, 100 - planet.morale) / 100.0 * year_of_tax * 0.1
+            if effect == "famine_immunity":
+                return max(0, 80 - planet.morale) / 100.0 * year_of_tax
+            if effect == "tax_bonus":
+                return float(max(0, min(500, 500000 - planet.treasury)))
+            if effect == "shield_bonus":
+                return 100 * 3.0 * (1 + int(siege.get("assaults", 0)))
+            return 0.0                                     # an effect the world does not yet know how to use
+
+        def cost(cfg: Dict[str, Any]) -> float:
+            return cfg.get("cost_work", 100) + cfg.get("cost_ore", 0) * price("ORE") / 10.0 + \
+                cfg.get("cost_organics", 0) * price("ORGANICS") / 10.0
+
+        names = sorted(n for n in CIVIC_PROJECTS if n != completed) or sorted(CIVIC_PROJECTS)
+        return max(names, key=lambda n: (worth(CIVIC_PROJECTS[n].get("effect", "")) / cost(CIVIC_PROJECTS[n]), n))

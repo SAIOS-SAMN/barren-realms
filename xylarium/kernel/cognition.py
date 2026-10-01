@@ -920,8 +920,11 @@ class SeatSurvive:
                 and (current_sec.is_null_space or kernel.captains[c_id].bounty > 0)
                 and current_sec.sentries.get(c_id, 0) < captain.ship.fighters
             ]
-            if hostile_captains:
-                target_id = random.choice(hostile_captains)
+            from xylarium.kernel import motive
+            best = motive.pick(kernel, captain, [motive.fight(kernel, captain, kernel.captains[c], current_sec)
+                                                 for c in hostile_captains], "intercept")
+            if best is not None:
+                target_id = best["target"]
                 return CognitiveDeed(
                     seat="SURVIVE",
                     action_type=ActionType.ATTACK_SHIP,
@@ -1587,10 +1590,15 @@ class SeatGrow:
         t = temperament(captain, kernel)
         comfort = AI_WORKING_FLOAT * t["caution"] * 2
         surplus = captain.credits - comfort
-        if surplus <= 500 or random.random() > t["spend"] * 0.5:
+        if surplus <= 500:
             return None
         amount = int(surplus * SHORE_LEAVE_MAX_SHARE * t["spend"])
         if amount < 100:
+            return None
+        # leave is worth what its temperament makes of the pleasure (a spender more than it costs, a miser less)
+        from xylarium.kernel import decide, motive
+        if motive.pick(kernel, captain, [decide.option("shore_leave", amount, amount * 2.0 * t["spend"])],
+                       "leave") is None:
             return None
         return CognitiveDeed(seat="GROW", action_type=ActionType.SHORE_LEAVE, deed_name="SHORE_LEAVE",
                              target_coordinate=f"SECTOR_{sector.id:03d}", residual_magnitude=float(amount),
@@ -1768,13 +1776,7 @@ class SeatGrow:
         ]
         if targets:
             return cls._step_toward(captain, kernel, parent, targets[0], "SURVEY_MARKETS")
-        if sector.warps:
-            return CognitiveDeed(
-                seat="GROW", action_type=ActionType.MOVE, deed_name="SURVEY_MARKETS",
-                target_coordinate="FRONTIER", residual_magnitude=1.0,
-                parameters={"destination": random.choice(sector.warps)}, ration_cost=1,
-            )
-        return None
+        return None                 # every market in reach is known and fresh: nothing to survey
 
 
 class SeatArc:
@@ -2020,8 +2022,19 @@ class CognitiveOrgan:
                             )
                             break
             if arc_deed:
-                # 60% chance to prioritize ARC breakthrough when material needs are met
-                if random.random() < 0.60 or (survive_deed and survive_deed.deed_name == "SURVEY_MARKETS"):
+                # material needs met: decode when what it teaches and pays is worth the decoding, as it judges
+                from xylarium.kernel import decide, motive
+                anom = kernel.research_manager.anomalies.get(arc_deed.target_coordinate)
+                if anom is not None:
+                    worth, cost = motive.anomaly_worth(kernel, anom), motive.CATALYST_COST
+                else:                       # a step of a cartography puzzle: its 5000 Cr breakthrough over the steps left
+                    puzzle = getattr(kernel, "cartography_manager", None) and \
+                        kernel.cartography_manager.puzzles.get(arc_deed.target_coordinate)
+                    nodes = [n for row in (puzzle.grid_nodes if puzzle else []) for n in row]
+                    left = sum(1 for n in nodes if n.get("vector_angle") != n.get("target_angle"))
+                    worth, cost = 5000.0 / max(1, left), float(kernel.crew_wage(captain))
+                if (survive_deed and survive_deed.deed_name == "SURVEY_MARKETS") or motive.pick(
+                        kernel, captain, [decide.option("decode", cost, worth)], "decode"):
                     selected_deed = arc_deed
 
         # 4. FAILURE MEMORY: a deed that just failed cools down (exponential backoff);

@@ -40,6 +40,17 @@ So one mind's choices never shift another's luck, the caller's random state neve
 order (PYTHONHASHSEED) does not matter. `scheduler.rng(kernel, *parts)` gives a private `random.Random` on the
 same streams.
 
+## What is chance, and what is choice
+
+Minds do not roll for what they want. Every decision - a captain's fights (Lanchester odds, prize, warrant), trips
+(what each place in reach holds for its calling, over distance), dealings with natives, decoding, shore leave; a
+patrol's beat; a people's civic works; a firm's freight orders - is a valued option chosen by `decide.choose`
+(`motive.py` prices a captain's). The only randomness in a choice is the mind's misjudgement (its thermal noise).
+
+What stays chance, locked as above: physical uncertainty (battle exchanges, detection, hazards on the lanes),
+discovery (what a probe or an excavation turns up), inheritance (an offshoot's mutation), market noise in share
+prices, and flavour (names, taunts).
+
 ## Velocity
 
 How many cycles pass per wall-second - a throttle on the runner, never on the physics. The same seed makes the same

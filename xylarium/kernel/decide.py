@@ -92,7 +92,8 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     nets = [o["value"] - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
                                             o.get("currency", "SOL")) if o.get("cash") else 0.0) for o in options]
     scale = max(abs(n) for n in nets) or 1.0
-    rng = _rng("decide", kernel.cycle_count, *salt)
+    from xylarium.kernel import scheduler
+    rng = scheduler.rng(kernel, "decide", kernel.cycle_count, *salt)     # this universe's own misjudgements
     best, best_seen = None, 0.0
     for o, n in zip(options, nets):
         seen = n + rng.gauss(0.0, JUDGEMENT_ERROR * m["noise"] * scale)
