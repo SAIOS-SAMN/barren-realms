@@ -140,6 +140,38 @@ recolouring with biology, the stack operators with energy; a composite written t
 (abstraction); neighbours teach the less knowing; relics carry their makers' crystals; peoples forget what few of
 their worlds hold, less where households have leisure to teach.
 
+### Genomes (`genome.py`)
+Every peopled world carries its deme's genome on six heritable axes - light (its tuned optimum), tolerance (how
+wide, at the cost of peak height), chemistry (adaptation to its world's surface), birth, temperature (its minds'
+substrate) and aptitude (how well it keeps what it learns). Each quarter selection moves it by Lande's equation
+(additive variance x the gradient of log fitness read from the world's own physics; r-selection where land is open,
+K-selection near what it can carry) and drift jostles it by 1/sqrt(people). Daughter worlds inherit their parent's
+genome and adapt to their own light; a world that drifts three additive deviations from its people's mean becomes
+another people (a new civilization inheriting knowledge and crystals, or a colony strain). Evolution is slow -
+a generation is a third of a century - but a people that has mastered genome editing (biology) may move toward
+what its world rewards (the optimum is computed, not searched) when the room it would gain is worth the cost
+(`POPULATION` -> `World # EDIT`).
+
+### Introspection, creativity and integrity (`introspect.py`)
+Each year every people reads eight gauges - sustenance, vitality, knowledge, intellect, creativity, prosperity,
+peace, integrity - weighs them by aspirations that come from its own character (its alignment, its minds, what it
+has gone without), and pursues its widest gap with the lever it holds: its rulers' inquiry, restraint from raids,
+guarding its art. Whether its goal is reached is **purpose**, a prospect in meaning. **Creativity** is defined by
+speciation - novelty that lives: new species of its worlds, crystals no other people knows, luxury signatures
+unique to it and its own. **Integrity** is the share of its worlds still crafting the signature their own world
+gave them; peoples that value it demand a greater market premium before selling out.
+
+### Enterprise (`enterprise.py`)
+Laid over the listed companies, the ISSE and their dividends, **process firms** run the economy's own recipes
+(equipment, superconductors, biosphere packs, engine manifolds, warp cores) at their home port: they buy inputs
+from their own world's surplus first and the port second, burn a unit of their world's fuel a batch, pay wages
+into their world's households, make in lots - stopping when the next lot no longer pays or the port cannot pay for
+it - and sell back. Materials knowledge cuts their waste. A council founds one where a quarter's profit on the
+plant, as its mind discounts it at the policy rate, beats the plant's cost - sized to its share of the market;
+profitable firms reinvest; firms short of inputs post import orders for captains to haul. Four losing quarters
+and a firm goes into **receivership**: its orders are cancelled, its plant auctioned to a rival or scrapped, its
+cash paid to its shareholders, and it is struck from the exchange - every unit of money moved, none lost.
+
 ### Fertility (`fertility.py`)
 How many children a people wants depends on its biology:
 - **r-strategists** (mycotiforms, hexasocial swarms, hypobiotids): stored food becomes clutches - they boom.

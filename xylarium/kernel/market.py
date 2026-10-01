@@ -1025,7 +1025,11 @@ class MarketManager:
             return
         if source.startswith("company:"):
             comp = self.companies.get(source.split(":", 1)[1])
-            if comp:
+            cur = getattr(contract, "currency", "SOL") or "SOL"
+            if comp and cur != "SOL" and comp.home_currency == cur:
+                comp.home_cash += amount              # escrowed in the firm's home money, returned there
+                return
+            if comp and cur == "SOL":
                 comp.treasury += amount
                 return
         elif source.startswith("planet:") and kernel is not None:
@@ -1033,6 +1037,16 @@ class MarketManager:
             if planet:
                 planet.treasury += amount
                 return
+        cur = getattr(contract, "currency", "SOL") or "SOL"
+        if cur != "SOL" and kernel is not None:
+            # unclaimed escrow in a regional money stays in that money: to the world it was bound for, else
+            # cleared into SOL through the exchange before it reaches the Reserve
+            dest = kernel.get_planet(contract.destination_planet_id) if contract.destination_planet_id else None
+            if dest is not None and dest.currency == cur:
+                dest.treasury += amount
+                return
+            from xylarium.kernel.fx import ACTIVE_FX
+            amount = ACTIVE_FX.swap_to_sol(cur, amount) if ACTIVE_FX is not None else 0
         fed = getattr(kernel, "federal_reserve", None) if kernel is not None else None
         if fed:
             fed.receive(amount, "unclaimed_escrow")
