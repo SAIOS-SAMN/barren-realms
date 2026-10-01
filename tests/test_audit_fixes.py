@@ -125,6 +125,22 @@ class TestAuditFixes(unittest.TestCase):
         self.assertTrue(again is None or again.currency == w.currency)
         self.assertTrue(all(p.currency == w.currency for p in demography._markets(k, w)))
 
+    def test_a_company_that_changed_money_withdraws_liquidity_through_the_exchange(self):
+        k = fresh()
+        from xylarium.kernel import liquidity
+        comp = next(iter(k.market_manager.companies.values()))
+        cur = next(iter(k.fx_market.pools))
+        other = next(c for c in k.fx_market.pools if c != cur)
+        comp.home_currency, comp.home_cash, comp.treasury = cur, 10 ** 6, 10 ** 6
+        _, _, ts, tl, _, _ = liquidity._purse(k, comp, "company", cur)
+        liquidity.deposit(k, f"company:{comp.ticker}", cur, 1000, ts, tl)
+        comp.home_currency = other                                   # it moved home since
+        m0 = money(k)
+        _, _, _, _, gs, gl = liquidity._purse(k, comp, "company", cur)
+        held = liquidity.stats(k)["positions"][cur][f"company:{comp.ticker}"]
+        liquidity.withdraw(k, f"company:{comp.ticker}", cur, held, gs, gl)
+        self.assertEqual(m0, money(k))
+
     def test_port_income_decays_when_nothing_is_bought(self):
         k = fresh()
         port = next(s.port for s in k.sectors.values() if s.port is not None)

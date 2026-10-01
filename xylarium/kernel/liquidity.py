@@ -226,7 +226,17 @@ def _purse(kernel: Any, who: Any, kind: str, cur: str):
     def take_sol(n): who.treasury -= n
     def give_sol(n): who.treasury += n
     def take_local(n): who.home_cash -= n
-    def give_local(n): who.home_cash += n
+
+    def give_local(n):
+        # what comes back is the pool's money; a company whose home money has since changed (a conversion, a
+        # rescue) takes it home through the exchange, not as if it were its own
+        if home == cur:
+            who.home_cash += n
+        elif home == "SOL":
+            who.treasury += kernel.fx_market.swap_to_sol(cur, n)
+        else:
+            got, _ = kernel.fx_market.convert(cur, home, n)
+            who.home_cash += got
     local = max(0, who.home_cash) if home == cur else 0
     return max(0, who.treasury), local, take_sol, take_local, give_sol, give_local
 
