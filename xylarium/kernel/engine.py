@@ -124,6 +124,8 @@ from xylarium.kernel import decide as decide_mod  # noqa: F401  (registers its s
 from xylarium.kernel import liquidity as liquidity_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import regimes as regimes_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import intellect as intellect_mod  # noqa: F401  (registers its seasonal hook)
+from xylarium.kernel import genome as genome_mod  # noqa: F401  (registers its seasonal hook)
+from xylarium.kernel import introspect as introspect_mod  # noqa: F401  (registers its seasonal hook)
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
 from xylarium.kernel import government as government_mod
@@ -1676,23 +1678,7 @@ class GameKernel:
         if planet is None:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message="No such world.")
         try:
-            if kwargs.get("nursery"):
-                if planet.owner_id != captain.id:
-                    raise ValueError(f"You do not govern {planet.name}.")
-                msg = nursery_mod.build(self, planet)
-            elif kwargs.get("raid"):
-                if planet.owner_id != captain.id:
-                    raise ValueError(f"You do not govern {planet.name}.")
-                fed = planet.society.get("sustenance") not in sustenance_mod.HUNGRY
-                msg = sustenance_mod.raid(self, planet)
-                if msg is None:
-                    raise ValueError(f"No one in {planet.name}'s reach holds {staples_mod.of(self, planet)} to take.")
-                if fed:                                   # a fed people raiding is plunder, not necessity
-                    alignment_mod.deed(self, captain, "food_raid")
-            elif kwargs.get("natal") is not None:
-                msg = fertility_mod.set_natal(self, captain, planet, kwargs.get("natal", ""))
-            else:
-                msg = demography_mod.set_policy(self, captain, planet, kwargs.get("policy", ""))
+            msg = demography_mod.population_command(self, captain, planet, kwargs)
         except ValueError as e:
             return ActionResult(success=False, action=ActionType.POPULATION_POLICY, message=str(e))
         return ActionResult(success=True, action=ActionType.POPULATION_POLICY, message=msg, logs=[msg])

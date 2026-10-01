@@ -128,7 +128,8 @@ def effort(kernel: Any, planet: Any) -> float:
     ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
     free = max(0.0, 1.0 - 1.0 / ss) if ss > 0 else 0.0
     leisure = 1.0 + laws.clamp(float(soc.get("lux_access", 0.0) or 0.0))
-    depth = laws.cognition(biosphere.metabolism_of(kernel, planet))["depth"]
+    from xylarium.kernel import genome
+    depth = laws.cognition(biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))["depth"]
     e = planet.population / 1000.0 * free * leisure * depth
     civ = getattr(planet, "civilization", None)
     faction = getattr(planet, "faction_id", None) or (getattr(civ, "faction_id", None) if civ is not None else None)

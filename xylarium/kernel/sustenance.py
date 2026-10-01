@@ -340,7 +340,8 @@ def quarter(kernel: Any) -> List[str]:
                 continue
         if g["state"] in RAIDERS:
             _shift_civ(planet, -HUNGER_ALIGNMENT_SHIFT)                 # scarcity hardens a people
-            if _council(kernel, planet):
+            from xylarium.kernel import introspect
+            if _council(kernel, planet) and not introspect.restrained(kernel, planet):   # unless it chose peace
                 log = raid(kernel, planet, g)
                 if log:
                     logs.append(log)

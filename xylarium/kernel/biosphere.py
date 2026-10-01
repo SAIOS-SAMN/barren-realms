@@ -104,8 +104,18 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
     if civ is not None and not getattr(civ, "light_optimum", None):
         adapt(kernel, civ, planet)             # first sight of a people is its homeworld (genesis, first flight)
     optimum = F(civ.light_optimum) if (civ is not None and civ.light_optimum) else None
-    fit = light_fit(metab, fl, planet, optimum)
+    from xylarium.kernel import genome
+    if metabolism is None and metab != "plasmic":
+        # the people's genome tunes its light (optimum x e^light) and widens it (tolerance, at constant area)
+        optimum = (optimum if optimum else _OPT.get(metab, F(1))) * genome.fraction(genome.optimum_factor(planet))
+        x = float(fl / optimum) if optimum else 1.0
+        fit = genome.fraction(genome.tuned_fit(float(light_fit(metab, fl, planet, optimum)), x,
+                                               genome.value(planet, "tolerance")))
+    else:
+        fit = light_fit(metab, fl, planet, optimum)
     chemistry = F(1) if (civ is not None and civ.home_type == planet.planet_type) else _surface_fit(metab, planet.planet_type)
+    if metabolism is None and chemistry < 1:
+        chemistry = genome.fraction(genome.adapted_chemistry(float(chemistry), planet))   # a people adapts
     area = physics.surface_area(planet)
     if physics.body(planet).get("giant"):
         area = area * GIANT_LIVING_BAND        # life on a giant lives in a band of its clouds
@@ -124,8 +134,11 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     metab = metabolism or metabolism_of(kernel, planet)
     civ = getattr(planet, "civilization", None)
     tailings = (getattr(planet, "element_deposits", {}) or {}).get("TAILINGS", 0)
+    from xylarium.kernel import genome
     key = (tier, habs, metab, planet.planet_type, str(getattr(planet, "body", None)), planet.owner_id,
-           getattr(civ, "light_optimum", None), tailings // 500)
+           getattr(civ, "light_optimum", None), tailings // 500,
+           round(genome.value(planet, "light"), 3), round(genome.value(planet, "tolerance"), 3),
+           round(genome.value(planet, "chemistry"), 3))
     if citadel is None and habitats is None and metabolism is None and kernel is not None \
             and hasattr(kernel, "caches"):
         from xylarium.kernel import cache
@@ -190,6 +203,8 @@ def births(kernel: Any, planet: Any, ceiling: int) -> int:
     prof = _profile(kernel, planet)
     f = float((getattr(planet, "society", None) or {}).get("fertility", 1.0))
     speed = max(1.0, f)
+    from xylarium.kernel import genome
+    speed *= genome.birth_factor(planet)                 # its natural increase is heritable
     r = min(int(prof.get("birth_micro_per_cycle", prof["rate_micro_per_cycle"]) * speed),
             prof.get("food_micro_per_cycle", prof["rate_micro_per_cycle"]))
     target = max(1, int(ceiling * min(1.0, f)))

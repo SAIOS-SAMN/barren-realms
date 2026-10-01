@@ -151,20 +151,23 @@ def progress(kernel: Any, planet: Any) -> float:
 def meaning(kernel: Any, planet: Any) -> Tuple[float, Dict[str, float]]:
     """mu = (1 + prospects + catch-up) x (1 - satiation / 2), in [MEANING_FLOOR, MEANING_CEIL].
 
-    prospects  the mean of room (open land in reach) and progress (knowledge growth over a generation)
+    prospects  the mean of room (open land in reach), progress (knowledge growth over a generation) and purpose
+               (whether the goal the people chose for itself is being reached - introspect.py)
     catch-up   births a crisis deferred, made up at up to twice the natural rate until recovered
     satiation  comfort without prospects: luxury access x (1 - prospects); a wholly sated people with nothing
                ahead of it sits at half (the floor)
     """
     soc = planet.society
+    from xylarium.kernel import introspect, knowledge
     r, p = room(kernel, planet), progress(kernel, planet)
-    prospects = (r + p) / 2.0
+    aim = introspect.purpose(kernel, knowledge.holder_of_planet(planet))   # living toward what it chose
+    prospects = (r + p + aim) / 3.0
     share = birth_share_quarter()
     catch_up = 0.0 if stressed(kernel, planet) else min(1.0, float(soc.get("deferred", 0.0)) / share)
     satiation = laws_clamp(float(soc.get("lux_access", 0.0) or 0.0)) * (1.0 - max(0.0, min(1.0, prospects)))
     mu = (1.0 + prospects + catch_up) * (1.0 - satiation / 2.0)
     mu = min(MEANING_CEIL, max(MEANING_FLOOR, mu))
-    return mu, {"room": round(r, 3), "progress": round(p, 3), "catch_up": round(catch_up, 3),
+    return mu, {"room": round(r, 3), "progress": round(p, 3), "purpose": round(aim, 3), "catch_up": round(catch_up, 3),
                 "satiation": round(satiation, 3)}
 
 

@@ -55,12 +55,12 @@ def thermal_noise(t: float, t_ref: float = T_EARTH) -> float:
     return math.sqrt(t / t_ref)
 
 
-def cognition(metabolism: str) -> dict:
+def cognition(metabolism: str, temperature_factor: float = 1.0) -> dict:
     """A people's mind from its substrate temperature. A thought erases bits at Landauer's cost (bits per joule
     ~ 1/T) while the energy it cycles a second follows its kinetics (~ sqrt T), so the knowledge a second of thought
     yields - its depth - goes as 1/sqrt(T); how fast it reacts is kinetic (sqrt T); how noisy its judgements are is
     thermal (sqrt T). Cold minds are deep and slow; hot minds quick, noisy and shallow."""
-    t = substrate_temperature(metabolism or "biotic")
+    t = substrate_temperature(metabolism or "biotic") * temperature_factor     # a people's genome tunes its minds
     return {"temperature": round(t, 1), "depth": landauer_bits(t) * thermal_speed(t), "speed": thermal_speed(t),
             "noise": thermal_noise(t)}
 

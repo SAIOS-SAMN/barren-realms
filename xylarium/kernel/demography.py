@@ -434,6 +434,8 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     if exodus:
         sustenance.stats(kernel)["exodus"] += 1
     daughter.society["founded_cycle"] = kernel.cycle_count
+    from xylarium.kernel import genome
+    genome.inherit(planet, daughter)                  # the settlers carry their world's genome
     daughter.population = emigrants
     daughter.habitability = hab
     daughter.owner_id = planet.owner_id
@@ -662,6 +664,40 @@ def exports(kernel: Any) -> None:
 
 
 # ---------------------------------------------------------------------- player command
+def population_command(kernel: Any, captain: Any, planet: Any, kwargs: Dict[str, Any]) -> str:
+    """A governor's orders for one of its worlds: NURSERY, EDIT (its genome), RAID (for its staple), NATAL <card>,
+    or EXPAND / STEADY. Raises ValueError with the reason a command cannot be carried out."""
+    from xylarium.kernel import alignment, fertility, genome, nursery, staples, sustenance
+    own = planet.owner_id == captain.id
+    if kwargs.get("nursery"):
+        if not own:
+            raise ValueError(f"You do not govern {planet.name}.")
+        return nursery.build(kernel, planet)
+    if kwargs.get("edit"):
+        if not own:
+            raise ValueError(f"You do not govern {planet.name}.")
+        plan = genome.proposal(kernel, planet)
+        if plan is None:
+            raise ValueError(f"Your people know too little of genome editing (biology) to improve on "
+                             f"{planet.name}'s fit to its world.")
+        if planet.treasury < plan["cost"]:
+            raise ValueError(f"Editing costs {int(plan['cost']):,} {planet.currency} from the vault.")
+        return genome.engineer(kernel, planet, plan)
+    if kwargs.get("raid"):
+        if not own:
+            raise ValueError(f"You do not govern {planet.name}.")
+        fed = planet.society.get("sustenance") not in sustenance.HUNGRY
+        msg = sustenance.raid(kernel, planet)
+        if msg is None:
+            raise ValueError(f"No one in {planet.name}'s reach holds {staples.of(kernel, planet)} to take.")
+        if fed:                                   # a fed people raiding is plunder, not necessity
+            alignment.deed(kernel, captain, "food_raid")
+        return msg
+    if kwargs.get("natal") is not None:
+        return fertility.set_natal(kernel, captain, planet, kwargs.get("natal", ""))
+    return set_policy(kernel, captain, planet, kwargs.get("policy", ""))
+
+
 def set_policy(kernel: Any, captain: Any, planet: Any, policy: str) -> str:
     if planet.owner_id != captain.id:
         raise ValueError(f"You do not govern {planet.name}.")

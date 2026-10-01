@@ -122,6 +122,7 @@ def signature(kernel: Any, planet: Any) -> Optional[Dict[str, str]]:
     noun = _NOUN[best]
     soc["luxury"] = {"type": best, "metabolism": metab, "input": _input(planet, best, metab),
                      "name": f"{people_name(kernel, planet)} {adj[h % len(adj)]} {noun[(h >> 4) % len(noun)]}"}
+    soc.setdefault("luxury_origin", best)               # what its world and nature first gave it to make
     return soc["luxury"]
 
 
@@ -226,7 +227,11 @@ def reconsider(kernel: Any, planet: Any) -> Optional[str]:
 
     now = worth(sig["type"])
     best = max(LUXURY_TYPES, key=worth)
-    if best != sig["type"] and worth(best) > 1.25 * now:
+    # a people that values its art staying its own asks a greater premium before it sells out (introspect.py)
+    from xylarium.kernel import introspect
+    premium = 1.25 * max(1.0, introspect.integrity_weight(kernel, planet)) if sig["type"] == \
+        soc.get("luxury_origin", sig["type"]) else 1.25
+    if best != sig["type"] and worth(best) > premium * now:
         h = _hash(planet.id, best)
         adj = _ADJECTIVE.get(planet.planet_type, ["Far"])
         noun = _NOUN[best]

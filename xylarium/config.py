@@ -1552,6 +1552,7 @@ PROCESSES = {
     "nursery_lithic": {"domain": "materials", "name": "foundry budding"},
     "nursery_cryo": {"domain": "energy", "name": "deep refrigeration"},
     "nursery_plasmic": {"domain": "energy", "name": "magnetic confinement"},
+    "genome_editing": {"domain": "biology", "name": "genome editing"},
 }
 LEGACY_TECH_PROCESS = {"JUMP_DRIVE": "jump_drive", "CLOAKING_GRID": "cloaking", "NANITE_DRYDOCK": "nanite_repair",
                        "BIO_SYNTHESIZER": "bio_synthesis", "ORBITAL_FOUNDRY": "orbital_foundry",

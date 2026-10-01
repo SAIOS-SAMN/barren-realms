@@ -27,8 +27,8 @@ def _rng(*parts: Any) -> random.Random:
     return random.Random(zlib.crc32(":".join(str(p) for p in parts).encode()))
 
 
-def mind(kernel: Any, metabolism: Optional[str]) -> Dict[str, float]:
-    return laws.cognition(metabolism or "biotic")
+def mind(kernel: Any, metabolism: Optional[str], temperature_factor: float = 1.0) -> Dict[str, float]:
+    return laws.cognition(metabolism or "biotic", temperature_factor)
 
 
 def _steadied(kernel: Any, m: Dict[str, float], holder: Optional[str]) -> Dict[str, float]:
@@ -42,8 +42,9 @@ def _steadied(kernel: Any, m: Dict[str, float], holder: Optional[str]) -> Dict[s
 
 
 def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
-    from xylarium.kernel import biosphere, knowledge
-    return _steadied(kernel, mind(kernel, biosphere.metabolism_of(kernel, planet)), knowledge.holder_of_planet(planet))
+    from xylarium.kernel import biosphere, genome, knowledge
+    m = mind(kernel, biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))
+    return _steadied(kernel, m, knowledge.holder_of_planet(planet))
 
 
 def mind_of_captain(kernel: Any, captain: Any) -> Dict[str, float]:

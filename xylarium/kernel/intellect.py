@@ -284,7 +284,9 @@ def _peoples(kernel: Any) -> Dict[str, Dict[str, Any]]:
             h = knowledge.holder_of_planet(p)
             if not h:
                 continue
-            rec = out.setdefault(h, {"effort": 0.0, "worlds": [], "lux": 0.0})
+            rec = out.setdefault(h, {"effort": 0.0, "worlds": [], "lux": 0.0, "aptitude": []})
+            from xylarium.kernel import genome
+            rec["aptitude"].append(genome.aptitude_factor(p))
             rec["effort"] += knowledge.effort(kernel, p) * years
             rec["worlds"].append(p)
             rec["lux"] = max(rec["lux"], float(p.society.get("lux_access", 0.0) or 0.0))
@@ -377,7 +379,9 @@ def _learn(kernel: Any, holder: str, rec: Dict[str, Any], neighbours: List[str])
                 st["stats"]["taught"] += 1
     # forgetting: knowledge's own depreciation, spread over the worlds that hold it, less where households teach
     years = _quarter() / 100.0
-    lose = (1.0 - (1.0 - laws.KNOWLEDGE_DEPRECIATION) ** years) * (1.0 - rec["lux"]) / max(1, len(rec["worlds"]))
+    forgetful = sum(rec.get("aptitude") or [1.0]) / max(1, len(rec.get("aptitude") or [1.0]))   # heritable
+    lose = (1.0 - (1.0 - laws.KNOWLEDGE_DEPRECIATION) ** years) * (1.0 - rec["lux"]) / max(1, len(rec["worlds"])) \
+        * forgetful
     keep = []
     for crystal in v:
         if norm(crystal) not in BASE and rng.random() < lose:
