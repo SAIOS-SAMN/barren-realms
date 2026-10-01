@@ -25,6 +25,8 @@ from xylarium.kernel import cache, matter, topology
 
 from xylarium.config import (
     CITADEL_CONFIG,
+    CITADEL_UPKEEP,
+    COMMODITY_CONFIG,
     DAUGHTER_CITADEL_TIER,
     DAUGHTER_COOLDOWN_QUARTERS,
     DAUGHTER_EMIGRANT_SHARE,
@@ -161,11 +163,9 @@ def _pay_contractor(kernel: Any, planet: Any, amount: int, from_escrow: bool = F
 
 
 def develop(kernel: Any, planet: Any) -> Optional[str]:
-    """The colony council's quarter: build when crowded, choose at the ceiling, act on the choice."""
+    """The colony council's quarter: past the inflection of its growth a people chooses the stars or enough and
+    acts on it; at any time its council weighs its works (_works) by the one decision rule."""
     st = stats(kernel)
-    level = PRICE_LEVEL.get(planet.currency, 1.0)
-    reserve = int(DEMOGRAPHY_COUNCIL_RESERVE * level)
-    cap = housing_cap(planet)
     policy = getattr(planet, "growth_policy", None)
     is_diaspora = getattr(planet, "crowded_cycles", 0) > DIASPORA_CROWDED_CYCLES
 
@@ -181,7 +181,7 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
     settled = equilibrium(planet, kernel)
     exodus = planet.society.get("sustenance") == "expanding"       # hungry, with open worlds in reach
     if planet.population < settled * SETTLE_PRESSURE and not exodus:
-        return None
+        return _works(kernel, planet) if kernel.cycle_count >= getattr(planet, "works_ready_cycle", 0) else None
 
     # 0. Past the inflection of its growth (P = half its equilibrium: each newcomer now adds less than the
     #    last), a people with a yard that builds settler ships chooses what it will become - the stars, or
@@ -202,50 +202,92 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
             log = send_settlers(kernel, planet)
             if log:
                 return log
-    # Growth drives technology: past the inflection, a people without the yards works toward them;
-    # habitats and higher citadels wait until housing itself presses
-    toward_yards = planet.citadel_level < DAUGHTER_CITADEL_TIER
-    if planet.population < settled * DEMOGRAPHY_PRESSURE and not toward_yards:
-        return None
-
     if kernel.cycle_count < getattr(planet, "works_ready_cycle", 0):
         return None   # the council's crews are still on the last project
+    return _works(kernel, planet)
 
-    # 1. Technology first: the citadel is both housing and the yard that builds settler ships.
-    #    Players upgrade their own citadels; councils of AI and indigenous worlds do it themselves.
+
+def _tax_per_head_quarter(planet: Any) -> float:
+    from xylarium.config import COLONY_TAX_PER_CAPITA
+    return COLONY_TAX_PER_CAPITA * PRICE_LEVEL.get(planet.currency, 1.0) * _quarter_len()
+
+
+def value_of_room(kernel: Any, planet: Any, extra: float, m: Dict[str, float]) -> float:
+    """What housing `extra` more people is worth to the council: their tax as a quarterly flow, beginning when the
+    people's natural increase would fill what it has now (logistic time), discounted at its money's policy rate over
+    the council's horizon. Room nobody will grow into within the horizon is worth nothing yet."""
+    from xylarium.kernel import decide, fertility, laws
+    if extra <= 0:
+        return 0.0
+    f = float(planet.society.get("fertility", 1.0) or 1.0)
+    people = extra * min(1.0, f)                      # a people below replacement never fills all of it
+    have = max(1, equilibrium(planet, kernel))
+    now = max(1, planet.population)
+    r = fertility.birth_share_quarter() * max(0.05, min(1.0, f))
+    fill = 0.0 if now >= have else math.log(have / now) / r
+    horizon = laws.horizon(m["noise"], decide.BASE_HORIZON_QUARTERS)
+    if fill >= horizon:
+        return 0.0
+    rate = decide.rate(kernel, planet.currency)
+    return laws.present_value(people * _tax_per_head_quarter(planet), horizon - fill, rate) * (1 + rate) ** (-fill)
+
+
+def _works(kernel: Any, planet: Any) -> Optional[str]:
+    """The council's works, by the one decision rule: raise the citadel, dig a habitat, build the nursery - or
+    nothing - whichever is worth most over its cost. Players raise their own citadels."""
+    from xylarium.kernel import biosphere, decide, nursery
+    st = stats(kernel)
+    level = PRICE_LEVEL.get(planet.currency, 1.0)
+    ore_price = COMMODITY_CONFIG["ORE"]["base_price"] * level
+    m = decide.mind_of_planet(kernel, planet)
+    k_now = housing_cap(planet, kernel)
+    # what the world must keep: a quarter of its citadel's upkeep
+    keep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])["credits"] * level * _quarter_len()
+    options = []
     nxt = planet.citadel_level + 1
     if self_governed(planet, kernel) and nxt in CITADEL_CONFIG:
         cfg = CITADEL_CONFIG[nxt]
-        cost = int(cfg["upgrade_cost"] * level)
-        if planet.treasury >= cost + reserve and planet.ore_silo >= cfg["upgrade_ore"]:
-            _pay_contractor(kernel, planet, cost)
-            matter.consume(planet, "ore_silo", "ORE", cfg["upgrade_ore"], "construction")
-            planet.citadel_level = nxt
-            planet.works_ready_cycle = kernel.cycle_count + CITADEL_BUILD_QUARTERS_PER_TIER * nxt * _quarter_len()
-            st["citadels"] += 1
-            if getattr(kernel, "event_bus", None):
-                civ = getattr(planet, "civilization", None)
-                who = civ.name if (civ is not None and planet.owner_id is None) else planet.name
-                kernel.event_bus.broadcast_radio(sender=planet.name, channel="COMM-1", sector_id=planet.sector_id,
-                                                 text=f"CIVIC ASCENT: {who} on {planet.name} has raised its Citadel to "
-                                                      f"Tier {nxt} ({cfg['name']}) to house a growing people.")
-            return f"[DEMOGRAPHY] {planet.name} raised its citadel to Tier {nxt} ({cfg['name']}) to house its people."
-
-    # 2. Dig: sub-surface habitats, up to what the citadel's engineering allows
-    if planet.population < settled * DEMOGRAPHY_PRESSURE:
-        return None
+        cost = cfg["upgrade_cost"] * level
+        if planet.treasury - cost >= keep and planet.ore_silo >= cfg["upgrade_ore"]:
+            gain = biosphere.carrying_capacity(kernel, planet, citadel=nxt) - k_now
+            options.append(decide.option("raise_citadel", cost + cfg["upgrade_ore"] * ore_price,
+                                         value_of_room(kernel, planet, gain, m), tier=nxt, cash=cost,
+                                         ore=cfg["upgrade_ore"]))
     if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
-        cost = int(HABITAT_COST * level * (1 + planet.habitats))
-        if planet.treasury >= cost + reserve and planet.ore_silo >= HABITAT_ORE:
-            _pay_contractor(kernel, planet, cost)
-            matter.consume(planet, "ore_silo", "ORE", HABITAT_ORE, "construction")
-            planet.habitats += 1
-            planet.works_ready_cycle = kernel.cycle_count + HABITAT_BUILD_QUARTERS * _quarter_len()
-            st["habitats"] += 1
-            return None
-        return None   # saving for the next habitat
-
-    return None   # no more room to dig: the choice above is all that is left (players: upgrade the citadel)
+        cost = HABITAT_COST * level * (1 + planet.habitats)
+        if planet.treasury - cost >= keep and planet.ore_silo >= HABITAT_ORE:
+            gain = biosphere.carrying_capacity(kernel, planet, habitats=planet.habitats + 1) - k_now
+            options.append(decide.option("dig_habitat", cost + HABITAT_ORE * ore_price,
+                                         value_of_room(kernel, planet, gain, m), cash=cost))
+    if not nursery.has(planet) and nursery.why_not(kernel, planet) is None and \
+            planet.treasury - nursery.cost(planet, kernel) >= keep:
+        a = nursery.appraise(kernel, planet)
+        options.append(decide.option("build_nursery", a["cost"], a["worth"]))
+    pick = decide.choose(kernel, options, m, planet.id, "works")
+    if pick is None:
+        return None
+    if pick["name"] == "build_nursery":
+        return f"[NURSERY] {nursery.build(kernel, planet)}"
+    if pick["name"] == "dig_habitat":
+        _pay_contractor(kernel, planet, int(pick["cash"]))
+        matter.consume(planet, "ore_silo", "ORE", HABITAT_ORE, "construction")
+        planet.habitats += 1
+        planet.works_ready_cycle = kernel.cycle_count + HABITAT_BUILD_QUARTERS * _quarter_len()
+        st["habitats"] += 1
+        return None
+    nxt, cfg = pick["tier"], CITADEL_CONFIG[pick["tier"]]
+    _pay_contractor(kernel, planet, int(pick["cash"]))
+    matter.consume(planet, "ore_silo", "ORE", pick["ore"], "construction")
+    planet.citadel_level = nxt
+    planet.works_ready_cycle = kernel.cycle_count + CITADEL_BUILD_QUARTERS_PER_TIER * nxt * _quarter_len()
+    st["citadels"] += 1
+    if getattr(kernel, "event_bus", None):
+        civ = getattr(planet, "civilization", None)
+        who = civ.name if (civ is not None and planet.owner_id is None) else planet.name
+        kernel.event_bus.broadcast_radio(sender=planet.name, channel="COMM-1", sector_id=planet.sector_id,
+                                         text=f"CIVIC ASCENT: {who} on {planet.name} has raised its Citadel to "
+                                              f"Tier {nxt} ({cfg['name']}) to house a growing people.")
+    return f"[DEMOGRAPHY] {planet.name} raised its citadel to Tier {nxt} ({cfg['name']}) to house its people."
 
 
 def choose_policy(kernel: Any, planet: Any) -> str:

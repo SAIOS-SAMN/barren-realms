@@ -30,10 +30,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from xylarium.config import (
     DAUGHTER_CITADEL_TIER,
     DAUGHTER_MIN_HABITABILITY,
-    FOOD_RAID_ALIGNMENT_SHIFT,
     FOOD_WAR_PEACE_QUARTERS,
     HUNGER_ALIGNMENT_SHIFT,
-    RELIEF_ALIGNMENT_SHIFT,
     RELIEF_LIGHT_THRESHOLD,
     SUSTENANCE_RUNWAY_QUARTERS,
     SUSTENANCE_SMOOTHING,
@@ -231,11 +229,13 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None) -> Op
     staples.move(planet, food, take)                      # a transfer: the stores change hands
     st["raids"] += 1
     st["seized"][food] = st["seized"].get(food, 0) + take
+    from xylarium.config import COMMODITY_CONFIG
+    from xylarium.kernel import alignment
+    taken = take * COMMODITY_CONFIG.get(food, {}).get("base_price", 20)          # judged by what it took
     if planet.owner_id:
-        from xylarium.kernel import alignment
-        alignment.deed(kernel, kernel.captains.get(planet.owner_id), "food_raid")
+        alignment.act(kernel, kernel.captains.get(planet.owner_id), "food_raid", harmed_sol=taken)
     else:
-        _shift_civ(planet, -FOOD_RAID_ALIGNMENT_SHIFT)
+        _shift_civ(planet, alignment.measure(kernel, harmed_sol=taken))
     _war(kernel, planet, me, them, food, take, where.id)
     target = victim.name if victim is not None else f"the {port.name} docks"
     return f"[FOOD WAR] {people_name(kernel, me)} of {planet.name} seized {take:,} {food} from {target}."
@@ -301,12 +301,15 @@ def relieve(kernel: Any, planet: Any, gauge: Dict[str, Any]) -> Optional[str]:
     st = stats(kernel)
     st["relief"] += 1
     st["relief_units"] += give
+    from xylarium.config import COMMODITY_CONFIG
+    from xylarium.kernel import alignment
+    saved = give * alignment.LIVES_PER_FOOD_UNIT if gauge.get("short") else 0      # famine's own arithmetic
+    helped = give * COMMODITY_CONFIG.get(food, {}).get("base_price", 20)
     if donor.owner_id:
-        from xylarium.kernel import alignment
-        alignment.deed(kernel, kernel.captains.get(donor.owner_id), "famine_aid", scale=0.2)
+        alignment.act(kernel, kernel.captains.get(donor.owner_id), "famine_aid", helped_sol=helped, lives_saved=saved)
     else:
-        _shift_civ(donor, RELIEF_ALIGNMENT_SHIFT)
-    _shift_civ(planet, RELIEF_ALIGNMENT_SHIFT)
+        _shift_civ(donor, alignment.measure(kernel, helped_sol=helped, lives_saved=saved))
+    _shift_civ(planet, alignment.measure(kernel, helped_sol=helped) / 2)      # gratitude, not merit
     return (f"[RELIEF] {people_name(kernel, people_of(donor))} of {donor.name} sent {give:,} {food} to the hungry "
             f"of {planet.name} ({people_name(kernel, me)}).")
 

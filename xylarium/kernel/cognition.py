@@ -1018,76 +1018,96 @@ class SeatSurvive:
                                         ration_cost=1,
                                     )
 
-            # If matter has surplus (> 5000 Cr), invest into capital infrastructure
-            if matter_book.total_surplus >= 5000:
-                # A. Claim unowned planet in sector if available
-                if current_sec.planets:
-                    from xylarium.kernel.colony import ColonyManager
-                    unclaimed = [
-                        p for p in current_sec.planets
-                        if p.owner_id is None and ColonyManager.claim_requirements(captain, p, current_sec, kernel) is None
-                        and SeatGrow.feeds(captain, p, kernel) > 0
-                    ]
-                    unclaimed.sort(key=lambda p: -SeatGrow.feeds(captain, p, kernel))   # where its people can eat
-                    if unclaimed:
-                        return CognitiveDeed(
-                            seat="SURVIVE",
-                            action_type=ActionType.PLANET_CLAIM,
-                            deed_name="COLONIZE_TERRESTRIAL_BODY",
-                            target_coordinate="CAPITAL_EXPANSION",
-                            residual_magnitude=matter_book.total_surplus,
-                            parameters={"planet_id": unclaimed[0].id},
-                            ration_cost=1,
-                        )
-                # B. Deploy orbital toll gate if player unlocked shortcuts
-                if captain.unlocked_secrets and not captain.toll_gates and captain.credits >= 5000:
-                    s_id = captain.unlocked_secrets[0]
-                    return CognitiveDeed(
-                        seat="SURVIVE",
-                        action_type=ActionType.TOLL_GATE_DEPLOY,
-                        deed_name="DEPLOY_ORBITAL_TOLL_GATE",
-                        target_coordinate="MONOPOLY_TRANSIT",
-                        residual_magnitude=matter_book.total_surplus,
-                        parameters={"shortcut_id": s_id, "toll_fee": 500},
-                        ration_cost=1,
-                    )
-                # C. Invest into ISSE stock market
-                if hasattr(kernel, "market_manager") and kernel.market_manager.companies:
-                    comps = list(kernel.market_manager.companies.values())
-                    # Invest only what is truly spare: a working reserve stays liquid for food, fuel and repairs
-                    temper = temperament(captain, kernel)
-                    reserve = AI_INVEST_RESERVE * temper["caution"]
-                    # Save for the next hull first: capital that compounds beats paper
-                    saving_for = SeatGrow._next_hull_price(captain, kernel)
-                    if saving_for and captain.credits < saving_for * 1.5 + AI_CASH_RESERVE * 4 + 500:
-                        cheap = []
-                    else:
-                        from xylarium.config import SHARE_ISSUANCE_MAX_MULTIPLE
-                        def capacity(c: Any) -> int:
-                            ceiling = int((c.initial_shares or c.total_shares) * SHARE_ISSUANCE_MAX_MULTIPLE)
-                            return c.available_shares + max(0, ceiling - c.total_shares)
-                        cheap = [c for c in comps if captain.credits - c.share_price * 10 >= reserve and capacity(c) >= 10]
-                    if cheap:
-                        comp = random.choice(cheap)
-                        # Size the order to the surplus: savings recycle into company treasuries (which pay
-                        # dividends, escrow freight and spend at their home starports) instead of idling
-                        share = AI_INVEST_SHARE * temper["thrift"] * temper["horizon"]
-                        if temper["calling"] == "financier":
-                            share *= 2.0
-                        lot = max(10, int((captain.credits - reserve) * min(0.6, share) // max(1, comp.share_price)))
-                        lot = min(lot, capacity(comp))
-                        return CognitiveDeed(
-                            seat="SURVIVE",
-                            action_type=ActionType.STOCK_BUY,
-                            deed_name="ACQUIRE_CORPORATE_SHARES",
-                            target_coordinate="CAPITAL_DIVIDENDS",
-                            residual_magnitude=matter_book.total_surplus,
-                            parameters={"ticker": comp.ticker, "shares": lot},
-                            ration_cost=1,
-                        )
+            # Capital: claim a world, deploy a toll gate, or buy shares - whichever is worth most over its cost as
+            # this captain's mind judges it (decide.py). Cash beyond a working reserve (its temperament's caution)
+            # is the budget; holding it is always the option worth exactly what it costs.
+            temper = temperament(captain, kernel)
+            reserve = AI_INVEST_RESERVE * temper["caution"]
+            saving_for = SeatGrow._next_hull_price(captain, kernel)      # capital that compounds comes first
+            if saving_for and captain.credits < saving_for * 1.5 + AI_CASH_RESERVE * 4 + 500:
+                reserve = max(reserve, saving_for * 1.5 + AI_CASH_RESERVE * 4 + 500)
+            spare = captain.credits - reserve
+            if spare > 0:
+                deed = SeatSurvive._invest(captain, current_sec, kernel, spare, temper, matter_book.total_surplus)
+                if deed is not None:
+                    return deed
 
         # Material books are closed or unactionable: the syntropic seat plans for growth
         return SeatGrow.propose(captain, kernel)
+
+
+    @classmethod
+    def _invest(cls, captain: Captain, sector: Any, kernel: "GameKernel", spare: float, temper: Dict[str, float],
+                surplus: float) -> Optional[CognitiveDeed]:
+        """Value each use of spare capital in SOL today against what it costs, and take the best (or none)."""
+        from xylarium.config import (COLONY_KIT_COLONISTS, COLONY_KIT_CREDITS, SHARE_ISSUANCE_MAX_MULTIPLE,
+                                     TOLL_GATE_DEFAULT_FEE, TOLL_GATE_DEPLOY_COST_CREDITS)
+        from xylarium.kernel import decide, fertility, laws
+        from xylarium.kernel.colony import ColonyManager
+        m = decide.mind_of_captain(kernel, captain)
+        horizon = laws.horizon(m["noise"], decide.BASE_HORIZON_QUARTERS)
+        rate = decide.rate(kernel, "SOL")
+        options = []
+        # A. a world of one's own: its tax at full growth, from when its colonists have half filled it
+        if COLONY_KIT_CREDITS <= spare:
+            best = None
+            for p in sector.planets:
+                if p.owner_id is None and ColonyManager.claim_requirements(captain, p, sector, kernel) is None:
+                    k = SeatGrow.feeds(captain, p, kernel)
+                    if k > COLONY_KIT_COLONISTS and (best is None or k > best[1]):
+                        best = (p, k)
+            if best is not None:
+                p, k = best
+                from xylarium.kernel.demography import _tax_per_head_quarter
+                fx_rate = kernel.fx_market.to_sol_value(p.currency, 1.0) if p.currency != "SOL" else 1.0
+                fill = math.log(k / COLONY_KIT_COLONISTS) / max(1e-6, fertility.birth_share_quarter())
+                delay = fill / 2
+                worth = 0.0 if delay >= horizon else laws.present_value(
+                    k / 2 * _tax_per_head_quarter(p) * fx_rate, horizon - delay, rate) * (1 + rate) ** (-delay)
+                options.append(decide.option("claim_world", COLONY_KIT_CREDITS, worth, planet_id=p.id))
+        # B. a toll on a secret shortcut: the fee times the traffic a sector sees in a quarter
+        if captain.unlocked_secrets and not captain.toll_gates and TOLL_GATE_DEPLOY_COST_CREDITS <= spare:
+            passages = len(kernel.captains) * 25 / max(1, len(kernel.sectors))
+            worth = laws.present_value(TOLL_GATE_DEFAULT_FEE * passages, horizon, rate)
+            options.append(decide.option("toll_gate", TOLL_GATE_DEPLOY_COST_CREDITS, worth,
+                                         shortcut_id=captain.unlocked_secrets[0]))
+        # C. shares: a share is worth its dividends over the horizon; buy where that most exceeds its price
+        mm = getattr(kernel, "market_manager", None)
+        if mm is not None and mm.companies:
+            def capacity(c: Any) -> int:
+                ceiling = int((c.initial_shares or c.total_shares) * SHARE_ISSUANCE_MAX_MULTIPLE)
+                return c.available_shares + max(0, ceiling - c.total_shares)
+            best = None
+            for c in mm.companies.values():
+                if capacity(c) < 10 or c.share_price <= 0:
+                    continue
+                cur = getattr(c, "home_currency", None) or "SOL"
+                div = c.last_dividend * (kernel.fx_market.to_sol_value(cur, 1.0) if cur != "SOL" else 1.0)
+                per_share = laws.present_value(div, horizon, rate)
+                if best is None or per_share / c.share_price > best[1] / best[0].share_price:
+                    best = (c, per_share, capacity(c))
+            if best is not None:
+                c, per_share, cap = best
+                share = AI_INVEST_SHARE * temper["thrift"] * temper["horizon"] * (2.0 if temper["calling"] == "financier" else 1.0)
+                lot = min(cap, max(10, int(spare * min(0.6, share) // max(1, c.share_price))))
+                if lot * c.share_price <= spare:
+                    options.append(decide.option("buy_shares", lot * c.share_price, lot * per_share,
+                                                 ticker=c.ticker, shares=lot))
+        pick = decide.choose(kernel, options, m, captain.id, "invest")
+        if pick is None:
+            return None
+        if pick["name"] == "claim_world":
+            return CognitiveDeed(seat="SURVIVE", action_type=ActionType.PLANET_CLAIM, deed_name="COLONIZE_TERRESTRIAL_BODY",
+                                 target_coordinate="CAPITAL_EXPANSION", residual_magnitude=surplus,
+                                 parameters={"planet_id": pick["planet_id"]}, ration_cost=1)
+        if pick["name"] == "toll_gate":
+            return CognitiveDeed(seat="SURVIVE", action_type=ActionType.TOLL_GATE_DEPLOY, deed_name="DEPLOY_ORBITAL_TOLL_GATE",
+                                 target_coordinate="MONOPOLY_TRANSIT", residual_magnitude=surplus,
+                                 parameters={"shortcut_id": pick["shortcut_id"], "toll_fee": TOLL_GATE_DEFAULT_FEE},
+                                 ration_cost=1)
+        return CognitiveDeed(seat="SURVIVE", action_type=ActionType.STOCK_BUY, deed_name="ACQUIRE_CORPORATE_SHARES",
+                             target_coordinate="CAPITAL_DIVIDENDS", residual_magnitude=surplus,
+                             parameters={"ticker": pick["ticker"], "shares": pick["shares"]}, ration_cost=1)
 
 
 class SeatGrow:

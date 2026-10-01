@@ -158,8 +158,8 @@ def _collect(kernel: Any, case: Dict[str, Any], logs: List[str]) -> None:
                    and c is not case for c in docket(kernel)["cases"]):
             if case["court"] in frozen:
                 frozen.remove(case["court"])
-        from xylarium.kernel import alignment
-        alignment.deed(kernel, cap, "restitution")
+        from xylarium.kernel import alignment              # the harm undone, measured
+        alignment.act(kernel, cap, "restitution", helped_sol=case["recovered_sol"])
 
 
 def garnish(kernel: Any, cap: Any, owed_sol: int, court: str, court_currency: str) -> int:

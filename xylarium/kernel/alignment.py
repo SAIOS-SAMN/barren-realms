@@ -17,6 +17,7 @@ At the poles, vows bind: a Paragon of Light cannot commit evil deeds, and an Ava
 of the Dark will not stoop to charity.
 """
 
+import math
 import random
 from typing import Any, Dict, Optional
 
@@ -102,11 +103,50 @@ def _apply_anchor(kernel: Any, captain: Any) -> None:
             rec["baseline"] = ceiling
 
 
+# ---------------------------------------------------------------------- consequences
+ALIGNMENT_ACT_SCALE = 0.12      # the largest shift one act can make (the gravest deed in the old table)
+LIVES_PER_FOOD_UNIT = 200       # colony.tick_colony: each unit of a famine's deficit costs this many lives
+
+
+def scales(kernel: Any) -> Dict[str, float]:
+    """What counts as a consequential act in this universe as it is now: a typical world's people, and a typical
+    captain's purse (medians, re-read each quarter)."""
+    from xylarium.kernel import cache
+
+    def reckon() -> Dict[str, float]:
+        pops = sorted(p.population for s in kernel.sectors.values() for p in s.planets if p.population > 0)
+        purses = sorted(max(0, c.credits) for c in kernel.captains.values())
+        return {"lives": float(pops[len(pops) // 2]) if pops else 1000.0,
+                "sol": float(purses[len(purses) // 2]) if purses else 1000.0}
+    return cache.memo(kernel, "alignment_scales", "all", reckon, max_age=25)
+
+
+def measure(kernel: Any, harmed_sol: float = 0.0, helped_sol: float = 0.0, lives_lost: float = 0.0,
+            lives_saved: float = 0.0) -> float:
+    """The shift an act's consequences earn: ALIGNMENT_ACT_SCALE x tanh(net lives / a typical world's people +
+    net SOL / a typical captain's purse). Saturating: no act weighs more than the gravest."""
+    sc = scales(kernel)
+    x = (lives_saved - lives_lost) / max(1.0, sc["lives"]) + (helped_sol - harmed_sol) / max(1.0, sc["sol"])
+    return ALIGNMENT_ACT_SCALE * math.tanh(x)
+
+
+def act(kernel: Any, captain: Any, key: str, harmed_sol: float = 0.0, helped_sol: float = 0.0,
+        lives_lost: float = 0.0, lives_saved: float = 0.0, note: Optional[str] = None) -> float:
+    """An act judged by what it did: harm and help in SOL and in lives (see measure)."""
+    if captain is None:
+        return 0.0
+    return _apply(kernel, captain, key, measure(kernel, harmed_sol, helped_sol, lives_lost, lives_saved), note)
+
+
 def deed(kernel: Any, captain: Any, key: str, scale: float = 1.0, note: Optional[str] = None) -> float:
-    """Applies an aligned deed to a captain. Returns the new alignment."""
+    """Applies a deed whose weight is a social judgement (ALIGNMENT_DEEDS: a conviction, an oath kept or broken,
+    knowledge shared). Acts with measurable consequences use act()."""
     if captain is None or key not in ALIGNMENT_DEEDS:
         return getattr(captain, "cosmic_alignment", 0.0)
-    delta = ALIGNMENT_DEEDS[key] * scale
+    return _apply(kernel, captain, key, ALIGNMENT_DEEDS[key] * scale, note)
+
+
+def _apply(kernel: Any, captain: Any, key: str, delta: float, note: Optional[str] = None) -> float:
     if delta == 0:
         return captain.cosmic_alignment
     old = captain.cosmic_alignment

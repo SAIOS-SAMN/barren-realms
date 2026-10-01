@@ -67,7 +67,9 @@ deed = alignment_mod.deed
 def _before_attack(kernel, captain, sector, kwargs, pre):
     target = kernel.captains.get(kwargs.get("target_id"))
     if target is not None:
+        from xylarium.kernel import hulls
         pre["target"] = target
+        pre["target_hull_value"] = hulls.spec(target.ship).get("price", 0)
         pre["target_wanted"] = target.bounty > 0 or getattr(target.personality, "value", "") in ("pirate", "crusader")
         pre["target_hull"] = target.ship.ship_type
         pre["target_sector"] = target.sector_id
@@ -80,6 +82,9 @@ def _before_bombard(kernel, captain, sector, kwargs, pre):
     if planet is not None:
         pre["planet"] = planet
         pre["owner"] = planet.owner_id
+        pre["population"] = planet.population
+        pre["treasury_sol"] = kernel.fx_market.to_sol_value(planet.currency, planet.treasury) \
+            if planet.currency != "SOL" else planet.treasury
 
 
 @before(ActionType.SELL_ARTIFACT)
@@ -111,9 +116,22 @@ def _delivered(kernel, captain, sector, action, kwargs, result, pre):
     chronicle_mod.note_freight(kernel, captain)
 
 
+@before(ActionType.IDEOLOGY_AID_DISPATCH)
+def _before_aid(kernel, captain, sector, kwargs, pre):
+    planet = kernel.get_planet(kwargs.get("planet_id")) if kwargs.get("planet_id") else None
+    if planet is not None:
+        pre["starving"] = bool(planet.society.get("short_q")) or planet.society.get("sustenance") in (
+            "expanding", "pressed", "stranded")
+
+
 @after(ActionType.IDEOLOGY_AID_DISPATCH)
 def _aid(kernel, captain, sector, action, kwargs, result, pre):
-    deed(kernel, captain, "famine_aid")
+    if not result.success:
+        return
+    from xylarium.config import COMMODITY_CONFIG
+    units = int(kwargs.get("food_units", 20))
+    alignment_mod.act(kernel, captain, "famine_aid", helped_sol=units * COMMODITY_CONFIG["ORGANICS"]["base_price"],
+                      lives_saved=units * alignment_mod.LIVES_PER_FOOD_UNIT if pre.get("starving") else 0)
 
 
 @after(ActionType.STUDY_ARTIFACT, ActionType.ANOMALY_INVESTIGATE, ActionType.CARTOGRAPHY_SOLVE)
@@ -159,12 +177,13 @@ def _fought(kernel, captain, sector, action, kwargs, result, pre):
     if pre.get("target_wanted"):
         deed(kernel, captain, "justice")
     elif captain.faction_id is None:
-        deed(kernel, captain, "piracy")
-        if any("[HOSTILE ACT]" in line for line in (result.logs or [])):
-            deed(kernel, captain, "hostile_act")
-        # Piracy is a case at law where it happened: the harm is what the victim lost
+        # Piracy is judged by what it did: what the victim lost, and the hull if it was destroyed
         victim = pre["target"]
         harm = max(500, pre.get("target_credits", 0) - victim.credits)
+        lost_hull = pre.get("target_hull_value", 0) if victim.ship.ship_type != pre.get("target_hull") else 0
+        alignment_mod.act(kernel, captain, "piracy", harmed_sol=harm + lost_hull)
+        if any("[HOSTILE ACT]" in line for line in (result.logs or [])):
+            deed(kernel, captain, "hostile_act")              # breaking a protected system's peace: a judgement
         law_mod.file(kernel, "piracy", captain, sector, harm, {"kind": "captain", "id": victim.id})
     target = pre["target"]
     if target.ship.ship_type != pre.get("target_hull") or target.sector_id != pre.get("target_sector"):
@@ -179,12 +198,13 @@ def _bombarded(kernel, captain, sector, action, kwargs, result, pre):
     if "planet" not in pre:
         return
     planet = pre["planet"]
+    dead = max(0, pre.get("population", 0) - planet.population)
     if planet.owner_id == captain.id and pre.get("owner") != captain.id:
-        deed(kernel, captain, "conquest")
+        alignment_mod.act(kernel, captain, "conquest", harmed_sol=pre.get("treasury_sol", 0), lives_lost=dead)
         chronicle_mod.annals_conquest(kernel, planet, str(pre.get("owner")), captain)
         planet.siege = None
     else:
-        deed(kernel, captain, "bombardment")
+        alignment_mod.act(kernel, captain, "bombardment", lives_lost=dead)
         siege = planet.siege or {"start": kernel.cycle_count, "assaults": 0, "attackers": []}
         siege["assaults"] += 1
         siege["last"] = kernel.cycle_count
