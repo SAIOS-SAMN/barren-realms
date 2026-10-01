@@ -829,13 +829,13 @@ class ColonyManager:
         from xylarium.kernel import populace, sustenance
         if not kernel or getattr(planet, "natives", None) or not sustenance.yards(planet):
             return None
+        if (kernel.cycle_count % 25) != (zlib.crc32(planet.id.encode()) % 25):
+            return None                                   # the council sits once a season
         active_id = getattr(planet, "active_indigenous_captain_id", None)
         if active_id and active_id in kernel.captains:
             return None
-        if not populace.room_for_ai(kernel) or planet.treasury < PLANETARY_SPACEFLIGHT_COST:
+        if planet.treasury < PLANETARY_SPACEFLIGHT_COST or not populace.room_for_ai(kernel):
             return None
-        if (kernel.cycle_count % 25) != (zlib.crc32(planet.id.encode()) % 25):
-            return None                                   # the council sits once a season
         from xylarium.config import COLONY_IMPORT_UNIT_PREMIUM, COMMODITY_CONFIG, PRICE_LEVEL
         from xylarium.kernel import decide, staples
         level = PRICE_LEVEL.get(planet.currency, 1.0)

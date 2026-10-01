@@ -33,9 +33,10 @@ def extra_humans(kernel: Any) -> int:
 
 def shipyards(kernel: Any) -> int:
     """Peopled worlds whose yards can build and keep a starship (sustenance.yards)."""
-    from xylarium.kernel import sustenance
-    return sum(1 for s in kernel.sectors.values() for p in s.planets
-               if p.population > 0 and not getattr(p, "natives", None) and sustenance.yards(p))
+    from xylarium.kernel import cache, sustenance
+    return cache.memo(kernel, "populace_yards", kernel.cycle_count, lambda: sum(
+        1 for s in kernel.sectors.values() for p in s.planets
+        if p.population > 0 and not getattr(p, "natives", None) and sustenance.yards(p)), max_age=1)
 
 
 def ai_capacity(kernel: Any) -> int:

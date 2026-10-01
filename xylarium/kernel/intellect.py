@@ -347,8 +347,22 @@ def _attempt(kernel: Any, holder: str, budget: float, seed: str) -> Tuple[Dict[s
     proofs = []
     minted = 0.0
     st = stats(kernel)
+    mem = st.setdefault("work_mem", {}).setdefault(holder, {})
+    held = st["gauge"].get(holder, {})
     for rank in (2, 3, 4):
-        for level in range(1, TOP + 1):
+        # the rungs well below what it holds are its ladder's footing: it pays their work (as last measured) and
+        # their knowledge is minted again, but only the rung below its gauge and upward are forged and proved anew
+        start = 1
+        for level in range(1, max(1, int(held.get(str(rank), 0)) - 1)):
+            cost = mem.get(f"{rank}:{level}")
+            if cost is None or cost > budget:
+                break
+            budget -= cost
+            reached[str(rank)] = level
+            peers = sum(1 for g in st["gauge"].values() if g.get(str(rank), 0) >= level)
+            minted += (level / TOP) / (1 + peers)
+            start = level + 1
+        for level in range(start, TOP + 1):
             task = forge(seed, holder, rank, level)
             program = decompact(vocab, task)
             if not program:
@@ -362,6 +376,7 @@ def _attempt(kernel: Any, holder: str, budget: float, seed: str) -> Tuple[Dict[s
                 break
             cert = certificate(task, program)
             budget -= cost
+            mem[f"{rank}:{level}"] = cost
             reached[str(rank)] = level
             proofs.append(cert)
             # useful work mints knowledge: difficulty x scarcity (fewer peoples at this rung, the rarer the feat)
@@ -495,6 +510,7 @@ def quarter(kernel: Any) -> List[str]:
     for gone in [h for h in st["gauge"] if h not in peoples]:      # a people that is no more proves nothing
         st["gauge"].pop(gone, None)
         st["proofs"].pop(gone, None)
+        st.get("work_mem", {}).pop(gone, None)
     return []
 
 
