@@ -32,11 +32,14 @@ def stefan_boltzmann_temperature(flux: float) -> float:
     return T_EARTH * max(1e-9, flux) ** 0.25
 
 
-def substrate_temperature(metabolism: str) -> float:
+def substrate_temperature(metabolism: str, home_flux: Optional[float] = None) -> float:
     """The temperature a people's thinking runs at: its world's equilibrium temperature at the light it evolved
-    under; plasmic minds run in ionised hydrogen."""
+    under (its own homeworld's, when known - its star's luminosity over its orbit squared; else its metabolism's
+    optimum); plasmic minds run in ionised hydrogen."""
     if metabolism == "plasmic":
         return T_PLASMA
+    if home_flux:
+        return stefan_boltzmann_temperature(home_flux)
     from xylarium.config import LIGHT_OPTIMUM
     a, _, b = str(LIGHT_OPTIMUM.get(metabolism, "1/1")).partition("/")
     return stefan_boltzmann_temperature(float(a) / float(b or 1))
@@ -55,12 +58,12 @@ def thermal_noise(t: float, t_ref: float = T_EARTH) -> float:
     return math.sqrt(t / t_ref)
 
 
-def cognition(metabolism: str, temperature_factor: float = 1.0) -> dict:
+def cognition(metabolism: str, temperature_factor: float = 1.0, home_flux: Optional[float] = None) -> dict:
     """A people's mind from its substrate temperature. A thought erases bits at Landauer's cost (bits per joule
     ~ 1/T) while the energy it cycles a second follows its kinetics (~ sqrt T), so the knowledge a second of thought
     yields - its depth - goes as 1/sqrt(T); how fast it reacts is kinetic (sqrt T); how noisy its judgements are is
     thermal (sqrt T). Cold minds are deep and slow; hot minds quick, noisy and shallow."""
-    t = substrate_temperature(metabolism or "biotic") * temperature_factor     # a people's genome tunes its minds
+    t = substrate_temperature(metabolism or "biotic", home_flux) * temperature_factor   # its genome tunes its minds
     return {"temperature": round(t, 1), "depth": landauer_bits(t) * thermal_speed(t), "speed": thermal_speed(t),
             "noise": thermal_noise(t)}
 

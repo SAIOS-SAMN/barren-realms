@@ -48,12 +48,17 @@ class TestDyingStars(unittest.TestCase):
         t0, n0 = matter.totals(k), k.matter.net()
         self._at(ends - 0.09 * (ends - born))
         cosmos.quarter(k)
-        exodus.quarter(k)
+        for _ in range(20):                                   # a fleet per yards world per season, until all are gone
+            exodus.quarter(k)
+            if p.population == 0:
+                break
         self.assertEqual(p.population, 0)
         self.assertGreater(exodus.summary(k)["moved"], 0)
+        kind = cosmos.death_kind(k, self.sid)
         self._at(ends + 0.001)
         cosmos.quarter(k)
-        self.assertEqual(k.sectors[self.sid].star_type, "White dwarf remnant")
+        self.assertEqual(k.sectors[self.sid].star_type,
+                         "White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant")
         self.assertEqual(exodus.summary(k)["abandoned"], 0)
         self.assertEqual(_undeclared(k, t0, n0), {})
 

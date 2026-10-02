@@ -98,9 +98,11 @@ class TestTheChoice(unittest.TestCase):
     def test_population_controls_hold_numbers_below_housing(self):
         w = self.world
         w.growth_policy = None
-        w.civilization.alignment = 0.9                  # a luminous, steady people
         entries = self.kernel.chronicle.next_id
-        demography.develop(self.kernel, w)
+        from unittest import mock
+        from xylarium.kernel import syntropy
+        with mock.patch.object(syntropy, "room_in_reach", return_value=0):   # nothing in reach it can live on
+            demography.develop(self.kernel, w)
         self.assertEqual(w.growth_policy, "steady")
         self.assertEqual(demography.growth_ceiling(w), int(demography.housing_cap(w) * STEADY_STATE_SHARE))
         self.assertGreater(self.kernel.chronicle.next_id, entries)          # the Covenant of Enough is recorded

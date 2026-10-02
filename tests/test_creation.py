@@ -125,6 +125,23 @@ class TestEachBiologyItsOwnNeeds(unittest.TestCase):
             self.assertGreaterEqual(biosphere.carrying_capacity(k, p), creation.VIABLE)  # Franklin's 500
 
 
+class TestEveryStarItsOwn(unittest.TestCase):
+    def test_stars_have_their_own_mass_and_light_and_minds_think_at_their_homeworlds_warmth(self):
+        from fractions import Fraction
+        from xylarium.kernel import laws
+        stars = [s for j in range(20) for s in creation.cell(7, 16, j) if "spec" in s]
+        self.assertGreater(len({s["spec"]["mass"] for s in stars}), len(stars) // 3)     # a continuum, not classes
+        for s in stars:
+            if s["star"] != "Binary pair":
+                m = Fraction(s["spec"]["m"])
+                self.assertEqual(Fraction(s["spec"]["luminosity"]), (m ** 7).limit_denominator(10 ** 6))
+        warm = laws.cognition("biotic", home_flux=4.0)
+        cold = laws.cognition("biotic", home_flux=0.25)
+        self.assertGreater(warm["temperature"], cold["temperature"])
+        self.assertGreater(warm["speed"], cold["speed"])                                  # hot minds quick
+        self.assertGreater(cold["depth"], warm["depth"])                                  # cold minds deep
+
+
 class TestChartedWhereTheyGo(unittest.TestCase):
     def test_a_mind_is_given_its_own_system_and_a_people_with_yards_charts_its_sky(self):
         from xylarium.kernel import sustenance

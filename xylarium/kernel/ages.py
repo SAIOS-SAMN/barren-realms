@@ -218,6 +218,9 @@ def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> st
                 if w.population > 0 and knowledge.holder_of_planet(w) == holder:
                     w.society["exodus_ordered"] = True
         return "Your council will carry every one of your people it can away from a dying sun, whatever it costs."
+    if what == "counsel":
+        from xylarium.kernel import counsel
+        return counsel.render(counsel.counsel(kernel, p))
     if what == "works":
         if ways.stateless(p):
             return "Without a state there is no treasury to build with."

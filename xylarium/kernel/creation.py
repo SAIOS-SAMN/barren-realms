@@ -28,8 +28,10 @@ sample volume. A sector holds a star with the Poisson chance 1 - exp(-n), n risi
 star-formation history: gas falls in on the inside-out timescale tau(r) = 1.033 r - 1.267 Gyr (Chiappini, Matteucci
 & Romano 2001) and forms stars as it arrives - an exponential after the first stars - so the core is born at once
 and the rim is still making stars long after today: systems emerge over deep time, each on its own date, fixed now.
-Its mass is drawn from Salpeter's IMF; a giant planet needs a core of metals to gather its gas, so giants form as
-the square of the star's metallicity (10^(2 [Fe/H]); Fischer & Valenti 2005); a third of stars have a companion (Raghavan et al. 2010). A star is born with
+Its mass is drawn from Salpeter's IMF - each star its own, its light from its own mass (L = M^3.5), not its
+class's; a third have a companion (Raghavan et al. 2010), its mass ratio drawn flat, the pair's light added; a giant
+planet needs a core of metals to gather its gas, so giants form as the square of the star's metallicity
+(10^(2 [Fe/H]); Fischer & Valenti 2005). A star is born with
 the metals its ring had made by then (the age-metallicity relation: the share of the ring's stars already formed,
 over today's share), and its worlds' deposits carry them; hydrogen and helium are the Big Bang's own.
 
@@ -183,6 +185,21 @@ def metals_at(seed: int, r: float, t: float) -> float:
 
 
 # ---------------------------------------------------------------------- a cell
+def _spec(mass: float, companion: float = 0.0) -> Dict[str, str]:
+    """A star's exact physics from its own mass (not its class's): m = sqrt(M) to a hundredth, the main-sequence
+    luminosity m^7 = M^3.5 (physics.star_for's law); a companion adds its mass and its own light."""
+    from fractions import Fraction
+    m1 = Fraction(max(1, round(math.sqrt(mass) * 100)), 100)
+    total, lum = m1 * m1, m1 ** 7
+    if companion > 0:
+        m2 = Fraction(max(1, round(math.sqrt(companion) * 100)), 100)
+        total, lum = total + m2 * m2, lum + m2 ** 7
+    m = Fraction(max(1, round(math.sqrt(float(total)) * 100)), 100)
+    lum = lum.limit_denominator(10 ** 6)
+    return {"m": f"{m.numerator}/{m.denominator}", "mass": f"{total.numerator}/{total.denominator}",
+            "luminosity": f"{lum.numerator}/{lum.denominator}"}
+
+
 def _star(mass: float, binary: bool) -> str:
     if binary:
         return "Binary pair"
@@ -222,9 +239,12 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
         u = rng.random()
         a, b, g = IMF_MIN, IMF_MAX, IMF_SLOPE
         mass = (a ** g + u * (b ** g - a ** g)) ** (1.0 / g)
-        star_type = _star(mass, rng.random() < BINARY_SHARE)
+        binary = rng.random() < BINARY_SHARE
+        companion = mass * (0.1 + 0.9 * rng.random()) if binary else 0.0     # mass ratios flat (Raghavan 2010)
+        star_type = _star(mass, binary)
+        spec = _spec(mass, companion)
         z = metals_at(seed, r, born)
-        sec = SimpleNamespace(star=physics.star_for(star_type), star_type=star_type)
+        sec = SimpleNamespace(star=spec, star_type=star_type)
         worlds = []
         for q, body, ptype in physics.lay_out_system(sec, rng.randint(*SYSTEM_PLANETS), rng):
             deps = _deposits_for(ptype, rng)
@@ -234,7 +254,7 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
                 enrich = 1.0 if el in PRIMORDIAL else z / max(1e-9, cosmos.metals(r))   # made by then, over today
                 deps[el] = int(round(deps[el] * cosmos.abundance(el, r) * enrich))
             worlds.append({"q": q, "body": body, "type": ptype, "deposits": deps})
-        slot.update({"star": star_type, "born": round(born, 6), "z": round(z, 4), "worlds": worlds,
+        slot.update({"star": star_type, "spec": spec, "born": round(born, 6), "z": round(z, 4), "worlds": worlds,
                      "mass": float(physics.star(sec)["mass"])})
         out.append(slot)
     _CACHE[key] = out
@@ -267,7 +287,7 @@ def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[D
         x = float(Fraction(str(b.get("mass", 1)))) / float(biosphere.PLASMIC_MASS_OPTIMUM)
         fit = 4 * x / (1 + x) ** 2
     from xylarium.kernel import physics
-    star = physics.star_for((slot or {}).get("star"))
+    star = (slot or {}).get("spec") or physics.star_for((slot or {}).get("star"))
     q = Fraction(str(b.get("q", 1)))
     flux = float(Fraction(star["luminosity"]) / q ** 4)
     gravity = radius * (float(physics.GIANT_DENSITY) if b.get("giant") else 1.0)

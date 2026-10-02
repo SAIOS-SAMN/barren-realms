@@ -125,8 +125,8 @@ def generation_years(strat: Optional[str] = None, speed: float = 1.0) -> float:
 
 
 def generation_of(kernel: Any, planet: Any) -> float:
-    from xylarium.kernel import genome, laws, biosphere
-    m = laws.cognition(biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))
+    from xylarium.kernel import biosphere
+    m = biosphere.cognition_of(kernel, planet)
     return generation_years(strategy(kernel, planet), m["speed"])
 
 

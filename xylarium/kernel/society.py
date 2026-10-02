@@ -310,12 +310,12 @@ def trades(kernel: Any, planet: Any) -> int:
 
 def _guilds(kernel: Any, planet: Any) -> None:
     """Every trade is practised, and practice teaches crafts (materials), as gathering teaches biology."""
-    from xylarium.kernel import biosphere, genome, knowledge
+    from xylarium.kernel import biosphere, knowledge
     n = trades(kernel, planet)
     planet.society["trades"] = n
     if n <= 0:
         return
-    depth = laws.cognition(biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))["depth"]
+    depth = biosphere.cognition_of(kernel, planet)["depth"]
     share = n / (1.0 + n)                                   # the share of a people in its trades
     units = planet.population / 1000.0 * depth * share * _quarter() / 100.0
     knowledge.learn(kernel, knowledge.holder_of_planet(planet), "materials", units, "crafts")

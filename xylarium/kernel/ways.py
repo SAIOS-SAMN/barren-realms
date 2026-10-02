@@ -128,9 +128,9 @@ def _practise(kernel: Any, planet: Any) -> None:
     """Before writing and schools a people's knowledge is its practice: a season of gathering or tending teaches
     biology as thought does (Wright's curve is learning by doing) - every head at its minds' depth, a thousand
     people-years to a unit, as knowledge.effort counts its thinkers. It fades as all knowledge does."""
-    from xylarium.kernel import biosphere, genome, knowledge
+    from xylarium.kernel import biosphere, knowledge
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
-    depth = laws.cognition(biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet))["depth"]
+    depth = biosphere.cognition_of(kernel, planet)["depth"]
     units = planet.population / 1000.0 * depth * FISCAL_QUARTER_CYCLES / 100.0
     knowledge.learn(kernel, knowledge.holder_of_planet(planet), "biology", units, "practice")
 

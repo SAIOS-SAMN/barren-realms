@@ -299,7 +299,7 @@ def _light(kernel: Any, sid: int, slot: Dict[str, Any]) -> None:
     from xylarium.kernel.universe import PLANET_LETTERS
     sec = kernel.sectors[sid]
     sec.kind, sec.star_type = "SYSTEM", slot["star"]
-    sec.star = physics.star_for(sec.star_type)
+    sec.star = dict(slot["spec"]) if slot.get("spec") else physics.star_for(sec.star_type)   # its own mass and light
     sec.belts = []
     currency = currency_for_security(sec.security)
     for n, w in enumerate(slot["worlds"]):

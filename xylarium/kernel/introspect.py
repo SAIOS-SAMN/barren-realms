@@ -27,6 +27,14 @@ into being that no other people holds and that holds up - new species born of it
 of its own making no other people knows (intellect.py abstractions), and luxury signatures that are both unique
 to it and its own (authentic). Its creativity gauge is that output over the last years.
 
+SELF-KNOWLEDGE is what makes a people sentient in the full sense - a society that can look at itself. Each year
+it forecasts its own gauges for the next (its self-model: where each was, carried along its trend, blurred by its
+judgement - decide's error at its minds' thermal noise, steadied by its fluid intelligence), and the next year the
+forecast is scored against the naive guess that nothing changes. Its SKILL is 1 - (its error / the naive error),
+smoothed over a year. A people whose self-model has beaten the naive guess for a generation has come to know itself
+(INTROSPECTION, the threshold); one whose skill stays below it for a generation loses sight of itself. Nothing
+grants it: a noisy mind on a world whose fortunes do not trend cannot learn itself.
+
 ARTISTIC INTEGRITY is how much of a people's art still expresses what it is: the share of its worlds crafting the
 signature their own world and nature gave them (luxury.signature), not the one the market paid more for
 (luxury.reconsider). A people that values integrity asks a greater premium before it sells out.
@@ -194,6 +202,56 @@ def purpose(kernel: Any, holder: Optional[str]) -> float:
     return float((stats(kernel)["peoples"].get(holder) or {}).get("purpose", 0.0))
 
 
+# ---------------------------------------------------------------------- self-knowledge
+def _forecast(kernel: Any, holder: str, rec: Dict[str, Any], g: Dict[str, float], p0: Any) -> None:
+    """Score last year's self-forecast against what came, then forecast next year."""
+    from xylarium.kernel import decide, fertility, history, scheduler
+    prev, fc = rec.get("last_gauges"), rec.get("forecast")
+    if prev and fc:
+        model = sum(abs(fc[x] - g[x]) for x in GAUGES) / len(GAUGES)
+        naive = sum(abs(prev[x] - g[x]) for x in GAUGES) / len(GAUGES)
+        if naive > 1e-6:
+            skill = max(-1.0, 1.0 - model / naive)
+            rec["skill"] = round(0.75 * float(rec.get("skill", 0.0)) + 0.25 * skill, 4)
+            gen = fertility.generation_of(kernel, p0) * 100
+            knows = bool(rec.get("introspective"))
+            side = rec["skill"] > 0
+            if side == knows:
+                rec.pop("crossing", None)
+            elif "crossing" not in rec:
+                rec["crossing"] = kernel.cycle_count
+            elif kernel.cycle_count - rec["crossing"] >= gen:
+                rec.pop("crossing", None)
+                rec["introspective"] = kernel.cycle_count if side else 0
+                name = holder.split(":", 1)[-1]
+                title = (f"The {name} come to know themselves" if side else f"The {name} lose sight of themselves")
+                history.event(kernel, "INTROSPECTION", title, actors=[holder], planet=p0,
+                              cause="their forecasts of themselves " + ("beat" if side else "no longer beat")
+                                    + " the guess that nothing changes, for a generation",
+                              data={"skill": rec["skill"]})
+                st = stats(kernel)
+                st["introspective"] = int(st.get("introspective", 0)) + (1 if side else -1)
+    m = decide.mind_of_planet(kernel, p0)
+    rng = scheduler.rng(kernel, "self", holder, kernel.cycle_count)
+    blur = decide.JUDGEMENT_ERROR * m["noise"]
+    rec["forecast"] = {x: min(1.0, max(0.0, g[x] + (g[x] - prev[x] if prev else 0.0) + rng.gauss(0.0, blur)))
+                       for x in GAUGES}
+    rec["last_gauges"] = dict(g)
+
+
+def self_knowledge(kernel: Any, holder: Optional[str]) -> float:
+    if not holder or kernel is None or "introspect" not in getattr(kernel, "state", {}):
+        return 0.0
+    return float((stats(kernel)["peoples"].get(holder) or {}).get("skill", 0.0))
+
+
+def introspective(kernel: Any, holder: Optional[str]) -> bool:
+    """Whether this people has come to know itself (and not since lost sight of itself)."""
+    if not holder or kernel is None or "introspect" not in getattr(kernel, "state", {}):
+        return False
+    return bool((stats(kernel)["peoples"].get(holder) or {}).get("introspective"))
+
+
 def quarter(kernel: Any) -> List[str]:
     if (kernel.cycle_count // _quarter()) % 4:
         return []
@@ -224,6 +282,7 @@ def quarter(kernel: Any) -> List[str]:
         rec.update(gauges={k: round(v, 3) for k, v in g.items()}, aspirations=w, goal=goal,
                    gap=round(1.0 - g[goal], 4))
         _act(kernel, holder, goal)
+        _forecast(kernel, holder, rec, g, max(worlds, key=lambda p: (p.population, p.id)))
     return logs
 
 
@@ -241,7 +300,8 @@ def summary(kernel: Any) -> Dict[str, Any]:
         n += 1
     return {"goals": goals, "mean_gauges": {x: round(v / max(1, n), 3) for x, v in mean.items()},
             "goal_changes": st["goal_changes"],
-            "purposeful": sum(1 for r in st["peoples"].values() if r.get("purpose", 0) > 0)}
+            "purposeful": sum(1 for r in st["peoples"].values() if r.get("purpose", 0) > 0),
+            "introspective": sum(1 for r in st["peoples"].values() if r.get("introspective"))}
 
 
 from xylarium.kernel import state  # noqa: E402
@@ -249,7 +309,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="introspect",
-    state=lambda: {"peoples": {}, "goal_changes": 0},
+    state=lambda: {"peoples": {}, "goal_changes": 0, "introspective": 0},
     season=quarter,
     summary=summary,
 ))

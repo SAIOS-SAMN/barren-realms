@@ -242,6 +242,18 @@ def metabolic_factor(metabolism: str, strat: str, birth: float = 1.0, temperatur
     return mass ** 0.75 * laws.thermal_speed(t)
 
 
+def home_flux(planet: Any) -> Optional[float]:
+    """The light this world's people evolved under (its homeworld's), if known."""
+    civ = getattr(planet, "civilization", None)
+    return float(F(civ.light_optimum)) if civ is not None and getattr(civ, "light_optimum", None) else None
+
+
+def cognition_of(kernel: Any, planet: Any) -> dict:
+    """This world's people's minds (laws.cognition) at its own homeworld's temperature, as its genome tunes them."""
+    from xylarium.kernel import genome, laws
+    return laws.cognition(metabolism_of(_kernel(kernel), planet), genome.temperature_factor(planet), home_flux(planet))
+
+
 def need_factor(planet: Any, kernel: Any = None) -> float:
     """This world's people's metabolic factor (its species, as its genome has drifted)."""
     from xylarium.kernel import fertility, genome

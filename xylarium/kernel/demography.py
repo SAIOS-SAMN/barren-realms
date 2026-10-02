@@ -8,7 +8,8 @@ Xylarium: demography - peoples grow on their worlds, and then decide what to bec
   * At the engineering ceiling a people chooses. Expansionists send settler fleets to found daughter
     worlds within reach (the multi-planetary drive). Others adopt population controls: they hold their
     numbers below housing, are content for it, and the Light notices (stewardship). AI houses choose by
-    temperament and alignment, indigenous civilizations by their own alignment, players by command.
+    temperament and alignment, players by command, a people's own council by the room its fleets reach against
+    what frugality yields - weighed again each generation (syntropy.py: the population-technology saddle).
   * Space is as large as it has been seen to be: a world whose settler fleets reach the charted edge sees the
     cluster beyond it (observation.py). Fleets that find nothing in reach are counted as the frontier's pressure.
   * Households are consumers. Every fiscal quarter each populated world buys a basket of goods from its
@@ -160,6 +161,10 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
     st = stats(kernel)
     policy = getattr(planet, "growth_policy", None)
     is_diaspora = getattr(planet, "crowded_cycles", 0) > DIASPORA_CROWDED_CYCLES
+    if policy is not None and not planet.owner_id and planet.citadel_level >= DAUGHTER_CITADEL_TIER:
+        from xylarium.kernel import syntropy
+        if syntropy.due(kernel, planet):
+            policy = planet.growth_policy = None              # a generation on: the council weighs its fork again
 
     if policy == "steady":
         planet.morale = min(100, planet.morale + STEADY_STATE_MORALE)
@@ -320,11 +325,10 @@ def choose_policy(kernel: Any, planet: Any) -> str:
         drive = t.get("ambition", 1.0) * t.get("horizon", 1.0) - t.get("caution", 1.0)
         drive -= 0.6 * getattr(owner, "cosmic_alignment", 0.0)     # the Light leans toward enough
         return "expand" if drive > -0.25 else "steady"
-    civ = getattr(planet, "civilization", None)
-    align = getattr(civ, "alignment", 0.0) or 0.0
-    # Indigenous peoples: a steady, luminous people keeps its world; others reach outward
-    seed = sum(ord(ch) for ch in planet.id) % 100 / 100.0
-    return "steady" if align + 0.3 * seed > 0.35 else "expand"
+    # A people's own council: the fork off the population-technology saddle, priced through its own mind (outward
+    # to the room its fleets reach, or enough within its world) and weighed again each generation (syntropy.py)
+    from xylarium.kernel import syntropy
+    return syntropy.fork(kernel, planet)
 
 
 def _stewardship(kernel: Any, planet: Any) -> None:
