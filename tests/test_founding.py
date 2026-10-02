@@ -68,7 +68,9 @@ class TestFounding(unittest.TestCase):
         from xylarium.kernel import regimes
         for _ in range(400):
             self.k.tick_simulation()
-        self.assertEqual(regimes.stats(self.k)["switches"], 0)
+        founded = set(institutions.stats(self.k).get("currencies", {}))
+        for cur in regimes.stats(self.k)["by_currency"]:          # only moneys some people founded are governed
+            self.assertIn(cur, founded)                           # (a people may found one in its annals' ages)
 
 
 if __name__ == "__main__":

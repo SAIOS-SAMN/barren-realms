@@ -56,6 +56,43 @@ def sol_like(seed: Any) -> Optional[Dict[str, Any]]:
     return best[1] if best else None
 
 
+def mesozoic(seed: Any, found: Dict[str, Any], a: Any) -> Optional[float]:
+    """Begin at its Mesozoic: 252 Myr before its 2026 its biosphere holds complex life a rung short of a mind; its
+    lineages race up that last rung (life.climb, clades by the progenitors' law), the comets of its neighbourhood
+    knocking them back, until one holds a mind's blueprint - or none does by its present."""
+    import random
+    from xylarium.kernel import life
+    slot = creation.cell(seed, *found["cell"])[found["k"]]
+    world = slot["worlds"][found["w"]]
+    ch = next((c for c in creation.chemistries(seed, slot, world) if c["region"] == "biotic"), None)
+    if ch is None or not ch["ladder"]["complete"]:
+        print("its chemistry cannot climb to a mind")
+        return None
+    last = ch["ladder"]["steps"][-1]["mean_gyr"]
+    now = found["born"] + interior.SOLAR_AGE_GYR
+    start = now - 0.252
+    life.ERASURE, life.CLADES = a.erasure, a.clades
+    rng = random.Random(a.seed)
+    tries = []
+    for _ in range(a.rolls):                       # its dice rolled many times: the spread, then one history
+        got = life.climb(rng, [1e-12, last], start, now + 1.0, float("inf"), ch["mu"])
+        tries.append(got["times"][-1] if len(got["times"]) == 2 else None)
+    hits = sorted(t for t in tries if t is not None)
+    by_now = [t for t in hits if t <= now]
+    print(json.dumps({"last_rung_mean_myr": round(last * 1000, 1), "impacts_per_myr": round(ch["mu"] / 1000, 5),
+                      "erasure": a.erasure, "clades": a.clades,
+                      "mind_by_its_2026": round(len(by_now) / a.rolls, 3),
+                      "median_myr_after_mesozoic_began": round((hits[len(hits) // 2] - start) * 1000, 1) if hits else None,
+                      "in_the_mesozoic": round(sum(1 for t in hits if t <= now - 0.066) / a.rolls, 3)}))
+    one = tries[0]
+    if one is None or one > now:
+        print("in this history no lineage reached a mind by its present")
+        return None
+    print(f"in this history a mind arises {(one - start) * 1000:.1f} Myr after the Mesozoic began "
+          f"({(now - one) * 1000:.1f} Myr before its 2026)")
+    return one
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=7)
@@ -63,6 +100,10 @@ def main() -> None:
     ap.add_argument("--every", type=int, default=100)
     ap.add_argument("--pace", default="lonely")
     ap.add_argument("--out", default="")
+    ap.add_argument("--mesozoic", action="store_true", help="begin 252 Myr before its 2026, a rung short of a mind")
+    ap.add_argument("--erasure", default="clades", choices=("rung", "clades"))
+    ap.add_argument("--clades", type=int, default=6)
+    ap.add_argument("--rolls", type=int, default=400)
     a = ap.parse_args()
     k = GameKernel(seed=a.seed, genesis=f"cosmic:{a.pace}")
     k.activate()
@@ -73,6 +114,10 @@ def main() -> None:
         return
     st = cosmos.stats(k)
     epoch = found["born"] + interior.SOLAR_AGE_GYR - 0.0003       # it wakes ~300,000 years before its 2026
+    if a.mesozoic:
+        epoch = mesozoic(seed, found, a)
+        if epoch is None:
+            return
     k.cycle_count = int((epoch - st["epoch0"]) * 1e9 / cosmos.ruler(k) * 100)
     st["minds"], st["next"] = [], 0                               # no elders woken around it
     later = [m for m in creation.schedule(seed)["minds"] if m["epoch"] > epoch]

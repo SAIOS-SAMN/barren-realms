@@ -246,7 +246,9 @@ def season(kernel: Any) -> List[str]:
             card_now = _doctrine(kernel, members, {x: 1.0 for x in members}, by)
             from xylarium.config import POLICY_ORDER
             gap = abs(POLICY_ORDER.index(card_now) - POLICY_ORDER.index(preferred_card(_alignment(kernel, by[m]))))
-            cost = gain / 2.0 + gain * gap / 3.0
+            # a people of the Light trusts its fellows' word: common law costs it less in dues and in watching
+            trust = max(0.0, _alignment(kernel, by[m]))
+            cost = gain / 2.0 * (1.0 - trust) + gain * gap / 3.0
             if decide.choose(kernel, [decide.option("join_federation", cost, gain)], m_mind, m, "federation"):
                 agreed.append(m)
         if existing:

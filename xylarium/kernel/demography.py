@@ -169,12 +169,14 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
     if policy == "steady":
         planet.morale = min(100, planet.morale + STEADY_STATE_MORALE)
         _stewardship(kernel, planet)
-        if not is_diaspora:
+        if is_diaspora:
+            log = send_settlers(kernel, planet)
+            if log:
+                return log
+        # living within its world is not ceasing to build on it: its council still weighs its works
+        if kernel.cycle_count < getattr(planet, "works_ready_cycle", 0):
             return None
-        log = send_settlers(kernel, planet)
-        if log:
-            return log
-        return None
+        return _works(kernel, planet)
     settled = equilibrium(planet, kernel)
     exodus = planet.society.get("sustenance") == "expanding"       # hungry, with open worlds in reach
     if planet.population < settled * SETTLE_PRESSURE and not exodus:
