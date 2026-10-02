@@ -174,7 +174,8 @@ class SenateManager:
         (genesis stock, before the money baseline); a loaded game's vault is already restored with the factions."""
         self.kernel = kernel
         fed = kernel.factions.factions.get("FEDERATION") if (kernel is not None and hasattr(kernel, "factions")) else None
-        if fed is not None and genesis:
+        from xylarium.kernel import institutions
+        if fed is not None and genesis and not institutions.founding(kernel):   # a cosmic universe has no Federation yet
             fed.vault["SOL"] = fed.vault.get("SOL", 0) + self._treasury
 
     def _fed(self) -> Any:

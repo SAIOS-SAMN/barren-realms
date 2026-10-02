@@ -137,6 +137,9 @@ class BankingSystem:
     # ------------------------------------------------------------------ genesis
     def found(self, kernel: Any) -> None:
         """Seats each federation's central bank with founding reserves (genesis, before the money baseline)."""
+        from xylarium.kernel import institutions
+        if institutions.founding(kernel):
+            return                                    # a cosmic universe founds its banks (institutions.py)
         from xylarium.kernel.alignment import genesis_value
         from xylarium.config import AUTHORITIES
         rng = random.Random(kernel.seed * 613 + 29)
@@ -180,8 +183,11 @@ class BankingSystem:
     def _intervene(self, kernel: Any, bank: CentralBank, receipts: Any) -> None:
         """Keeps the bank's money orderly in the ISSE pools (its local side, or - for SOL - the SOL side)."""
         fxm = kernel.fx_market
-        pools = ([(cur, "sol", FX_POOL_SEED[cur][0]) for cur in fxm.pools if cur in FX_POOL_SEED]
-                 if bank.currency == "SOL" else [(bank.currency, "local", FX_POOL_SEED[bank.currency][1])])
+        from xylarium.kernel import institutions          # a founded pool is measured against its own founding depth
+        pools = ([(cur, "sol", institutions.depth(kernel, cur, "sol", FX_POOL_SEED[cur][0])) for cur in fxm.pools
+                  if cur in FX_POOL_SEED]
+                 if bank.currency == "SOL" else
+                 [(bank.currency, "local", institutions.depth(kernel, bank.currency, "local", FX_POOL_SEED[bank.currency][1]))])
         for pool_cur, side, genesis in pools:
             pool = fxm.pools.get(pool_cur)
             if pool is None:

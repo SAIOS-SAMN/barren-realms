@@ -177,6 +177,10 @@ def quarter(kernel: Any) -> List[str]:
             cost = decide.worth(kernel, p.population * (1.0 - HOUSEHOLD_INCOME_SHARE) * (1.0 - pressure) / 4.0, m)
             if decide.choose(kernel, [decide.option("found_state", cost, value)], m, p.id, "state") is not None:
                 p.society["way"] = "state"
+                from xylarium.kernel import institutions
+                line = institutions.found_currency(kernel, p)        # a state taxes: it strikes its coin
+                if line:
+                    logs.append(line)
                 st["states"] += 1
                 primordial.first(kernel, "first_state", name)
                 from xylarium.kernel import history, knowledge

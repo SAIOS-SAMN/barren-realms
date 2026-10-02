@@ -358,6 +358,8 @@ def position(kernel: Any, sector_id: int, cycle: Optional[int] = None) -> Option
 def genesis(kernel: Any) -> None:
     """The universe begins its clock when its first mind arises: the first witness's cell is the region of
     sectors 1-100; everything else waits to be witnessed."""
+    from xylarium.kernel import institutions
+    institutions.genesis(kernel)                       # no money, bank, exchange or Reserve until founded
     st = stats(kernel)
     sched = schedule(kernel)
     st["curve"], st["per_cell_r0"], st["ever"] = sched["curve"], sched["per_cell_r0"], len(sched["minds"])

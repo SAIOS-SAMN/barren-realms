@@ -147,10 +147,12 @@ def review(kernel: Any) -> List[str]:
         return logs
     for cur, rec in st["by_currency"].items():
         bank = kernel.banking.banks[cur]
+        if cur != "SOL" and cur not in kernel.fx_market.pools:
+            continue                              # a money with no market cannot be judged by its holders' returns
         m = decide.mind(kernel, "biotic")
         own = growth(rec["returns"])
-        if own is None:
-            continue
+        if own is None or len(rec["returns"]) < 4:
+            continue                              # a year of returns before a governor judges its own
         options = []
         everything = [x for pool in st["pooled"].values() for x in pool]
         for r in REGIMES:
@@ -160,8 +162,8 @@ def review(kernel: Any) -> List[str]:
             if growth(evidence) is None:
                 evidence = everything          # untried: expected to do as money typically does
             seen = growth(evidence)
-            if seen is None:
-                continue
+            if seen is None or len(evidence) < 4:
+                continue                       # no year of evidence for the alternative: nothing to move on
             # a rational governor moves only on evidence: the gain must clear the comparison's standard error
             doubt = math.sqrt(stderr(rec["returns"]) ** 2 + stderr(evidence) ** 2)
             options.append(decide.option(f"regime:{r}", decide.worth(kernel, doubt, m),
@@ -343,6 +345,8 @@ def distressed(kernel: Any, cur: str) -> bool:
     sigma = lq["vol"].get(cur, 0.0)
     sliding = kernel.fx_market.expected_depreciation(kernel, cur) - kernel.banking.paid_rate(cur) > sigma
     depths = lq.setdefault("depth_hist", {}).get(cur, [])
+    if cur not in kernel.fx_market.pools:
+        return False                                      # it has no market to be distressed in yet
     now = kernel.fx_market.pools[cur]["sol"]
     thinning = len(depths) >= 4 and now < 0.25 * sorted(depths)[len(depths) // 2]
     return (sliding or thinning) and _sol_of(kernel, bank) <= 0

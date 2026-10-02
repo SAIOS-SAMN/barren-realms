@@ -258,7 +258,10 @@ class MonetaryPolicy:
 
     def update(self, kernel: Any) -> None:
         supply = money_supply(kernel)
+        from xylarium.kernel import institutions
         for cur, bucket in supply.items():
+            if not institutions.issued(kernel, cur):
+                continue                                    # no one has founded this money yet
             m = float(bucket["total"])
             if cur not in self.targets:
                 self.targets[cur] = m                       # first reading = genesis supply M0

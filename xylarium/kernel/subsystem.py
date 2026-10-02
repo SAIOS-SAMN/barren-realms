@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 SEASON = [
     "cosmos", "monetary_policy", "federal_reserve", "banking", "fx_reanchor", "prices", "liquidity", "regimes", "alignment", "natives", "sieges",
     "credit", "geology", "propulsion", "crime", "law", "fibres", "physics", "demography",
-    "fertility", "contact", "sustenance", "relations", "occupation", "society", "cohabit", "knowledge", "ways", "chemistry", "harvest", "energy", "intellect", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "observation", "realms", "government",
+    "fertility", "contact", "institutions", "sustenance", "relations", "occupation", "society", "cohabit", "knowledge", "ways", "chemistry", "harvest", "energy", "intellect", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "observation", "realms", "government",
 ]
 
 
@@ -51,12 +51,14 @@ def run_season(kernel: Any) -> None:
         sub = REGISTRY.get(name)
         if sub is None or sub.season is None:
             continue
+        if name == "federal_reserve" and not institutions.reserve_founded(kernel):
+            continue                                     # no Reserve has been founded yet (institutions.py)
         scheduler.lock(kernel, "season", name, kernel.cycle_count)    # each season rolls its own dice
         for line in sub.season(kernel) or []:
             kernel.action_logs.append(line)
 
 
-from xylarium.kernel import scheduler  # noqa: E402
+from xylarium.kernel import institutions, scheduler  # noqa: E402
 
 
 def run_genesis(kernel: Any) -> None:

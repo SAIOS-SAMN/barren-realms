@@ -882,6 +882,14 @@ class ColonyManager:
                                                 cash=PLANETARY_SPACEFLIGHT_COST + dock_local, currency=planet.currency)],
                          decide.mind_of_planet(kernel, planet), planet.id, "ship") is None:
             return None
+        from xylarium.kernel import institutions
+        if institutions.founding(kernel) and planet.currency not in kernel.fx_market.pools:
+            line = institutions.found_exchange(kernel, "the first starport opens")   # the lanes need a clearing house
+            if line:
+                kernel.action_logs.append(line)
+            institutions._open_pool(kernel, planet.currency)
+            if planet.currency not in kernel.fx_market.pools or planet.treasury < PLANETARY_SPACEFLIGHT_COST + dock_local:
+                return None
         if dock_sol > 0:
             kernel.action_logs.append(waystations.found(kernel, sec, planet, dock_sol))
             primordial.first(kernel, "first_starport", planet.name)

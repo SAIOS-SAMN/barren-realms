@@ -199,6 +199,8 @@ def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> st
             return (f"Their harvests leave a surplus of {ways.surplus(kernel, p):.0%} - a state would take "
                     f"{1.0 - HOUSEHOLD_INCOME_SHARE:.0%}. Breed the crops further first.")
         p.society["way"] = "state"
+        from xylarium.kernel import institutions
+        institutions.found_currency(kernel, p)
         return "A council, a granary, a tax: your people found a state."
     if what == "gauge":
         from xylarium.kernel import society
