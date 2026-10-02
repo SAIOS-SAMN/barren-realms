@@ -43,6 +43,32 @@ class TestGalaxyLaws(unittest.TestCase):
                 self.assertIn(c, cosmos.neighbours(*nb))
 
 
+class TestShear(unittest.TestCase):
+    def test_cells_on_neighbouring_rings_slide_apart(self):
+        a = (15, 10)
+        b = next(n for n in cosmos.neighbours(*a) if n[0] == 16 and cosmos.overlap(a, n, 0.0) > 0.5)
+        self.assertGreater(cosmos.overlap(a, b, 0.0), 0)
+        self.assertEqual(cosmos.overlap(a, b, 200.0), 0.0)                              # a few galactic years on
+        later = [n for n in [(16, j) for j in range(cosmos.slots(16))] if cosmos.overlap(a, n, 200.0) > 0]
+        self.assertTrue(later and b not in later)                                       # new neighbours face it
+
+    def test_lanes_open_and_close_with_the_shear_and_stretch_between(self):
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        home = tuple(int(x) for x in cosmos.stats(k)["materialised"][0].split(","))
+        cosmos.entered(k, 1)                                                            # see the cells around it
+        across = [c for c in (tuple(int(x) for x in key.split(",")) for key in cosmos.stats(k)["materialised"])
+                  if c[0] != home[0]]
+        self.assertTrue(across)
+        self.assertTrue(cosmos.stats(k)["cross"])
+        lanes0 = dict(cosmos.stats(k)["cross"])
+        k.cycle_count += 100 * 400                                                       # 400 clock years of shear
+        cosmos._shear(k)
+        self.assertNotEqual(lanes0, dict(cosmos.stats(k)["cross"]))
+        for key, f in cosmos.stats(k)["stretch"].items():
+            self.assertGreaterEqual(f, 1.0)
+
+
 class TestMindsArise(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

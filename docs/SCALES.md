@@ -48,6 +48,16 @@ when they touch. The audit (`cosmos.audit`, in observations) measures the scales
 the galaxy's, sectors per people, the share of charted space no people can reach, and minds arisen against minds
 expected by now.
 
+## The shear
+
+On a flat rotation curve the inner rings turn faster: at 8 kpc two neighbouring rings slip a cell's width past
+each other in ~35-45 clock years. Lanes within a ring stand (its cells turn together); lanes across rings are
+re-forged every season from the cells' angles at that deep-time moment - they open as cells come to face each
+other and close as they slide apart (ledger events LANE_OPEN / LANE_CLOSE), and while open a lane costs more as
+its ends slide apart (1 / the share still facing; fibres.lane_cost). Contact windows across rings open and close
+like conjunctions; an empire across two rings is pulled apart; a ship entering a region sees the cells facing it
+now.
+
 ## History
 
 Everything that happens is written once to the ledger (history.py): when (clock year, deep-time epoch, age), where

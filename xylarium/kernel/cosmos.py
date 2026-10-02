@@ -330,17 +330,100 @@ def _gates(region: int) -> List[int]:
     return _sectors_of_region(region)[:3]
 
 
-def _join(kernel: Any, cell: Tuple[int, int]) -> None:
-    """Warp lanes between this region's gate sectors and each charted neighbour's."""
-    mine = _gates(region_of_cell(kernel, cell))
-    for nb in neighbours(*cell):
-        if not materialised(kernel, nb):
+def _link(kernel: Any, ra: int, rb: int, on: bool) -> None:
+    for a, b in zip(_gates(ra), _gates(rb)):
+        if a not in kernel.sectors or b not in kernel.sectors:
             continue
-        theirs = _gates(region_of_cell(kernel, nb))
-        for a, b in zip(mine, theirs):
-            if a in kernel.sectors and b in kernel.sectors and b not in kernel.sectors[a].warps:
-                kernel.sectors[a].warps = sorted(set(kernel.sectors[a].warps) | {b})
-                kernel.sectors[b].warps = sorted(set(kernel.sectors[b].warps) | {a})
+        if on:
+            kernel.sectors[a].warps = sorted(set(kernel.sectors[a].warps) | {b})
+            kernel.sectors[b].warps = sorted(set(kernel.sectors[b].warps) | {a})
+        else:
+            kernel.sectors[a].warps = [w for w in kernel.sectors[a].warps if w != b]
+            kernel.sectors[b].warps = [w for w in kernel.sectors[b].warps if w != a]
+
+
+def _join(kernel: Any, cell: Tuple[int, int]) -> None:
+    """Lanes to the charted cells beside it on its own ring (they turn together); across rings, the shear decides
+    (_shear) who its neighbours are now."""
+    mine = region_of_cell(kernel, cell)
+    for nb in neighbours(*cell):
+        if nb[0] == cell[0] and materialised(kernel, nb):
+            _link(kernel, mine, region_of_cell(kernel, nb), True)
+    _shear(kernel)
+
+
+# ---------------------------------------------------------------------- the shear
+def _centre(i: int, j: int, t_myr: float) -> float:
+    return cell_theta(i, j) + omega(ring_radius(i)) * t_myr
+
+
+def overlap(a: Tuple[int, int], b: Tuple[int, int], t_myr: float) -> float:
+    """How much of the narrower of two cells on neighbouring rings faces the other now (0 when they no longer
+    touch): the inner ring turns faster (a flat rotation curve), so cells slide past one another."""
+    ha, hb = math.pi / slots(a[0]), math.pi / slots(b[0])
+    d = (_centre(*a, t_myr) - _centre(*b, t_myr) + math.pi) % (2 * math.pi) - math.pi
+    return max(0.0, min(1.0, (ha + hb - abs(d)) / (2 * min(ha, hb))))
+
+
+def neighbours_now(kernel: Any, cell: Tuple[int, int]) -> List[Tuple[int, int]]:
+    """The cells beside it on its ring, and those facing it now on the rings either side."""
+    t = deep_gyr(kernel) * 1000.0
+    i, j = cell
+    out = [n for n in neighbours(i, j) if n[0] == i]
+    for k in (i - 1, i + 1):
+        if 0 <= k < rings():
+            out += [(k, jj) for jj in range(slots(k)) if overlap(cell, (k, jj), t) > 0]
+    return sorted(set(out))
+
+
+def stretch(kernel: Any, a: int, b: int) -> float:
+    """A lane between rings costs more as its ends slide apart (1 / the share of the cells still facing)."""
+    if not is_cosmic(kernel):
+        return 1.0
+    return float(stats(kernel)["stretch"].get(f"{min(a, b)}-{max(a, b)}", 1.0))
+
+
+def _shear(kernel: Any) -> List[str]:
+    """Across rings, lanes open as cells come to face each other and close as they slide apart."""
+    st = stats(kernel)
+    t = deep_gyr(kernel) * 1000.0
+    cells_ = [tuple(int(x) for x in key.split(",")) for key in st["materialised"]]
+    cross, stretches = st["cross"], {}
+    logs, changed = [], False
+    for x in range(len(cells_)):
+        for y in range(x + 1, len(cells_)):
+            a, b = cells_[x], cells_[y]
+            if abs(a[0] - b[0]) != 1:
+                continue
+            ra, rb = region_of_cell(kernel, a), region_of_cell(kernel, b)
+            key = f"{min(ra, rb)}-{max(ra, rb)}"
+            f = overlap(a, b, t)
+            if f > 0 and key not in cross:
+                _link(kernel, ra, rb, True)
+                cross[key] = kernel.cycle_count
+                changed = True
+                logs.append(_lane_event(kernel, "LANE_OPEN", ra, rb, "their cells turn to face each other"))
+            elif f <= 0 and key in cross:
+                _link(kernel, ra, rb, False)
+                cross.pop(key)
+                changed = True
+                logs.append(_lane_event(kernel, "LANE_CLOSE", ra, rb, "the inner ring turns faster: they slide apart"))
+            if key in cross:
+                for g, h in zip(_gates(ra), _gates(rb)):
+                    stretches[f"{min(g, h)}-{max(g, h)}"] = round(1.0 / max(0.05, f), 3)
+    st["stretch"] = stretches
+    if changed:
+        from xylarium.kernel import topology
+        topology.changed(kernel)
+    return logs
+
+
+def _lane_event(kernel: Any, kind: str, ra: int, rb: int, cause: str) -> str:
+    from xylarium.kernel import history
+    verb = "open" if kind == "LANE_OPEN" else "close"
+    history.event(kernel, kind, f"The lanes between regions {ra} and {rb} {verb}", sector_id=_gates(ra)[0],
+                  cause=cause, data={"regions": [ra, rb]})
+    return f"[COSMOS] The lanes between regions {ra} and {rb} {verb}: {cause}."
 
 
 def position(kernel: Any, sector_id: int, cycle: Optional[int] = None) -> Optional[Dict[str, float]]:
@@ -485,7 +568,7 @@ def entered(kernel: Any, sector_id: int) -> Optional[str]:
     if key in st["entered"]:
         return None
     st["entered"].append(key)
-    lines = [materialise(kernel, nb, f"seen from Sector {sector_id:03d}") for nb in neighbours(*cell)]
+    lines = [materialise(kernel, nb, f"seen from Sector {sector_id:03d}") for nb in neighbours_now(kernel, cell)]
     return "\n".join(x for x in lines if x) or None
 
 
@@ -506,7 +589,7 @@ def _reach(kernel: Any) -> List[str]:
 def quarter(kernel: Any) -> List[str]:
     if not is_cosmic(kernel):
         return []
-    return _due(kernel) + _reach(kernel)
+    return _due(kernel) + _reach(kernel) + _shear(kernel)
 
 
 def audit(kernel: Any) -> Dict[str, Any]:
@@ -543,7 +626,7 @@ register_subsystem(Subsystem(
     name="cosmos",
     state=lambda: {"epoch0": 0.0, "minds": [], "next": 0, "arisen": 0, "silent": 0, "curve": [], "ever": 0,
                    "region_of": {}, "next_region": 2, "materialised": [], "entered": [], "per_cell_r0": 0,
-                   "place": {}},
+                   "place": {}, "cross": {}, "stretch": {}},
     season=quarter,
     summary=summary,
 ))

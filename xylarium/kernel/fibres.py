@@ -209,7 +209,8 @@ def _bump(kernel: Any) -> None:
 
 
 def lane_cost(kernel: Any, a: int, b: int) -> float:
-    return cost(kernel, a, b) * (1.0 + curvature(kernel, a, b))
+    from xylarium.kernel import cosmos                        # a lane between rings stretches as the galaxy shears
+    return cost(kernel, a, b) * (1.0 + curvature(kernel, a, b)) * cosmos.stretch(kernel, a, b)
 
 
 def geodesic(kernel: Any, start: int, goal: int) -> List[int]:
