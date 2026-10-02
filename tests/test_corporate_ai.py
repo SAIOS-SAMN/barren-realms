@@ -152,8 +152,11 @@ class TestAutonomousCorporateAI(unittest.TestCase):
         )
         self.kernel.market_manager.contracts[cid] = contract
 
-        # Run AI turn
-        AIManager.execute_turn(self.kernel, trader)
+        # A few of its turns: a trader's own mind may first refit or sail for a better market, but commerce follows
+        for _ in range(16):
+            AIManager.execute_turn(self.kernel, trader)
+            if trader.active_contracts or trader.portfolio:
+                break
 
         # Trader should accept contract or purchase stock
         self.assertTrue(len(trader.active_contracts) > 0 or len(trader.portfolio) > 0)

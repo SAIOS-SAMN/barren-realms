@@ -2,13 +2,21 @@
 Xylarium occupation: taking a world is a battle; holding it is a cost.
 
 When a world is taken by force (an orbital assault that silences its guns, a ground invasion), its people do not
-change: they keep their biology (their staple, their light, their genome) under the new flag. What changes is who
-rules them, and what that rule costs:
+change: every sentient people keeps its own biology (its staple, its light, its genome) under any flag. Nobody is
+assimilated. What changes is who rules them, and what that rule costs:
 
   FOREIGNNESS  how little the occupied and the occupier understand each other: their minds' channel overlap
-               (contact.channel - kin share a band, a cryogenic mind barely perceives a plasmic one), and how long
-               they have lived together - understanding grows over a generation of the occupied people
-               (1 - e^-years/generation). Resistance is what is not understood: f = 1 - channel x assimilation.
+               (contact.channel - kin share a band, a cryogenic mind barely perceives a plasmic one) times what they
+               have learned of each other living together (understanding grows each season at the occupier's
+               mastery of information, as contact.py's familiarity does - learning, not becoming). Resistance is what
+               is not understood: f = 1 - channel x understanding.
+  SYMBIOSIS    the one exception: where the two biologies feed each other (cohabit.effect: each one's waste is the
+               other's staple, a mutualism), the occupied are not resisting a ruler but joining a partner - no
+               resistance, no decline.
+  DEMOGRAPHY   otherwise an occupation is a controlled demolition of the local demography: the occupied bear
+               children in proportion to their compliance (births x (1 - f)), and those who can leave do - each
+               season a resisting share of a generation's increase emigrates to the nearest world of their own kind
+               in reach.
   POLICING     an occupation is held by force in proportion to the people and their resistance: the measured
                ratio of counter-insurgency is about 20 security personnel per 1000 inhabitants (Quinlivan 1995),
                each paid what a head of that world produces - from the world's own treasury, each quarter.
@@ -63,17 +71,68 @@ def _occupier_metab(kernel: Any, planet: Any) -> str:
     return getattr(owner, "metabolism", None) or "biotic"
 
 
-def foreignness(kernel: Any, planet: Any) -> float:
+def symbiotic(kernel: Any, planet: Any) -> bool:
+    """Whether occupier and occupied biologies feed each other (cohabit's measured interaction, both positive)."""
     rec = record(planet)
     if not rec:
+        return False
+    from xylarium.kernel import cohabit
+    occ, pop = _occupier_metab(kernel, planet), rec["metab"]
+    if occ == pop:
+        return False
+    n = max(1, planet.population)
+    na, nb = cohabit.niche(planet, pop), cohabit.niche(planet, occ)
+    a = cohabit.effect(pop, na, n, occ, nb, n)
+    b = cohabit.effect(occ, nb, n, pop, na, n)
+    return a > 0 and b > 0
+
+
+def foreignness(kernel: Any, planet: Any) -> float:
+    rec = record(planet)
+    if not rec or symbiotic(kernel, planet):
         return 0.0
-    from xylarium.kernel import contact, fertility, laws
+    from xylarium.kernel import contact, laws
     t_occ = laws.cognition(_occupier_metab(kernel, planet))["temperature"]
     t_pop = laws.cognition(rec["metab"])["temperature"]
-    years = max(0.0, (kernel.cycle_count - rec["since"]) / 100.0)
-    gen = fertility.generation_years(fertility.strategy(kernel, planet))
-    assimilated = 1.0 - math.exp(-years / max(1e-6, gen))
-    return max(0.0, min(1.0, 1.0 - contact.channel(t_occ, t_pop) * assimilated))
+    return max(0.0, min(1.0, 1.0 - contact.channel(t_occ, t_pop) * float(rec.get("understood", 0.0))))
+
+
+def _learn(kernel: Any, planet: Any, rec: Dict[str, Any]) -> None:
+    """A season of living together: understanding grows at the occupier's mastery of information."""
+    from xylarium.config import KNOWLEDGE_UNIT
+    from xylarium.kernel import knowledge, laws
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    occ = kernel.captains.get(rec["by"])
+    info = laws.mastery(knowledge.experience(kernel, knowledge.holder_of_captain(occ), "information"),
+                        KNOWLEDGE_UNIT) if occ is not None else 0.0
+    u = float(rec.get("understood", 0.0))
+    rec["understood"] = round(u + (1.0 - u) * info * FISCAL_QUARTER_CYCLES / 100.0, 5)
+
+
+def births_factor(kernel: Any, planet: Any) -> float:
+    """The occupied bear children in proportion to their compliance."""
+    return compliance(kernel, planet)
+
+
+def _emigrate(kernel: Any, planet: Any, rec: Dict[str, Any], f: float) -> int:
+    """A resisting share of a generation's increase leaves for the nearest world of its own kind in reach."""
+    from xylarium.kernel import biosphere, fertility, topology
+    n = int(planet.population * f * fertility.birth_share_quarter())
+    if n <= 0:
+        return 0
+    for sid in topology.reach(kernel, planet.sector_id, 3):
+        for w in kernel.sectors[sid].planets:
+            if w is planet or w.population <= 0 or record(w):
+                continue
+            if biosphere.metabolism_of(kernel, w) != rec["metab"]:
+                continue
+            if w.owner_id is not None and w.owner_id != rec.get("from"):
+                continue
+            n = min(n, planet.population - 1)
+            planet.population -= n
+            w.population += n
+            return n
+    return 0
 
 
 def compliance(kernel: Any, planet: Any) -> float:
@@ -108,6 +167,9 @@ def quarter(kernel: Any) -> List[str]:
             if p.population <= 0 or p.owner_id != rec["by"]:
                 p.society.pop("occupation", None)           # emptied, or taken again (a new record was made)
                 continue
+            _learn(kernel, p, rec)
+            f = foreignness(kernel, p)
+            st["emigrated"] = st.get("emigrated", 0) + _emigrate(kernel, p, rec, f)
             need = policing_need(kernel, p)
             paid = min(max(0, p.treasury), int(need))
             if paid > 0:
@@ -131,7 +193,8 @@ def quarter(kernel: Any) -> List[str]:
 
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    return {"held": st.get("held", 0), "conquests": st["conquests"], "revolts": st["revolts"]}
+    return {"held": st.get("held", 0), "conquests": st["conquests"], "revolts": st["revolts"],
+            "emigrated": st.get("emigrated", 0)}
 
 
 from xylarium.kernel import state  # noqa: E402

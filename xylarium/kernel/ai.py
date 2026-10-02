@@ -7,17 +7,16 @@ import random
 from typing import Dict, List, Optional, TYPE_CHECKING
 from xylarium.kernel import hulls
 from xylarium.kernel import matter
+from xylarium.kernel import motive
 from xylarium.config import (
+    CITADEL_CONFIG,
     AI_CAPTAINS_CONFIG,
     COMMODITY_CONFIG,
     SHIP_CATALOG,
-    BANK_EMERGENCY_THRESHOLD,
     REST_COST_CREDITS,
     CLEAVE_BASIS_THRESHOLD,
     CLEAVE_ENDOWMENT_CREDITS,
-    CLEAVE_MIN_PARENT_CREDITS,
     CLEAVE_COOLDOWN_CYCLES,
-    AI_CASH_RESERVE,
     AI_CRITICAL_SHIELDS,
     AI_CRITICAL_FIGHTERS,
 )
@@ -224,12 +223,12 @@ class AIManager:
         exchanges when the triangle pays after fees. The trade itself pulls the cross rate back toward
         the rates the SOL hub implies.
         """
-        from xylarium.config import FINANCIER_ARBITRAGE_MIN_EDGE, AI_INVEST_RESERVE
+        from xylarium.config import FINANCIER_ARBITRAGE_MIN_EDGE
         from xylarium.kernel.cognition import temperament
         if temperament(captain, kernel).get("calling") != "financier":
             return
         fxm = kernel.fx_market
-        budget = captain.credits - AI_INVEST_RESERVE
+        budget = motive.investable(kernel, captain)
         if budget < 500:
             return
         best = None
@@ -334,7 +333,6 @@ class AIManager:
                 choices.append("observe")
         if not choices:
             return False
-        from xylarium.kernel import motive
         best = motive.pick(kernel, captain, [cls._native_option(kernel, captain, planet, sub) for sub in choices],
                            "natives")
         if best is None:
@@ -347,7 +345,7 @@ class AIManager:
         """What a dealing with a native people is worth to this captain (natives.py's own yields), in Cr."""
         from xylarium.config import (COMMODITY_CONFIG, NATIVE_EXPLOIT_YIELD, NATIVE_TRADE_UNITS,
                                      RESEARCH_POINTS_PER_UNIT, HOSTILE_ACT_BOUNTY)
-        from xylarium.kernel import decide, motive
+        from xylarium.kernel import decide
         n = planet.natives
         price = lambda g: COMMODITY_CONFIG.get(g, {}).get("base_price", 20)
         deposits = {k: v for k, v in planet.element_deposits.items() if v > 0}
@@ -398,8 +396,8 @@ class AIManager:
         if grown_count < CLEAVE_BASIS_THRESHOLD and learned < 2.5:
             return None
 
-        # Must have adequate surplus capital to endow the offshoot without starving
-        if captain.credits < CLEAVE_MIN_PARENT_CREDITS:
+        # Must be able to endow the offshoot out of what it does not keep back
+        if not motive.affords(kernel, captain, CLEAVE_ENDOWMENT_CREDITS):
             return None
 
         # Cooldown check
@@ -567,7 +565,6 @@ class AIManager:
                 anom = unsolved[0]
                 # Pirate Dilemma: Raid other captains present, or if alone, plunder/crack the anomaly
                 if captain.personality == AIPersonality.PIRATE:
-                    from xylarium.kernel import motive
                     others = [c_id for c_id in sector.captains if c_id != captain.id and c_id in kernel.captains]
                     best = motive.pick(kernel, captain, [motive.fight(kernel, captain, kernel.captains[c], sector)
                                                          for c in others], "ambush") \
@@ -582,20 +579,20 @@ class AIManager:
                             sector_id=sector.id,
                         )
                         return True
-                    elif captain.credits >= 1000:
+                    elif motive.affords(kernel, captain, motive.CATALYST_COST):
                         kernel.dispatch(captain.id, ActionType.ANOMALY_INVESTIGATE, anomaly_id=anom.id, solve_inputs={"mode": "catalyst"})
                         return True
                 else:
                     # Traders, Industrialists, Mercenaries invest into decoding the anomaly
-                    if captain.credits >= 1000:
+                    if motive.affords(kernel, captain, motive.CATALYST_COST):
                         kernel.dispatch(captain.id, ActionType.ANOMALY_INVESTIGATE, anomaly_id=anom.id, solve_inputs={"mode": "catalyst"})
                         return True
 
         # A captain whose people can fold space, and can afford the fold, explores the frontier
         from xylarium.kernel.research import jump_cost
         fold = jump_cost(kernel, captain)
-        if captain.credits >= 2 * fold:
-            from xylarium.kernel import decide, motive
+        from xylarium.kernel import decide
+        if motive.affords(kernel, captain, fold + motive.CATALYST_COST):
             opts = [decide.option(a.id, fold + motive.CATALYST_COST, motive.anomaly_worth(kernel, a), sid=a.sector_id)
                     for a in kernel.research_manager.anomalies.values()
                     if a.status != "SOLVED" and a.sector_id != captain.sector_id]
@@ -619,14 +616,16 @@ class AIManager:
         - If captain is critically damaged (shields < 50 or fighters < 10) and not in Sector 1:
           - Route towards Sector 1 to repair and re-arm!
         """
+        from xylarium.kernel.cognition import temperament
         refit_here = sector.id == 1 or (sector.security == SecurityLevel.ANARCHY and sector.port is not None)
         if refit_here:
-            # 1. Emergency relief loan (funded by the Federal Reserve) if destitute
-            if sector.id == 1 and captain.credits < BANK_EMERGENCY_THRESHOLD:
+            # 1. Emergency relief loan (funded by the Federal Reserve) when it cannot pay its crew for the quarter
+            if sector.id == 1 and motive.destitute(kernel, captain):
                 kernel.dispatch(captain.id, ActionType.BANK_TRANSACTION, sub_action="loan")
 
-            # Working capital is protected so the captain can keep trading after refitting
-            disposable = max(0, captain.credits - AI_CASH_RESERVE)
+            # A refit spends what it keeps for refits; the crew's wages, as its caution keeps them, stay
+            keep_wages = temperament(captain, kernel)["caution"] * motive.running_cost(kernel, captain)
+            disposable = max(0, int(captain.credits - keep_wages))
 
             # 2. Re-arm fighters up to the respawn-kit floor first, then toward bay capacity
             ship_cfg = hulls.spec(captain.ship)
@@ -635,19 +634,19 @@ class AIManager:
                 budget = disposable // 2 if captain.ship.shields < captain.ship.max_shields else disposable
                 buy_qty = min(max_fighters - captain.ship.fighters, max(1, budget // 60))
                 kernel.dispatch(captain.id, ActionType.SHIPYARD_PURCHASE, item="fighters", amount=buy_qty)
-                disposable = max(0, captain.credits - AI_CASH_RESERVE)
+                disposable = max(0, int(captain.credits - keep_wages))
 
             # 3. Partial shield recharge within budget
             if captain.ship.shields < captain.ship.max_shields and disposable >= 30:
                 kernel.dispatch(captain.id, ActionType.SHIPYARD_PURCHASE, item="shields", budget=disposable)
 
-            # 4. Repay federal debt when flush
-            if sector.id == 1 and captain.debt > 0 and captain.credits >= 3000:
-                kernel.dispatch(captain.id, ActionType.BANK_TRANSACTION, sub_action="repay",
-                                amount=min(captain.debt, captain.credits - 2000))
+            # 4. Repay federal debt out of what it does not keep back
+            repay = int(min(captain.debt, motive.surplus(kernel, captain)))
+            if sector.id == 1 and captain.debt > 0 and repay > 0:
+                kernel.dispatch(captain.id, ActionType.BANK_TRANSACTION, sub_action="repay", amount=repay)
 
             # 5. Rest if turns low
-            if sector.id == 1 and captain.turns_left < 50 and captain.credits >= REST_COST_CREDITS + AI_CASH_RESERVE:
+            if sector.id == 1 and captain.turns_left < 50 and motive.affords(kernel, captain, REST_COST_CREDITS):
                 kernel.dispatch(captain.id, ActionType.REST)
 
         # Retreat only when genuinely crippled (below the respawn kit), not merely under-armed
@@ -674,7 +673,6 @@ class AIManager:
         def deterred(t_id: str) -> bool:
             return sector.sentries.get(t_id, 0) >= captain.ship.fighters
 
-        from xylarium.kernel import motive
         prey = [c for c in other_captains if not deterred(c)]
         best = motive.pick(kernel, captain, [motive.fight(kernel, captain, kernel.captains[c], sector) for c in prey],
                            "prey") if sector.security != SecurityLevel.FEDERATION else None
@@ -697,7 +695,8 @@ class AIManager:
                     # Weaponized Short Selling: Pirates short victim colony's enterprise before bombarding
                     for comp in kernel.market_manager.companies.values():
                         if comp.planet_id == planet.id or (comp.sector_id == sector.id and comp.planet_name == planet.name):
-                            if comp.ticker not in getattr(captain, "short_positions", {}) and captain.credits >= 1500:
+                            if comp.ticker not in getattr(captain, "short_positions", {}) and \
+                                    motive.affords(kernel, captain, comp.share_price * 40):
                                 kernel.dispatch(captain.id, ActionType.STOCK_SHORT, ticker=comp.ticker, amount=40)
                                 break
                     CombatManager.attack_planet(captain, planet, sector, kernel=kernel)
@@ -771,14 +770,15 @@ class AIManager:
                     if port.sells.get(comm, False) and port.stock.get(comm, 0) > 20:
                         _, sell_p = EconomyManager.get_unit_prices(port, comm)
                         if sell_p <= COMMODITY_CONFIG[comm]["base_price"] * 1.1:
-                            disposable_cr = max(0, captain.credits - 300)
+                            disposable_cr = int(motive.surplus(kernel, captain))
                             buy_amt = min(captain.ship.cargo.available_space, disposable_cr // sell_p, 25)
                             if buy_amt > 0:
                                 EconomyManager.execute_buy(captain, port, comm, buy_amt)
                                 return
 
         # 4. Long-term wealth generation: Invest surplus capital into high-dividend ISSE shares
-        if captain.credits >= 6000:
+        budget = motive.investable(kernel, captain)
+        if budget > 0:
             best_comp = max(
                 kernel.market_manager.companies.values(),
                 key=lambda c: c.dividend_rate if c.available_shares >= 25 else -1,
@@ -786,7 +786,7 @@ class AIManager:
             )
             if best_comp and best_comp.available_shares >= 25:
                 cost = best_comp.share_price * 25
-                if cost <= captain.credits // 2:
+                if cost <= budget:
                     kernel.dispatch(captain.id, ActionType.STOCK_BUY, ticker=best_comp.ticker, amount=25)
 
         # 5. Route toward freight destination if carrying cargo
@@ -799,7 +799,6 @@ class AIManager:
                     return
 
         # Otherwise toward the port whose prices are worth most to what it holds and has room for
-        from xylarium.kernel import motive
         dest = motive.destination(kernel, captain, sector, "trader")
         if dest is not None:
             cls._warp_captain(kernel, captain, dest)
@@ -873,7 +872,7 @@ class AIManager:
                                     target_ticker=other_ticker,
                                 )
                                 break
-            elif captain.credits >= 4000:
+            elif motive.affords(kernel, captain, 1500):
                 kernel.dispatch(
                     captain.id,
                     ActionType.LOBBY_CONTRIBUTE,
@@ -882,7 +881,7 @@ class AIManager:
                 )
 
             # 4. Sales Executive Recruitment & Mobility
-            if len(comp.sales_executives) < 2 and captain.credits >= 3000:
+            if len(comp.sales_executives) < 2 and motive.affords(kernel, captain, 2500):
                 kernel.dispatch(
                     captain.id,
                     ActionType.EXECUTIVE_HIRE,
@@ -908,14 +907,14 @@ class AIManager:
                                     break
 
             # 5. Media PR & Corporate Warfare
-            if comp.consumer_trust < 60 and captain.credits >= 3500:
+            if comp.consumer_trust < 60 and motive.affords(kernel, captain, 3000):
                 kernel.dispatch(
                     captain.id,
                     ActionType.MARKETING_CAMPAIGN,
                     ticker=comp.ticker,
                     campaign_type="POSITIVE",
                 )
-            elif captain.credits >= 6000:
+            elif motive.affords(kernel, captain, 4500):
                 for other_ticker, other_comp in kernel.market_manager.companies.items():
                     if other_ticker != comp.ticker:
                         other_pen = other_comp.market_penetration.get(comp.sector_id, 0.0)
@@ -949,7 +948,7 @@ class AIManager:
                     kernel.dispatch(captain.id, ActionType.PLANET_TAX, planet_id=p.id)
                     return
             # If low on credits (< 2500), route towards richest colony
-            if captain.credits < 2500:
+            if captain.credits < motive.reserve(kernel, captain):
                 best_sec = max(owned_planets, key=lambda x: x[1].treasury)[0]
                 path = kernel.find_path(captain.sector_id, best_sec)
                 if path and len(path) > 1:
@@ -969,17 +968,17 @@ class AIManager:
                 return
             elif planet.owner_id == captain.id:
                 # Fortify colony with counter-intelligence security operatives if treasury is rich
-                if planet.treasury >= 5000 and planet.security_operatives < 5 and captain.credits >= 1000:
+                if planet.treasury >= 5000 and planet.security_operatives < 5 and motive.affords(kernel, captain, 1000):
                     planet.security_operatives += 2
                     captain.credits -= 1000
-                elif captain.credits >= 3500 and planet.citadel_level < 3:
+                elif planet.citadel_level < 3 and motive.affords(
+                        kernel, captain, CITADEL_CONFIG.get(planet.citadel_level + 1, {}).get("upgrade_cost", 10 ** 9)):
                     ColonyManager.upgrade_citadel(captain, planet)
                 else:
                     ColonyManager.build_shields(captain, planet, 20)
                 return
 
         # 3. Otherwise toward the worlds worth claiming or the treasuries worth collecting
-        from xylarium.kernel import motive
         dest = motive.destination(kernel, captain, sector, "industrialist")
         if dest is not None:
             cls._warp_captain(kernel, captain, dest)
@@ -1013,7 +1012,6 @@ class AIManager:
                     return
 
         # 3. Otherwise toward the bounties worth hunting
-        from xylarium.kernel import motive
         dest = motive.destination(kernel, captain, sector, "mercenary")
         if dest is not None:
             cls._warp_captain(kernel, captain, dest)

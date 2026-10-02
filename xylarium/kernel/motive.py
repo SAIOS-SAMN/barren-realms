@@ -197,3 +197,52 @@ def destination(kernel: Any, captain: Any, sector: Any, calling: Optional[str] =
     if best is None or best["sid"] == sector.id:
         return None
     return topology.first_hop(parent, sector.id, best["sid"])
+
+
+# ---------------------------------------------------------------------- money management (its own risk profile)
+def _quarter_turns() -> float:
+    from xylarium.config import MAINTENANCE_INTERVAL_CYCLES, MAINTENANCE_TURNS_GRANTED
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    return MAINTENANCE_TURNS_GRANTED * FISCAL_QUARTER_CYCLES / MAINTENANCE_INTERVAL_CYCLES
+
+
+def running_cost(kernel: Any, captain: Any) -> float:
+    """A quarter of its crew's wages (every turn it is granted, at its hull's wage)."""
+    wage = float(kernel.crew_wage(captain)) if hasattr(kernel, "crew_wage") else 1.0
+    return wage * _quarter_turns()
+
+
+def reserve(kernel: Any, captain: Any) -> float:
+    """What this captain keeps back, by its own temperament: its crew's wages for as many quarters as its caution
+    says, fewer the more danger it courts (a risk-taker sails on a thinner margin). Refits are paid from what it
+    keeps for them (refit_budget), not from this."""
+    from xylarium.kernel.cognition import temperament
+    t = temperament(captain, kernel)
+    return t["caution"] * running_cost(kernel, captain) / max(0.1, t["risk"])
+
+
+def surplus(kernel: Any, captain: Any) -> float:
+    return max(0.0, captain.credits - reserve(kernel, captain))
+
+
+def affords(kernel: Any, captain: Any, cost: float) -> bool:
+    """Whether paying `cost` leaves what it keeps back."""
+    return cost <= surplus(kernel, captain)
+
+
+def investable(kernel: Any, captain: Any) -> float:
+    """The share of its surplus it puts into stock: its thrift (capped at all of it)."""
+    from xylarium.kernel.cognition import temperament
+    return surplus(kernel, captain) * min(1.0, temperament(captain, kernel)["thrift"] / 2.0)
+
+
+def destitute(kernel: Any, captain: Any) -> bool:
+    """It cannot pay its crew for the quarter."""
+    return captain.credits < running_cost(kernel, captain)
+
+
+def refit_budget(kernel: Any, captain: Any) -> float:
+    """What it may spend re-arming: everything but the crew's wages its caution keeps (a refit spends the refit
+    money it kept)."""
+    from xylarium.kernel.cognition import temperament
+    return max(0.0, captain.credits - temperament(captain, kernel)["caution"] * running_cost(kernel, captain))

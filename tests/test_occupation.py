@@ -34,8 +34,25 @@ class TestOccupation(unittest.TestCase):
         f0 = occupation.foreignness(k, p)
         self.assertGreater(f0, 0.9)                         # a plasmic ruler barely perceives biotic subjects
         self.assertLess(occupation.compliance(k, p), 0.1)
-        k.cycle_count += 100 * 200                          # generations later
-        self.assertLess(occupation.foreignness(k, p), f0 + 1e-9)
+        k.cycle_count += 100 * 200                          # generations later: still themselves, still foreign
+        self.assertAlmostEqual(occupation.foreignness(k, p), f0)
+        self.assertEqual(biosphere.metabolism_of(k, p), "biotic")
+        self.assertLess(occupation.births_factor(k, p), 0.1)    # a demography in controlled decline
+
+    def test_symbiosis_dissolves_resistance(self):
+        """In this chemistry no two biologies feed each other both ways (biotic water feeds the Stillcold, their
+        hydrogen the plasmic, nothing feeds back) - so the rule is checked on a mutualism that could exist."""
+        from unittest import mock
+        k = GameKernel(seed=9)
+        k.activate()
+        owner, rival, p = _colony_and_rival(k)
+        occupation.conquer(k, p, rival, "test")
+        p.owner_id = rival.id
+        self.assertFalse(occupation.symbiotic(k, p))
+        with mock.patch("xylarium.kernel.cohabit.effect", return_value=1.0):
+            self.assertTrue(occupation.symbiotic(k, p))
+            self.assertEqual(occupation.foreignness(k, p), 0.0)
+            self.assertEqual(occupation.births_factor(k, p), 1.0)
 
     def test_unpaid_occupation_ends_in_revolt(self):
         k = GameKernel(seed=9)

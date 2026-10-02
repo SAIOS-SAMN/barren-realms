@@ -247,9 +247,8 @@ def _spare(kernel: Any, who: Any, kind: str) -> float:
     if kind == "authority":
         return float(max(0, kernel.federal_reserve.treasury))
     if kind == "captain":
-        from xylarium.config import AI_INVEST_RESERVE
-        from xylarium.kernel.cognition import temperament
-        return who.credits - AI_INVEST_RESERVE * temperament(who, kernel)["caution"]
+        from xylarium.kernel import motive
+        return who.credits - motive.reserve(kernel, who)             # its own risk profile
     return who.treasury - max(1000, getattr(who, "quarterly_revenue", 0))
 
 

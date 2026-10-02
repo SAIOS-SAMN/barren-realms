@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 
 from xylarium.kernel import hulls
+from xylarium.kernel import motive
 from xylarium.kernel import matter, topology
 from xylarium.kernel.models import (
     ActionType,
@@ -776,7 +777,7 @@ class SeatSurvive:
                         # The bare refill is bought with any money; the deep reserve only with money beyond
                         # a working float (food must never eat the capital that earns the next meal)
                         essential = min(max_can_buy, int(deficit_entry.deficit) + 3)
-                        float_local = AI_WORKING_FLOAT * kernel.fx_market.rate(port.currency)
+                        float_local = motive.reserve(kernel, captain) * kernel.fx_market.rate(port.currency)
                         extra_budget = max(0.0, spendable - float_local - essential * unit_price)
                         extra = min(max_can_buy - essential, int(extra_budget // unit_price))
                         affordable = min(essential, int(spendable * 0.97 // unit_price)) + max(0, extra)
@@ -852,7 +853,7 @@ class SeatSurvive:
                 can_refit_here = (current_sec.id == 1 and welcome(kernel, captain, 1)) or (
                     current_sec.security == SecurityLevel.ANARCHY and current_sec.port is not None
                 )
-                budget = captain.credits - AI_CASH_RESERVE // 2
+                budget = motive.refit_budget(kernel, captain)
                 if can_refit_here and budget >= 30:
                     return CognitiveDeed(
                         seat="SURVIVE",
@@ -890,7 +891,8 @@ class SeatSurvive:
         security_book = books.get("SECURITY")
         if security_book and not security_book.is_closed:
             deficit_entry = security_book.get_acute_deficit()
-            if deficit_entry and deficit_entry.coordinate == "FIGHTERS" and captain.credits >= 90:
+            if deficit_entry and deficit_entry.coordinate == "FIGHTERS" and \
+                    motive.refit_budget(kernel, captain) >= 2 * 45:
                 if current_sec.id == 1 and welcome(kernel, captain, 1):
                     return CognitiveDeed(
                         seat="SURVIVE",
@@ -920,7 +922,6 @@ class SeatSurvive:
                 and (current_sec.is_null_space or kernel.captains[c_id].bounty > 0)
                 and current_sec.sentries.get(c_id, 0) < captain.ship.fighters
             ]
-            from xylarium.kernel import motive
             best = motive.pick(kernel, captain, [motive.fight(kernel, captain, kernel.captains[c], current_sec)
                                                  for c in hostile_captains], "intercept")
             if best is not None:
@@ -994,7 +995,9 @@ class SeatSurvive:
                                     )
 
             # Empire-wide relief hauler chartering if capital is healthy
-            if captain.credits >= 5000 and hasattr(kernel, "market_manager") and getattr(kernel.market_manager, "commission_trade_hauler", None):
+            from xylarium.config import SPECIALIZED_HULLS
+            if motive.affords(kernel, captain, SPECIALIZED_HULLS.get("STANDARD", {}).get("price", 5000)) and \
+                    hasattr(kernel, "market_manager") and getattr(kernel.market_manager, "commission_trade_hauler", None):
                 # Relief already en route to a sector must not be chartered again every tick
                 served_sectors = {
                     h.dest_sector for h in kernel.market_manager.trade_haulers.values()
@@ -1034,10 +1037,10 @@ class SeatSurvive:
             # this captain's mind judges it (decide.py). Cash beyond a working reserve (its temperament's caution)
             # is the budget; holding it is always the option worth exactly what it costs.
             temper = temperament(captain, kernel)
-            reserve = AI_INVEST_RESERVE * temper["caution"]
+            reserve = motive.reserve(kernel, captain)                     # its own risk profile
             saving_for = SeatGrow._next_hull_price(captain, kernel)      # capital that compounds comes first
-            if saving_for and captain.credits < saving_for * 1.5 + AI_CASH_RESERVE * 4 + 500:
-                reserve = max(reserve, saving_for * 1.5 + AI_CASH_RESERVE * 4 + 500)
+            if saving_for and captain.credits < saving_for + reserve:
+                reserve = saving_for + reserve
             spare = captain.credits - reserve
             if spare > 0:
                 deed = SeatSurvive._invest(captain, current_sec, kernel, spare, temper, matter_book.total_surplus)
@@ -1432,7 +1435,7 @@ class SeatGrow:
         if not port:
             return []
         cycle = cls._cycle(kernel)
-        cash_sol = captain.credits - AI_CASH_RESERVE
+        cash_sol = captain.credits - motive.reserve(kernel, captain)
         opts = []
         for comm in cls.TRADE_GOODS:
             if not port.sells.get(comm, False) or port.stock.get(comm, 0) <= 0:
@@ -1585,18 +1588,17 @@ class SeatGrow:
     @classmethod
     def _shore_leave(cls, captain: Captain, sector: Any, kernel: "GameKernel") -> Optional[CognitiveDeed]:
         from xylarium.config import SHORE_LEAVE_MAX_SHARE
-        if sector.port is None or not welcome(kernel, captain, sector.id):
-            return None
+        if sector.port is None or not welcome(kernel, captain, sector.id) or not captain.is_ai:
+            return None                                   # a human captain takes its own leave
         t = temperament(captain, kernel)
-        comfort = AI_WORKING_FLOAT * t["caution"] * 2
-        surplus = captain.credits - comfort
-        if surplus <= 500:
+        surplus = motive.surplus(kernel, captain)
+        if surplus <= 0:
             return None
         amount = int(surplus * SHORE_LEAVE_MAX_SHARE * t["spend"])
         if amount < 100:
             return None
         # leave is worth what its temperament makes of the pleasure (a spender more than it costs, a miser less)
-        from xylarium.kernel import decide, motive
+        from xylarium.kernel import decide
         if motive.pick(kernel, captain, [decide.option("shore_leave", amount, amount * 2.0 * t["spend"])],
                        "leave") is None:
             return None
@@ -1670,7 +1672,7 @@ class SeatGrow:
                 continue
             if cfg.get("clade") and cfg["clade"] not in (captain.clade, captain.faction_id):
                 continue
-            if cfg["price"] * 1.5 + AI_CASH_RESERVE * 4 > captain.credits:
+            if not motive.affords(kernel, captain, cfg["price"]):
                 continue
             if best is None or cfg["holds"] / max(1, cfg["price"]) > best[1]["holds"] / max(1, best[1]["price"]):
                 best = (name, cfg)
@@ -1980,7 +1982,7 @@ class CognitiveOrgan:
         can_spillover = (
             ration_book is not None and
             ration_book.total_deficit <= 0 and
-            captain.credits >= 1000
+            motive.affords(kernel, captain, 1000.0)
         )
         # Dogma suppresses reason: zealots above the freeze brand inquiry tech-heresy, and the
         # Throne's officers do not meddle with xeno puzzles
@@ -2010,7 +2012,8 @@ class CognitiveOrgan:
                 if sec_anoms and hasattr(kernel, "research_manager"):
                     for aid in sec_anoms:
                         anom = kernel.research_manager.anomalies.get(aid)
-                        if anom and anom.status != "SOLVED" and captain.credits >= 1000:
+                        if anom and anom.status != "SOLVED" and \
+                                motive.affords(kernel, captain, 1000.0):
                             arc_deed = CognitiveDeed(
                                 seat="ARC",
                                 action_type=ActionType.ANOMALY_INVESTIGATE,
@@ -2023,7 +2026,7 @@ class CognitiveOrgan:
                             break
             if arc_deed:
                 # material needs met: decode when what it teaches and pays is worth the decoding, as it judges
-                from xylarium.kernel import decide, motive
+                from xylarium.kernel import decide
                 anom = kernel.research_manager.anomalies.get(arc_deed.target_coordinate)
                 if anom is not None:
                     worth, cost = motive.anomaly_worth(kernel, anom), motive.CATALYST_COST
