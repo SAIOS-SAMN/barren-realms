@@ -1750,6 +1750,8 @@ class GameKernel:
         black_market = sector.id != 1 and sector.security == SecurityLevel.ANARCHY and sector.port is not None
         # ...and sell hulls, at a steep markup, to captains Sol's turrets turn away
         outlaw_hull = black_market and item == "upgrade_ship" and self.turret_blocks(captain, self.sectors[1])
+        if sector.port is None:                     # no dock has been built here yet (a primordial Sol): no yard
+            return ActionResult(success=False, action=ActionType.SHIPYARD_PURCHASE, message="No shipyard: no dock here.")
         if sector.id != 1 and not (black_market and item in ("shields", "fighters")) and not outlaw_hull:
             return ActionResult(
                 success=False,
