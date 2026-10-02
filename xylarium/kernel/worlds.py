@@ -475,8 +475,9 @@ def of_planet(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
     g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {}) if kernel is not None and cosmos.is_cosmic(
         kernel) else {}
     b = physics.body(planet)
-    age = max(0.0, cosmos.deep_gyr(kernel) - float(g.get("born", cosmos.deep_gyr(kernel) - 4.6))) \
-        if g else 4.6
+    from xylarium.kernel import creation
+    age = creation.SETTLED_GYR                           # the settled world its life evolved in (creation reads the
+                                                         # same); within a game it changes through its star's light
     swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
     key = (round(age, 1), planet.planet_type, round(swell, 3))
     cache = planet.society.get("_media")

@@ -90,7 +90,10 @@ class TestPaceAndStars(unittest.TestCase):
         born, ends = life
         self.assertEqual(cosmos.luminosity_factor(k, sid, born + 0.5 * (ends - born)), 1.0)
         self.assertGreater(cosmos.luminosity_factor(k, sid, ends - 0.05 * (ends - born)), 1.0)    # the giant branch
-        self.assertGreater(cosmos.luminosity_factor(k, sid, ends - 0.001 * (ends - born)), 100.0)  # near its tip
+        from xylarium.kernel import physics
+        l0 = float(physics.star(k.sectors[sid])["luminosity"])
+        self.assertGreater(cosmos.luminosity_factor(k, sid, ends - 0.001 * (ends - born)),
+                           (cosmos.RGB_TIP_LSUN / l0) ** 0.9)                                     # near its tip
         self.assertEqual(cosmos.star_factor(k, sid, ends - 0.05 * (ends - born)), 1.0)
         self.assertEqual(cosmos.star_factor(k, sid, ends + 0.01), 0.0)
         p = k.sectors[sid].planets[0]

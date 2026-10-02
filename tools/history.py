@@ -19,7 +19,6 @@ import sys
 from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List
 
-AGES = ["Before Minds", "Age of Foragers", "Age of Fields", "Age of First Flight", "Age of the Lanes"]
 
 
 def load(path: str) -> List[Dict[str, Any]]:
@@ -45,9 +44,11 @@ def about(events: Iterable[Dict[str, Any]], people: str) -> List[Dict[str, Any]]
 def overview(events: List[Dict[str, Any]]) -> str:
     lines = [f"{len(events)} events, years {events[0]['year']} to {events[-1]['year']}" if events else "no events"]
     by_age = defaultdict(Counter)
+    first: Dict[str, int] = {}
     for e in events:
         by_age[e.get("age", "?")][e["kind"]] += 1
-    for age in AGES + sorted(set(by_age) - set(AGES)):
+        first.setdefault(e.get("age", "?"), e["cycle"])
+    for age in sorted(by_age, key=first.get):                             # each age as it first came
         if age in by_age:
             kinds = ", ".join(f"{k} {n}" for k, n in by_age[age].most_common(8))
             lines.append(f"  {age}: {kinds}")
@@ -57,23 +58,22 @@ def overview(events: List[Dict[str, Any]]) -> str:
 
 
 def book(events: List[Dict[str, Any]], title: str) -> str:
-    """The chronicle as a book: a part per age, a chapter per people within it, events in order."""
+    """The chronicle as a book: a part per people, in the order they arose, each in chapters of its own ages as it
+    lived them (every people's ages are its own, named from what it lives by); what no people owns is the galaxy's."""
     out = [f"# {title}", ""]
-    by_age: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    parts: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for e in events:
-        by_age[e.get("age", "?")].append(e)
-    for age in AGES + sorted(set(by_age) - set(AGES)):
-        if age not in by_age:
-            continue
-        evs = by_age[age]
-        out += [f"## {age}", "", f"*Years {evs[0]['year']:.0f} to {evs[-1]['year']:.0f}*"
-                + (f" *- deep time {evs[0]['deep_gyr']:.3f} to {evs[-1]['deep_gyr']:.3f} Gyr*" if "deep_gyr" in evs[0] else ""),
-                ""]
-        chapters: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        parts[(_who(e) or ["The galaxy"])[0]].append(e)
+    for who, evs in sorted(parts.items(), key=lambda kv: (kv[0] == "The galaxy", kv[1][0]["cycle"])):
+        out += [f"## {who}", ""]
+        chapters: Dict[str, List[Dict[str, Any]]] = {}
         for e in evs:
-            chapters[(_who(e) or ["The galaxy"])[0]].append(e)
-        for who, ces in sorted(chapters.items(), key=lambda kv: kv[1][0]["cycle"]):
-            out += [f"### {who}", ""]
+            chapters.setdefault(e.get("age", "?") if who != "The galaxy" else "Across the galaxy", []).append(e)
+        for age, ces in chapters.items():
+            out += [f"### {age[:1].upper() + age[1:]}", "",
+                    f"*Years {ces[0]['year']:.0f} to {ces[-1]['year']:.0f}*"
+                    + (f" *- deep time {ces[0]['deep_gyr']:.3f} to {ces[-1]['deep_gyr']:.3f} Gyr*"
+                       if "deep_gyr" in ces[0] else ""), ""]
             for e in ces:
                 where = f" ({e['planet_name']})" if e.get("planet_name") else ""
                 text = e.get("text") or e.get("title")

@@ -82,6 +82,7 @@ IMF_MIN, IMF_MAX = 0.08, 60.0   # solar masses: the hydrogen-burning limit to th
 KROUPA_LOW = 1.3                # Kroupa (2001): dN/dM ~ M^-1.3 below the break, M^-2.3 above
 KROUPA_HIGH = 2.3
 KROUPA_BREAK = 0.5              # solar masses, at solar metallicity
+CLOUD_K = 10.0                  # K: a star-forming cloud's temperature where the background does not hold it up
 JEANS_Z = 0.3                   # the break rises as metals fall: metal-poor gas cools less, is hotter, and collapses
                                 # into heavier stars (Jeans mass ~ T^1.5; declared exponent)
 BINARY_SHARE = 1.0 / 3.0        # Raghavan et al. 2010
@@ -97,6 +98,11 @@ STEPS_RANGE = (3, 6)            # hard steps from chemistry to a mind: drawn per
 STEP_LOG_RANGE = (-2.0, 0.0)    # log10 Gyr: a step's mean wait at unit pace, full richness, ample energy (drawn)
 ENERGY_HALF = 0.01              # flux units (~3 W/m^2: about what a biosphere fixes of full sunlight) at which a
                                 # chemistry's progress is half energy-limited (declared)
+ORIGIN_GYR = 0.1                # life is abundant: it arises within ~0.1 Gyr of chemistry wherever a solvent is,
+                                # slower as that chemistry is slower and poorer (declared: the universe's life law)
+TRANSFER_GYR = 0.05             # life carried between the worlds of a region by impact ejecta (declared)
+HARDEN = 0.25                   # each extinction a lineage survives makes it hardier: later steps come sooner and
+                                # blows land softer by this share (declared)
 EXTINCTIONS_PER_GYR = 2.0       # life-resetting impacts per Gyr at unit stellar density (declared): flybys and the
                                 # tide shake comets loose in proportion to the neighbourhood's stars
 SUN_MS_GYR = 10.0               # main-sequence life of a solar-mass star; ~ M^-2.5
@@ -228,9 +234,14 @@ def luminosity(mass: float) -> float:
     return 32000.0 * mass
 
 
-def imf(u: float, z: float) -> float:
-    """A star's mass from Kroupa's two slopes, the break moved by its gas's metals (inverse transform)."""
+def imf(u: float, z: float, born: Optional[float] = None) -> float:
+    """A star's mass from Kroupa's two slopes, the break moved by its gas's metals and by the warmth of the young
+    universe: no cloud is colder than the cosmic background, 2.725 K x (1 + z), and a warmer cloud's Jeans mass is
+    larger (~ T^1.5) - the early stars were heavier and hotter (inverse transform)."""
     mb = KROUPA_BREAK * max(z, 1e-3) ** -JEANS_Z
+    if born is not None:
+        floor = 2.725 / max(1e-3, scale_factor(born))
+        mb *= max(1.0, floor / CLOUD_K) ** 1.5
     lo, hi = IMF_MIN, IMF_MAX
     mb = min(max(mb, lo * 1.01), hi * 0.99)
     a1, a2 = 1.0 - KROUPA_LOW, 1.0 - KROUPA_HIGH
@@ -294,7 +305,7 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
             continue
         born = first_stars(seed) + rng.expovariate(1.0 / infall_gyr(seed, r))
         z = metals_at(seed, r, born)
-        mass = imf(rng.random(), z)                      # Kroupa, heavier where the gas was metal-poor
+        mass = imf(rng.random(), z, born)                # Kroupa, heavier in metal-poor gas and a warmer young sky
         binary = rng.random() < BINARY_SHARE
         companion = mass * (0.1 + 0.9 * rng.random()) if binary else 0.0     # mass ratios flat (Raghavan 2010)
         star_type = _star(mass, binary)
@@ -339,13 +350,13 @@ def _erlang(x: float) -> float:
 
 
 def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[Dict[str, Any]] = None) -> float:
-    """How many foragers the world feeds once a people has evolved there (biosphere.py at the Stone Age, one link up
+    """How many foragers the world feeds once a people has evolved there (biosphere.py before its works, one link up
     the food chain: ways.py): its living area x its seasons x the energy reaching its chemistry (light through its
     sky, or heat from below: worlds.py) - divided among bodies by what each burns (biosphere.metabolic_factor at its
     chemistry's own temperature, Damuth's law): a variable world - a tilted axis, a flaring red dwarf - breeds small
     r-strategists (cosmos.arise), a steady one large K-strategists."""
     from fractions import Fraction
-    from xylarium.config import PEOPLE_PER_EARTH_AREA, TECH_YIELD
+    from xylarium.config import PEOPLE_PER_EARTH_AREA
     from xylarium.kernel import biosphere, ways
     b = world.get("body") or {}
     radius = float(Fraction(str(b.get("radius", 1))))
@@ -362,7 +373,8 @@ def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[D
     flux = float(Fraction(star["luminosity"]) / q ** 4)
     gravity = radius * (float(physics.GIANT_DENSITY) if b.get("giant") else 1.0)
     strat = "r" if (int(b.get("tilt", 0)) > 23 or float(Fraction(star["mass"])) < 0.5) else "K"
-    return (PEOPLE_PER_EARTH_AREA * float(Fraction(TECH_YIELD[0])) * area * season * fit * ways.TROPHIC_EFFICIENCY
+    # a minded people takes the whole of what its chemistry's energy offers (the leap of cognition: biosphere._reckon)
+    return (PEOPLE_PER_EARTH_AREA * area * season * fit * ways.TROPHIC_EFFICIENCY
             / biosphere.metabolic_factor(metabolism, strat, home_flux=flux, home_gravity=gravity, body_t=body_t))
 
 
@@ -404,11 +416,14 @@ def chemistries(seed: int, slot: Dict[str, Any], world: Dict[str, Any]) \
     return out
 
 
-def lineage(seed: int, i: int, j: int, k: int, w: int, slot: Dict[str, Any], world: Dict[str, Any]) \
-        -> Optional[Dict[str, Any]]:
+def lineage(seed: int, i: int, j: int, k: int, w: int, slot: Dict[str, Any], world: Dict[str, Any],
+            seeded: Optional[Dict[str, float]] = None) -> Optional[Dict[str, Any]]:
     """A world's life, as the seed's dice give it: for each chemistry, the hard steps it passes and when (a step is
     progress an extinction can undo; the first, life itself, is never undone), its setbacks, and whether it was
-    sterilised. The furthest lineage (soonest, at a tie) is the world's life."""
+    sterilised. The furthest lineage (soonest, at a tie) is the world's life.
+    Life is abundant: it arises soon wherever a solvent is (ORIGIN_GYR, slower for slow, poor chemistry), and once one
+    world of a region has it, the region's others with the same chemistry receive it (seeded: region -> epoch).
+    Each extinction survived hardens the lineage: its later steps come sooner and its next blows land softer."""
     bb = big_bang(seed)
     n = bb["steps"]
     t0 = slot["born"] + CRUST_GYR
@@ -420,18 +435,26 @@ def lineage(seed: int, i: int, j: int, k: int, w: int, slot: Dict[str, Any], wor
         horizon = min(end, HORIZON_GYR)
         steril = t0 + rng.random() * (horizon - t0) if rng.random() >= live and horizon > t0 else float("inf")
         t, times, setbacks = t0, [], 0
+        chem = bb["step_gyr"] / max(1e-12, mean * ef)               # pace x richness of this chemistry
         for step in range(n):
-            need = rng.expovariate(1.0 / (mean * ef if step == 0 else mean))   # life itself: chemistry and time
+            hard = 1.0 + HARDEN * setbacks
+            if step == 0:
+                need = rng.expovariate(1.0 / (ORIGIN_GYR / math.sqrt(max(1e-6, chem))))   # life: chemistry and time
+                if seeded and region in seeded:
+                    need = min(need, max(0.0, seeded[region] - t0))   # or carried here from a neighbour
+            else:
+                need = rng.expovariate(hard / mean)
             if step == 0 or mu <= 0:
                 t += need
             else:
                 while t < horizon:
-                    x = rng.expovariate(mu)
+                    x = rng.expovariate(mu / hard)
                     if x >= need:
                         t += need
                         break
                     t += x
                     setbacks += 1
+                    hard = 1.0 + HARDEN * setbacks
             if t > horizon or t > steril:
                 break
             times.append(round(t, 6))
@@ -441,6 +464,22 @@ def lineage(seed: int, i: int, j: int, k: int, w: int, slot: Dict[str, Any], wor
                                                                          -(best["steps"][-1] if best["steps"] else 0)):
             best = rec
     return best
+
+
+def region_life(seed: Any, i: int, j: int) -> Dict[str, float]:
+    """When life of each chemistry could first reach the worlds of a cell: its earliest origin there, plus the
+    transfer time - life that exists outside will exist inside."""
+    key = ("region_life", seed, i, j)
+    if key in _CACHE:
+        return _CACHE[key]
+    first: Dict[str, float] = {}
+    for slot in cell(seed, i, j):
+        for w, world in enumerate(slot.get("worlds", [])):
+            lin = lineage(seed, i, j, slot["k"], w, slot, world)
+            if lin and lin["steps"]:
+                first[lin["region"]] = min(first.get(lin["region"], float("inf")), lin["steps"][0])
+    _CACHE[key] = {r: t + TRANSFER_GYR for r, t in first.items()}
+    return _CACHE[key]
 
 
 def _erlang_n(x: float, n: int) -> float:
@@ -507,6 +546,7 @@ def _compute(seed: int) -> Dict[str, Any]:
     bins: Dict[Tuple[Any, ...], int] = {}
     life = {"worlds": 0, "alive": 0, "stages": [0] * (n + 1)}
     for (i, j) in cosmos.cells():
+        seeded = region_life(seed, i, j)
         for slot in cell(seed, i, j):
             if "worlds" not in slot:
                 continue
@@ -515,7 +555,7 @@ def _compute(seed: int) -> Dict[str, Any]:
                 continue
             for w, world in enumerate(slot["worlds"]):
                 life["worlds"] += 1
-                lin = lineage(seed, i, j, slot["k"], w, slot, world)
+                lin = lineage(seed, i, j, slot["k"], w, slot, world, seeded)
                 if lin is None:
                     continue
                 life["stages"][len(lin["steps"])] += 1
@@ -566,7 +606,7 @@ def limits(seed: Any, every: int = 7) -> Dict[str, Any]:
                 if not world.get("media"):
                     out["no_solvent"] += 1
                     continue
-                lin = lineage(seed, i, j, slot["k"], w, slot, world)
+                lin = lineage(seed, i, j, slot["k"], w, slot, world, region_life(seed, i, j))
                 if lin is None or not chems:
                     out["poor_chemistry"] += 1
                     continue

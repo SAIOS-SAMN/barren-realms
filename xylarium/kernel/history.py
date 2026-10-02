@@ -49,7 +49,22 @@ def sink(kernel: Any, path: Optional[str]) -> None:
                 f.write(json.dumps(rec, default=str) + "\n")
 
 
-def _age(kernel: Any) -> str:
+def _age(kernel: Any, actors: Optional[List[str]] = None, planet: Any = None) -> str:
+    """The age an event belongs to. In a universe made by physics, it is its own people's age in its own terms
+    (ways.era); an event no people owns belongs to the galaxy's own epoch. The settled galaxy keeps its calendar."""
+    from xylarium.kernel import cosmos
+    if cosmos.is_cosmic(kernel):
+        from xylarium.kernel import ways
+        home = planet if planet is not None and getattr(planet, "civilization", None) is not None else None
+        if home is None:
+            names = {a.split(":", 1)[1] for a in (actors or []) if str(a).startswith("civ:")}
+            if names:
+                home = next((p for s in kernel.sectors.values() for p in s.planets
+                             if p.population > 0 and getattr(getattr(p, "civilization", None), "name", None) in names),
+                            None)
+        if home is not None:
+            return ways.era(home)
+        return f"{cosmos.deep_gyr(kernel):.3f} Gyr after the Big Bang"
     firsts = ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("firsts") or {}
     for key, name in (("first_empire", "Age of the Lanes"), ("first_starship", "Age of First Flight"),
                       ("first_state", "Age of Fields"), ("first_mind", "Age of Foragers"),
@@ -71,7 +86,7 @@ def event(kernel: Any, kind: str, title: str, actors: Optional[List[str]] = None
     st["next"] += 1
     sid = sector_id if sector_id is not None else (getattr(planet, "sector_id", None) if planet is not None else None)
     cyc = int(getattr(kernel, "cycle_count", 0))
-    rec = {"id": f"H-{st['next']:06d}", "cycle": cyc, "year": round(cyc / 100.0, 2), "age": _age(kernel),
+    rec = {"id": f"H-{st['next']:06d}", "cycle": cyc, "year": round(cyc / 100.0, 2), "age": _age(kernel, actors, planet),
            "kind": kind, "title": title, "actors": list(actors or []), "magnitude": magnitude, "cause": cause,
            "text": text, "refs": list(refs or []), "sector": sid,
            "planet": getattr(planet, "id", None) if planet is not None else None,

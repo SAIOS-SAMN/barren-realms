@@ -109,7 +109,7 @@ def forage(kernel: Any) -> None:
     for sec in kernel.sectors.values():
         for p in sec.planets:
             n = getattr(p, "natives", None)
-            if n:                                      # the natives too are in their Stone Age, as many as it fed
+            if n:                                      # the natives too live by gathering, as many as it fed
                 n["population"] = max(100, int(n["population"] / 1.6 ** int(n["stage"])))   # (each age x1.6)
                 n["stage"], n["progress"], n["crop_z"] = 0, 0.0, 0.0       # and their crops as wild as anyone's
                 continue
@@ -199,18 +199,34 @@ def words(planet: Any) -> Dict[str, str]:
     traits = getattr(getattr(planet, "civilization", None), "traits", None) or {}
     solvent, sense = traits.get("solvent", "H2O"), traits.get("sense", "light")
     if solvent == "plasma":
-        return {"tend": "shape their first standing field-swarms", "crop": "field-swarms",
-                "order": "a lattice of keepers, a store of charge, a share for the whole"}
+        return {"tend": "shape their first standing field-swarms", "crop": "field-swarms", "gather": "the drift",
+                "order": "a lattice of keepers, a store of charge, a share for the whole", "rule": "the keepers"}
     if solvent in ("melt",) or sense == "heat":
-        return {"tend": "cultivate their first mineral beds", "crop": "mineral growths",
-                "order": "a council of the hot places, a hoard, a tithe"}
+        return {"tend": "cultivate their first mineral beds", "crop": "mineral growths", "gather": "the hot places",
+                "order": "a council of the hot places, a hoard, a tithe", "rule": "the hot-place council"}
     if sense == "heat and pressure":
-        return {"tend": "tend their first vent-gardens", "crop": "vent-mats",
-                "order": "a council of the warm springs, a cache, a share"}
+        return {"tend": "tend their first vent-gardens", "crop": "vent-mats", "gather": "the warm springs",
+                "order": "a council of the warm springs, a cache, a share", "rule": "the warm-spring council"}
     if solvent in ("CH4", "N2", "NH3") or sense == "chemistry":
-        return {"tend": "herd their first cold blooms", "crop": "brine-blooms",
-                "order": "a council of the shoals, a store, a levy"}
-    return {"tend": "sow their first fields", "crop": "crops", "order": "a council, a granary, a tax"}
+        return {"tend": "herd their first cold blooms", "crop": "brine-blooms", "gather": "the shoals",
+                "order": "a council of the shoals, a store, a levy", "rule": "the shoal council"}
+    return {"tend": "sow their first fields", "crop": "crops", "gather": "the wild", "rule": "the granary",
+            "order": "a council, a granary, a tax"}
+
+
+def era(planet: Any) -> str:
+    """A people's age in its own terms - what it lives by, named from its chemistry and senses (words), as its
+    species is named from what its world made of it; there is no galaxy-wide calendar of human eras."""
+    from xylarium.kernel import sustenance
+    w = words(planet)
+    if sustenance.yards(planet):
+        return "the age of first voyages"
+    how = (getattr(planet, "society", None) or {}).get("way", "forage")
+    if how == "state":
+        return f"the age of {w['rule']}"
+    if how == "farm":
+        return f"the age of {w['crop']}"
+    return f"the age of {w['gather']}"
 
 
 def summary(kernel: Any) -> Dict[str, Any]:

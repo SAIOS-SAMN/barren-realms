@@ -28,13 +28,14 @@ import os
 from typing import Any, Callable, Dict, List, Optional
 
 AGES: List[Dict[str, Any]] = [
-    {"key": "forager", "name": "Age of Foragers", "until": None,
-     "blurb": "Year 0. Bands living off the wild: no fields, no states, no money. The whole clock is ahead of you."},
-    {"key": "agrarian", "name": "Age of Fields", "until": "first_state",
-     "blurb": "The first state has risen somewhere. Most peoples still forage; some sow."},
-    {"key": "first_flight", "name": "Age of First Flight", "until": "first_starship",
-     "blurb": "Some people's first hull has risen. Others are still in their fields - or their forests."},
-    {"key": "lanes", "name": "Age of the Lanes", "until": "first_empire",
+    {"key": "forager", "name": "When the first minds gather", "until": None,
+     "blurb": "Year 0. A people lives off what its world gives: nothing tended, no order, no money. Every people's ages "
+              "are its own, named from what it lives by. The whole clock is ahead of you."},
+    {"key": "agrarian", "name": "When a first surplus is ordered", "until": "first_state",
+     "blurb": "Somewhere a people has ordered its surplus. Most still gather; some tend what they eat."},
+    {"key": "first_flight", "name": "When a first ship flies", "until": "first_starship",
+     "blurb": "Some people's first hull has risen. Others still gather or tend, each in its own age."},
+    {"key": "lanes", "name": "When the lanes open", "until": "first_empire",
      "blurb": "The first empire: peoples with ships protect, prey, and tax. The galaxy is as advanced as it got."},
     {"key": "classic", "name": "Classic: a ready-made galaxy", "until": None, "genesis": "settled",
      "blurb": "Skip the history: a settled galaxy of ports, houses and great powers. You are a captain (TradeWars)."},

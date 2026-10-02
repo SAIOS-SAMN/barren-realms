@@ -187,7 +187,13 @@ def _reckon(kernel: Any, planet: Any, metabolism: Optional[str], tier: int, habs
         nf = need_factor(planet, kernel)
     natural = ld["area"] * ld["chemistry"] * ld["light"] * ld["season"]
     from xylarium.kernel.geology import pollution_factor
-    k = int(PEOPLE_PER_EARTH_AREA * _TECH.get(tier, _TECH[max(_TECH)]) * (natural + _HAB_AREA * habs)
+    works = _TECH.get(tier, _TECH[max(_TECH)])
+    from xylarium.kernel import cosmos
+    if kernel is not None and cosmos.is_cosmic(kernel):
+        # the leap of cognition: a minded people takes the whole of what its chemistry's energy offers before it builds
+        # anything (its tools, fire and cooperation); its works multiply from there
+        works = works / _TECH[0]
+    k = int(PEOPLE_PER_EARTH_AREA * works * (natural + _HAB_AREA * habs)
             * pollution_factor(planet) / F(nf).limit_denominator(10 ** 6))              # Damuth's law
     food = _CROP * ld["light"] * ld["season"]
     rate = min(_BIRTH, food) if k > 0 else F(0)
