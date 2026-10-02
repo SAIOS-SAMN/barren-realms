@@ -5,7 +5,7 @@ Largest first. Each tier exists in detail only where it is witnessed; everywhere
 | Tier | What it is | How it is carried | Its clock |
 |---|---|---|---|
 | **Universe** | the whole run: one seed, one clock | `GameKernel(seed)`; lockstep (scheduler.py) | the clock (100 cycles a year) |
-| **Galactic cluster** | the galaxies bound together | the home cluster: a count (`cosmos.GALAXIES_IN_CLUSTER`); only the home galaxy is simulated | - |
+| **Galactic cluster** | the galaxies bound together | `cluster.py`: 40 galaxies, analytic - masses from the galaxy stellar mass function, closed-form orbits about the barycentre, their own minds drawn from the seed (never placed), a merger on the free-fall clock | deep time |
 | **Galaxy** | an exponential disc, R_D = 3 kpc, to 5 R_D | `cosmos.py`: rings 0.5 kpc wide cut into ~equal cells (~2,800 cells) | deep time: the universe's pace - lonely 0.1, neighbourly 1 (default), teeming 10 Myr per clock year (`cosmos.PACES`, the one ruler between the tiers, a law chosen at genesis: `genesis="cosmic:teeming"`) |
 | **Region** | one cell of the disc | 40 sectors (sectors 1-100 are the first witness's own cell); materialised when witnessed | - |
 | **System** | one sector: a star and its worlds | `physics.py`: exact Keplerian orbits | historical time |
@@ -69,6 +69,23 @@ other and close as they slide apart (ledger events LANE_OPEN / LANE_CLOSE), and 
 its ends slide apart (1 / the share still facing; fibres.lane_cost). Contact windows across rings open and close
 like conjunctions; an empire across two rings is pulled apart; a ship entering a region sees the cells facing it
 now.
+
+## The cluster
+
+The home galaxy's cluster is a formula: 40 galaxies with stellar masses from the measured Schechter function
+(alpha -1.2, M* 5e10 suns, dwarfs down to 1e8), placed through a Local-Group-sized 1.5 Mpc, each on a circular orbit
+at the speed the cluster's mass (stars x a halo of 30) gives it. Each raises minds by the home galaxy's own law,
+scaled by its stellar mass and its metals (Z ~ M^0.3): seed 7's cluster raises ~19,000 by the 30 Gyr horizon. The
+most massive companion falls toward the home galaxy from rest on its free-fall time (seed 7: 14.5 Gyr - beyond a
+game; a closer, heavier companion would meet within one).
+
+When a home people first reaches space it charts the cluster (CLUSTER_CHARTED); a mind elsewhere is heard once its
+light has crossed the distance (SIGNAL, the first from each galaxy). The tier-boundary rule, written down: light
+between galaxies travels on deep time, at the universe's pace - Andromeda's 2.5 million years of light take ~2.5
+clock years at the neighbourly pace. Within a system, light and ships travel on historical time; lanes take their
+geometry from deep-time positions and their traffic from historical time. Any later tier (another galaxy
+materialised when a people can cross to it) obeys the same contract: each tier's physics on its own clock, and the
+boundary translated by the pace.
 
 ## History
 

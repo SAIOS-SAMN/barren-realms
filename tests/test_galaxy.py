@@ -95,6 +95,52 @@ class TestPaceAndStars(unittest.TestCase):
         self.assertEqual(biosphere.carrying_capacity(k, p), 0)
 
 
+class TestCluster(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.k = GameKernel(seed=7, genesis="cosmic")
+        cls.k.activate()
+
+    def test_galaxies_follow_the_mass_function_and_orbit_in_closed_form(self):
+        from xylarium.kernel import cluster
+        gals = cluster.stats(self.k)["galaxies"]
+        self.assertEqual(len(gals), cosmos.GALAXIES_IN_CLUSTER)
+        masses = sorted(g["mass"] for g in gals[1:])
+        self.assertGreaterEqual(masses[0], cluster.M_MIN * 0.99)
+        self.assertGreater(sum(1 for m in masses if m < 1e9), sum(1 for m in masses if m > 1e10))   # dwarfs abound
+        i = max(range(1, len(gals)), key=lambda j: gals[j]["r"])
+        p0 = cluster.position(self.k, i, 0)
+        g = gals[i]
+        period_cycles = int(2 * 3.141592653589793 * g["r"] / g["v_kms"] * cluster.GYR_PER_KPC_PER_KMS * 1e9
+                            / cosmos.ruler(self.k) * 100)
+        p1 = cluster.position(self.k, i, period_cycles)
+        self.assertAlmostEqual(p0[0], p1[0], delta=g["r"] * 0.01)                         # once round, back again
+
+    def test_signals_arrive_only_after_charting_and_light_travel(self):
+        from xylarium.kernel import cluster
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        st = cluster.stats(k)
+        g = min(st["galaxies"][1:], key=lambda x: x["minds"][0] + cluster.light_gyr(x["dist_kpc"]) if x["minds"] else 99)
+        arrive = g["minds"][0] + cluster.light_gyr(g["dist_kpc"])
+        years = (arrive - cosmos.stats(k)["epoch0"]) * 1e9 / cosmos.ruler(k)
+        k.cycle_count = int(years * 100) + 100
+        self.assertEqual([l for l in cluster.quarter(k) if "signal" in l], [])          # no one has looked yet
+        k.state["genesis"].setdefault("firsts", {})["first_starship"] = {"cycle": 0, "year": 0, "who": "civ:Test"}
+        lines = cluster.quarter(k)
+        self.assertTrue(any("charted" in l or "chart" in l for l in lines))
+        self.assertTrue(any("A signal from" in l for l in lines))
+
+    def test_the_merger_is_a_free_fall(self):
+        import math
+        from xylarium.kernel import cluster
+        st = cluster.stats(self.k)
+        g = st["galaxies"][st["merger"]["with"]]
+        m = (cluster.HOME_MASS + g["mass"]) * cluster.HALO_TO_STARS
+        t = math.pi / 2 * math.sqrt(g["dist_kpc"] ** 3 / (2 * cluster.G_KPC * m)) * cluster.GYR_PER_KPC_PER_KMS
+        self.assertAlmostEqual(st["merger"]["free_fall_gyr"], t, places=2)
+
+
 class TestMindsArise(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

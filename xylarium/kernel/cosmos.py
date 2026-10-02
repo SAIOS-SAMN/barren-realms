@@ -536,6 +536,9 @@ def genesis(kernel: Any) -> None:
     if not st["minds"]:
         st["epoch0"] = 0.0
         return
+    st["epoch0"] = st["minds"][0]["epoch"]
+    from xylarium.kernel import cluster
+    cluster.genesis(kernel)                            # the galaxies around this one, as a formula
     first = st["minds"][0]
     st["epoch0"] = first["epoch"]
     home = tuple(first["cell"])
