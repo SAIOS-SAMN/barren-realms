@@ -32,7 +32,9 @@ class TestDyingStars(unittest.TestCase):
         k0 = biosphere.carrying_capacity(self.k, self.p)
         self._at(ends - 0.01 * (ends - born))
         cosmos.quarter(self.k)
-        self.assertGreater(cosmos.lum(self.sid), 100.0)                               # near the giant branch tip
+        from xylarium.kernel import physics
+        l0 = float(physics.star(self.k.sectors[self.sid])["luminosity"])
+        self.assertGreater(cosmos.lum(self.sid), max(1.0, cosmos.RGB_TIP_LSUN / l0) ** 0.5)   # toward the tip
         if biosphere.metabolism_of(self.k, self.p) == "plasmic":
             self.assertGreaterEqual(biosphere.carrying_capacity(self.k, self.p), k0)  # it lives on its giant's heat
         else:

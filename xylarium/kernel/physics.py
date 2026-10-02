@@ -47,6 +47,10 @@ STAR_CLASSES: Dict[str, Tuple[F, Optional[F]]] = {
     "Supernova remnant": (F(1, 10), F(1, 1000000)),   # what a Type Ia leaves: a shell of gas, nearly no light
     "Brown dwarf": (F(3, 10), F(1, 100000)),
     "Precursor": (F(6, 5), F(1, 100)),   # an engineered pulsar: heavy, dim in the visible
+    "Neutron star": (F(118, 100), F(1, 1000000)),   # 1.4 suns, a cooling ember
+    "Black hole": (F(3), F(1, 10 ** 9)),            # what a heavy star's collapse leaves: dark
+    "B-class": (F(2), None),             # M = 4
+    "O-class": (F(5), None),             # M = 25
 }
 
 # ---------------------------------------------------------------------- orbits

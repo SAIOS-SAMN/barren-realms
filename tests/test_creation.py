@@ -89,27 +89,32 @@ class TestBigBang(unittest.TestCase):
 
 
 class TestEachBiologyItsOwnNeeds(unittest.TestCase):
-    def test_plasmic_minds_need_no_metals_and_shrug_off_supernovae(self):
-        slot = {"z": 0.0, "born": 1.0, "mass": 0.8, "r": 1.0}
-        bios = {m: (mean, live) for m, mean, live, _ in creation.needs(7, slot, {"type": "GAS_GIANT"})}
-        self.assertIn("plasmic", bios)
-        self.assertEqual(bios["plasmic"][1], 1.0)
-        rocky = {m for m, *_ in creation.needs(7, slot, {"type": "TERRESTRIAL"})}
-        self.assertNotIn("biotic", rocky)                                                 # no metals, no carbon life
-        slot["z"] = 1.0
-        bios = {m: live for m, _, live, _ in creation.needs(7, slot, {"type": "TERRESTRIAL"})}
-        self.assertLess(bios["biotic"], bios["mineral"])                                  # molecules break first
+    def test_a_world_offers_the_chemistries_its_physics_allows(self):
+        from xylarium.kernel import worlds
+        slot = {"z": 1.0, "born": 1.0, "mass": 1.0, "r": 8.0}
+        giant = {"media": worlds.media(7, {"mass": "1", "luminosity": "1"}, 27.0, 11.0, 318.0, True, 1.0, 8.0, 3.0)}
+        self.assertEqual([c[0] for c in creation.chemistries(7, slot, giant)], ["plasmic"])
+        temperate = {"media": worlds.media(7, {"mass": "1", "luminosity": "1"}, 1.0, 1.0, 1.0, False, 1.0, 8.0, 3.0)}
+        chems = {c[0]: c for c in creation.chemistries(7, slot, temperate)}
+        self.assertIn("biotic", chems)                                                    # surface water under light
+        dark = [c for c in creation.chemistries(7, slot, giant)][0]
+        self.assertEqual(dark[3], float("inf"))                                           # a dark sea waits on no star
 
-    def test_every_mind_arises_on_a_world_the_cells_hold_in_a_biology_that_fits_it(self):
-        from xylarium.config import HABITABILITY
+    def test_every_mind_arises_on_a_world_the_cells_hold_in_a_chemistry_it_has(self):
         for m in creation.schedule(7)["minds"][:40]:
             slot = creation.cell(7, *m["cell"])[m["k"]]
             world = slot["worlds"][m["w"]]
-            self.assertGreater(HABITABILITY[m["metab"]].get(world["type"], 0), 0)
+            self.assertIn(m["metab"], {md["region"] for md in world["media"]})
             self.assertLessEqual(slot["born"] + creation.CRUST_GYR, m["epoch"])
-            if world["type"] != "ROGUE":
-                self.assertLessEqual(m["epoch"], slot["born"] + creation.SUN_MS_GYR * slot["mass"] ** -2.5)
+            self.assertEqual(len(m["steps"]), creation.big_bang(7)["steps"])
+            self.assertEqual(m["steps"], sorted(m["steps"]))
 
+    def test_the_big_bang_draws_the_steps_to_a_mind(self):
+        draws = {(creation.big_bang(s)["steps"], creation.big_bang(s)["step_gyr"]) for s in range(1, 40)}
+        self.assertGreater(len({d[0] for d in draws}), 2)
+        for n, g in draws:
+            self.assertTrue(creation.STEPS_RANGE[0] <= n <= creation.STEPS_RANGE[1])
+            self.assertTrue(10 ** creation.STEP_LOG_RANGE[0] <= g <= 10 ** creation.STEP_LOG_RANGE[1])
 
     def test_minds_arise_only_where_a_viable_people_can_be_fed(self):
         from xylarium.kernel import biosphere
@@ -133,8 +138,9 @@ class TestEveryStarItsOwn(unittest.TestCase):
         self.assertGreater(len({s["spec"]["mass"] for s in stars}), len(stars) // 3)     # a continuum, not classes
         for s in stars:
             if s["star"] != "Binary pair":
-                m = Fraction(s["spec"]["m"])
-                self.assertEqual(Fraction(s["spec"]["luminosity"]), (m ** 7).limit_denominator(10 ** 6))
+                m = Fraction(s["spec"]["m"])                                             # light from its own mass
+                self.assertAlmostEqual(float(Fraction(s["spec"]["luminosity"])),
+                                       creation.luminosity(float(m * m)), delta=1e-6 + 1e-6 * creation.luminosity(float(m * m)))
         warm = laws.cognition("biotic", home_flux=4.0)
         cold = laws.cognition("biotic", home_flux=0.25)
         self.assertGreater(warm["temperature"], cold["temperature"])

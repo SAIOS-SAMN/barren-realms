@@ -64,6 +64,9 @@ STRATEGIES = ("r", "K", "lithic", "cryo", "plasmic")
 def strategy(kernel: Any, planet: Any) -> str:
     """The reproductive strategy of the people living on this world."""
     civ = getattr(planet, "civilization", None)
+    traits = getattr(civ, "traits", None) if civ is not None else None
+    if traits and traits.get("strategy"):
+        return traits["strategy"]                       # what its own world selected (cosmos.arise)
     clade = (getattr(civ, "clade", None) or "").lower() if civ is not None else ""
     if clade in REPRODUCTIVE_STRATEGY:
         return REPRODUCTIVE_STRATEGY[clade]

@@ -139,6 +139,7 @@ class Civilization:
     home_type: Optional[str] = None        # The world type the species evolved on (biosphere adaptation)
     light_optimum: Optional[str] = None    # The light its biology evolved under (exact flux, Earth = 1)
     home_gravity: Optional[str] = None     # The surface gravity its bodies were built against (exact, Earth = 1)
+    traits: Optional[Dict[str, Any]] = None   # what its world selected: strategy, body, senses, sociality, mind shape
 
     @property
     def era_name(self) -> str:
@@ -178,6 +179,7 @@ class Civilization:
             "home_type": self.home_type,
             "light_optimum": self.light_optimum,
             "home_gravity": self.home_gravity,
+            "traits": dict(self.traits) if self.traits else None,
         }
 
     @classmethod
@@ -209,6 +211,7 @@ class Civilization:
             home_type=data.get("home_type"),
             light_optimum=data.get("light_optimum"),
             home_gravity=data.get("home_gravity"),
+            traits=dict(data["traits"]) if data.get("traits") else None,
         )
 
 

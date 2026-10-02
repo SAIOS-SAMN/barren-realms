@@ -27,3 +27,38 @@ computed for each world and each people.
 `mirror.py` places the Terrans - the people of Terra - in the galaxy's own distribution on energy per person,
 predation, fluid intelligence, alignment, planning horizon and the year of their first shipyards, as values and
 percentiles (in `observations.jsonl` as `mirror`). Earth is measured; it is no longer the ruler of anything but units.
+
+## The audit: every number that is still Earth's, and where it was measured
+
+Earth is one sample, taken in the backwoods: ~8.2 kpc from its galaxy's centre in a quiet stretch of the disc, in a
+sparse group of galaxies (not a rich cluster), around a ~solar-metallicity star 4.6 Gyr old, 13.8 Gyr after the Big
+Bang, with no confirmed contact and no direct probe of a black hole's interior. Every Earth number below was measured
+there, then, by the one people we know. Each is either kept as a **law** (true across what we can test), kept as a
+**unit**, declared as an **assumption** (no evidence either way - stated once, in one place), or **retired**: to be
+derived from the funnel (docs/FUNNEL.md), with Earth kept only as a test the engine should be able to reproduce
+at Earth's own place and time.
+
+| Number | Where | Provenance | Verdict | Retired by |
+|---|---|---|---|---|
+| Stefan-Boltzmann, Kepler, Landauer, Jeans escape, condensation temperatures (Lodders 2003), solar abundances | laws, chemistry | physics; meteorites | law | - |
+| Kleiber M^(3/4), generation ~ M^(1/4), Damuth density, square-cube gravity | biosphere | all Earth life across ~20 decades of mass | law (declared: tested only on carbon life) | - |
+| Trophic efficiency 10% (Lindeman) | ways | Earth ecosystems | law (declared) | - |
+| Planck cosmology, Salpeter IMF, Milky Way disc gradients, Chiappini infall | creation, cosmos | our universe and galaxy | law / data drawn about per seed | - |
+| Einstein-Cartan bounce at the centre | blackhole | none: a hypothesis that avoids infinite density | **assumption** (exterior effects only ever touch life) | - |
+| T_EARTH = 278 K at flux 1 | laws | a unit of flux and its temperature | unit | - |
+| AU, Earth mass/radius/area, standard year, EU, knowledge unit | everywhere | units | unit | - |
+| LIGHT_OPTIMUM per metabolism, PLASMIC_MASS_OPTIMUM | config, biosphere | invented per metabolism | **retire** | 3 (chemistry from the world) |
+| HABITABILITY table (metabolism x world type) | config | invented | **retire** | 2-3 |
+| Seven world types as inputs (TERRESTRIAL, ICE ...) | physics.classify | categories | **retire** to labels | 2 |
+| HARD_STEPS = 4, STEP_GYR = 10 | creation | Carter/Watson: Earth's single history | **retire** to a per-universe draw + kinetics | 4 |
+| REPRODUCTIVE_STRATEGY clade list and names (bimaniform ...) | config | invented, human-flavoured | **retire** | 4 |
+| BIRTH_RATE 3%/yr (generation ~28-33 yr) | config | human | **retire** | 5 |
+| Life spans 0.6 / 1.7 / 2.5 / 4.3 generations | lifespan | human life history | **retire** | 5 |
+| BODY_CYCLES 13 | lifespan | 70 kg human, 1.5 kg food a day | **retire** | 5 |
+| PEOPLE_PER_EARTH_AREA 50,000; TECH_YIELD tiers; HABITAT_AREA | config | human agriculture | **retire** | 6 |
+| Forage -> farm -> state; temple / levy gauges; "fields" | ways, society | human history | **retire** to chemistry-neutral ways | 6 |
+| CRITICAL_COMMUNITY 250,000 (Bartlett) | lifespan | measles in humans | **retire** | 7 |
+| CFR_VIRGIN 0.25 (Fiji 1875) | lifespan | one human epidemic | **retire** | 7 |
+| KNOWLEDGE_DEPRECIATION 15% at HUMAN_LIFE_YEARS 70 | laws, knowledge | human R&D | keep as the rate of a human-like people (law, declared); its death share already the people's own | 8 checks it |
+| Geology per Earth mass (ore, outgassing, tailings, He-3) | geology | scaled to an Earth, per mass | law-by-scaling (declared) | 2 refines outgassing |
+| SYSTEMS_SHARE_R0 0.28 | creation | the settled galaxy's own share | unit of sampling | - |

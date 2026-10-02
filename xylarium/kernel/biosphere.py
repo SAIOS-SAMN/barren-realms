@@ -99,6 +99,15 @@ def _surface_fit(metabolism: str, planet_type: str) -> F:
     return F(str(habitability(metabolism, planet_type)))
 
 
+def _world_fit(kernel: Any, metabolism: str, planet: Any) -> F:
+    """How well a world's own chemistry suits a metabolism: its physics in a cosmic universe (worlds.py), else the
+    settled galaxy's table."""
+    from xylarium.kernel import cosmos, worlds
+    if kernel is not None and cosmos.is_cosmic(kernel) and getattr(planet, "body", None):
+        return F(int(round(worlds.fit(worlds.of_planet(kernel, planet), metabolism) * 10 ** 6)), 10 ** 6)
+    return _surface_fit(metabolism, planet.planet_type)
+
+
 def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str, F]:
     """The world's natural capacity for a people of ``metabolism`` (independent of technology)."""
     kernel = _kernel(kernel)
@@ -118,7 +127,7 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
                                                genome.value(planet, "tolerance")))
     else:
         fit = light_fit(metab, fl, planet, optimum)
-    chemistry = F(1) if (civ is not None and civ.home_type == planet.planet_type) else _surface_fit(metab, planet.planet_type)
+    chemistry = F(1) if (civ is not None and civ.home_type == planet.planet_type) else _world_fit(kernel, metab, planet)
     if metabolism is None and chemistry < 1:
         chemistry = genome.fraction(genome.adapted_chemistry(float(chemistry), planet))   # a people adapts
     if (getattr(planet, "society", None) or {}).get("terraform"):

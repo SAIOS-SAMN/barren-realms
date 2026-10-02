@@ -426,6 +426,8 @@ GIANT_REACH_AU = 1.0            # a giant near its tip is ~200 solar radii (~1 A
 WD_LSUN = 1.0e-3                # a young white dwarf's light
 WD_MASS = 0.6                   # what a white dwarf keeps of its star (solar masses)
 EJECTA_PER_SUN = 150            # deposit units a solar mass of shed matter seeds (a world's worth of an element)
+CORE_COLLAPSE_SUNS = 8.0        # above this a star's core collapses
+BLACK_HOLE_SUNS = 20.0          # above this the collapse leaves a black hole, below a neutron star
 R_BULGE_KPC = 2.0               # within it, a dying star's remains fall to the galactic centre (blackhole.py)
 
 
@@ -439,19 +441,29 @@ def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
     if "remnant" in (getattr(sec, "star_type", "") or "").lower():
         return (0.0, 0.0)
     try:
-        m = float(physics.star(sec)["mass"])
+        st = physics.star(sec)
+        m, lum = float(st["mass"]), float(st["luminosity"])
     except Exception:
         return None
     born = float(g.get("born", formed_gyr(g["r"])))
-    return born, born + SUN_MS_GYR * max(0.1, m) ** -2.5
+    return born, born + SUN_MS_GYR * m / max(1e-9, lum)        # its fuel over its burn
 
 
 def death_kind(kernel: Any, sector_id: int) -> str:
-    """How it ends: a binary's white dwarf takes its companion's matter until it detonates (a Type Ia supernova);
-    a single star sheds its envelope and leaves a white dwarf. (No star the generator makes is massive enough,
-    above 8 suns, to collapse its core.)"""
+    """How it ends: a star above eight suns collapses its core (a core-collapse supernova, leaving a neutron star
+    or, above ~20 suns, a black hole); below that a binary's white dwarf takes its companion's matter until it
+    detonates (a Type Ia supernova), and a single star sheds its envelope and leaves a white dwarf."""
+    from xylarium.kernel import physics
     sec = kernel.sectors.get(sector_id)
-    return "supernova" if sec is not None and "binary" in (sec.star_type or "").lower() else "white_dwarf"
+    if sec is None:
+        return "white_dwarf"
+    try:
+        m = float(physics.star(sec)["mass"])
+    except Exception:
+        m = 1.0
+    if m >= CORE_COLLAPSE_SUNS:
+        return "core_collapse"
+    return "supernova" if "binary" in (sec.star_type or "").lower() else "white_dwarf"
 
 
 def phase(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> Tuple[str, float]:
@@ -575,22 +587,25 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
             _perish(kernel, p, kind)
         p.society["star_k"] = 0.0
         a = float(physics.body(p).get("q", 1) or 1) ** 2
-        unbound = kind == "supernova" or a < GIANT_REACH_AU
+        unbound = kind in ("supernova", "core_collapse") or a < GIANT_REACH_AU
         if unbound:
             if to_centre:
                 blackhole.capture(kernel, dict(p.element_deposits), f"the worlds of {sec.name}")
-            elif a < GIANT_REACH_AU and kind != "supernova":
+            elif a < GIANT_REACH_AU and kind == "white_dwarf":
                 for el, q in p.element_deposits.items():
                     matter.sink("stellar_engulfment", el, q)        # swallowed by its own star
-            if to_centre or (a < GIANT_REACH_AU and kind != "supernova"):
+            if to_centre or (a < GIANT_REACH_AU and kind == "white_dwarf"):
                 p.element_deposits = {el: 0 for el in p.element_deposits}
-            if kind == "supernova":
+            if kind in ("supernova", "core_collapse"):
                 p.planet_type = "ROGUE"                              # flung out: dark, drifting
         if hasattr(p, "_orbit_cache"):
             del p._orbit_cache
-    shed = (m - WD_MASS) if kind == "white_dwarf" else m                # a Type Ia leaves nothing
+    remnant = WD_MASS if kind == "white_dwarf" else 0.0 if kind == "supernova" else \
+        (1.4 if m < BLACK_HOLE_SUNS else 0.5 * m)                     # a neutron star, or a black hole
+    shed = max(0.0, m - remnant)
     yields = ({"C": 0.5, "H2O": 0.3, "Si": 0.2} if kind == "white_dwarf" else
-              {"Fe": 0.6, "Ni": 0.2, "Si": 0.15, "U": 0.05})          # what each death makes
+              {"Fe": 0.6, "Ni": 0.2, "Si": 0.15, "U": 0.05} if kind == "supernova" else
+              {"H2O": 0.45, "Si": 0.2, "C": 0.15, "Fe": 0.12, "Ni": 0.03, "U": 0.05})   # what each death makes
     units = {el: int(max(0.0, shed) * EJECTA_PER_SUN * w) for el, w in yields.items()}
     if to_centre:
         blackhole.capture(kernel, units, f"the remains of the star of {sec.name}", made=True)
@@ -602,14 +617,16 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
                 if share:
                     w.element_deposits[el] = w.element_deposits.get(el, 0) + share
                     matter.source("stellar_ejecta", el, share)          # made in the star, now in the worlds
-    sec.star_type = "White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant"
+    sec.star_type = ("White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant" if kind == "supernova"
+                     else "Neutron star remnant" if m < BLACK_HOLE_SUNS else "Black hole remnant")
     sec.star = physics.star_for(sec.star_type)
     st = stats(kernel)
     st["deaths"][kind] = st["deaths"].get(kind, 0) + 1
     if quiet:
         return None
-    history.event(kernel, "STAR_DEATH", f"The star of {sec.name} dies" + (" in a supernova" if kind == "supernova"
-                                                                           else ", leaving a white dwarf"),
+    history.event(kernel, "STAR_DEATH", f"The star of {sec.name} dies" + (
+                      " in a supernova" if kind == "supernova" else ", leaving a white dwarf" if kind == "white_dwarf"
+                      else " as its core collapses"),
                   sector_id=sid, magnitude=lost, actors=who, cause=f"it left the main sequence ({m:.2f} suns)",
                   data={"kind": kind, "to_centre": to_centre, "ejecta": units})
     return f"[COSMOS] The star of {sec.name} dies ({kind.replace('_', ' ')})" + (f": {lost:,} perish." if lost else ".")
@@ -797,7 +814,6 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
     own system comes onto the map, nothing more: the rest of its sky is description until someone sails into it.
     Natural selection has given it its body: a variable world (a tilted axis, a flaring red dwarf) breeds
     r-strategists, a steady one K-strategists."""
-    from xylarium.config import REPRODUCTIVE_STRATEGY
     from xylarium.kernel import biosphere, history, physics, primordial, scheduler, ways
     from xylarium.kernel.civilization import CivilizationIntelligenceEngine
     cell = tuple(rec["cell"])
@@ -820,12 +836,14 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
         m = 1.0
     variable = tilt > 23.0 or m < 0.5
     strategy = "r" if variable else "K"
-    plans = sorted(k for k, v in REPRODUCTIVE_STRATEGY.items() if v == strategy) or ["bimaniform"]
-    plan = plans[int(rng.random() * len(plans)) % len(plans)]
+    traits = select(kernel, p, metab, strategy, rng)
+    plan = traits["shape"]
     name = _name(kernel, rec)
     civ = CivilizationIntelligenceEngine.create_civilization({
-        "name": name, "species_name": f"{plan}-{name.lower()}", "clade": plan, "class_code": 0, "sigil": "*",
+        "name": name, "species_name": f"{plan}-{name.lower()}", "clade": traits["body"], "class_code": 0,
+        "sigil": "*",
         "metabolism": metab, "disposition": "industry", "motto": "we looked up", "station": "arisen", "tech_level": 0})
+    civ.traits = traits
     p.civilization = civ
     biosphere.adapt(kernel, civ, p)                       # it evolved under this light, on this ground
     p.owner_id = None
@@ -843,11 +861,58 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
     st["arisen"] += 1
     primordial.first(kernel, "first_mind", f"{name} of {p.name}")
     r = float(st["place"][str(sid)]["r"])
+    steps = rec.get("steps") or []
+    if steps:                                             # the world's deep history, now that someone can read it
+        history.event(kernel, "DEEP_HISTORY", f"The deep history of {p.name}", actors=[f"civ:{name}"], planet=p,
+                      text=f"Life began on {p.name} {(rec['epoch'] - steps[0]) * 1000:,.0f} million years before "
+                           f"the {name}; it passed {len(steps)} hard steps"
+                           + (f", thrown back {rec.get('setbacks', 0)} times by the impacts of its sky"
+                              if rec.get("setbacks") else "") + ".",
+                      data={"steps_gyr": steps, "setbacks": rec.get("setbacks", 0), "medium": traits["medium"]})
     history.event(kernel, "EMERGENCE", f"The {name} look up", actors=[f"civ:{name}"], planet=p,
-                  magnitude=p.population, cause=f"{HARD_STEPS} hard steps, {rec['epoch']:.3f} Gyr into the galaxy",
-                  text=f"On {p.name}, {r:.1f} kpc from the galactic centre, under a star of "
-                       f"{m:.2f} solar masses, a {metab} people of {plan} body became aware of itself: the {name}.")
+                  magnitude=p.population, cause=f"{len(steps) or HARD_STEPS} hard steps, {rec['epoch']:.3f} Gyr "
+                                                f"into the galaxy",
+                  text=f"On {p.name}, {r:.1f} kpc from the galactic centre, under a star of {m:.2f} solar masses, "
+                       f"in {traits['medium']}, a people became aware of itself: {traits['describe']} - "
+                       f"the {name}.", data={"traits": traits})
     return f"[COSMOS] A mind arises: the {name} of {p.name} ({metab}, {plan}), {r:.1f} kpc out."
+
+
+def select(kernel: Any, planet: Any, metab: str, strategy: str, rng: Any) -> Dict[str, Any]:
+    """What a world selected in the lineage that became a mind: its strategy (a variable world breeds r, a steady
+    one K), its size (its gravity and strategy: biosphere.body_mass), how it moves (its gravity and medium), what it
+    senses (light, or in the dark heat, pressure and chemistry; fields in plasma), how social it is (r lineages and
+    energy-poor worlds lean to cooperation) - and so the shape of its mind: a society of individuals, a superorganism
+    whose colony is the mind, or a distributed mind spread slow through its medium."""
+    from xylarium.kernel import biosphere, fertility, physics, worlds
+    ms = worlds.of_planet(kernel, planet)
+    med = worlds.best(ms, metab) or {"solvent": "H2O", "where": "surface", "t": 280.0, "energy": 1.0, "pace": 1.0,
+                                     "dark": False}
+    dark = med.get("where") in ("under_ice", "deep")
+    g = float(physics.surface_gravity(planet))
+    sense = ("fields" if med["solvent"] == "plasma" else "heat and pressure" if dark else
+             "chemistry" if med["solvent"] in ("CH4", "N2", "NH3") else "heat" if med["t"] > 450 else "light")
+    form = ("drifting" if med["solvent"] == "plasma" else "swimming" if dark or med["where"] == "under_ice" else
+            "low and many-limbed" if g > 1.5 else "tall and slender" if g < 0.5 else "walking")
+    social = min(1.0, max(0.0, rng.random() + (0.3 if strategy == "r" else 0.0)
+                          + (0.2 if med["energy"] < 0.1 else 0.0) - 0.25))
+    shape = ("superorganism" if social > 0.75 and strategy == "r" else
+             "distributed" if med["solvent"] == "plasma" or (dark and med["pace"] < 0.05) else "society")
+    hands = rng.choice(["grasping limbs", "tendrils", "mouths and tongues", "jointed palps"]) \
+        if med["solvent"] != "plasma" else "shaped fields"
+    out = {"strategy": strategy, "medium": f"{'a dark ' if dark else ''}{med['solvent']} {med['where'].replace('_', ' ')}",
+           "sense": sense, "form": form, "hands": hands, "social": round(social, 3), "shape": shape}
+    # its size as the biosphere reckons a body (life history and its world's gravity: biosphere.body_mass)
+    size = (fertility.CEILING["K"] / fertility.CEILING.get(strategy, fertility.CEILING["K"])) ** 4
+    if med["solvent"] != "plasma":
+        size *= max(1e-3, g) ** -biosphere.GRAVITY_MASS_POWER
+    word = ("tiny" if size < 0.05 else "small" if size < 0.5 else "middling" if size < 2 else "large" if size < 10
+            else "vast")
+    kind = {"superorganism": "colony that thinks as one", "distributed": "mind spread through its medium",
+            "society": "people of many minds"}[shape]
+    out["body"] = f"{word} {form}"
+    out["describe"] = f"a {kind}: {word}, {form}, {sense}-sensing, working with {hands}"
+    return out
 
 
 # ---------------------------------------------------------------------- witnessing
