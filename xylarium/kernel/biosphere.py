@@ -7,7 +7,7 @@ Everything here is derived from the world's physics (physics.py) and a handful o
   * Light fit. Each metabolism's energy peaks at a flux F* (biotic life at Earth's light, cryogenic life in
     the cold, mineral life on hot rock, umbral life in the dark; plasmic life feeds on a giant's heat, its
     mass). With x = flux / F*, the fit is 4x / (1+x)^2: exactly 1 at the optimum, falling away on both sides.
-  * Season. Axial tilt shortens the growing season (1 - tilt/90); a tidally locked world farms only its
+  * Season. Axial tilt brings winters and polar nights (physics.growing_share); a tidally locked world farms only its
     terminator band (half).
   * Carrying capacity K = people-per-Earth-area x tech yield x [surface area x surface chemistry fit x light
     fit x season + enclosed habitat area]. Nothing is looked up by citadel tier except agricultural
@@ -91,7 +91,7 @@ def season(planet: Any) -> F:
     b = physics.body(planet)
     if b.get("locked"):
         return F(1, 2)
-    return 1 - F(int(b.get("tilt", 0)), 90)
+    return physics.growing_share(int(b.get("tilt", 0)))
 
 
 def _surface_fit(metabolism: str, planet_type: str) -> F:

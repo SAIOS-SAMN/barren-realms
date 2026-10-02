@@ -528,12 +528,12 @@ def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[D
     r-strategists (cosmos.arise), a steady one large K-strategists."""
     from fractions import Fraction
     from xylarium.config import PEOPLE_PER_EARTH_AREA
-    from xylarium.kernel import biosphere, ways
+    from xylarium.kernel import biosphere, physics, ways
     b = world.get("body") or {}
     radius = float(Fraction(str(b.get("radius", 1))))
     area = radius * radius * (float(biosphere.GIANT_LIVING_BAND) if b.get("giant") else 1.0)
-    season = 0.5 if b.get("locked") else 1.0 - int(b.get("tilt", 0)) / 90.0
-    from xylarium.kernel import physics, worlds as W
+    season = 0.5 if b.get("locked") else float(physics.growing_share(int(b.get("tilt", 0))))
+    from xylarium.kernel import worlds as W
     med = W.best(world.get("media") or [], metabolism)
     if world.get("media") is not None and med is None:
         return 0.0

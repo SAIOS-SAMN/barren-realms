@@ -75,6 +75,20 @@ history); universes are weighted by how well their own formulas produce a premis
 stripped of air or broken apart (ruin.py) only by peoples and captains who choose it, at the energy each world's own
 binding asks.
 
+## From the Big Bang to federations
+
+| Link | Made from | Module |
+|---|---|---|
+| Belts and comet clouds | the disc's solids no world gathered: inside a giant's orbit, beyond the last world; what the giants fling out | creation._belts |
+| Growing seasons | daily sunlight at every latitude through the year, swung by the axial tilt | physics.growing_share |
+| Holding a sky | a shield against the star's wind, volatiles steered from belts, gas broken from rock - each priced, each chosen | skies.py |
+| Mastery | a people's power (bodies and works) over its world's sunlight and its star's light: Kardashev's types, measured | mastery.py |
+| The crossing | sublight within a system; the next star only once a people's mathematics holds the fourth axis and it can raise a passage's energy (a universe may forbid it: `ftl=0`) | mastery.py |
+| Hearing | the light a people's works leak, against a listener's instruments and the light-time between | signals.py |
+| Federations | blocs of crossed peoples founding common law when it beats its dues; charters and doctrines chosen by members | federation.py |
+| Elders | every mind of the galaxy given a life at the level of history - crossing, falling, expanding, settling, doctrine - across declared ranges | prehistory.py, tools/elders.py |
+| Earth by our rules | a people woken on a Sun-like system at our place and time, lived year by year | tools/earth_run.py |
+
 ## What limits life (creation.limits)
 
 `creation.limits(seed)` sorts a sample of a universe's worlds by the first gate each fails. Seed 7, measured: of

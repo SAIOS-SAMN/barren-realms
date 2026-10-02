@@ -50,6 +50,11 @@ other physics. `tools/progenitor.py` compares universes so made.
 | A mind | a nervous system | I_MIND bits of blueprint; a people's council as one collective mind | projected, declared |
 | Time on a world | days, seasons, years | universal cycles; each world's year for its own reckoning | restored for reckoning (CLOCK.md) |
 | A world through deep time | a history: its star brightening, its interior cooling, its air gathered and lost | `worlds.history`: the same physics read at ten ages, with the young star fainter (Gough) and the magma ocean's degassing | **restored** for questions about a world's past (`tools/scenarios.py`); creation still reads one settled age |
+| A system's small bodies | belts and comet clouds of every size and orbit | belts by where the disc went ungathered, composition by where they condensed; comet clouds by giants and passing stars | **restored** (creation._belts) |
+| A world's seasons | sunlight by latitude and day | the share of the year and surface over half its latitude's mean light (physics.growing_share) | **restored** from a linear tilt penalty |
+| Travel between stars | sublight, by the rocket equation, or folded space | in-system for every people; between stars once a people crosses (mastery.py) | **restored** as a crossing a people earns |
+| Peoples' awareness of each other | light crossing the galaxy | leaked power against instruments and light-time (signals.py) | **restored** |
+| A galaxy's prehistory | every people's history over billions of years | a history-level life per mind from declared rates (prehistory.py) | projected, declared: the ranges are the progenitors', the full engine's runs measure them |
 | Life's lineages | many clades climbing at once, extinctions pruning some | `life.ERASURE`: "rung" (one lineage, impacts reset its rung) or "clades" (CLADES lineages, each impact killing each with its severity, survivors radiating) | **restored** as a choice of law, compared by the scenarios |
 
 ## What is still a number someone chose

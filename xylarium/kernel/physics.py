@@ -325,6 +325,37 @@ def local_calendar(sector: Any, planet: Any, cycle: int) -> Dict[str, Any]:
             "local_day": int(days_elapsed / day_len)}
 
 
+# ---------------------------------------------------------------------- seasons
+_GROWING: Dict[int, F] = {}
+
+
+def growing_share(tilt_deg: float) -> F:
+    """The share of a world's year and surface warm enough to grow: daily-mean sunlight at each latitude through the
+    year (the declination swinging by the axial tilt), counted where it reaches half that latitude's own yearly mean,
+    weighted by each latitude band's area. An upright world grows all year; a tilted one has winters, and a world on
+    its side has polar nights - but no world loses its whole year to tilt."""
+    key = int(round(abs(tilt_deg)))
+    if key in _GROWING:
+        return _GROWING[key]
+    eps = math.radians(min(90, key))
+    lats = [math.radians(5.0 + 10.0 * i) for i in range(9)]
+    days = 48
+    total = weight = 0.0
+    for phi in lats:
+        qs = []
+        for d in range(days):
+            dec = eps * math.sin(2 * math.pi * (d + 0.5) / days)
+            x = -math.tan(phi) * math.tan(dec)
+            h0 = 0.0 if x >= 1 else math.pi if x <= -1 else math.acos(x)
+            qs.append(max(0.0, h0 * math.sin(phi) * math.sin(dec) + math.cos(phi) * math.cos(dec) * math.sin(h0)))
+        mean = sum(qs) / days
+        grow = sum(1 for q in qs if q >= 0.5 * mean) / days if mean > 0 else 0.0
+        total += grow * math.cos(phi)
+        weight += math.cos(phi)
+    _GROWING[key] = F(int(round(total / weight * 1000)), 1000)
+    return _GROWING[key]
+
+
 # ---------------------------------------------------------------------- surface
 def surface_area(planet: Any) -> F:
     """Relative to Earth (r^2)."""
