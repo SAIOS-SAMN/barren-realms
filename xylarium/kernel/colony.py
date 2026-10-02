@@ -633,7 +633,7 @@ class ColonyManager:
         # land can carry, never faster than its farms can add food. Over capacity, it shrinks.
         # Each people eats its own staple (staples.py): organics, ore, ice or hydrogen.
         from xylarium.kernel import biosphere, staples
-        required_food = biosphere.consumption(planet)
+        required_food = biosphere.meal(planet)
         famine = False
         famine_loss = 0
         soc = planet.society
@@ -888,7 +888,14 @@ class ColonyManager:
             if line:
                 kernel.action_logs.append(line)
             institutions._open_pool(kernel, planet.currency)
-            if planet.currency not in kernel.fx_market.pools or planet.treasury < PLANETARY_SPACEFLIGHT_COST + dock_local:
+            if planet.currency not in kernel.fx_market.pools:
+                return None
+            # the exchange has just set its money's real rate: the dock is priced again at it, and paid only if the
+            # vault (less its deposit in the pool) still covers hull and dock
+            if dock_sol > 0:
+                dock_sol = PORT_START_TREASURY * level / max(1e-9, kernel.fx_market.rate(planet.currency)) / 3
+                dock_local = dock_sol * kernel.fx_market.rate(planet.currency)
+            if planet.treasury < PLANETARY_SPACEFLIGHT_COST + dock_local:
                 return None
         if dock_sol > 0:
             kernel.action_logs.append(waystations.found(kernel, sec, planet, dock_sol))

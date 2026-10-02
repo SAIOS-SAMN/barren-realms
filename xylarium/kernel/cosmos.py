@@ -16,9 +16,13 @@ THE SCALES (largest first)
                     witness's own region and its neighbourhood)
   system            one sector: a star and its worlds, on exact Keplerian orbits (physics.py)
 
-Nothing is materialised until it is witnessed. The map begins at the first mind that arises and grows outward as
-observers arise and reach: a cell is materialised when a new mind arises in it, when a ship enters a neighbouring
-cell, or when a people's fleets can reach it. Everywhere else the galaxy is a formula.
+CREATION IS FIXED AT THE BIG BANG (creation.py): every cell's stars, their birth dates and their worlds are a pure
+function of the seed and the cell's coordinates - never redrawn, the same whoever finds them in whatever order.
+
+Nothing is charted until it is witnessed. A mind that arises is given its own system and nothing more: its sky is
+description, not map. A cell is charted (all its sectors and lanes) when a ship enters it or a neighbour, or when a
+people with shipyards stands in it - the map grows only where peoples that reach the stars actually go. Everywhere
+else the galaxy is a formula.
 
 THE GALAXY (Milky Way measurements as rulers and data points, not as a template)
 
@@ -38,25 +42,26 @@ lonely 0.1 Myr a year - the second mind arrives long after the first has reached
 teeming 10 Myr - minds arise within a lifetime of each other and the galaxy turns visibly); everything else is
 physics.
 
-STARS AGE. Each star lives SUN_MS_GYR x M^-2.5 from when its ring formed. Over its last tenth it brightens toward
+STARS ARE BORN AND AGE. Each star is born on its own date from its ring's star-formation history (creation.py): a
+charted sector whose star is not yet born is gas, and lights when its date comes (STAR_BORN). It lives
+SUN_MS_GYR x M^-2.5 from its birth. Over its last tenth it brightens toward
 the giant phase and its worlds feed fewer and fewer (their carrying capacity falls with what is left of it) - a
 people sees its end coming for centuries; then the star dies and its worlds feed no one. A star already dead when
 its region is first witnessed is found as a remnant with lifeless worlds.
 
-MINDS ARISE (Carter's hard steps). A world that can carry life passes HARD_STEPS improbable steps - the origin of
-life, complex cells, multicellular life, intelligence - each an exponential wait of mean STEP_GYR / (h x metals),
-h its habitability for the biology that fits it best and metals its region's metallicity (no rocky worlds without
-metals), after its crust settles. A mind arises only if all the steps finish inside its star's main-sequence window
-(10 Gyr x M^-2.5) and no supernova sterilises it first (a hazard rising with the local stellar density: the crowded
-core is deadly, the metal-poor rim barren - between lies the galactic habitable zone). Each candidate's dice are its
-own (scheduler.rng) and fixed by the universe's seed. The clock's year 0 is the epoch the first mind arises; each
-later one arises in its own year, is named, materialises its region, and begins as foragers (ways.py).
+MINDS ARISE (Carter's hard steps, creation.py). Every world of every system the cells hold is a candidate for every
+biology that can live on it, each with its own needs - metals (none for plasmic minds, the Big Bang's hydrogen),
+its vulnerability to sterilising supernovae, its star's window - and its own dice, fixed by the seed. There is no
+one habitable zone: each biology has its own. The clock's year 0 is the epoch the first mind arises; each later one
+arises in its own year on its own world, is named, and begins as foragers (ways.py).
 """
 
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import matter
+
+SLOTS = 40                      # sectors per cell (creation.SLOTS)
 
 # ---------------------------------------------------------------------- rulers (units and anchors)
 R0_KPC = 8.0                    # the Sun's galactocentric radius: where today's deposits were set (a ruler)
@@ -70,10 +75,8 @@ GALAXIES_IN_CLUSTER = 40        # the home cluster's galaxies (Local Group scale
 # ---------------------------------------------------------------------- laws and measurements
 FE_GRADIENT = 0.06              # dex/kpc: iron's radial gradient (Milky Way disc)
 LAMBDA_FE = 1.0 / (FE_GRADIENT * math.log(10.0))       # kpc: iron's scatter length
-HARD_STEPS = 4                  # Carter (1983); Watson (2008): ~4 hard steps to intelligence
-STEP_GYR = 10.0                 # each step's mean wait on an ideal world: a Sun-like star's whole window
+HARD_STEPS = 4                  # Carter (1983); Watson (2008): ~4 hard steps to intelligence (creation.py)
 SUN_MS_GYR = 10.0               # main-sequence lifetime of a solar-mass star; tau ~ M^-2.5
-CRUST_GYR = 0.6                 # a rocky world's crust settles and its bombardment ends (Earth: ~0.5-0.7 Gyr)
 STERILISE_AT_R0 = 0.1           # chance a biosphere at R0 is sterilised by a nearby supernova over its window
 KPC_PER_MYR_AT_1KMS = 1.0 / 977.8
 
@@ -132,8 +135,8 @@ def density(r: float) -> float:
 
 
 def formed_gyr(r: float) -> float:
-    """Inside-out: when a radius forms its stars, Gyr after the Big Bang (Chiappini et al. 2001; the first 0.3 Gyr
-    after the Big Bang - the age of the oldest stars measured)."""
+    """Inside-out: a radius's star-formation timescale in our universe, Gyr (Chiappini et al. 2001's infall; at
+    least 0.3 Gyr - the age of the oldest stars measured). Each universe scales it (creation.infall_gyr)."""
     return max(0.3, 1.033 * r - 1.267)
 
 
@@ -184,70 +187,16 @@ def deep_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
     return float(st.get("epoch0", 0.0)) + (c / 100.0) * ruler(kernel) / 1.0e9
 
 
-# ---------------------------------------------------------------------- minds arise (hard steps)
-def _erlang_cdf(t: float, n: int, mean: float) -> float:
-    if t <= 0:
-        return 0.0
-    x = t / mean
-    term, total = 1.0, 1.0
-    for k in range(1, n):
-        term *= x / k
-        total += term
-    return 1.0 - math.exp(-x) * total
-
-
-def _candidates_at_r0(kernel: Any) -> Tuple[int, List[float]]:
-    """Measured from the materialised region: candidate worlds per 40 sectors at R0, and their habitabilities."""
-    from xylarium.kernel.universe import habitability
-    from xylarium.kernel import designer
-    hs = []
-    for s in kernel.sectors.values():
-        for p in s.planets:
-            h = max(habitability(m, p.planet_type) for m in designer.CLADE_OF)
-            if h >= 0.6:
-                hs.append(float(h))
-    n = max(1, int(round(len(hs) * 40.0 / max(1, len(kernel.sectors)))))
-    return n, (hs or [0.8])
-
-
-HORIZON_GYR = 30.0              # deep time the schedule looks ahead to (red dwarfs outlive it; the clock never gets there)
-WINDOW = 64                     # minds kept ahead in the kernel; the rest are recomputed from the seed when needed
-CURVE_STEP = 0.25               # Gyr between points of the expectation curve
+# ---------------------------------------------------------------------- minds arise (creation.py)
+WINDOW = 64                     # minds kept ahead in the kernel; the rest are the seed's, read when needed
+CURVE_STEP = 0.25               # Gyr between points of the expectation curve (creation.CURVE_STEP)
 
 
 def schedule(kernel: Any) -> Dict[str, Any]:
-    """Every mind the home galaxy raises before HORIZON_GYR: cell, epoch (Gyr), its star's mass and world's fitness
-    - with the expectation the dice are drawn from, as a curve over deep time (the audit of the scales)."""
-    from xylarium.kernel import scheduler
-    st = stats(kernel)
-    if not st.get("hs"):                                  # measured once, from the first witnessed region, and kept:
-        st["per_cell_r0"], st["hs"] = _candidates_at_r0(kernel)   # the future is the seed's, not the map's
-    per_cell, hs = st["per_cell_r0"], st["hs"]
-    out = []
-    curve = [0.0] * (int(HORIZON_GYR / CURVE_STEP) + 1)
-    for (i, j) in cells():
-        r = ring_radius(i)
-        n = int(round(per_cell * density(r)))
-        t0 = formed_gyr(r) + CRUST_GYR
-        z, live = metals(r), survival(r)
-        for k in range(n):
-            rng = scheduler.rng(kernel, "mind", i, j, k)
-            u = rng.random()                                    # Salpeter IMF on [0.1, 2] solar masses
-            a, b, g = 0.1, 2.0, -1.35
-            m = (a ** g + u * (b ** g - a ** g)) ** (1.0 / g)
-            window = SUN_MS_GYR * m ** -2.5
-            h = hs[int(rng.random() * len(hs)) % len(hs)]
-            mean = STEP_GYR / max(1e-6, h * z)
-            end = t0 - CRUST_GYR + window                         # its star leaves the main sequence
-            for c in range(len(curve)):
-                t = min(c * CURVE_STEP, end) - t0
-                if t > 0:
-                    curve[c] += _erlang_cdf(t, HARD_STEPS, mean) * live
-            steps = sum(rng.expovariate(1.0 / mean) for _ in range(HARD_STEPS))
-            if steps <= window - CRUST_GYR and t0 + steps <= HORIZON_GYR and rng.random() < live:
-                out.append({"cell": [i, j], "epoch": round(t0 + steps, 6), "mass": round(m, 3), "h": h, "k": k})
-    out.sort(key=lambda e: (e["epoch"], e["cell"], e["k"]))
-    return {"minds": out, "curve": [round(x, 2) for x in curve], "per_cell_r0": per_cell}
+    """Every mind the home galaxy raises before the horizon, on the worlds its cells hold, with the expectation the
+    dice are drawn from (the audit of the scales). A pure function of the seed (creation.schedule)."""
+    from xylarium.kernel import creation
+    return creation.schedule(kernel.seed)
 
 
 def expected_by(kernel: Any, epoch: float) -> float:
@@ -259,23 +208,25 @@ def expected_by(kernel: Any, epoch: float) -> float:
 
 
 def _refill(kernel: Any) -> None:
-    """Keep the next WINDOW minds in the kernel (the schedule is the seed's; it is recomputed, never stored whole)."""
+    """Keep the next WINDOW minds in the kernel."""
+    from xylarium.kernel import creation
     st = stats(kernel)
-    last = st.get("last")
-    sched = schedule(kernel)
-    later = [m for m in sched["minds"] if last is None or (m["epoch"], m["cell"], m["k"]) > tuple(last)]
-    st["minds"] = later[:WINDOW]
+    st["minds"] = creation.after(kernel.seed, st.get("last"), WINDOW)
     st["next"] = 0
-    st["ever"] = len(sched["minds"])
 
 
 # ---------------------------------------------------------------------- the map: cells <-> regions
+ADJECTIVES = ["Veiled", "Obsidian", "Cosmic", "Tesseract", "Supernova", "Prismatic", "Hyperion", "Eclipse"]
+NOUNS = ["Rift", "Spire", "Shoals", "Chasm", "Nexus", "Matrix", "Sanctum", "Abyss"]
+
+
 def _index(kernel: Any) -> Dict[str, int]:
     return stats(kernel)["region_of"]
 
 
 def region_of_cell(kernel: Any, cell: Tuple[int, int]) -> int:
-    """The region (research.mint_frontier_cluster index) a cell is carried by: 1 for the first witness's cell."""
+    """The region a cell is carried by - a label in the order cells are first witnessed (1 for the first witness's);
+    what the cell holds does not depend on it (creation.py)."""
     st = stats(kernel)
     key = f"{cell[0]},{cell[1]}"
     idx = _index(kernel)
@@ -286,76 +237,158 @@ def region_of_cell(kernel: Any, cell: Tuple[int, int]) -> int:
 
 
 def cell_of_sector(kernel: Any, sector_id: int) -> Optional[Tuple[int, int]]:
-    st = stats(kernel)
-    region = 1 if sector_id <= 200 else 2 + (sector_id - 201) // 40
-    for key, k in st["region_of"].items():
-        if k == region:
-            a, _, b = key.partition(",")
-            return int(a), int(b)
+    g = stats(kernel)["place"].get(str(sector_id))
+    if g and "cell" in g:
+        return int(g["cell"][0]), int(g["cell"][1])
     return None
 
 
+def sector_of_slot(kernel: Any, cell: Tuple[int, int], k: int) -> int:
+    """The sector id carrying a cell's slot: the first witness's region is sectors 1-40, its home slot sector 1."""
+    region = region_of_cell(kernel, cell)
+    if region == 1:
+        return 1 + (k - int(stats(kernel).get("home_slot", 0))) % SLOTS
+    return 201 + (region - 2) * SLOTS + k
+
+
 def _sectors_of_region(region: int) -> List[int]:
-    return list(range(1, 101)) if region == 1 else list(range(201 + (region - 2) * 40, 241 + (region - 2) * 40))
+    return list(range(1, SLOTS + 1)) if region == 1 else list(range(201 + (region - 2) * SLOTS,
+                                                                    201 + (region - 1) * SLOTS))
 
 
 def materialised(kernel: Any, cell: Tuple[int, int]) -> bool:
+    """Charted: all its sectors and lanes on the map."""
     return f"{cell[0]},{cell[1]}" in stats(kernel)["materialised"]
 
 
 @matter.declared("cluster_genesis")
+def build_slot(kernel: Any, cell: Tuple[int, int], k: int) -> int:
+    """One sample volume of a cell onto the map, as the Big Bang made it: a star (lit if born by now, gas until
+    then), or the null space between, with its belts."""
+    from xylarium.config import BELT_TYPES
+    from xylarium.kernel import creation
+    from xylarium.kernel.models import Sector, SecurityLevel
+    sid = sector_of_slot(kernel, cell, k)
+    if sid in kernel.sectors:
+        return sid
+    slot = creation.cell(kernel.seed, *cell)[k]
+    sec = Sector(id=sid, name=f"{ADJECTIVES[slot['names'][0]]} {NOUNS[slot['names'][1]]} #{sid}",
+                 security=SecurityLevel.ANARCHY, warps=[], port=None, planets=[], captains=[])
+    sec.cluster_name = f"Ring {cell[0]}, arc {cell[1]}"
+    sec.kind, sec.star_type, sec.star = "NULL", None, None
+    kernel.sectors[sid] = sec
+    place = {"r": slot["r"], "theta0": slot["theta0"], "cell": [cell[0], cell[1]], "k": k}
+    stats(kernel)["place"][str(sid)] = place
+    if "star" not in slot:
+        sec.belts = [{"id": f"BELT-{sid:03d}-{n + 1}", "type": t, "composition": dict(BELT_TYPES[t]), "reserve": q,
+                      "max_reserve": q} for n, (t, q) in enumerate(slot["belts"])]
+        return sid
+    place["born"] = slot["born"]
+    if slot["born"] <= deep_gyr(kernel):
+        _light(kernel, sid, slot)
+    else:
+        stats(kernel)["unborn"][str(sid)] = slot["born"]
+    return sid
+
+
+def _light(kernel: Any, sid: int, slot: Dict[str, Any]) -> None:
+    """A star is born and its worlds with it."""
+    from xylarium.kernel import physics
+    from xylarium.kernel.fx import currency_for_security
+    from xylarium.kernel.models import Planet
+    from xylarium.kernel.universe import PLANET_LETTERS
+    sec = kernel.sectors[sid]
+    sec.kind, sec.star_type = "SYSTEM", slot["star"]
+    sec.star = physics.star_for(sec.star_type)
+    sec.belts = []
+    currency = currency_for_security(sec.security)
+    for n, w in enumerate(slot["worlds"]):
+        p = Planet(id=f"planet_{sid}" if n == 0 else f"planet_{sid}_{PLANET_LETTERS[n]}", sector_id=sid,
+                   name=f"{sec.name.split()[0]} {sid:03d}{PLANET_LETTERS[n]}", owner_id=None, population=0, shields=0,
+                   max_shields=200, fighters=0, citadel_level=0, treasury=0, ore_silo=0, organics_silo=0, morale=80,
+                   element_deposits=dict(w["deposits"]), garrison_troops=0, planet_type=w["type"],
+                   currency=currency, body=dict(w["body"]))
+        physics.apply_derived(p, physics.star(sec))
+        p.orbital_angle = float(physics.orbital_phase(sec, p, 0)) * 360.0
+        sec.planets.append(p)
+
+
+@matter.declared("star_formation")
+def _ignite(kernel: Any) -> List[str]:
+    """Charted gas whose date has come: its star is born (systems emerge over deep time, each on the date the
+    Big Bang fixed for it)."""
+    from xylarium.kernel import creation, history
+    st = stats(kernel)
+    now = deep_gyr(kernel)
+    logs = []
+    for key, born in sorted(st["unborn"].items(), key=lambda kv: (kv[1], int(kv[0]))):
+        if born > now:
+            continue
+        sid = int(key)
+        st["unborn"].pop(key)
+        g = st["place"][key]
+        slot = creation.cell(kernel.seed, *g["cell"])[g["k"]]
+        _light(kernel, sid, slot)
+        sec = kernel.sectors[sid]
+        history.event(kernel, "STAR_BORN", f"A star is born in {sec.name}", sector_id=sid,
+                      cause=f"its ring's gas, {born:.3f} Gyr after the Big Bang",
+                      data={"star": slot["star"], "worlds": len(slot["worlds"])})
+        logs.append(f"[COSMOS] A star is born in {sec.name}: {slot['star']}, {len(slot['worlds'])} worlds.")
+    if logs:
+        from xylarium.kernel import topology
+        topology.changed(kernel)
+    return logs
+
+
+def _lanes_within(kernel: Any, cell: Tuple[int, int]) -> None:
+    """A charted cell's own lanes: a chain through its sectors and a cross-stitch, fixed by the cell (not by who
+    charted it)."""
+    from xylarium.kernel import scheduler
+    rng = scheduler.rng(kernel, "lanes", *cell)
+    order = list(range(SLOTS))
+    rng.shuffle(order)
+    edges = set()
+    for a, b in zip(order, order[1:]):
+        edges.add((min(a, b), max(a, b)))
+    deg = {k: 0 for k in range(SLOTS)}
+    for a, b in edges:
+        deg[a] += 1
+        deg[b] += 1
+    for k in range(SLOTS):
+        c = rng.randrange(SLOTS)
+        if c != k and deg[k] < 4 and (min(k, c), max(k, c)) not in edges:
+            edges.add((min(k, c), max(k, c)))
+            deg[k] += 1
+            deg[c] += 1
+    for a, b in sorted(edges):
+        sa, sb = sector_of_slot(kernel, cell, a), sector_of_slot(kernel, cell, b)
+        kernel.sectors[sa].warps = sorted(set(kernel.sectors[sa].warps) | {sb})
+        kernel.sectors[sb].warps = sorted(set(kernel.sectors[sb].warps) | {sa})
+
+
 def materialise(kernel: Any, cell: Tuple[int, int], why: str) -> Optional[str]:
-    """A cell is witnessed: its region's systems are laid out, its elements scattered by its radius, no mind put
-    there (minds arise), and it is joined to whatever neighbours are already charted."""
+    """A cell is charted: every sector it carries is laid out as the Big Bang made it, its own lanes drawn, and it
+    is joined to whatever neighbours are already charted."""
     key = f"{cell[0]},{cell[1]}"
     st = stats(kernel)
     if key in st["materialised"]:
         return None
     region = region_of_cell(kernel, cell)
-    if region != 1:
-        rm = kernel.research_manager
-        rm.mint_frontier_cluster(kernel, region)
-    ids = [s for s in _sectors_of_region(region) if s in kernel.sectors]
-    inside = set(ids)
-    for s in ids:                                         # a minted region's chain-bridge is not a neighbour here
-        for w in [w for w in kernel.sectors[s].warps if w not in inside]:
-            kernel.sectors[s].warps.remove(w)
-            if s in kernel.sectors[w].warps:
-                kernel.sectors[w].warps.remove(s)
-    _furnish(kernel, ids, cell)
-    _stars(kernel, ids)                                   # found as its stars are now (a dead one, a remnant)
+    for k in range(SLOTS):
+        build_slot(kernel, cell, k)
+    _lanes_within(kernel, cell)
+    _stars(kernel, [sector_of_slot(kernel, cell, k) for k in range(SLOTS)])   # found as its stars are now
     st["materialised"].append(key)
     _join(kernel, cell)
     from xylarium.kernel import topology
     topology.changed(kernel)
     i, j = cell
-    return f"[COSMOS] Region {region} (ring {i}, arc {j}, {ring_radius(i):.1f} kpc out) is witnessed: {why}."
-
-
-def _furnish(kernel: Any, ids: List[int], cell: Tuple[int, int]) -> None:
-    """No minds but those that arise; elements as gravity sorted them at this radius; each sector's place."""
-    r = ring_radius(cell[0])
-    place = stats(kernel)["place"]
-    for s in ids:
-        sec = kernel.sectors[s]
-        place[str(s)] = {"r": round(r + _jitter(kernel, s, 0) * CELL_KPC * 0.4, 4),
-                         "theta0": round(cell_theta(*cell) + _jitter(kernel, s, 1) * 2 * math.pi / slots(cell[0]) * 0.4, 6)}
-        for p in sec.planets:
-            p.natives = None
-            p.ruins = None
-            if p.population > 0 and (p.civilization is not None or not p.owner_id):
-                p.population, p.civilization = 0, None
-            for el in list(p.element_deposits):
-                p.element_deposits[el] = int(round(p.element_deposits[el] * abundance(el, r)))
-
-
-def _jitter(kernel: Any, sector_id: int, axis: int) -> float:
-    from xylarium.kernel import scheduler
-    return (scheduler.stream(kernel, "place", sector_id, axis) % 10 ** 6) / 10 ** 6 - 0.5
+    return f"[COSMOS] Region {region} (ring {i}, arc {j}, {ring_radius(i):.1f} kpc out) is charted: {why}."
 
 
 def _gates(region: int) -> List[int]:
     return _sectors_of_region(region)[:3]
+
 
 
 def _link(kernel: Any, ra: int, rb: int, on: bool) -> None:
@@ -403,7 +436,7 @@ def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
         m = float(physics.star(sec)["mass"])
     except Exception:
         return None
-    born = formed_gyr(g["r"])
+    born = float(g.get("born", formed_gyr(g["r"])))
     return born, born + SUN_MS_GYR * max(0.1, m) ** -2.5
 
 
@@ -501,7 +534,7 @@ def _stars(kernel: Any, sector_ids: Optional[List[int]] = None) -> List[str]:
             continue
         st["phase"][str(sid)] = ph
         peopled = [p for p in sec.planets if p.population > 0]
-        who = [getattr(getattr(p, "civilization", None), "name", p.name) for p in peopled]
+        who = sorted({f"civ:{p.civilization.name}" for p in peopled if getattr(p, "civilization", None) is not None})
         if ph == "giant" and not quiet:
             history.event(kernel, "STAR_AGEING", f"The star of {sec.name} begins to swell", sector_id=sid, actors=who,
                           cause=f"its giant branch: {years_left(kernel, sid):,.0f} clock years left")
@@ -528,6 +561,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
         m = 1.0
     to_centre = r < R_BULGE_KPC
     lost = 0
+    who = sorted({f"civ:{p.civilization.name}" for p in sec.planets
+                  if p.population > 0 and getattr(p, "civilization", None) is not None})
     for p in sec.planets:
         if p.population > 0:
             lost += p.population
@@ -569,7 +604,7 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
         return None
     history.event(kernel, "STAR_DEATH", f"The star of {sec.name} dies" + (" in a supernova" if kind == "supernova"
                                                                            else ", leaving a white dwarf"),
-                  sector_id=sid, magnitude=lost, cause=f"it left the main sequence ({m:.2f} suns)",
+                  sector_id=sid, magnitude=lost, actors=who, cause=f"it left the main sequence ({m:.2f} suns)",
                   data={"kind": kind, "to_centre": to_centre, "ejecta": units})
     return f"[COSMOS] The star of {sec.name} dies ({kind.replace('_', ' ')})" + (f": {lost:,} perish." if lost else ".")
 
@@ -627,14 +662,15 @@ def _shear(kernel: Any) -> List[str]:
     """Across rings, lanes open as cells come to face each other and close as they slide apart."""
     st = stats(kernel)
     t = deep_gyr(kernel) * 1000.0
-    cells_ = [tuple(int(x) for x in key.split(",")) for key in st["materialised"]]
+    by_ring: Dict[int, List[Tuple[int, int]]] = {}
+    for key in st["materialised"]:
+        c = tuple(int(x) for x in key.split(","))
+        by_ring.setdefault(c[0], []).append(c)
+    pairs = [(a, b) for i in sorted(by_ring) for a in by_ring[i] for b in by_ring.get(i + 1, [])]
     cross, stretches = st["cross"], {}
     logs, changed = [], False
-    for x in range(len(cells_)):
-        for y in range(x + 1, len(cells_)):
-            a, b = cells_[x], cells_[y]
-            if abs(a[0] - b[0]) != 1:
-                continue
+    for a, b in pairs:
+        if True:
             ra, rb = region_of_cell(kernel, a), region_of_cell(kernel, b)
             key = f"{min(ra, rb)}-{max(ra, rb)}"
             f = overlap(a, b, t)
@@ -659,10 +695,14 @@ def _shear(kernel: Any) -> List[str]:
 
 
 def _lane_event(kernel: Any, kind: str, ra: int, rb: int, cause: str) -> str:
-    from xylarium.kernel import history
+    """Told only where a people among the stars lives at either end (history mutes the rest)."""
+    from xylarium.kernel import history, knowledge
     verb = "open" if kind == "LANE_OPEN" else "close"
+    who = sorted({knowledge.holder_of_planet(p) or "" for r in (ra, rb) for s in _sectors_of_region(r)
+                  if s in kernel.sectors for p in kernel.sectors[s].planets
+                  if p.population > 0 and getattr(p, "civilization", None) is not None})
     history.event(kernel, kind, f"The lanes between regions {ra} and {rb} {verb}", sector_id=_gates(ra)[0],
-                  cause=cause, data={"regions": [ra, rb]})
+                  actors=who, cause=cause, data={"regions": [ra, rb]})
     return f"[COSMOS] The lanes between regions {ra} and {rb} {verb}: {cause}."
 
 
@@ -678,26 +718,36 @@ def position(kernel: Any, sector_id: int, cycle: Optional[int] = None) -> Option
 
 
 # ---------------------------------------------------------------------- genesis and emergence
+@matter.declared("cluster_genesis")
 def genesis(kernel: Any) -> None:
-    """The universe begins its clock when its first mind arises: the first witness's cell is the region of
-    sectors 1-100; everything else waits to be witnessed."""
-    from xylarium.kernel import institutions
+    """The universe begins its clock when its first mind arises. Everything the settled generator laid out is
+    unmade - the galaxy is the Big Bang's (creation.py) - and the first mind's own system becomes sector 1;
+    everything else waits to be witnessed."""
+    from xylarium.kernel import creation, institutions
     institutions.genesis(kernel)                       # no money, bank, exchange or Reserve until founded
     st = stats(kernel)
     sched = schedule(kernel)
-    st["curve"], st["per_cell_r0"], st["ever"] = sched["curve"], sched["per_cell_r0"], len(sched["minds"])
+    st["curve"], st["ever"] = sched["curve"], len(sched["minds"])
+    st["big_bang"] = dict(creation.big_bang(kernel.seed))
     st["minds"] = sched["minds"][:WINDOW]
     if not st["minds"]:
         st["epoch0"] = 0.0
         return
-    st["epoch0"] = st["minds"][0]["epoch"]
-    from xylarium.kernel import cluster
-    cluster.genesis(kernel)                            # the galaxies around this one, as a formula
     first = st["minds"][0]
     st["epoch0"] = first["epoch"]
+    for sec in list(kernel.sectors.values()):          # the settled galaxy's map is not this universe's
+        sec.planets, sec.belts, sec.warps = [], [], []
+    kernel.sectors.clear()
+    rm = getattr(kernel, "research_manager", None)
+    if rm is not None:
+        rm.anomalies.clear()                           # no relics before anyone lived to leave them
+    from xylarium.kernel import cluster, sphere, topology
+    cluster.genesis(kernel)                            # the galaxies around this one, as a formula
+    sphere.genesis(kernel)                             # and the clusters around this one, on the closed universe
     home = tuple(first["cell"])
     st["region_of"][f"{home[0]},{home[1]}"] = 1
-    materialise(kernel, home, "the first mind looks up")
+    st["home_slot"] = int(first["k"])
+    topology.changed(kernel)
     _due(kernel)
 
 
@@ -716,7 +766,7 @@ def _due(kernel: Any) -> List[str]:
         if rec["epoch"] > now + 1e-12:
             break
         st["next"] += 1
-        st["last"] = [rec["epoch"], rec["cell"], rec["k"]]
+        st["last"] = [rec["epoch"], rec["cell"], rec["k"], rec.get("w", 0)]
         line = arise(kernel, rec)
         if line:
             logs.append(line)
@@ -728,7 +778,7 @@ def _name(kernel: Any, rec: Dict[str, Any]) -> str:
     from xylarium.kernel import scheduler
     from xylarium.kernel.natives import _name as syllables
     taken = set(stats(kernel).setdefault("names", []))
-    rng = scheduler.rng(kernel, "name", *rec["cell"], rec["k"])
+    rng = scheduler.rng(kernel, "name", *rec["cell"], rec["k"], rec.get("w", 0))
     name = syllables(rng)
     while name in taken:
         name = syllables(rng)
@@ -737,45 +787,27 @@ def _name(kernel: Any, rec: Dict[str, Any]) -> str:
 
 
 def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
-    """A mind arises: its cell is witnessed, its world is the fittest unclaimed one there whose star has lived long
-    enough, and natural selection has given it its body: a variable world (a tilted axis, a flaring red dwarf)
-    breeds r-strategists, a steady one K-strategists."""
+    """A mind arises on the world the Big Bang's dice gave it, in the biology that finished its hard steps first. Its
+    own system comes onto the map, nothing more: the rest of its sky is description until someone sails into it.
+    Natural selection has given it its body: a variable world (a tilted axis, a flaring red dwarf) breeds
+    r-strategists, a steady one K-strategists."""
     from xylarium.config import REPRODUCTIVE_STRATEGY
     from xylarium.kernel import biosphere, history, physics, primordial, scheduler, ways
     from xylarium.kernel.civilization import CivilizationIntelligenceEngine
-    from xylarium.kernel.universe import habitability
-    from xylarium.kernel import designer
     cell = tuple(rec["cell"])
-    log = materialise(kernel, cell, "a mind arises there") if not materialised(kernel, cell) else None
-    region = region_of_cell(kernel, cell)
-    best = None
-    for s in _sectors_of_region(region):
-        sec = kernel.sectors.get(s)
-        if sec is None:
-            continue
-        for p in sec.planets:
-            if p.population > 0 or getattr(p, "civilization", None) is not None or p.owner_id:
-                continue
-            metab = max(designer.CLADE_OF, key=lambda m: (habitability(m, p.planet_type), m))
-            h = habitability(metab, p.planet_type)
-            if h < 0.6 or float(p.society.get("star_k", 1.0)) <= 0.0:
-                continue
-            try:
-                lived = SUN_MS_GYR * float(physics.star(sec)["mass"]) ** -2.5 >= rec["epoch"] - formed_gyr(
-                    ring_radius(cell[0]))
-            except Exception:
-                lived = True
-            score = (lived, h, p.id)
-            if best is None or score > best[0]:
-                best = (score, p, metab)
     st = stats(kernel)
-    if best is None:
-        st["silent"] += 1
-        return log
-    _, p, metab = best
-    rng = scheduler.rng(kernel, "body", *cell, rec["k"])
+    sid = build_slot(kernel, cell, int(rec["k"]))
+    _stars(kernel, [sid])
+    sec = kernel.sectors[sid]
+    w = int(rec["w"])
+    p = sec.planets[w] if w < len(sec.planets) else None
+    if (p is None or p.population > 0 or getattr(p, "civilization", None) is not None or p.owner_id
+            or float(p.society.get("star_k", 1.0)) <= 0.0):
+        st["silent"] += 1                                   # its world was taken, or its star died, before it woke
+        return None
+    metab = rec.get("metab") or "biotic"
+    rng = scheduler.rng(kernel, "body", *cell, rec["k"], w)
     tilt = float(physics.body(p).get("tilt", 0) or 0)
-    sec = kernel.sectors[p.sector_id]
     try:
         m = float(physics.star(sec)["mass"])
     except Exception:
@@ -798,14 +830,18 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
     p.society["arisen"] = {"epoch": rec["epoch"], "cell": list(cell)}
     ways._refresh(kernel, p)
     p.population = max(500, int(biosphere.carrying_capacity(kernel, p)))
+    from xylarium.config import FOOD_PER_THOUSAND
+    from xylarium.kernel import staples
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES       # it wakes at harvest: a season the wild gives
+    staples.add(p, staples.of(kernel, p), p.population * FOOD_PER_THOUSAND * FISCAL_QUARTER_CYCLES // 1000, "harvest")
     st["arisen"] += 1
     primordial.first(kernel, "first_mind", f"{name} of {p.name}")
+    r = float(st["place"][str(sid)]["r"])
     history.event(kernel, "EMERGENCE", f"The {name} look up", actors=[f"civ:{name}"], planet=p,
                   magnitude=p.population, cause=f"{HARD_STEPS} hard steps, {rec['epoch']:.3f} Gyr into the galaxy",
-                  text=f"On {p.name}, {ring_radius(cell[0]):.1f} kpc from the galactic centre, under a star of "
+                  text=f"On {p.name}, {r:.1f} kpc from the galactic centre, under a star of "
                        f"{m:.2f} solar masses, a {metab} people of {plan} body became aware of itself: the {name}.")
-    line = f"[COSMOS] A mind arises: the {name} of {p.name} ({metab}, {plan}), {ring_radius(cell[0]):.1f} kpc out."
-    return "\n".join(x for x in (log, line) if x)
+    return f"[COSMOS] A mind arises: the {name} of {p.name} ({metab}, {plan}), {r:.1f} kpc out."
 
 
 # ---------------------------------------------------------------------- witnessing
@@ -819,7 +855,8 @@ def entered(kernel: Any, sector_id: int) -> Optional[str]:
     if key in st["entered"]:
         return None
     st["entered"].append(key)
-    lines = [materialise(kernel, nb, f"seen from Sector {sector_id:03d}") for nb in neighbours_now(kernel, cell)]
+    lines = [materialise(kernel, cell, f"a ship stands in Sector {sector_id:03d}")]
+    lines += [materialise(kernel, nb, f"seen from Sector {sector_id:03d}") for nb in neighbours_now(kernel, cell)]
     return "\n".join(x for x in lines if x) or None
 
 
@@ -840,7 +877,7 @@ def _reach(kernel: Any) -> List[str]:
 def quarter(kernel: Any) -> List[str]:
     if not is_cosmic(kernel):
         return []
-    return _due(kernel) + _reach(kernel) + _shear(kernel) + _stars(kernel)
+    return _due(kernel) + _ignite(kernel) + _reach(kernel) + _shear(kernel) + _stars(kernel)
 
 
 def audit(kernel: Any) -> Dict[str, Any]:
@@ -876,7 +913,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 register_subsystem(Subsystem(
     name="cosmos",
     state=lambda: {"epoch0": 0.0, "minds": [], "next": 0, "arisen": 0, "silent": 0, "curve": [], "ever": 0,
-                   "region_of": {}, "next_region": 2, "materialised": [], "entered": [], "per_cell_r0": 0,
+                   "region_of": {}, "next_region": 2, "materialised": [], "entered": [], "unborn": {},
                    "place": {}, "cross": {}, "stretch": {}, "lum": {}, "phase": {}, "deaths": {}},
     season=quarter,
     summary=summary,

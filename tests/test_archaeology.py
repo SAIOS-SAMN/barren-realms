@@ -47,6 +47,7 @@ class TestArchaeology(unittest.TestCase):
                       if p.civilization is not None and p.owner_id is None and p.sector_id != 1)
         planet.population = 120
         planet.organics_silo = 0
+        planet.society["meal_carry"] = 999          # a meal is due this cycle (meals carry their fraction of a unit)
         planet.treasury = 7777
         before = {c: b["total"] for c, b in money_supply(self.kernel).items()}
         res = ColonyManager.tick_colony(planet, kernel=self.kernel)

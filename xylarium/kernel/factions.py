@@ -346,7 +346,7 @@ class FactionManager:
                             w.habitats = 2
                         civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
                         civ.faction_id, civ.alignment, civ.dogma = key, faction.alignment, faction.dogma
-                        civ.home_type, civ.light_optimum = "TERRESTRIAL", "1/1"   # Terran-born, wherever they live
+                        civ.home_type, civ.light_optimum, civ.home_gravity = "TERRESTRIAL", "1/1", "1/1"   # Terran-born, wherever they live
                         w.civilization, w.faction_id = civ, key
                         w.name = f"{names[len(world_specs) % len(names)]} {'Outpost' if outpost else 'Colony'}"
                         w.population = world_specs[-1][1]

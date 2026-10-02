@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional
 
 RECENT = 2000                   # events kept in the kernel (the file keeps them all)
 MONEY_KINDS = ("MONETARY_REGIME", "MONETARY_UNION", "COINAGE", "FACTION_DECREE")
+WHERE_SOMEONE_IS = ("LANE_OPEN", "LANE_CLOSE")
+SKY_KINDS = ("STAR_BORN", "STAR_AGEING", "STAR_DEATH")
 PER_PEOPLE = 300                # events indexed per people in the kernel
 
 
@@ -109,6 +111,11 @@ def _muted(kernel: Any, kind: str, actors: List[str]) -> bool:
         return bool(civs) and not any(culture.is_linked(kernel, a) for a in civs)
     if kind == "GALACTIC_HISTORY":
         return not culture.linked_peoples(kernel)
+    if kind in WHERE_SOMEONE_IS:                       # the galaxy's weather, told where someone linked lives
+        civs = [a for a in actors if str(a).startswith("civ:")]
+        return not any(culture.is_linked(kernel, a) for a in civs)
+    if kind in SKY_KINDS:                              # a star's birth or death no one lives by: told once anyone
+        return not actors and not culture.linked_peoples(kernel)      # is among the stars to see it
     return False
 
 

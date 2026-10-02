@@ -138,6 +138,7 @@ class Civilization:
     faction_id: Optional[str] = None
     home_type: Optional[str] = None        # The world type the species evolved on (biosphere adaptation)
     light_optimum: Optional[str] = None    # The light its biology evolved under (exact flux, Earth = 1)
+    home_gravity: Optional[str] = None     # The surface gravity its bodies were built against (exact, Earth = 1)
 
     @property
     def era_name(self) -> str:
@@ -176,6 +177,7 @@ class Civilization:
             "faction_id": self.faction_id,
             "home_type": self.home_type,
             "light_optimum": self.light_optimum,
+            "home_gravity": self.home_gravity,
         }
 
     @classmethod
@@ -206,6 +208,7 @@ class Civilization:
             faction_id=data.get("faction_id"),
             home_type=data.get("home_type"),
             light_optimum=data.get("light_optimum"),
+            home_gravity=data.get("home_gravity"),
         )
 
 

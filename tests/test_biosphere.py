@@ -43,7 +43,10 @@ class TestBiosphere(unittest.TestCase):
         w.body = dict(base, radius="3/2")
         big = biosphere.carrying_capacity(self.kernel, w, citadel=1, habitats=0, metabolism="biotic")
         w.body = base
-        self.assertAlmostEqual(big / small, float((F(3, 2) / physics.body(w)["radius"]) ** 2), places=3)
+        x = float(F(3, 2) / physics.body(w)["radius"])
+        # area, and gravity: a heavier world bears smaller bodies (square-cube, M ~ g^-3), more of them on the same
+        # food (Damuth: need ~ M^(3/4), so K ~ g^(9/4))
+        self.assertAlmostEqual(big / small, x ** 2 * x ** (3 * 0.75), places=3)
 
     def test_technology_multiplies_the_harvest(self):
         w = self.world()

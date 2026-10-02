@@ -4,10 +4,10 @@ Largest first. Each tier exists in detail only where it is witnessed; everywhere
 
 | Tier | What it is | How it is carried | Its clock |
 |---|---|---|---|
-| **Universe** | the whole run: one seed, one clock | `GameKernel(seed)`; lockstep (scheduler.py) | the clock (100 cycles a year) |
+| **Universe** | a closed 3-sphere of galactic clusters: one seed, one Big Bang, one clock | `creation.py` (the Big Bang's draw, the expansion law), `sphere.py` (the nearest 64 clusters, analytic); lockstep (scheduler.py) | the clock (100 cycles a year); light between clusters on conformal time |
 | **Galactic cluster** | the galaxies bound together | `cluster.py`: 40 galaxies, analytic - masses from the galaxy stellar mass function, closed-form orbits about the barycentre, their own minds drawn from the seed (never placed), a merger on the free-fall clock | deep time |
 | **Galaxy** | an exponential disc, R_D = 3 kpc, to 5 R_D | `cosmos.py`: rings 0.5 kpc wide cut into ~equal cells (~2,800 cells) | deep time: the universe's pace - lonely 0.1, neighbourly 1 (default), teeming 10 Myr per clock year (`cosmos.PACES`, the one ruler between the tiers, a law chosen at genesis: `genesis="cosmic:teeming"`) |
-| **Region** | one cell of the disc | 40 sectors (sectors 1-100 are the first witness's own cell); materialised when witnessed | - |
+| **Region** | one cell of the disc | 40 sectors, a pure function of the seed and the cell (`creation.cell`); charted when a ship enters it or a people with yards stands in it (the first witness's region is sectors 1-40, its home system sector 1) | - |
 | **System** | one sector: a star and its worlds | `physics.py`: exact Keplerian orbits | historical time |
 
 The clocks are tiered: a system's worlds turn on historical time; the galaxy - its rotation (closed form on a flat
@@ -24,29 +24,44 @@ evolution of life - turns on deep time. Every tier is clockwork: any moment of a
 * **The galactic habitable zone:** metals for rocky worlds fall outward with the gradient; supernova sterilisation
   rises inward with stellar density.
 
-## Minds arise; nothing is placed
+## Creation is fixed at the Big Bang (creation.py)
 
-Carter's hard steps (4, Watson 2008): each candidate world passes the origin of life, complex cells, multicellular
-life and intelligence, each an exponential wait of mean 10 Gyr / (habitability x metals), after its crust settles
-(0.6 Gyr), inside its star's main-sequence window (10 Gyr x M^-2.5, a Salpeter star), unless a supernova sterilises
-it first. Candidate worlds per region are measured from the materialised map at R0 and scale with stellar density.
-Each candidate's dice are fixed by the seed; the expectation is computed alongside (the audit).
+Each universe draws its initial conditions once, about the measured values (Planck 2018): the fluctuation amplitude
+sigma8 (lumpier matter collapses sooner: formation epochs scale as (0.811 / sigma8)^1.5), the baryon fraction (stars
+per volume, and the supernovae that sterilise), and the curvature - always closed, drawn about the measured flatness.
+How lively a universe is follows from these; the pace is only its tempo. Seed 7: sigma8 0.776, f_b 0.148, a
+3-sphere 757 Gpc round.
 
-The clock's year 0 is the epoch the first mind arises; each later mind arises in its own year, is named, chooses
-nothing of its body (a variable world - a tilted axis, a red dwarf - breeds r-strategists; a steady one K), is
-given its world's fittest metabolism, witnesses its own region, and begins as foragers.
+Every cell's 40 sample volumes are a pure function of the seed and the cell's coordinates - never redrawn, the same
+whoever charts them in whatever order. A sector holds a star with the Poisson chance 1 - exp(-n), n rising with the
+disc's density (0.28 of sectors at R0, the settled galaxy's measured share). Its birth date is drawn from its ring's
+star-formation history (gas falling in on Chiappini's inside-out timescale and forming stars as it arrives): the
+core is born at once, the rim is still making stars long after today - a charted sector whose star is not yet born
+is gas, and lights on its date (STAR_BORN). Its mass is Salpeter's; a third are binaries; it is born with the metals
+its ring had made by then (age-metallicity), and giant planets form only as the square of those metals (their
+cores; Fischer & Valenti 2005).
 
-Seed 7: the first mind at 3.27 Gyr (the Zishamar, 1.8 kpc out, under a 0.4 solar-mass star); the second 1,364
-clock years later (the Quaqua). Expected minds in the galaxy: 6 by 5 Gyr, 16 by 6, 68 by 8, ~845 by the present
-universe's 13.8 Gyr - tens of peoples over the thousands of clock years a game runs, not thousands of worlds.
+## Minds arise on worlds that exist, each biology by its own needs
 
-## Elastic space
+Every world of every system is a candidate, for every biology that can live on it - if it can feed a viable people
+(Franklin's 500 foragers on its living area through its seasons, divided among bodies by what each burns). Each
+biology has its own needs: metals (carbon life and lattice minds fully, ice-dwellers half - oxygen came early -
+plasmic minds none: they are the Big Bang's hydrogen), its tolerance of sterilising supernovae (plasma none,
+molecules fully), its star's window (a rogue's dark life waits on no star). Each passes Carter's four hard steps on
+its own dice; the first to finish is the world's mind. There is no single habitable zone.
 
-A region is materialised when a mind arises in it, when a ship first enters a neighbouring region, or when a people
-with shipyards stands in a neighbouring region (its fleets see the cells around it). Regions join by warp lanes
-when they touch. The audit (`cosmos.audit`, in observations) measures the scales every reading: cells charted of
-the galaxy's, sectors per people, the share of charted space no people can reach, and minds arisen against minds
-expected by now.
+Seed 7: the first mind at 6.02 Gyr - plasmic, in a gas giant 2.7 kpc from the core under a red dwarf; the second
+0.31 Gyr later (cryogenic). ~1,850 minds by the 30 Gyr horizon, ~82 by 13.8 Gyr: half plasmic, a third
+ice-dwellers, carbon life rare. The schedule is computed once per seed and kept on disk under the digest of the laws
+it follows (`runs/creation/`).
+
+## Charted where they go
+
+A mind that arises is given its own system and nothing more: its sky is description, not map. A cell is charted -
+all 40 sectors and its own lanes, as the Big Bang made them - when a ship enters it, or when a people with shipyards
+stands in it (it charts its own cell and those facing it now). The map stays tiny until peoples reach the stars, and
+then grows only where they go. Lanes and the stars' weather (LANE_OPEN/CLOSE, STAR_BORN, STAR_AGEING, STAR_DEATH)
+are told only where a people linked to the interstellar community lives.
 
 ## The Big Bang, the pace, and the lives of stars
 
@@ -57,7 +72,7 @@ The pace is a law of each universe, chosen once at genesis and kept for its whol
 it). Seed 7's second mind arrives 13,639 clock years after the first when lonely, 1,364 when neighbourly, 136 when
 teeming - order and relative spacing are the physics; the pace is how much evolution a year of history stands for.
 
-Every witnessed star lives 10 Gyr x M^-2.5 from when its ring formed. Over its last tenth it climbs the giant
+Every witnessed star lives 10 Gyr x M^-2.5 from its own birth. Over its last tenth it climbs the giant
 branch: its light rises toward the measured tip (~2,500 suns) as the square of its progress - its worlds' biology
 burns (light fit collapses: physics.planet_flux), while arrays and fields take a windfall of energy. Then it dies:
 a single star sheds its envelope and leaves a white dwarf (a thousandth of the Sun's light: its worlds frozen, those
@@ -133,3 +148,35 @@ Everything that happens is written once to the ledger (history.py): when (clock 
 Myths compound: each retells the one before it, and a generation after a war, a strife, a conquest or a first
 meeting, the gravest becomes a legend that remembers it. `tools/history.py` reads it back - annals, a book by
 age and people, a people's mythology, or scenes in space and time for a replay.
+
+## The closed universe (sphere.py)
+
+The universe is a 3-sphere of comoving radius c / H0 / sqrt(Omega - 1): finite, without edge, its antipode pi R
+away. Its groups and clusters (haloes above 1e13 suns, 1e-4 per Mpc^3; Tinker et al. 2008) are drawn nearest first
+by inverting the sphere's own volume, so no cluster's place depends on another's; distance is the arc between two
+points of the sphere. The expansion is one law, fixed in time (flat Lambda-CDM, measured H0 and Omega_m): comoving
+places stand still and distances grow as a(t); light crosses comoving space on conformal time, and beyond the event
+horizon light sent now never arrives. Each cluster's first mind is drawn from the home galaxy's expectation scaled by
+its stars; its SIGNAL is heard once its light has arrived and a home people has charted the sky beyond its cluster.
+Seed 7: the nearest group 5.5 Mpc away, and every one of the nearest 64 woke minds before the home galaxy did - the
+home peoples will hear older voices. The black holes at every galaxy's heart bounce what they swallow
+(Einstein-Cartan); in that theory each is the seed of a universe of its own - the tier beyond this one.
+
+## Guidance (guidance.py)
+
+Once a year each people among the stars weighs, through its own mind, what it could do for younger peoples it has
+met and the empty worlds its fleets reach: UPLIFT (teach the gap in each domain, as far as the two understand each
+other; the cost its teachers' passage - a knowledge unit is a thousand minds' year), SEED (set a designed people
+down on a world that can feed one), or nothing. Both are valued as the lives they lift, as far as the elder values
+strangers (its alignment toward the Light), and move it toward the Light. A people of the Dark never chooses either.
+
+## What a body burns (biosphere.metabolic_factor)
+
+No two species eat alike. Need per head follows the metabolic theory of ecology (Brown et al. 2004): B ~ M^(3/4) x
+the kinetic pace of its chemistry at its body's temperature - its homeworld's, from the light it evolved under (its
+star's luminosity over its orbit squared, Stefan-Boltzmann); plasmic bodies run at plasma temperature. Body mass
+comes from its homeworld's gravity (square-cube: the bodies a world bears scale as g^-3; a plasmic body has no frame)
+and its life history (a generation ~ M^(1/4): r-strategists small, K large). The land divides the same yield among
+them (Damuth's law): a carbon K-body on an Earth under the Sun eats 1; small r-bodies on a cold, heavy ice world eat
+a thirtieth as much and are thirty times as many; plasmic K-bodies at 10^4 K eat six times as much. Meals carry their
+fraction of a unit, as harvests do.

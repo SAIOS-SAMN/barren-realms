@@ -132,7 +132,7 @@ from xylarium.kernel import waystations as waystations_mod, liquidation as liqui
 from xylarium.kernel import observation as observation_mod, primordial as primordial_mod, relations as relations_mod, prices as prices_mod  # noqa: F401
 from xylarium.kernel import harvest as harvest_mod, energy as energy_mod, mirror as mirror_mod, contact as contact_mod, cohabit as cohabit_mod  # noqa: F401
 from xylarium.kernel import clock as clock_mod, scheduler as scheduler_mod, ways as ways_mod, designer as designer_mod, terraform as terraform_mod, occupation as occupation_mod, ages as ages_mod, society as society_mod  # noqa: F401
-from xylarium.kernel import cosmos as cosmos_mod, history as history_mod, institutions as institutions_mod, cluster as cluster_mod  # noqa: F401
+from xylarium.kernel import cosmos as cosmos_mod, history as history_mod, institutions as institutions_mod, cluster as cluster_mod, sphere as sphere_mod, guidance as guidance_mod  # noqa: F401
 from xylarium.kernel import blackhole as blackhole_mod, exodus as exodus_mod, culture as culture_mod  # noqa: F401
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod

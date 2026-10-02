@@ -33,7 +33,10 @@ class TestDyingStars(unittest.TestCase):
         self._at(ends - 0.01 * (ends - born))
         cosmos.quarter(self.k)
         self.assertGreater(cosmos.lum(self.sid), 100.0)                               # near the giant branch tip
-        self.assertLess(biosphere.carrying_capacity(self.k, self.p), k0 / 10)
+        if biosphere.metabolism_of(self.k, self.p) == "plasmic":
+            self.assertGreaterEqual(biosphere.carrying_capacity(self.k, self.p), k0)  # it lives on its giant's heat
+        else:
+            self.assertLess(biosphere.carrying_capacity(self.k, self.p), k0 / 10)
 
     def test_a_government_with_ships_carries_its_people_and_one_without_them_is_mourned(self):
         p, k = self.p, self.k

@@ -78,6 +78,8 @@ def adapt(kernel: Any, civ: Any, planet: Any) -> None:
     fl = physics.planet_flux(sec, planet) if sec is not None else F(1)
     civ.home_type = planet.planet_type
     civ.light_optimum = f"{fl.numerator}/{fl.denominator}" if fl > 0 else "1/1"
+    g = physics.surface_gravity(planet)
+    civ.home_gravity = f"{g.numerator}/{g.denominator}" if g > 0 else "1/1"
 
 
 def _people(kernel: Any, planet: Any) -> Any:
@@ -146,7 +148,9 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
            cosmos.lum(planet.sector_id),
            getattr(civ, "light_optimum", None), tailings // 500,
            round(genome.value(planet, "light"), 3), round(genome.value(planet, "tolerance"), 3),
-           round(genome.value(planet, "chemistry"), 3), str((getattr(planet, "society", None) or {}).get("terraform")))
+           round(genome.value(planet, "chemistry"), 3), str((getattr(planet, "society", None) or {}).get("terraform")),
+           round(genome.value(planet, "birth"), 3), round(genome.value(planet, "temperature"), 3),
+           getattr(civ, "clade", None))
     if citadel is None and habitats is None and metabolism is None and kernel is not None \
             and hasattr(kernel, "caches"):
         from xylarium.kernel import cache
@@ -156,10 +160,18 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
 
 def _reckon(kernel: Any, planet: Any, metabolism: Optional[str], tier: int, habs: int) -> Dict[str, int]:
     ld = land(kernel, planet, metabolism)
+    if metabolism is not None:                             # a body not yet living here (a design, a forecast)
+        from xylarium.config import METABOLISM_STRATEGY
+        sec = kernel.sectors.get(planet.sector_id) if kernel is not None else None
+        nf = metabolic_factor(metabolism, METABOLISM_STRATEGY.get(metabolism, "K"),     # bred for this world
+                              home_flux=float(physics.planet_flux(sec, planet)) if sec is not None else None,
+                              home_gravity=float(physics.surface_gravity(planet)))
+    else:
+        nf = need_factor(planet, kernel)
     natural = ld["area"] * ld["chemistry"] * ld["light"] * ld["season"]
     from xylarium.kernel.geology import pollution_factor
     k = int(PEOPLE_PER_EARTH_AREA * _TECH.get(tier, _TECH[max(_TECH)]) * (natural + _HAB_AREA * habs)
-            * pollution_factor(planet))
+            * pollution_factor(planet) / F(nf).limit_denominator(10 ** 6))              # Damuth's law
     food = _CROP * ld["light"] * ld["season"]
     rate = min(_BIRTH, food) if k > 0 else F(0)
     prof = {"k": k, "food_rate_micro": int(food * MICRO), "rate_micro_per_cycle": int(rate * MICRO / _YEAR),
@@ -196,14 +208,65 @@ def harvest(kernel: Any, planet: Any, k: int) -> int:
     """Organics the farms bring in this cycle: the land's yield, up to what K people would eat.
     Farmers feed themselves and a quarter more, up to the land; the fraction of a unit is carried."""
     fed = min(planet.population * 5 // 4, k)
-    total = fed * FOOD_PER_THOUSAND + int(getattr(planet, "harvest_carry", 0) or 0)
+    total = int(fed * FOOD_PER_THOUSAND * need_factor(planet, kernel)) + int(getattr(planet, "harvest_carry", 0) or 0)
     planet.harvest_carry = total % 1000
     return total // 1000
 
 
+# ---------------------------------------------------------------------- what a body burns (metabolic theory)
+GRAVITY_MASS_POWER = 3.0        # square-cube: a skeleton's stress ~ M^(1/3) g, so the bodies a world bears ~ g^-3
+
+
+def metabolic_factor(metabolism: str, strat: str, birth: float = 1.0, temperature: float = 1.0,
+                     home_flux: Optional[float] = None, home_gravity: Optional[float] = None) -> float:
+    """A body's need, per head, over a K-strategist carbon body's on Earth under the Sun (Brown et al. 2004, the
+    metabolic theory of ecology): B ~ M^(3/4) x the kinetic pace of its chemistry at its body's temperature.
+
+      temperature  its homeworld's: the light it evolved under - its star's luminosity over its orbit squared -
+                   at radiative equilibrium (Stefan-Boltzmann); plasmic minds run in ionised hydrogen. Pace ~ sqrt T.
+      mass         from its homeworld's gravity (square-cube: the bodies a world supports scale as g^-3 - a light
+                   world grows large, hungry bodies; a heavy one small, frugal ones; a plasmic body has no frame to
+                   bear) and its life history (a generation ~ M^(1/4): r-strategists are small, K large;
+                   fertility.CEILING x its heritable birth factor).
+
+    The land holds inversely many such bodies (Damuth's law): a world's yield is the same food, divided by size."""
+    from xylarium.kernel import fertility, laws
+    c = fertility.CEILING.get(strat, fertility.CEILING["K"]) * max(1e-6, birth)
+    mass = (fertility.CEILING["K"] / c) ** 4
+    if metabolism == "plasmic":
+        t = laws.T_PLASMA * temperature
+    else:
+        t = laws.stefan_boltzmann_temperature(home_flux if home_flux else float(_OPT.get(metabolism, F(1)))) \
+            * temperature
+        mass *= max(1e-3, home_gravity if home_gravity else 1.0) ** -GRAVITY_MASS_POWER
+    return mass ** 0.75 * laws.thermal_speed(t)
+
+
+def need_factor(planet: Any, kernel: Any = None) -> float:
+    """This world's people's metabolic factor (its species, as its genome has drifted)."""
+    from xylarium.kernel import fertility, genome
+    kernel = _kernel(kernel)
+    civ = getattr(planet, "civilization", None)
+    flux = float(F(civ.light_optimum)) if civ is not None and getattr(civ, "light_optimum", None) else None
+    grav = float(F(civ.home_gravity)) if civ is not None and getattr(civ, "home_gravity", None) else None
+    return metabolic_factor(metabolism_of(kernel, planet), fertility.strategy(kernel, planet),
+                            genome.birth_factor(planet), genome.temperature_factor(planet), flux, grav)
+
+
 def consumption(planet: Any) -> int:
     from xylarium.kernel.fertility import food_factor
-    return max(1, int(planet.population * FOOD_PER_THOUSAND * food_factor(planet)) // 1000)
+    return max(1, int(planet.population * FOOD_PER_THOUSAND * food_factor(planet) * need_factor(planet)) // 1000)
+
+
+def meal(planet: Any) -> int:
+    """What the world eats this cycle: its exact need, the fraction of a unit carried - as its harvest carries its
+    own (a band of 845 eats 0.845 units a cycle, not a whole one it cannot grow)."""
+    from xylarium.kernel.fertility import food_factor
+    soc = planet.society
+    total = int(planet.population * FOOD_PER_THOUSAND * food_factor(planet) * need_factor(planet)) \
+        + int(soc.get("meal_carry", 0) or 0)
+    soc["meal_carry"] = total % 1000
+    return total // 1000
 
 
 def births(kernel: Any, planet: Any, ceiling: int) -> int:

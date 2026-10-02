@@ -55,8 +55,9 @@ class TestShear(unittest.TestCase):
     def test_lanes_open_and_close_with_the_shear_and_stretch_between(self):
         k = GameKernel(seed=7, genesis="cosmic")
         k.activate()
-        home = tuple(int(x) for x in cosmos.stats(k)["materialised"][0].split(","))
+        home = cosmos.cell_of_sector(k, 1)
         cosmos.entered(k, 1)                                                            # see the cells around it
+        self.assertTrue(cosmos.materialised(k, home))
         across = [c for c in (tuple(int(x) for x in key.split(",")) for key in cosmos.stats(k)["materialised"])
                   if c[0] != home[0]]
         self.assertTrue(across)
@@ -156,7 +157,8 @@ class TestMindsArise(unittest.TestCase):
         self.assertFalse(any(p.natives for s in self.k.sectors.values() for p in s.planets))
         st = cosmos.stats(self.k)
         self.assertAlmostEqual(cosmos.deep_gyr(self.k), st["epoch0"])
-        self.assertEqual(len(self.k.sectors), 100)                                       # only the first witness's region
+        self.assertEqual(list(self.k.sectors), [1])                                     # only its own system
+        self.assertEqual(st["materialised"], [])                                         # its sky is not yet map
 
     def test_scales_are_audited_against_expectation(self):
         a = cosmos.audit(self.k)
@@ -177,7 +179,8 @@ class TestMindsArise(unittest.TestCase):
         lines = cosmos.quarter(k)
         self.assertTrue(any("A mind arises" in l for l in lines))
         self.assertEqual(cosmos.stats(k)["arisen"], 2)
-        self.assertGreater(len(k.sectors), 100)
+        self.assertEqual(len(k.sectors), 2)                                              # its own system, no more
+        self.assertEqual(cosmos.stats(k)["materialised"], [])
 
 
 class TestHistoryLedger(unittest.TestCase):
