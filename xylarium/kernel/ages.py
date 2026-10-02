@@ -14,7 +14,8 @@ crowded or empty. Nothing stops at spaceflight; the clock simply goes on.
   classic      a ready-made galaxy already among the stars (the settled genesis; the TradeWars console)
 
 Running to a later age takes the clock time it takes; each age reached is kept (runs/eras/seed<N>/<age>.json), so
-the next player of that seed steps in at once - the same universe, since the clock is lockstep (scheduler.py).
+the next player of that seed steps in at once - the same universe, since the clock is lockstep (scheduler.py)
+and the kept ages are filed under the kernel's own laws (a digest of its source).
 
 A player is a STEWARD of one people, whatever the age: bound to its homeworld, deciding what its council could -
 its inquiry, its growth, farming, a state, works, and its society's gauges (society.py) - each only as its physics
@@ -46,8 +47,26 @@ def age(key: str) -> Dict[str, Any]:
     return next(a for a in AGES if a["key"] == key)
 
 
+_VERSION: List[str] = []
+
+
+def version() -> str:
+    """The kernel's own laws, as a digest of its source: an age kept by other laws is another universe."""
+    if not _VERSION:
+        import hashlib
+        h = hashlib.sha1()
+        here = os.path.dirname(os.path.abspath(__file__))
+        for d in (here, os.path.dirname(here)):
+            for name in sorted(os.listdir(d)):
+                if name.endswith(".py"):
+                    with open(os.path.join(d, name), "rb") as f:
+                        h.update(name.encode() + f.read())
+        _VERSION.append(h.hexdigest()[:10])
+    return _VERSION[0]
+
+
 def _era_path(seed: int, key: str, root: Optional[str] = None) -> str:
-    return os.path.join(root or ERAS_DIR, f"seed{seed}", f"{key}.json")
+    return os.path.join(root or ERAS_DIR, f"seed{seed}", version(), f"{key}.json")
 
 
 def cached(seed: int, root: Optional[str] = None) -> List[str]:
