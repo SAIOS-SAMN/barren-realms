@@ -148,10 +148,13 @@ def main() -> None:
     ap.add_argument("--show", type=int, default=0)
     ap.add_argument("--velocity", type=float, default=None,
                     help="cycles per wall-second (0: as fast as the machine allows); also read live from <dir>/seedN/velocity")
-    ap.add_argument("--genesis", default="settled", choices=("settled", "primordial", "forager", "cosmic", "cosmic:lonely", "cosmic:neighbourly", "cosmic:teeming",
-                             "cosmic:lonely:lush", "cosmic:neighbourly:lush", "cosmic:teeming:lush"),
-                    help="primordial: every people on its homeworld, nothing spacefaring (no bots)")
+    ap.add_argument("--genesis", default="settled",
+                    help="settled | primordial | forager | cosmic[:pace[:kind[:laws]]], e.g. cosmic:teeming:lush or "
+                         "cosmic:teeming:measured:alpha=1.02 (primordial: every people on its homeworld, no bots)")
     args = ap.parse_args()
+    head = args.genesis.split(":")
+    if head[0] not in ("settled", "primordial", "forager", "cosmic") or (len(head) > 1 and head[0] != "cosmic"):
+        ap.error(f"unknown genesis {args.genesis!r}")
     home = os.path.join(args.dir, f"seed{args.seed}")
     os.makedirs(os.path.join(home, "crash"), exist_ok=True)
     snap, obs_path = os.path.join(home, "snapshot.json"), os.path.join(home, "observations.jsonl")
