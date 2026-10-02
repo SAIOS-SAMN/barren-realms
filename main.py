@@ -148,7 +148,8 @@ def _begin_steward(args, key, player_id, save_file):
         if cycle % 1000 == 0:
             latest = max(firsts.items(), key=lambda kv: kv[1]["cycle"])[0].replace("_", " ") if firsts else "-"
             print(c_gray(f"  year {cycle // 100}: {len(firsts)} firsts so far (latest: {latest})"), flush=True)
-    kernel = ages.begin(args.seed, key, progress)
+    pace = steward_ui.choose_pace()
+    kernel = ages.begin(args.seed, key, progress, pace=pace)
     print(c_green(f"  You step in at year {kernel.cycle_count // 100}."))
     planet = steward_ui.choose_people(kernel)
     ages.bind(kernel, player_id, args.name, planet)

@@ -123,9 +123,10 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
 def choose_age(seed: int = 0) -> str:
     print(bold(c_cyan("\n=== XYLARIUM: WHERE ON THE CLOCK WILL YOU STEP IN? ===")))
     print(c_gray("One universe, one clock: every age is this universe run to the moment its milestone first happens."))
-    kept = ages.cached(seed)
+    kept = {pace: ages.cached(seed, pace=pace) for pace in ("lonely", "neighbourly", "teeming")}
     for i, a in enumerate(ages.AGES, 1):
-        ready = c_green(" [kept]") if a["key"] in kept else ""
+        paces = [pace for pace, keys in kept.items() if a["key"] in keys]
+        ready = c_green(f" [kept: {', '.join(paces)}]") if paces else ""
         print(f"  {c_gold(f'[{i}]')} {bold(a['name'])}{ready}  {c_gray(a['blurb'])}")
     print(c_gray("  Ages not yet kept for this seed are reached by running the clock (it can take a while; each is "
                  "kept for next time)."))
@@ -134,6 +135,23 @@ def choose_age(seed: int = 0) -> str:
     except (KeyboardInterrupt, EOFError):
         raw = ""
     return ages.AGES[int(raw) - 1]["key"] if raw.isdigit() and 1 <= int(raw) <= len(ages.AGES) else "forager"
+
+
+def choose_pace() -> str:
+    print(bold(c_cyan("\n=== HOW CROWDED IS THIS COSMOS? ===")))
+    print(c_gray("A law of the universe, chosen once: how much deep time - the evolution of life, the turning of the "
+                 "galaxy, the lives of stars - passes for each year of history."))
+    opts = [("lonely", "0.1 Myr a year: your people may reach the stars long before another mind arises"),
+            ("neighbourly", "1 Myr a year: neighbours arise while you build (the default)"),
+            ("teeming", "10 Myr a year: minds arise within lifetimes of each other; the galaxy visibly turns, "
+                        "and stars die within a reign")]
+    for i, (k, t) in enumerate(opts, 1):
+        print(f"  {c_gold(f'[{i}]')} {bold(k.title())}  {c_gray(t)}")
+    try:
+        raw = input(c_gold("Pace [2] > ")).strip()
+    except (KeyboardInterrupt, EOFError):
+        raw = ""
+    return opts[int(raw) - 1][0] if raw.isdigit() and 1 <= int(raw) <= 3 else "neighbourly"
 
 
 def choose_people(kernel: Any) -> Any:

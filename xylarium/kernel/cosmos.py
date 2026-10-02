@@ -28,8 +28,16 @@ THE GALAXY (Milky Way measurements as rulers and data points, not as a template)
     closed form, any moment as cheap as any other; each star keeps its own worlds on their own orbits.
 
 THE CLOCKS ARE TIERED. A system's worlds turn on historical time (100 cycles to a year). The galaxy - its rotation,
-its stars' lives, the evolution of life - turns on deep time: DEEP_YEARS_PER_YEAR years of it pass for each year
-of the clock. That is the one ruler mapping the two; everything else is physics.
+its stars' lives, the evolution of life - turns on deep time: ruler(kernel) years of it pass for each year of the
+clock. That is the one ruler mapping the two, and it is a law of each universe, chosen once at its genesis (PACES:
+lonely 0.1 Myr a year - the second mind arrives long after the first has reached the stars; neighbourly 1 Myr;
+teeming 10 Myr - minds arise within a lifetime of each other and the galaxy turns visibly); everything else is
+physics.
+
+STARS AGE. Each star lives SUN_MS_GYR x M^-2.5 from when its ring formed. Over its last tenth it brightens toward
+the giant phase and its worlds feed fewer and fewer (their carrying capacity falls with what is left of it) - a
+people sees its end coming for centuries; then the star dies and its worlds feed no one. A star already dead when
+its region is first witnessed is found as a remnant with lifeless worlds.
 
 MINDS ARISE (Carter's hard steps). A world that can carry life passes HARD_STEPS improbable steps - the origin of
 life, complex cells, multicellular life, intelligence - each an exponential wait of mean STEP_GYR / (h x metals),
@@ -52,7 +60,8 @@ R_D_KPC = 3.0                   # the disc's scale length (Milky Way, a data poi
 R_MAX_KPC = 5 * R_D_KPC         # the optical disc: five scale lengths
 CELL_KPC = 0.5                  # a cell of the disc, carried by one region (40 sectors)
 V_FLAT_KMS = 220.0              # flat rotation speed (Milky Way)
-DEEP_YEARS_PER_YEAR = 1.0e6     # deep time per clock year: the one ruler between the tiers' clocks
+PACES = {"lonely": 1.0e5, "neighbourly": 1.0e6, "teeming": 1.0e7}   # deep years per clock year, chosen at genesis
+DEEP_YEARS_PER_YEAR = PACES["neighbourly"]                          # the default: the one ruler between the tiers' clocks
 GALAXIES_IN_CLUSTER = 40        # the home cluster's galaxies (Local Group scale); only the home galaxy is simulated
 # ---------------------------------------------------------------------- laws and measurements
 FE_GRADIENT = 0.06              # dex/kpc: iron's radial gradient (Milky Way disc)
@@ -153,11 +162,21 @@ def omega(r: float) -> float:
     return V_FLAT_KMS * KPC_PER_MYR_AT_1KMS / max(0.05, r)
 
 
+def pace(kernel: Any) -> str:
+    p = ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("pace") or "neighbourly"
+    return p if p in PACES else "neighbourly"
+
+
+def ruler(kernel: Any) -> float:
+    """Deep years per clock year: a law of this universe, chosen once at its genesis."""
+    return PACES[pace(kernel)]
+
+
 def deep_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
     """The deep-time epoch (Gyr since the galaxy began forming) at a clock cycle."""
     st = stats(kernel)
     c = kernel.cycle_count if cycle is None else cycle
-    return float(st.get("epoch0", 0.0)) + (c / 100.0) * DEEP_YEARS_PER_YEAR / 1.0e9
+    return float(st.get("epoch0", 0.0)) + (c / 100.0) * ruler(kernel) / 1.0e9
 
 
 # ---------------------------------------------------------------------- minds arise (hard steps)
@@ -296,6 +315,7 @@ def materialise(kernel: Any, cell: Tuple[int, int], why: str) -> Optional[str]:
             if s in kernel.sectors[w].warps:
                 kernel.sectors[w].warps.remove(s)
     _furnish(kernel, ids, cell)
+    _stars(kernel, ids)                                   # found as its stars are now (a dead one, a remnant)
     st["materialised"].append(key)
     _join(kernel, cell)
     from xylarium.kernel import topology
@@ -350,6 +370,72 @@ def _join(kernel: Any, cell: Tuple[int, int]) -> None:
         if nb[0] == cell[0] and materialised(kernel, nb):
             _link(kernel, mine, region_of_cell(kernel, nb), True)
     _shear(kernel)
+
+
+# ---------------------------------------------------------------------- the stars' lives
+AGEING_SHARE = 0.1              # the last tenth of a star's main-sequence life: it brightens toward the giant phase
+
+
+def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
+    """(when the star formed, when it leaves the main sequence), in deep Gyr: its ring's formation, its mass's life."""
+    from xylarium.kernel import physics
+    g = stats(kernel)["place"].get(str(sector_id))
+    sec = kernel.sectors.get(sector_id)
+    if not g or sec is None:
+        return None
+    if "remnant" in (getattr(sec, "star_type", "") or "").lower():
+        return (0.0, 0.0)
+    try:
+        m = float(physics.star(sec)["mass"])
+    except Exception:
+        return None
+    born = formed_gyr(g["r"])
+    return born, born + SUN_MS_GYR * max(0.1, m) ** -2.5
+
+
+def star_factor(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> float:
+    """1 on the main sequence; falling to 0 over its last tenth; 0 once it has died."""
+    life = star_life(kernel, sector_id)
+    if life is None:
+        return 1.0
+    born, ends = life
+    t = deep_gyr(kernel) if at_gyr is None else at_gyr
+    if t >= ends:
+        return 0.0
+    span = AGEING_SHARE * (ends - born)
+    return 1.0 if t <= ends - span else max(0.0, (ends - t) / span)
+
+
+def _stars(kernel: Any, sector_ids: Optional[List[int]] = None) -> List[str]:
+    """Each witnessed star's worlds feed what its light still allows; its swelling and its death are history."""
+    from xylarium.kernel import history
+    logs = []
+    ids = sector_ids if sector_ids is not None else [int(s) for s in stats(kernel)["place"]]
+    for sid in ids:
+        sec = kernel.sectors.get(sid)
+        if sec is None or not sec.planets:
+            continue
+        f = round(star_factor(kernel, sid), 4)
+        was = float(sec.planets[0].society.get("star_k", 1.0))
+        if f == was:
+            continue
+        for p in sec.planets:
+            p.society["star_k"] = f
+        peopled = [p for p in sec.planets if p.population > 0]
+        if sector_ids is not None:
+            continue                                   # found as it is when first witnessed: no news
+        if was >= 1.0 > f:
+            history.event(kernel, "STAR_AGEING", f"The star of {sec.name} begins to swell", sector_id=sid,
+                          actors=[getattr(getattr(p, "civilization", None), "name", p.name) for p in peopled],
+                          cause="the last tenth of its main-sequence life")
+            if peopled:
+                logs.append(f"[COSMOS] The star of {sec.name} begins to swell: its worlds will feed fewer each year.")
+        if was > 0.0 >= f:
+            history.event(kernel, "STAR_DEATH", f"The star of {sec.name} dies", sector_id=sid,
+                          actors=[getattr(getattr(p, "civilization", None), "name", p.name) for p in peopled],
+                          magnitude=sum(p.population for p in peopled), cause="it left the main sequence")
+            logs.append(f"[COSMOS] The star of {sec.name} dies.")
+    return logs
 
 
 # ---------------------------------------------------------------------- the shear
@@ -508,7 +594,7 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
                 continue
             metab = max(designer.CLADE_OF, key=lambda m: (habitability(m, p.planet_type), m))
             h = habitability(metab, p.planet_type)
-            if h < 0.6:
+            if h < 0.6 or float(p.society.get("star_k", 1.0)) <= 0.0:
                 continue
             try:
                 lived = SUN_MS_GYR * float(physics.star(sec)["mass"]) ** -2.5 >= rec["epoch"] - formed_gyr(
@@ -589,7 +675,7 @@ def _reach(kernel: Any) -> List[str]:
 def quarter(kernel: Any) -> List[str]:
     if not is_cosmic(kernel):
         return []
-    return _due(kernel) + _reach(kernel) + _shear(kernel)
+    return _due(kernel) + _reach(kernel) + _shear(kernel) + _stars(kernel)
 
 
 def audit(kernel: Any) -> Dict[str, Any]:

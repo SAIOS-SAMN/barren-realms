@@ -174,7 +174,10 @@ def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, h
     soc = getattr(planet, "society", None) or {}
     air = float(soc.get("atmosphere", 1.0))
     way = float(soc.get("way_k", 1.0))                 # foragers live a link up the food chain (ways.py)
-    return k if (air >= 1.0 and way >= 1.0) else int(k * min(1.0, air) * min(1.0, way))
+    sun = float(soc.get("star_k", 1.0))                # a star ageing past its main sequence (cosmos.py)
+    if air >= 1.0 and way >= 1.0 and sun >= 1.0:
+        return k
+    return int(k * min(1.0, air) * min(1.0, way) * max(0.0, min(1.0, sun)))
 
 
 def food_rate(kernel: Any, planet: Any) -> F:

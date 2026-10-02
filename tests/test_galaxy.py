@@ -69,6 +69,32 @@ class TestShear(unittest.TestCase):
             self.assertGreaterEqual(f, 1.0)
 
 
+class TestPaceAndStars(unittest.TestCase):
+    def test_the_pace_is_a_law_of_the_universe(self):
+        gaps = {}
+        for pace in ("lonely", "neighbourly", "teeming"):
+            k = GameKernel(seed=7, genesis=f"cosmic:{pace}")
+            self.assertEqual(cosmos.pace(k), pace)
+            m = cosmos.stats(k)["minds"]
+            gaps[pace] = (m[1]["epoch"] - m[0]["epoch"]) * 1e9 / cosmos.ruler(k)
+        self.assertAlmostEqual(gaps["lonely"], 10 * gaps["neighbourly"], places=3)
+        self.assertAlmostEqual(gaps["neighbourly"], 10 * gaps["teeming"], places=3)
+
+    def test_stars_age_and_die_and_their_worlds_feed_no_one(self):
+        from xylarium.kernel import biosphere
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        sid, life = next((s.id, cosmos.star_life(k, s.id)) for s in k.sectors.values()
+                         if s.planets and cosmos.star_life(k, s.id) and cosmos.star_life(k, s.id)[1] > cosmos.deep_gyr(k))
+        born, ends = life
+        self.assertEqual(cosmos.star_factor(k, sid, born + 0.5 * (ends - born)), 1.0)
+        self.assertAlmostEqual(cosmos.star_factor(k, sid, ends - 0.05 * (ends - born)), 0.5, places=6)
+        self.assertEqual(cosmos.star_factor(k, sid, ends + 0.01), 0.0)
+        p = k.sectors[sid].planets[0]
+        p.society["star_k"] = 0.0
+        self.assertEqual(biosphere.carrying_capacity(k, p), 0)
+
+
 class TestMindsArise(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -98,7 +124,7 @@ class TestMindsArise(unittest.TestCase):
         k = GameKernel(seed=7, genesis="cosmic")
         k.activate()
         nxt = cosmos.stats(k)["minds"][1]
-        years = (nxt["epoch"] - cosmos.stats(k)["epoch0"]) * 1e9 / cosmos.DEEP_YEARS_PER_YEAR
+        years = (nxt["epoch"] - cosmos.stats(k)["epoch0"]) * 1e9 / cosmos.ruler(k)
         k.cycle_count = int(years * 100) + 1
         lines = cosmos.quarter(k)
         self.assertTrue(any("A mind arises" in l for l in lines))

@@ -102,6 +102,8 @@ def _shocks(kernel: Any, planet: Any) -> Dict[str, float]:
     ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
     if ss < 1.0:
         out["famine"] = max(out.get("famine", 0.0), 1.0 - ss)
+    if float(soc.get("star_k", 1.0)) < 1.0:
+        out["sun"] = 1.0 - float(soc.get("star_k", 1.0))           # its sun swelling toward its death
     if float(soc.get("dynamo", 1.0)) < 0.5:
         out["sky"] = 1.0 - float(soc.get("atmosphere", 1.0))      # the sky failing: its air taken by the stars' wind
     return out
@@ -127,6 +129,7 @@ _MYTH = {
     "bombarded": "fire fell from the dark between the stars, and {moons_say}",
     "sky": "the sky itself thinned, and the {colour} sun's breath reached the ground; {moons_say}",
     "strife": "brother rose against brother under the {colour} sun; {moons_say}",
+    "sun": "the {colour} sun grew great and hungry, and burned the fields it had fed; {moons_say}",
 }
 
 

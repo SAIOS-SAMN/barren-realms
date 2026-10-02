@@ -19,6 +19,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--to", default="lanes", choices=ages.ORDER)
+    ap.add_argument("--pace", default="neighbourly", choices=("lonely", "neighbourly", "teeming"))
     args = ap.parse_args()
     t0 = time.perf_counter()
 
@@ -26,9 +27,9 @@ def main() -> None:
         if cycle % 2500 == 0:
             print(f"year {cycle // 100}: {len(firsts)} firsts, {cycle / (time.perf_counter() - t0):.1f} cycles/s",
                   flush=True)
-    k = ages.begin(args.seed, args.to, progress)
+    k = ages.begin(args.seed, args.to, progress, pace=args.pace)
     firsts = k.state["genesis"]["firsts"]
-    print(f"seed {args.seed} at year {k.cycle_count // 100}; kept: {ages.cached(args.seed)}")
+    print(f"seed {args.seed} ({args.pace}) at year {k.cycle_count // 100}; kept: {ages.cached(args.seed, pace=args.pace)}")
     for key in ages.ORDER[1:]:
         m = ages.age(key)["until"]
         print(f"  {ages.age(key)['name']:<22} {('year %.1f' % firsts[m]['year']) if m in firsts else 'not yet'}")

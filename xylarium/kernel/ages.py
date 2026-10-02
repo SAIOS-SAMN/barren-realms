@@ -65,17 +65,17 @@ def version() -> str:
     return _VERSION[0]
 
 
-def _era_path(seed: int, key: str, root: Optional[str] = None) -> str:
-    return os.path.join(root or ERAS_DIR, f"seed{seed}", version(), f"{key}.json")
+def _era_path(seed: int, key: str, root: Optional[str] = None, pace: str = "neighbourly") -> str:
+    return os.path.join(root or ERAS_DIR, f"seed{seed}", version(), pace, f"{key}.json")
 
 
-def cached(seed: int, root: Optional[str] = None) -> List[str]:
-    """The ages of this seed already reached (and kept)."""
-    return [k for k in ORDER if os.path.exists(_era_path(seed, k, root))]
+def cached(seed: int, root: Optional[str] = None, pace: str = "neighbourly") -> List[str]:
+    """The ages of this seed (at this pace) already reached (and kept)."""
+    return [k for k in ORDER if os.path.exists(_era_path(seed, k, root, pace))]
 
 
 def begin(seed: int, key: str, progress: Optional[Callable[[int, Dict[str, Any]], None]] = None,
-          root: Optional[str] = None, max_years: Optional[int] = None) -> Any:
+          root: Optional[str] = None, max_years: Optional[int] = None, pace: str = "neighbourly") -> Any:
     """The universe of this seed at the start of this age: the latest age already kept at or before it, run on the
     clock until the age's milestone first happens (keeping every age passed on the way)."""
     from xylarium.kernel.engine import GameKernel
@@ -89,13 +89,13 @@ def begin(seed: int, key: str, progress: Optional[Callable[[int, Dict[str, Any]]
     target = ORDER.index(key)
     kernel = None
     for k in reversed(ORDER[:target + 1]):
-        if os.path.exists(_era_path(seed, k, root)):
-            kernel = StatePersistence.load_from_file(_era_path(seed, k, root))
+        if os.path.exists(_era_path(seed, k, root, pace)):
+            kernel = StatePersistence.load_from_file(_era_path(seed, k, root, pace))
             if kernel is not None:
                 break
     if kernel is None:
-        kernel = GameKernel(seed=seed, genesis="cosmic")        # the clock starts when the first mind arises
-        _keep(kernel, seed, "forager", root)
+        kernel = GameKernel(seed=seed, genesis=f"cosmic:{pace}")   # the clock starts when the first mind arises
+        _keep(kernel, seed, "forager", root, pace)
     kernel.activate()
     firsts = kernel.state.setdefault("genesis", {}).setdefault("firsts", {})
     limit = (max_years if max_years is not None else 10 ** 6) * 100
@@ -108,15 +108,15 @@ def begin(seed: int, key: str, progress: Optional[Callable[[int, Dict[str, Any]]
                 progress(kernel.cycle_count, firsts)
         if until not in firsts:
             break
-        if not os.path.exists(_era_path(seed, k, root)):
-            _keep(kernel, seed, k, root)
+        if not os.path.exists(_era_path(seed, k, root, pace)):
+            _keep(kernel, seed, k, root, pace)
     kernel.state["genesis"]["age"] = key
     return kernel
 
 
-def _keep(kernel: Any, seed: int, key: str, root: Optional[str]) -> None:
+def _keep(kernel: Any, seed: int, key: str, root: Optional[str], pace: str = "neighbourly") -> None:
     from xylarium.persistence.store import StatePersistence
-    path = _era_path(seed, key, root)
+    path = _era_path(seed, key, root, pace)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     StatePersistence.save_to_file(kernel, path)
 
