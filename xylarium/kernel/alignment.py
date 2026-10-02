@@ -205,7 +205,7 @@ def vow_forbids(captain: Any, action: Any, kwargs: Dict[str, Any], kernel: Any) 
                                                   in ("pirate", "crusader"))
             if not lawful_prey:
                 return "Your oath of Light forbids opening fire on a captain who has done no wrong."
-        if name in ("ATTACK_PLANET", "SURFACE_INVADE", "COVERT_OP"):
+        if name in ("ATTACK_PLANET", "SURFACE_INVADE", "COVERT_OP", "STRIKE_WORLD"):
             return "Your oath of Light forbids war on a living world."
         if name == "NATIVE_INTERACT" and sub in ("exploit", "convert"):
             return "Your oath of Light forbids exploiting a people who cannot yet reach the stars."

@@ -525,6 +525,7 @@ def lineage(seed: Any, i: int, j: int, k: int, w: int, slot: Dict[str, Any], wor
     exponential wait of its ladder's mean; an impact sends a lineage back to the start of its current rung - life
     itself, once begun, is never undone), and whether it was sterilised. The furthest lineage (soonest, at a tie)
     is the world's life. seeded: region -> the epoch life of that chemistry could arrive from a neighbour."""
+    from xylarium.kernel import life
     t0 = slot["born"] + CRUST_GYR
     if t0 >= HORIZON_GYR:
         return None
@@ -534,26 +535,9 @@ def lineage(seed: Any, i: int, j: int, k: int, w: int, slot: Dict[str, Any], wor
         rng = _rng(seed, "life", i, j, k, w, region)
         horizon = min(ch["end"], HORIZON_GYR)
         steril = t0 + rng.random() * (horizon - t0) if rng.random() >= ch["live"] and horizon > t0 else float("inf")
-        t, times, setbacks = t0, [], 0
-        for s, step in enumerate(steps):
-            need = rng.expovariate(1.0 / max(1e-12, step["mean_gyr"]))
-            if s == 0:
-                if seeded and region in seeded:
-                    need = min(need, max(0.0, seeded[region] - t0))     # or carried here from a neighbour
-                t += need
-            elif mu <= 0:
-                t += need
-            else:
-                while t < horizon:
-                    x = rng.expovariate(mu)
-                    if x >= need:
-                        t += need
-                        break
-                    t += x                               # an impact: this rung's progress is lost
-                    setbacks += 1
-            if t > horizon or t > steril:
-                break
-            times.append(round(t, 6))
+        got = life.climb(rng, [x["mean_gyr"] for x in steps], t0, horizon, steril, mu,
+                         seeded.get(region) if seeded else None)
+        times, setbacks = got["times"], got["setbacks"]
         rec = {"region": region, "steps": times, "n": len(steps), "complete": ch["ladder"]["complete"],
                "setbacks": setbacks, "sterilised": steril < horizon, "mu": mu, "live": ch["live"], "end": ch["end"],
                "eps0": ch["ladder"]["eps0"], "means": [x["mean_gyr"] for x in steps]}
@@ -710,7 +694,7 @@ def limits(seed: Any, every: int = 7) -> Dict[str, Any]:
     audit for choosing other laws or a richer Big Bang."""
     cosmos = _disc()
     out = {"worlds": 0, "no_solvent": 0, "cannot_copy": 0, "star_died": 0, "sterilised": 0, "too_slow": 0,
-           "unfed": 0, "minds": 0, "alive": 0, "by_region": {}, "rungs": {}}
+           "unfed": 0, "minds": 0, "alive": 0, "by_region": {}, "rungs": {}, "epochs": []}
     for (i, j) in cosmos.cells()[::every]:
         for slot in cell(seed, i, j):
             if not slot.get("worlds") or slot["born"] + CRUST_GYR >= HORIZON_GYR:
@@ -732,6 +716,7 @@ def limits(seed: Any, every: int = 7) -> Dict[str, Any]:
                 if lin["complete"] and len(lin["steps"]) == lin["n"]:
                     if foragers(world, lin["region"], slot) >= VIABLE:
                         out["minds"] += 1
+                        out["epochs"].append([round(lin["steps"][-1], 4), slot["r"], lin["region"]])
                     else:
                         out["unfed"] += 1
                 elif lin["sterilised"]:

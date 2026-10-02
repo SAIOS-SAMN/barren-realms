@@ -1061,6 +1061,16 @@ class FactionManager:
             self.hallow_world(kernel, f, planet, settlers=ZEALOT_HALLOW_TROOPS)
             return True
         if plan["mode"] == "siege" and planet.owner_id and planet.faction_id != "ZEALOT":
+            # a captain carrying antimatter weighs breaking the world's air against taking it (ruin.py): its own
+            # mind and alignment decide - most never will
+            from xylarium.kernel import decide, ruin
+            strike = ruin.worth_striking(kernel, cap, planet)
+            if strike is not None:
+                take = decide.option("assault", 0.0, 0.0)
+                pick = decide.choose(kernel, [strike, take], decide.mind_of_captain(kernel, cap), cap.id, "strike")
+                if pick is strike:
+                    res = kernel.dispatch(cap.id, ActionType.STRIKE_WORLD, planet_id=planet.id, units=strike["units"])
+                    return bool(res.success)
             res = kernel.dispatch(cap.id, ActionType.ATTACK_PLANET, planet_id=planet.id)
             if res.success and planet.owner_id == cap.id:
                 self.hallow_world(kernel, f, planet, conquered=True)

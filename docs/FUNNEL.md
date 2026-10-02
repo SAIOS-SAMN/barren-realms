@@ -66,6 +66,15 @@ until a mind arises; a people then lives on the universal clock and reckons on i
   0.052 W/m^2 of heat, three rungs, a mind in ~7.6 Gyr on average (a 71% chance within its star's life) - against
   288 K, 1 bar, 0.087 W/m^2 and one history of ~4 Gyr.
 
+## Scenarios by conditioning (tools/scenarios.py)
+
+No premise is written in as a constant. The declared numbers are given ranges; hundreds of universes are drawn;
+each is tested on our own system at its own place and time (Earth's climb by many rolls of its dice, Mars's
+history); universes are weighted by how well their own formulas produce a premise ("a mind in the Mesozoic",
+"Mars green at some time"); and the galaxies of the weighted universes are built and measured. Worlds can be
+stripped of air or broken apart (ruin.py) only by peoples and captains who choose it, at the energy each world's own
+binding asks.
+
 ## What limits life (creation.limits)
 
 `creation.limits(seed)` sorts a sample of a universe's worlds by the first gate each fails. Seed 7, measured: of

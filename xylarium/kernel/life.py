@@ -112,6 +112,99 @@ def ladder(m: Dict[str, Any], area_m2: float, laws: Any = None) -> Optional[Dict
     return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k}
 
 
+ERASURE = "rung"                # how an impact erases: "rung" - a lineage loses its current rung's progress; "clades"
+                                # - a world holds CLADES lineages climbing at once, an impact kills each with the
+                                # chance its severity gives, survivors keep what they hold and radiate into the
+                                # emptied niches (the progenitors' choice of law; tools/scenarios.py compares them)
+CLADES = 1                      # lineages a world's complex life climbs in at once under "clades"
+KILL_SHAPE = 3.0                # an impact's severity is u^KILL_SHAPE (u uniform): most impacts kill few, rare ones
+                                # most (impactor sizes follow a power law)
+
+
+def climb(rng: Any, means: List[float], t0: float, horizon: float, steril: float, mu: float,
+          arrives: Optional[float] = None) -> Dict[str, Any]:
+    """A world's climb up its chemistry's rungs: each step an exponential wait of its mean; life itself (step 0) is
+    never undone and may arrive from a neighbour first; impacts at rate mu erase by the universe's ERASURE law.
+    Returns the epochs each step was reached by the lineage that got furthest, and how many setbacks it took."""
+    t, times, setbacks = t0, [], 0
+    for s, mean in enumerate(means):
+        need = rng.expovariate(1.0 / max(1e-12, mean))
+        if s == 0:
+            if arrives is not None:
+                need = min(need, max(0.0, arrives - t0))     # or carried here from a neighbour
+            t += need
+            if t > horizon or t > steril:
+                return {"times": times, "setbacks": 0}
+            times.append(round(t, 6))
+            if ERASURE == "clades" and len(means) > 1:
+                return _clades(rng, means, times, horizon, steril, mu)
+            continue
+        if mu <= 0:
+            t += need
+        else:
+            while t < horizon:
+                x = rng.expovariate(mu)
+                if x >= need:
+                    t += need
+                    break
+                t += x                               # an impact: this rung's progress is lost
+                setbacks += 1
+        if t > horizon or t > steril:
+            break
+        times.append(round(t, 6))
+    return {"times": times, "setbacks": setbacks}
+
+
+def _clades(rng: Any, means: List[float], base: List[float], horizon: float, steril: float,
+            mu: float) -> Dict[str, Any]:
+    """Several lineages climbing at once above life's first rung. An impact of severity u^KILL_SHAPE kills each with
+    that chance; the survivors keep what they have written and radiate to refill the emptied niches (each daughter
+    its own luck from there); if none survive, complex life begins again from the first rung above microbes."""
+    n = len(means)
+    t = base[0]
+    end = min(horizon, steril)
+
+    def fresh(done: List[float], s: int) -> Dict[str, Any]:
+        return {"done": list(done), "s": s, "left": rng.expovariate(1.0 / max(1e-12, means[s]))}
+    clades = [fresh(base, 1) for _ in range(max(1, CLADES))]
+    setbacks = 0
+    best = clades[0]
+    while True:
+        c = min(clades, key=lambda x: x["left"])
+        t_done = t + c["left"]
+        t_hit = t + rng.expovariate(mu) if mu > 0 else float("inf")
+        if min(t_done, t_hit) > end:
+            break
+        if t_done <= t_hit:
+            dt = c["left"]
+            for x in clades:
+                x["left"] -= dt
+            t = t_done
+            c["done"].append(round(t, 6))
+            c["s"] += 1
+            if len(c["done"]) > len(best["done"]):
+                best = {"done": list(c["done"])}
+            if c["s"] >= n:
+                return {"times": c["done"], "setbacks": setbacks}
+            c["left"] = rng.expovariate(1.0 / max(1e-12, means[c["s"]]))
+        else:
+            dt = t_hit - t
+            for x in clades:
+                x["left"] -= dt
+            t = t_hit
+            severity = rng.random() ** KILL_SHAPE
+            alive = [x for x in clades if rng.random() >= severity]
+            if len(alive) < len(clades):
+                setbacks += 1
+            if not alive:
+                alive = [fresh(base, 1)]
+            while len(alive) < max(1, CLADES):              # survivors radiate into the emptied niches
+                parent = alive[int(rng.random() * len(alive))]
+                alive.append(fresh(parent["done"], parent["s"]))
+            clades = alive
+    return {"times": best["done"], "setbacks": setbacks}
+
+
 def transfer_gyr(a_au: float, star_suns: float) -> float:
     """How long rock thrown off one world takes to reach its neighbours: a million of its orbits."""
     return EJECTA_ORBITS * math.sqrt(max(1e-9, a_au) ** 3 / max(1e-9, star_suns)) / 1.0e9

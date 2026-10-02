@@ -125,6 +125,10 @@ PLASMA_WINDOW = 0.002           # how much structure ionised matter can hold, ag
 PHOTO_LOW = 0.4                 # a photon that lifts an electron in a bonded molecule carries ~0.4 of a covalent bond or
                                 # more (conjugated molecules' excitation gaps; declared): below it, light only warms
 UNIT_G = 9.81                   # m/s^2: the unit of surface gravity
+SUN_LIFE_GYR = 10.0             # a sun's main-sequence life (creation.SUN_MS_GYR)
+LATENT_ROCK = 4.0e5             # J/kg: latent heat of melting silicate
+MAGMA_DEGAS = 0.9               # share of a melted mantle's volatiles a freezing magma ocean gives to the air
+                                # (Elkins-Tanton 2008; declared)
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -270,7 +274,11 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
     e_now = 0.0
     if orbit:
         e_now = orbits.eccentricity(orbit["el"]["e0"], orbit["el"]["e_forced"], orbit["el"]["tau_e"], age_gyr)
-    flux = s["lum"] / max(1e-6, a_au) ** 2 / math.sqrt(max(1e-6, 1.0 - e_now * e_now))   # a year's mean
+    # a star brightens through its main sequence as its core's helium raises its weight per particle (Gough 1981): a
+    # star's mass-light relation is read at 46% of its life (the Sun's now)
+    life = SUN_LIFE_GYR * L.nuclear * s["mass"] / max(1e-9, s["lum"])
+    bright = 1.0 / (1.0 + 0.4 * (1.0 - min(1.0, max(0.0, age_gyr) / life) / 0.46))
+    flux = bright * s["lum"] / max(1e-6, a_au) ** 2 / math.sqrt(max(1e-6, 1.0 - e_now * e_now))   # a year's mean
     t_form = T_UNIT * (s["lum"] / max(1e-6, a_au) ** 2) ** 0.25    # the nebula's temperature where it formed
     env = cosmos.density(r_kpc)                                 # its neighbourhood: flybys, the tide, supernovae
     zz = max(0.0, z)
@@ -296,7 +304,11 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
                                           mass, radius, icy)
     inside = interior.evolve(mass, radius, core, inv, age_gyr, t_eq0, tide, ice_share > 0.2, L)
     heat = inside["heat_w"] / HEAT_UNIT_W                       # in units of a unit world's heat
-    out = 1.0 - math.exp(-inside["processed"])                  # the share of its volatiles its heat has degassed
+    # degassed: what its magma ocean gave up as it froze - the share of the mantle its accretion melted, (3/5) G M / R
+    # against the heat and latent heat that melts rock - then what its convecting heat has melted since
+    accreted = 0.6 * GM_OVER_R_UNIT * mass / max(1e-6, radius)
+    melted = min(1.0, accreted / (interior.CP_ROCK * interior.LIQUIDUS_K * L.chem + LATENT_ROCK * L.chem))
+    out = 1.0 - (1.0 - MAGMA_DEGAS * melted) * math.exp(-inside["processed"])
     field = inside["field"]
     # escape: a hot exosphere under its star's ultraviolet, on a world of this mass and radius
     t_exo = THERMOSPHERE * t_eq0 * activity(s["mass"] / L.star_mass, age_gyr) ** 0.5 * (1.0 if field > 0 else 1.5)
@@ -422,7 +434,7 @@ def _climate(gas: Dict[str, float], to_bar: float, flux: float, hpm: float, gian
         tau = GREENHOUSE_TAU * math.sqrt(gh * opacity) * max(1e-9, sum(air.values())) ** BROADENING
         return t_eq * (1.0 + 0.75 * tau) ** 0.25, air, seas, albedo
     base = T_UNIT * flux ** 0.25 * 0.3 ** 0.25                # the coldest it could be: a bright, bare world
-    grid = [max(15.0, base) * 1.16 ** i for i in range(21)]   # up to ~20x that: the thickest greenhouse
+    grid = [max(15.0, base) * 1.08 ** i for i in range(40)]   # up to ~20x that: the thickest greenhouse
     vals = [model(t)[0] - t for t in grid]
     root = None
     for i in range(len(grid) - 1, 0, -1):                   # the warmest crossing from warming to cooling
@@ -437,8 +449,8 @@ def _climate(gas: Dict[str, float], to_bar: float, flux: float, hpm: float, gian
                     lo = mid
                 else:
                     hi = mid
-            root = (lo + hi) / 2
-            break
+            root = hi                    # the cooling side: at a thermostat's pin (ice melting, weathering starting),
+            break                        # the world sits liquid with what weathering leaves in its air
     if root is None:
         root = grid[0] if vals[0] < 0 else grid[-1]
     t, air, seas, albedo = model(root)
@@ -616,6 +628,43 @@ def media(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
     return out
 
 
+HISTORY_GYR = (0.3, 0.6, 1.0, 1.5, 2.0, 3.0, 4.5, 6.0, 8.0, 10.0)   # ages a world's history is read at (Gyr after
+                                                                    # its star's birth)
+
+
+def history(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: float, giant: bool, z: float,
+            r_kpc: float, ices: Optional[Dict[str, float]] = None, born: Optional[float] = None,
+            orbit: Optional[Dict[str, Any]] = None, core: Optional[float] = None,
+            ages: Any = HISTORY_GYR) -> List[Dict[str, Any]]:
+    """A world through time - not one settled moment: at each age its interior (hotter young, cooling), its air (what
+    its heat has outgassed, less what its star's fiercer youth has stripped), its climate and seas, and the media its
+    chemistry could run in. A world can be green once and frozen later, or the other way about; each age is the same
+    physics read at another time (build), with the star's own light at that age where the star swells (its main
+    sequence brightening is the caller's: lum_at)."""
+    out = []
+    for age in ages:
+        w = build(seed, star, a_au, radius, mass, giant, z, r_kpc, age, ices, born=born, orbit=orbit, core=core)
+        ms = media(seed, star, a_au, radius, mass, giant, z, r_kpc, age, world=w)
+        out.append({"age": age, "t_surf": w["t_surf"], "p_bar": w["p_bar"], "field": w["field"], "q": w.get("q", 0.0),
+                    "air": dict(w["air"]), "seas": dict(w["seas"]), "media": ms,
+                    "green": any(m["region"] == "biotic" for m in ms)})
+    return out
+
+
+def windows(hist: List[Dict[str, Any]], key: str = "green") -> List[List[float]]:
+    """The spans of a world's history (Gyr after its star's birth) in which a state held: e.g. when it was green."""
+    spans: List[List[float]] = []
+    prev = None
+    for n, h in enumerate(hist):
+        if h[key]:
+            start = h["age"] if n == 0 else (hist[n - 1]["age"] + h["age"]) / 2.0
+            if prev is None or not hist[n - 1][key]:
+                spans.append([start, h["age"]])
+            spans[-1][1] = h["age"] if n == len(hist) - 1 else (h["age"] + hist[n + 1]["age"]) / 2.0
+        prev = h
+    return spans
+
+
 def best(ms: List[Dict[str, Any]], metabolism: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """The richest medium (of a region, if asked)."""
     cands = [m for m in ms if metabolism is None or m["region"] == metabolism]
@@ -631,39 +680,52 @@ def fit(ms: List[Dict[str, Any]], metabolism: str) -> float:
 
 
 # ---------------------------------------------------------------------- a planet in play
-def of_planet(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
-    """The media of a planet on the map (cached on the world: its physics changes on deep time only)."""
-    from xylarium.kernel import cosmos, physics
+_STATES: Dict[Any, Any] = {}
+
+
+def state_of_planet(kernel: Any, planet: Any) -> Dict[str, Any]:
+    """The world as physics makes it now (build): its air, seas, temperature, heat - for what acts on it in play."""
+    from xylarium.kernel import cosmos, creation, physics
     sec = kernel.sectors.get(planet.sector_id) if kernel is not None else None
     g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {}) if kernel is not None and cosmos.is_cosmic(
         kernel) else {}
     b = physics.body(planet)
-    from xylarium.kernel import creation
     age = creation.SETTLED_GYR                           # the settled world its life evolved in (creation reads the
                                                          # same); within a game it changes through its star's light
     swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
-    key = (round(age, 1), planet.planet_type, round(swell, 3))
-    cache = planet.society.get("_media")
-    if cache and tuple(cache.get("key", ())) == key:
-        return cache["media"]
+    seed = creation.universe(kernel) if kernel is not None else None
+    key = (seed, planet.id, round(age, 1), planet.planet_type, round(swell, 3), str(b.get("radius")))
+    got = _STATES.get(planet.id)
+    if got and got[0] == key:
+        return got[1]
     star = dict(getattr(sec, "star", None) or physics.star_for(getattr(sec, "star_type", None)))
     if swell != 1.0:                                     # its star as it shines now: a giant's glare boils its seas
         from fractions import Fraction
         star["luminosity"] = str(Fraction(star["luminosity"]) * Fraction(swell).limit_denominator(10 ** 6))
-    from xylarium.kernel import creation
-    z = creation.metals_at(creation.universe(kernel), float(g.get("r", cosmos.R0_KPC)), float(g.get("born", 9.2))) \
-        if g else 1.0
+    z = creation.metals_at(seed, float(g.get("r", cosmos.R0_KPC)), float(g.get("born", 9.2))) if g else 1.0
     ices, make = None, {}
-    seed = creation.universe(kernel)
     if g and "cell" in g and sec is not None and planet in sec.planets:   # the world its orbit built (creation)
         made = creation.cell(seed, *g["cell"])[g["k"]].get("worlds") or []
         n = sec.planets.index(planet)
         if n < len(made):
             ices, make = made[n].get("ices"), made[n].get("make") or {}
-    ms = media(seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
-               bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices,
-               world=build(seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
-                           bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices, born=make.get("born"),
-                           orbit=make.get("orbit"), core=make.get("core")))
+    args = (seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
+            bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices)
+    w = build(*args, born=make.get("born"), orbit=make.get("orbit"), core=make.get("core"))
+    out = {"world": w, "media": media(*args, world=w), "key": [age, planet.planet_type, round(swell, 3)]}
+    _STATES[planet.id] = (key, out)
+    return out
+
+
+def of_planet(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
+    """The media of a planet on the map (cached on the world: its physics changes on deep time only)."""
+    from xylarium.kernel import cosmos, creation
+    age = creation.SETTLED_GYR
+    swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
+    key = (round(age, 1), planet.planet_type, round(swell, 3))
+    cache = planet.society.get("_media")
+    if cache and tuple(cache.get("key", ())) == key:
+        return cache["media"]
+    ms = state_of_planet(kernel, planet)["media"]
     planet.society["_media"] = {"key": list(key), "media": ms}
     return ms

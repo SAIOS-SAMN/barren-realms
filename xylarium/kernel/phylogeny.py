@@ -31,6 +31,7 @@ COCHAIN_ROLLING_WINDOW = 150
 ACTION_FLUX: Dict[str, Tuple[float, float, float, float]] = {
     "ATTACK_SHIP": (0.0, 0.0, 0.0, 25.0),
     "ATTACK_PLANET": (0.0, 0.0, 0.0, 30.0),
+    "STRIKE_WORLD": (0.0, 40.0, 10.0, 60.0),
     "TACTICAL_COMBAT": (0.0, 0.0, 0.0, 25.0),
     "COVERT_OP": (0.0, 0.0, 5.0, 20.0),
     "SURFACE_INVADE": (5.0, 0.0, 0.0, 30.0),

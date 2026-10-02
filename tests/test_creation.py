@@ -108,7 +108,7 @@ class TestEachBiologyItsOwnNeeds(unittest.TestCase):
             slot = creation.cell(7, *m["cell"])[m["k"]]
             world = slot["worlds"][m["w"]]
             self.assertIn(m["metab"], {md["region"] for md in world["media"]})
-            self.assertLessEqual(slot["born"] + creation.CRUST_GYR, m["epoch"])
+            self.assertLessEqual(slot["born"] + creation.CRUST_GYR, m["epoch"] + 1e-6)       # rounded epochs
             ch = next(c for c in creation.chemistries(7, slot, world) if c["region"] == m["metab"])
             self.assertEqual(len(m["steps"]), len(ch["ladder"]["steps"]))               # the chemistry's own rungs
             self.assertEqual(m["steps"], sorted(m["steps"]))

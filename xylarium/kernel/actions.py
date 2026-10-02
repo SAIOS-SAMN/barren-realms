@@ -120,6 +120,25 @@ def _attack_planet(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, 
     return result
 
 
+@action(ActionType.STRIKE_WORLD, turns=1)
+def _strike_world(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    """Detonate antimatter from the hold against a world in this sector: its air stripped, or the world broken, by
+    as much as the energy delivered against its own binding (ruin.py)."""
+    from xylarium.kernel import ruin
+    planet = k._find_planet(current_sector, kwargs.get("planet_id"))
+    if planet is None:
+        return ActionResult(success=False, action=action, message="No such world in this sector.")
+    if planet.owner_id == captain.id:
+        return ActionResult(success=False, action=action, message=f"{planet.name} is your own world.")
+    units = int(kwargs.get("units") or ruin.antimatter_needed(k, planet))
+    got = ruin.strike(k, captain, planet, units)
+    if not got["ok"]:
+        return ActionResult(success=False, action=action, message=got["why"])
+    what = "broken apart" if got["kind"] == "WORLD_SHATTERED" else f"stripped of {got['share']:.0%} of its air"
+    return ActionResult(success=True, action=action, turns_spent=1,
+                        message=f"{planet.name} is {what} ({got['energy_j']:.2e} J delivered).")
+
+
 @action(ActionType.SHIPYARD_PURCHASE, turns=0)
 def _shipyard_purchase(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     result = k._handle_shipyard(captain, current_sector, kwargs)

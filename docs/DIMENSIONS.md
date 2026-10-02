@@ -49,6 +49,8 @@ other physics. `tools/progenitor.py` compares universes so made.
 | Life | populations of genomes in space and time | a lineage's information: the rungs its chemistry's fidelity needs and the time to write them (life.py) | projected, declared: no knob says how common life is |
 | A mind | a nervous system | I_MIND bits of blueprint; a people's council as one collective mind | projected, declared |
 | Time on a world | days, seasons, years | universal cycles; each world's year for its own reckoning | restored for reckoning (CLOCK.md) |
+| A world through deep time | a history: its star brightening, its interior cooling, its air gathered and lost | `worlds.history`: the same physics read at ten ages, with the young star fainter (Gough) and the magma ocean's degassing | **restored** for questions about a world's past (`tools/scenarios.py`); creation still reads one settled age |
+| Life's lineages | many clades climbing at once, extinctions pruning some | `life.ERASURE`: "rung" (one lineage, impacts reset its rung) or "clades" (CLADES lineages, each impact killing each with its severity, survivors radiating) | **restored** as a choice of law, compared by the scenarios |
 
 ## What is still a number someone chose
 
