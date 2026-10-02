@@ -830,7 +830,8 @@ def _species_design(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str,
         return ActionResult(False, action, "Name a world in this sector to design for (planet_id).")
     pv = designer.preview(k, knowledge.holder_of_captain(captain), _design_of(kwargs), planet)
     msg = (f"DESIGN for {planet.name}: niche {pv['niche'] or 'none'}, its wild land would feed {pv['foragers_fed']:,} "
-           f"foragers; your editing mastery {pv['mastery']:.0%} builds {pv['genome']}; cost {pv['cost']:,} Cr."
+           f"foragers; editing mastery {pv['mastery']:.0%}, mathematics {pv['mathematics']:.0%}. "
+           + "; ".join(designer.describe(pv["foresight"])) + f". Cost {pv['cost']:,} Cr."
            + (f" Cannot seed: {pv['why_not']}." if pv["why_not"] else ""))
     return ActionResult(True, action, msg, data=pv)
 

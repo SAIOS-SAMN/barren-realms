@@ -81,6 +81,26 @@ class TestDesigner(unittest.TestCase):
         self.assertEqual(designer.build(k, h, asked, full=True)["tolerance"], 1.0)
         self.assertGreater(designer.cost(k, h, {"tolerance": 1.0}), designer.cost(k, h, {"tolerance": 0.1}))
 
+    def test_what_is_not_understood_is_mystery(self):
+        from xylarium.kernel import crystal as C, intellect, scheduler
+        k = GameKernel(seed=5)
+        k.activate()
+        pl, p = _captain_at_empty_world(k)
+        h = knowledge.holder_of_captain(pl)
+        asked = {"tolerance": 0.5}
+        self.assertTrue(all(x.endswith("???") for x in designer.describe(designer.expect(k, h, asked))))
+        full = designer.expect(k, h, asked, full=True)
+        self.assertEqual(full["tolerance"]["sd"], 0.0)
+        self.assertEqual(designer.describe(full)[1], "tolerance +0.50")
+        for d in ("biology", "energy", "materials", "information"):
+            knowledge.learn(k, h, d, 10 ** 6)
+        intellect.stats(k)["vocab"][h] = [C.ROT90, C.FLIPH] + list(C.STACK_OPS + C.HYPER_OPS)
+        self.assertGreater(min(designer.understanding(k, h).values()), 0.95)    # full science and mathematics
+        # the same design in the same universe comes out the same; what it was not sure of, it learns by seeding
+        a = designer.build(k, None, asked, rng=scheduler.rng(k, "design", "x"))
+        b = designer.build(k, None, asked, rng=scheduler.rng(k, "design", "x"))
+        self.assertEqual(a, b)
+
     def test_seeding_a_world_makes_foragers_who_survive(self):
         k = GameKernel(seed=5)
         k.activate()
