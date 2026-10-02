@@ -50,7 +50,7 @@ at Earth's own place and time.
 | LIGHT_OPTIMUM per metabolism, PLASMIC_MASS_OPTIMUM | config, biosphere | invented per metabolism | **retire** | 3 (chemistry from the world) |
 | HABITABILITY table (metabolism x world type) | config | invented | **retire** | 2-3 |
 | Seven world types as inputs (TERRESTRIAL, ICE ...) | physics.classify | categories | **retire** to labels | 2 |
-| HARD_STEPS = 4, STEP_GYR = 10 | creation | Carter/Watson: Earth's single history | **retire** to a per-universe draw + kinetics | 4 |
+| HARD_STEPS = 4, STEP_GYR = 10 | creation | Carter/Watson: Earth's single history | **retired**: rungs from each chemistry's copying fidelity (life.py) | 4 |
 | REPRODUCTIVE_STRATEGY clade list and names (bimaniform ...) | config | invented, human-flavoured | **retire** | 4 |
 | BIRTH_RATE 3%/yr (generation ~28-33 yr) | config | human | **retire** | 5 |
 | Life spans 0.6 / 1.7 / 2.5 / 4.3 generations | lifespan | human life history | **retire** | 5 |
@@ -77,7 +77,31 @@ BIRTH_RATE), people per unit of captured energy per unit area (PEOPLE_PER_EARTH_
 Kept as **declared cross-species invariants**: the life-history ratios (maturity, productive span, life, longest
 life as multiples of a generation - Charnov's invariants), the works multipliers of a people's citadel tiers.
 
-Declared **assumptions** of the funnel (worlds.py, creation.py): the disc's normalisation and lifetime, giant-impact
-growth, comet composition, stripping rate and shielding, the weathering scale, the greenhouse fit, the photolysis
-threshold, the activation-energy scaling, the bond thresholds, plasma's structure, the energy half-saturation,
-extinction rate, the hard-step ranges, the trough and infection course.
+Declared **assumptions** of the funnel (worlds.py, creation.py, life.py, interior.py, orbits.py): the disc's
+normalisation and lifetime, giant-impact growth, comet composition, the wind's dose and its fragments' energy, the
+heat-transport column, the weathering scale, the greenhouse fit (with pressure broadening), the photolysis
+threshold, the activation-energy scaling, the bond thresholds, the light that lifts an electron, plasma's structure,
+the discrimination share, the bits of a monomer and of a mind, a cell's body per monomer, the impact and
+sterilisation rates at unit density, the Simon-Glatzel exponents, the tidal Q, the eccentricity stirring, the trough
+and infection course. docs/DIMENSIONS.md lists them with what each projects; `tools/progenitor.py --sensitivity`
+measures how far each moves the universe.
+
+### The laws beneath the constants (fundamental.py)
+
+Every temperature, energy, pressure, density, stellar mass, light and lifetime the funnel uses is now our universe's
+value of a scale computed from four dimensionless constants - alpha, the electron-to-proton mass ratio, alpha_G and
+hydrogen's fusion yield - times a pure number. The progenitors change a law in the genesis key
+(`cosmic:teeming:measured:alpha=1.02`) and the same dice rebuild the universe under it: boiling points, bond
+energies, the colours of starlight that drive chemistry, the mass and life of stars, the half-lives of uranium and
+thorium, the density of rock and the speed of a body's thought all move together. No constant downstream has to be
+edited by hand.
+
+### Retired with the information ladder (life.py)
+
+ORIGIN_GYR ("life is abundant"), TRANSFER_GYR (between the worlds of a region), HARDEN, ENERGY_HALF, the per-universe
+draw of the hard steps and their timescale (STEPS_RANGE, STEP_LOG_RANGE), METALS_NEED and MOLECULAR. How soon life
+starts, how many rungs a chemistry must climb to a mind and how long each takes now follow from the chemistry's
+copying fidelity (Boltzmann on its solvent's cohesion), Eigen's error threshold, kinetic proofreading, Eyring
+kinetics and the bodies its energy feeds; microbes travel only between the worlds of one system (Gladman's ejecta).
+Still Earth-read, stated as units: PEOPLE_PER_EARTH_AREA and the cognition leap in a people's capacity
+(biosphere._reckon) - the economy's scale, not life's.

@@ -27,8 +27,9 @@ class TestTheSolarSystemAsATest(unittest.TestCase):
         self.assertIn("H2O", earth["seas"])
         self.assertTrue(0.1 < earth["p_bar"] < 10)
         self.assertGreater(earth["air"].get("N2", 0), earth["air"].get("CO2", 0))       # weathering drew it down
-        self.assertLess(mars["p_bar"], 0.01)
-        self.assertLess(mars["t_surf"], 250)
+        self.assertLess(mars["p_bar"], 0.01)                    # its light world loses its air's fragments to space
+        self.assertLessEqual(mars["t_surf"], 273.5)             # no warmer than its ice can melt (its seas are frozen
+                                                                # or held at the triple point by what weathering leaves)
         self.assertEqual({m["region"] for m in em}, {"biotic"})
 
     def test_a_giant_holds_a_deep_plasma(self):

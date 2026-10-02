@@ -142,11 +142,15 @@ class AstronomyManager:
         if diff > 180.0:
             diff = 360.0 - diff
 
-        # Law of Cosines on orbital plane
-        # D_eff = sqrt(r1^2 + r2^2 - 2*r1*r2*cos(diff))
-        rad_diff = math.radians(diff)
-        d_sq = (pos1.radius_au ** 2) + (pos2.radius_au ** 2) - (2.0 * pos1.radius_au * pos2.radius_au * math.cos(rad_diff))
-        d_eff = math.sqrt(max(0.01, d_sq))
+        # Each world on its own inclined orbit (its inclination and node: orbits.py), the distance between them
+        # measured in the system's own space (geometry.separation_au) - not on one shared flat plane
+        from xylarium.kernel import geometry
+        b1, b2 = getattr(p1, "body", None) or {}, getattr(p2, "body", None) or {}
+        x1 = geometry.orbit_xyz(pos1.radius_au, math.radians(pos1.angle_deg), float(b1.get("inc", 0.0)),
+                                float(b1.get("node", 0.0)))
+        x2 = geometry.orbit_xyz(pos2.radius_au, math.radians(pos2.angle_deg), float(b2.get("inc", 0.0)),
+                                float(b2.get("node", 0.0)))
+        d_eff = max(0.1, geometry.separation_au(x1, x2))
 
         # Dynamic multiplier interpolation:
         # alpha = 0 (conjunction, closest approach) -> ORBIT_CONJUNCTION_TRANSIT_MULT (0.60x)

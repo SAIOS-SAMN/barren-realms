@@ -313,15 +313,34 @@ def _light(kernel: Any, sid: int, slot: Dict[str, Any]) -> None:
     sec.star = dict(slot["spec"]) if slot.get("spec") else physics.star_for(sec.star_type)   # its own mass and light
     sec.belts = []
     currency = currency_for_security(sec.security)
+    ids: Dict[int, Any] = {}
+    letters, moons = 0, {}
     for n, w in enumerate(slot["worlds"]):
-        p = Planet(id=f"planet_{sid}" if n == 0 else f"planet_{sid}_{PLANET_LETTERS[n]}", sector_id=sid,
-                   name=f"{sec.name.split()[0]} {sid:03d}{PLANET_LETTERS[n]}", owner_id=None, population=0, shields=0,
+        host = ids.get(w["host"]) if "host" in w else None
+        if host is None:
+            pid = f"planet_{sid}" if letters == 0 else f"planet_{sid}_{PLANET_LETTERS[letters % len(PLANET_LETTERS)]}" \
+                + ("" if letters < len(PLANET_LETTERS) else str(letters // len(PLANET_LETTERS)))
+            name = f"{sec.name.split()[0]} {sid:03d}{PLANET_LETTERS[letters % len(PLANET_LETTERS)]}"
+            letters += 1
+        else:                                       # a giant's moon: named for it, numbered outward
+            moons[host.id] = moons.get(host.id, 0) + 1
+            pid, name = f"{host.id}_m{moons[host.id]}", f"{host.name} {_ROMAN[moons[host.id] - 1]}"
+        body = dict(w["body"])
+        if host is not None:
+            body["parent"] = host.id
+        p = Planet(id=pid, sector_id=sid, name=name, owner_id=None, population=0, shields=0,
                    max_shields=200, fighters=0, citadel_level=0, treasury=0, ore_silo=0, organics_silo=0, morale=80,
                    element_deposits=dict(w["deposits"]), garrison_troops=0, planet_type=w["type"],
-                   currency=currency, body=dict(w["body"]))
+                   currency=currency, body=body)
+        if host is not None:
+            p.moon_of = host.id
+        ids[n] = p
         physics.apply_derived(p, physics.star(sec))
         p.orbital_angle = float(physics.orbital_phase(sec, p, 0)) * 360.0
         sec.planets.append(p)
+
+
+_ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
 
 @matter.declared("star_formation")
@@ -452,7 +471,9 @@ def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
     except Exception:
         return None
     born = float(g.get("born", formed_gyr(g["r"])))
-    return born, born + SUN_MS_GYR * m / max(1e-9, lum)        # its fuel over its burn
+    from xylarium.kernel import fundamental
+    nuclear = fundamental.of(cosmos_seed(kernel)).nuclear
+    return born, born + SUN_MS_GYR * nuclear * m / max(1e-9, lum)     # its fuel over its burn
 
 
 def death_kind(kernel: Any, sector_id: int) -> str:
@@ -467,7 +488,8 @@ def death_kind(kernel: Any, sector_id: int) -> str:
         m = float(physics.star(sec)["mass"])
     except Exception:
         m = 1.0
-    if m >= CORE_COLLAPSE_SUNS:
+    from xylarium.kernel import fundamental
+    if m >= CORE_COLLAPSE_SUNS * fundamental.of(cosmos_seed(kernel)).star_mass:     # a share of the Chandrasekhar scale
         return "core_collapse"
     return "supernova" if "binary" in (sec.star_type or "").lower() else "white_dwarf"
 
@@ -606,8 +628,11 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
                 p.planet_type = "ROGUE"                              # flung out: dark, drifting
         if hasattr(p, "_orbit_cache"):
             del p._orbit_cache
-    remnant = WD_MASS if kind == "white_dwarf" else 0.0 if kind == "supernova" else \
-        (1.4 if m < BLACK_HOLE_SUNS else 0.5 * m)                     # a neutron star, or a black hole
+    from xylarium.kernel import fundamental
+    scale = fundamental.of(cosmos_seed(kernel)).star_mass               # remnants are shares of the Chandrasekhar mass
+    heavy = m >= BLACK_HOLE_SUNS * scale
+    remnant = WD_MASS * scale if kind == "white_dwarf" else 0.0 if kind == "supernova" else \
+        (1.4 * scale if not heavy else 0.5 * m)                         # a neutron star, or a black hole
     shed = max(0.0, m - remnant)
     yields = ({"C": 0.5, "H2O": 0.3, "Si": 0.2} if kind == "white_dwarf" else
               {"Fe": 0.6, "Ni": 0.2, "Si": 0.15, "U": 0.05} if kind == "supernova" else
@@ -624,7 +649,7 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
                     w.element_deposits[el] = w.element_deposits.get(el, 0) + share
                     matter.source("stellar_ejecta", el, share)          # made in the star, now in the worlds
     sec.star_type = ("White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant" if kind == "supernova"
-                     else "Neutron star remnant" if m < BLACK_HOLE_SUNS else "Black hole remnant")
+                     else "Neutron star remnant" if not heavy else "Black hole remnant")
     sec.star = physics.star_for(sec.star_type)
     st = stats(kernel)
     st["deaths"][kind] = st["deaths"].get(kind, 0) + 1
@@ -736,14 +761,32 @@ def _lane_event(kernel: Any, kind: str, ra: int, rb: int, cause: str) -> str:
 
 
 def position(kernel: Any, sector_id: int, cycle: Optional[int] = None) -> Optional[Dict[str, float]]:
-    """Where a system is in the galaxy at a clock cycle: closed-form rotation on deep time (x, y in kpc)."""
+    """Where a system is in the galaxy at a clock cycle: closed-form rotation on deep time and its oscillation through
+    the plane (x, y, z in kpc), and how fast its own clock runs against the universe's there (geometry.lapse)."""
+    from xylarium.kernel import geometry
     g = stats(kernel)["place"].get(str(sector_id))
     if not g:
         return None
-    t_myr = deep_gyr(kernel, cycle) * 1000.0
-    th = g["theta0"] + omega(g["r"]) * t_myr
+    t = deep_gyr(kernel, cycle)
+    th = g["theta0"] + omega(g["r"]) * t * 1000.0
+    z = 0.0
+    if "cell" in g:
+        from xylarium.kernel import creation
+        v = creation.cell(cosmos_seed(kernel), *g["cell"])[g["k"]].get("vertical")
+        if v:
+            z = geometry.z_at(v, t, g["r"])
     return {"r": g["r"], "theta": round(th % (2 * math.pi), 6), "x": round(g["r"] * math.cos(th), 4),
-            "y": round(g["r"] * math.sin(th), 4), "deep_gyr": round(deep_gyr(kernel, cycle), 6)}
+            "y": round(g["r"] * math.sin(th), 4), "z": round(z, 4), "deep_gyr": round(t, 6),
+            "lapse": geometry.lapse(g["r"], z, V_FLAT_KMS)}
+
+
+def distance_kpc(kernel: Any, a: int, b: int, cycle: Optional[int] = None) -> Optional[float]:
+    """The proper distance between two systems now: through the galaxy's own curved space (geometry.proper_kpc)."""
+    from xylarium.kernel import geometry
+    pa, pb = position(kernel, a, cycle), position(kernel, b, cycle)
+    if not pa or not pb:
+        return None
+    return geometry.proper_kpc([pa["x"], pa["y"], pa["z"]], [pb["x"], pb["y"], pb["z"]])
 
 
 # ---------------------------------------------------------------------- genesis and emergence

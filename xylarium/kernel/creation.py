@@ -91,36 +91,29 @@ CLASSES = [(0.45, "M-class red dwarf"), (0.9, "K-class orange dwarf"), (1.1, "G-
            (float("inf"), "O-class blue giant")]       # names by mass; each star keeps its own mass and light
 PRIMORDIAL = ("H", "He-3")      # made in the Big Bang: no gradient of enrichment
 
-# ---------------------------------------------------------------------- minds
-HARD_STEPS = 4                  # Carter (1983) and Watson (2008) read ~4 off Earth's one history: now drawn per universe
-STEP_GYR = 10.0                 # the old Earth-read mean wait (retired: settled galaxies only)
-STEPS_RANGE = (3, 6)            # hard steps from chemistry to a mind: drawn per universe (one history fixes nothing)
-STEP_LOG_RANGE = (-2.0, 0.0)    # log10 Gyr: a step's mean wait at unit pace, full richness, ample energy (drawn)
-ENERGY_HALF = 0.01              # flux units (~3 W/m^2: about what a biosphere fixes of full sunlight) at which a
-                                # chemistry's progress is half energy-limited (declared)
-ORIGIN_GYR = 0.1                # life is abundant: it arises within ~0.1 Gyr of chemistry wherever a solvent is,
-                                # slower as that chemistry is slower and poorer (declared: the universe's life law)
-TRANSFER_GYR = 0.05             # life carried between the worlds of a region by impact ejecta (declared)
-HARDEN = 0.25                   # each extinction a lineage survives makes it hardier: later steps come sooner and
-                                # blows land softer by this share (declared)
-EXTINCTIONS_PER_GYR = 2.0       # life-resetting impacts per Gyr at unit stellar density (declared): flybys and the
-                                # tide shake comets loose in proportion to the neighbourhood's stars
+# ---------------------------------------------------------------------- minds (life.py holds life's own laws)
 SUN_MS_GYR = 10.0               # main-sequence life of a solar-mass star; ~ M^-2.5
 CRUST_GYR = 0.6                 # a rocky world's crust settles and its bombardment ends
-STERILISE_AT_R0 = 0.1           # chance a fully molecular biosphere at R0 is sterilised over its window
 HORIZON_GYR = 30.0              # deep time the schedule looks ahead to
 CURVE_STEP = 0.25               # Gyr between points of the expectation curve
-METALS_NEED = {"biotic": 1.0, "mineral": 1.0, "cryogenic": 0.5, "umbral": 1.0, "plasmic": 0.0}
-MOLECULAR = {"biotic": 1.0, "mineral": 0.5, "cryogenic": 0.5, "umbral": 0.5, "plasmic": 0.0}
 SETTLED_GYR = 3.0               # a world's chemistry is read once its crust, air and seas have settled (declared)
 VIABLE = 500                    # Franklin's 50/500 rule: the number that keeps a people's evolutionary potential
 
 _CACHE: Dict[Tuple[int, int], Dict[str, Any]] = {}       # (seed, cell) -> the cell; (seed,) -> the schedule
 
 
-def _rng(seed: int, *parts: Any) -> random.Random:
+def dice(seed: Any) -> Any:
+    """The part of a creation key the dice are rolled from: the seed and its kind of Big Bang, not its laws - the same
+    universe rebuilt under other laws rolls the same dice (fundamental.py)."""
+    parts = str(seed).split(":")
+    if len(parts) <= 2:
+        return seed
+    return int(parts[0]) if parts[1] in ("", "measured") and parts[0].lstrip("-").isdigit() else ":".join(parts[:2])
+
+
+def _rng(seed: Any, *parts: Any) -> random.Random:
     from xylarium.kernel import scheduler
-    return random.Random(scheduler.stream(SimpleNamespace(seed=seed), *parts))
+    return random.Random(scheduler.stream(SimpleNamespace(seed=dice(seed)), *parts))
 
 
 # ---------------------------------------------------------------------- the Big Bang
@@ -132,9 +125,15 @@ UNIVERSES = {                   # the kind of Big Bang chosen at genesis: centre
 
 
 def universe(kernel: Any) -> Any:
-    """The creation key of a kernel's universe: its seed, and the kind of Big Bang chosen at its genesis."""
+    """The creation key of a kernel's universe: its seed, the kind of Big Bang chosen at its genesis, and the laws
+    its progenitors wrote it under ('measured:alpha=1.01' - fundamental.py)."""
     kind = ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("universe") or "measured"
     return kernel.seed if kind == "measured" else f"{kernel.seed}:{kind}"
+
+
+def laws(seed: Any) -> Any:
+    from xylarium.kernel import fundamental
+    return fundamental.of(seed)
 
 
 def big_bang(seed: Any) -> Dict[str, float]:
@@ -142,18 +141,16 @@ def big_bang(seed: Any) -> Dict[str, float]:
     key = ("bb", seed)
     if key in _CACHE:
         return _CACHE[key]
-    kind = UNIVERSES.get(str(seed).partition(":")[2] or "measured", UNIVERSES["measured"])
+    parts = str(seed).split(":")
+    kind = UNIVERSES.get(parts[1] if len(parts) > 1 and parts[1] else "measured", UNIVERSES["measured"])
     rng = _rng(seed, "big bang")
     s8 = SIGMA8 * kind["sigma8"] * 10.0 ** rng.gauss(0.0, SPREAD_DEX)
     fb = F_BARYON * kind["f_baryon"] * 10.0 ** rng.gauss(0.0, SPREAD_DEX)
     closed = abs(rng.gauss(0.0, FLATNESS)) + FLATNESS / 20.0             # Omega - 1 > 0: a 3-sphere
-    steps = STEPS_RANGE[0] + int(rng.random() * (STEPS_RANGE[1] - STEPS_RANGE[0] + 1))
-    step_gyr = 10.0 ** (STEP_LOG_RANGE[0] + rng.random() * (STEP_LOG_RANGE[1] - STEP_LOG_RANGE[0]))
     out = {"sigma8": round(s8, 4), "f_baryon": round(fb, 4), "omega_minus_1": round(closed, 6),
            "assembly": round((SIGMA8 / s8) ** COLLAPSE, 4),               # epochs of formation, over ours
            "stars": round(fb / F_BARYON, 4),                              # stars per volume, over ours
-           "curvature_mpc": round(C_KMS / H0_KMS_MPC / math.sqrt(closed), 1),
-           "steps": steps, "step_gyr": round(step_gyr, 5)}
+           "curvature_mpc": round(C_KMS / H0_KMS_MPC / math.sqrt(closed), 1)}
     _CACHE[key] = out
     return out
 
@@ -222,9 +219,12 @@ def metals_at(seed: int, r: float, t: float) -> float:
 
 
 # ---------------------------------------------------------------------- a cell
-def luminosity(mass: float) -> float:
-    """Main-sequence light from mass (the measured piecewise relation): faint and slow-burning below half a sun,
-    steepest around a sun, flattening toward the Eddington limit for the heaviest."""
+def luminosity(mass: float, laws: Any = None) -> float:
+    """Main-sequence light from mass (the measured piecewise relation, in its universe's stellar scales -
+    fundamental.py): faint and slow-burning below half a sun, steepest around a sun, flattening toward the
+    Eddington limit for the heaviest."""
+    if laws is not None and not laws.ours:
+        return laws.star_lum * luminosity(mass / laws.star_mass)
     if mass < 0.43:
         return 0.23 * mass ** 2.3
     if mass < 2.0:
@@ -234,15 +234,31 @@ def luminosity(mass: float) -> float:
     return 32000.0 * mass
 
 
-def imf(u: float, z: float, born: Optional[float] = None) -> float:
-    """A star's mass from Kroupa's two slopes, the break moved by its gas's metals and by the warmth of the young
-    universe: no cloud is colder than the cosmic background, 2.725 K x (1 + z), and a warmer cloud's Jeans mass is
-    larger (~ T^1.5) - the early stars were heavier and hotter (inverse transform)."""
-    mb = KROUPA_BREAK * max(z, 1e-3) ** -JEANS_Z
+def cloud_k(r: Optional[float] = None, born: Optional[float] = None, laws: Any = None) -> float:
+    """A star-forming cloud's temperature: its dust is held at what the starlight around it gives (T ~ U^(1/6) for
+    dust whose emissivity rises as frequency squared), and never colder than the cosmic background, 2.725 K x (1 + z):
+    near the crowded centre and in the young universe, clouds are warmer. CLOUD_K at R0 today is the ruler, its
+    chemistry's cooling scaled with the laws."""
+    t = CLOUD_K * (laws.chem if laws is not None else 1.0)
+    if r is not None:
+        t *= _disc().density(r) ** (1.0 / 6.0)
     if born is not None:
-        floor = 2.725 / max(1e-3, scale_factor(born))
-        mb *= max(1.0, floor / CLOUD_K) ** 1.5
-    lo, hi = IMF_MIN, IMF_MAX
+        t = max(t, 2.725 / max(1e-3, scale_factor(born)))
+    return t
+
+
+def imf(u: float, z: float, born: Optional[float] = None, laws: Any = None, r: Optional[float] = None) -> float:
+    """A star's mass from Kroupa's two slopes, the break at the Jeans mass of its cloud: heavier in metal-poor gas
+    (it cools less), in warm clouds (~ T^1.5) - near the centre, where starlight crowds, and in the young universe,
+    whose background light no cloud is colder than - so the early stars and the core's were heavier and hotter
+    (inverse transform). The hydrogen-burning limit, the break and the heaviest stars move with the laws."""
+    jeans = laws.jeans if laws is not None else 1.0
+    chem = laws.chem if laws is not None else 1.0
+    mb = KROUPA_BREAK * jeans * max(z, 1e-3) ** -JEANS_Z
+    if born is not None or r is not None:
+        mb *= (cloud_k(r, born, laws) / (CLOUD_K * chem)) ** 1.5
+    lo = IMF_MIN * (laws.star_min if laws is not None else 1.0)
+    hi = IMF_MAX * (laws.star_mass if laws is not None else 1.0)
     mb = min(max(mb, lo * 1.01), hi * 0.99)
     a1, a2 = 1.0 - KROUPA_LOW, 1.0 - KROUPA_HIGH
     w1 = (mb ** a1 - lo ** a1) / a1                      # mass function continuous at the break
@@ -253,24 +269,25 @@ def imf(u: float, z: float, born: Optional[float] = None) -> float:
     return (mb ** a2 + a2 * (x - w1) / mb ** (KROUPA_HIGH - KROUPA_LOW)) ** (1.0 / a2)
 
 
-def _spec(mass: float, companion: float = 0.0) -> Dict[str, str]:
+def _spec(mass: float, companion: float = 0.0, laws: Any = None) -> Dict[str, str]:
     """A star's exact physics from its own mass (not its class's): m = sqrt(M) to a hundredth (orbits), its light
     from the mass-luminosity relation; a companion adds its mass and its own light."""
     from fractions import Fraction
     m1 = Fraction(max(1, round(math.sqrt(mass) * 100)), 100)
-    total, lum = m1 * m1, Fraction(luminosity(float(m1 * m1))).limit_denominator(10 ** 8)
+    total, lum = m1 * m1, Fraction(luminosity(float(m1 * m1), laws)).limit_denominator(10 ** 8)
     if companion > 0:
         m2 = Fraction(max(1, round(math.sqrt(companion) * 100)), 100)
-        total, lum = total + m2 * m2, lum + Fraction(luminosity(float(m2 * m2))).limit_denominator(10 ** 8)
+        total, lum = total + m2 * m2, lum + Fraction(luminosity(float(m2 * m2), laws)).limit_denominator(10 ** 8)
     m = Fraction(max(1, round(math.sqrt(float(total)) * 100)), 100)
     lum = lum.limit_denominator(10 ** 6)
     return {"m": f"{m.numerator}/{m.denominator}", "mass": f"{total.numerator}/{total.denominator}",
             "luminosity": f"{lum.numerator}/{lum.denominator}"}
 
 
-def _star(mass: float, binary: bool) -> str:
+def _star(mass: float, binary: bool, laws: Any = None) -> str:
     if binary:
         return "Binary pair"
+    mass = mass / (laws.star_mass if laws is not None else 1.0)     # a class is a share of its universe's star scale
     for edge, label in CLASSES:
         if mass < edge:
             return label
@@ -287,6 +304,7 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
     from xylarium.kernel.universe import _deposits_for
     cosmos = _disc()
     bb = big_bang(seed)
+    L = laws(seed)
     n0 = -math.log(1.0 - SYSTEMS_SHARE_R0)
     out = []
     for k in range(SLOTS):
@@ -305,40 +323,108 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
             continue
         born = first_stars(seed) + rng.expovariate(1.0 / infall_gyr(seed, r))
         z = metals_at(seed, r, born)
-        mass = imf(rng.random(), z, born)                # Kroupa, heavier in metal-poor gas and a warmer young sky
+        mass = imf(rng.random(), z, born, L, r)          # Kroupa, its break at its cloud's Jeans mass
         binary = rng.random() < BINARY_SHARE
         companion = mass * (0.1 + 0.9 * rng.random()) if binary else 0.0     # mass ratios flat (Raghavan 2010)
-        star_type = _star(mass, binary)
-        spec = _spec(mass, companion)
+        star_type = _star(mass, binary, L)
+        spec = _spec(mass, companion, L)
         sec = SimpleNamespace(star=spec, star_type=star_type)
-        worlds = []
-        from fractions import Fraction as _F
-        from xylarium.kernel import worlds as W
-        for n, (q, body, _) in enumerate(physics.lay_out_system(sec, rng.randint(*SYSTEM_PLANETS), rng)):
-            # the world its orbit built: its size, layers and ices from the disc's elements (worlds.form); the layout
-            # gives only its orbit, spin and tilt
-            a_au = float(_F(str(body["q"]))) ** 2
-            made = W.form(spec, a_au, z, cosmos.density(r), _rng(seed, "form", i, j, k, n))
-            body = dict(body, mass=physics._s(_F(made["mass"]).limit_denominator(10 ** 6)),
-                        radius=physics._s(_F(made["radius"]).limit_denominator(10 ** 6)), giant=made["giant"])
-            state = W.build(seed, spec, a_au, made["radius"], made["mass"], made["giant"], z, r, SETTLED_GYR,
-                            made["ices"])
-            ptype = W.label(state)
-            deps = _deposits_for(ptype, rng)
-            for el in deps:
-                enrich = 1.0 if el in PRIMORDIAL else z / max(1e-9, cosmos.metals(r))   # made by then, over today
-                deps[el] = int(round(deps[el] * cosmos.abundance(el, r) * enrich))
-            media = W.media(seed, spec, a_au, made["radius"], made["mass"], made["giant"], z, r, SETTLED_GYR,
-                            world=state)
-            worlds.append({"q": q, "body": body, "type": ptype, "deposits": deps, "ices": made["ices"],
-                           "layers": {kk: round(v, 4) for kk, v in made["layers"].items()},
-                           "media": [{kk: m[kk] for kk in ("solvent", "where", "region", "richness", "pace")}
-                                     | {"energy": round(m["energy"], 5), "t": round(m["t"], 1)} for m in media]})
-        slot.update({"star": star_type, "spec": spec, "born": round(born, 6), "z": round(z, 4), "worlds": worlds,
+        slot.update({"star": star_type, "spec": spec, "born": round(born, 6), "z": round(z, 4),
                      "mass": float(physics.star(sec)["mass"])})
+        from xylarium.kernel import geometry
+        vr = _rng(seed, "vertical", i, j, k)             # its orbit through the disc's plane, heated as it ages
+        v = geometry.vertical(r, SETTLED_GYR, vr.random(), 2 * math.pi * vr.random())
+        slot["vertical"] = {kk: round(v[kk], 5) for kk in ("amp_kpc", "vz_kms", "period_myr", "exposure", "phase")}
+        slot["worlds"] = _worlds(seed, L, i, j, k, slot, sec, r, z, born, rng)
         out.append(slot)
     _CACHE[key] = out
     return out
+
+
+def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec: Any, r: float, z: float,
+            born: float, rng: random.Random) -> List[Dict[str, Any]]:
+    """A star's worlds as physics made them: each orbit's planet (worlds.form), every orbit's six elements and every
+    world's spin (orbits.py), each giant's regular moons, then each world's interior, air, seas and chemistry at the
+    settled age (worlds.build: its heat from its star's isotopes, its formation and its host's tides)."""
+    from fractions import Fraction as _F
+    from xylarium.config import SYSTEM_PLANETS
+    from xylarium.kernel import interior, orbits, physics
+    from xylarium.kernel import worlds as W
+    from xylarium.kernel.universe import _deposits_for
+    cosmos = _disc()
+    spec = sec.star
+    env = cosmos.density(r)
+    star_kg = float(_F(spec["mass"])) * interior.M_SUN_KG
+    laid = physics.lay_out_system(sec, rng.randint(*SYSTEM_PLANETS), rng)
+    made, info = [], []
+    for n, (q, body, _) in enumerate(laid):
+        a_au = float(_F(str(body["q"]))) ** 2
+        m = W.form(spec, a_au, z, env, _rng(seed, "form", i, j, k, n), L)
+        made.append(m)
+        info.append({"a_au": a_au, "mass": m["mass"], "radius": m["radius"], "icy": m["layers"]["ices"] > 0.2})
+    els = orbits.system(star_kg, info, env, _rng(seed, "orbits", i, j, k))
+    worlds: List[Dict[str, Any]] = []
+
+    def world(body: Dict[str, Any], mm: Dict[str, Any], a_au: float, orbit: Dict[str, Any], host: Optional[int],
+              wrng: random.Random) -> Dict[str, Any]:
+        state = W.build(seed, spec, a_au, mm["radius"], mm["mass"], mm["giant"], z, r, SETTLED_GYR, mm["ices"],
+                        born=born, orbit=orbit, core=mm["layers"]["core"] / max(1e-9, 1.0 - mm["layers"]["envelope"]))
+        ptype = W.label(state)
+        deps = _deposits_for(ptype, wrng)
+        for el in deps:
+            enrich = 1.0 if el in PRIMORDIAL else z / max(1e-9, cosmos.metals(r))   # made by then, over today
+            deps[el] = int(round(deps[el] * cosmos.abundance(el, r) * enrich))
+        media = W.media(seed, spec, a_au, mm["radius"], mm["mass"], mm["giant"], z, r, SETTLED_GYR, world=state)
+        rec = {"q": body["q"], "body": body, "type": ptype, "deposits": deps, "ices": mm["ices"],
+               "layers": {kk: round(v, 4) for kk, v in mm["layers"].items()},
+               "interior": {"q_w_m2": round(state.get("q", 0.0), 5), "tidal_w_m2": round(state.get("q_tide", 0.0), 5),
+                            "field": state["field"], "t_int": state.get("t_int")},
+               "media": [{kk: md[kk] for kk in ("solvent", "where", "region", "richness", "pace")}
+                         | {"energy": round(md["energy"], 6), "t": round(md["t"], 1)} for md in media]}
+        if host is not None:
+            rec["host"] = host
+        # what a world in play needs to be rebuilt as its star changes (worlds.of_planet)
+        rec["make"] = {"born": born, "core": mm["layers"]["core"] / max(1e-9, 1.0 - mm["layers"]["envelope"]),
+                       "orbit": {"host_kg": orbit["host_kg"], "a_m": orbit["a_m"], "obliquity": orbit["obliquity"],
+                                 "el": {kk: orbit["el"][kk] for kk in ("e0", "e_forced", "tau_e")}}}
+        return rec
+
+    for n, ((q, body, _), mm, el) in enumerate(zip(laid, made, els)):
+        a_au = info[n]["a_au"]
+        a_m = a_au * interior.AU_M
+        now = orbits.at(star_kg, a_m, el, SETTLED_GYR)
+        tilt = math.degrees(min(now["obliquity"], math.pi - now["obliquity"]))
+        body = dict(body, mass=physics._s(_F(mm["mass"]).limit_denominator(10 ** 6)),
+                    radius=physics._s(_F(mm["radius"]).limit_denominator(10 ** 6)), giant=mm["giant"],
+                    locked=now["locked"], tilt=int(round(tilt)),
+                    day=physics._s(_F(now["day_s"] / 86400.0).limit_denominator(10 ** 4)),
+                    e=round(now["e"], 5), inc=round(now["inc"], 5), node=round(now["node"], 5),
+                    peri=round(now["peri"], 5), obliquity=round(now["obliquity"], 5))
+        orbit = {"host_kg": star_kg, "a_m": a_m, "el": el, "obliquity": now["obliquity"]}
+        worlds.append(world(body, mm, a_au, orbit, None, rng))
+        parent = len(worlds) - 1
+        if not mm["giant"]:
+            continue
+        mrng = _rng(seed, "moons", i, j, k, n)
+        ice_share = sum(mm["ices"].values()) / (1.0 + sum(mm["ices"].values()))
+        g_kg = mm["mass"] * interior.M_EARTH_KG
+        for moon in orbits.moons(mm["mass"], mm["radius"], ice_share, mrng):
+            am = moon["a_radii"] * mm["radius"] * interior.R_EARTH_M
+            mel = {"e0": moon["e_forced"], "e_forced": moon["e_forced"], "tau_e": 0.0, "obliquity": 0.0}
+            period_days = 2 * math.pi * math.sqrt(am ** 3 / (interior.G_SI * g_kg)) / 86400.0
+            share = moon["icy"] and ice_share or 0.0
+            mm_moon = {"mass": moon["mass"], "radius": moon["radius"], "giant": False,
+                       "ices": {sp: v for sp, v in mm["ices"].items()},
+                       "layers": {"core": W.SOLIDS["core"] * (1 - share), "mantle": (1 - W.SOLIDS["core"]) * (1 - share),
+                                  "ices": share, "envelope": 0.0}}
+            mbody = {"q": body["q"], "radius": physics._s(_F(moon["radius"]).limit_denominator(10 ** 6)),
+                     "mass": physics._s(_F(moon["mass"]).limit_denominator(10 ** 8)), "giant": False,
+                     "day": physics._s(_F(period_days).limit_denominator(10 ** 4)), "tilt": 0, "locked": True,
+                     "phase0": body.get("phase0", "0/1"), "parent": parent, "e": round(moon["e_forced"], 5),
+                     "a_host_radii": round(moon["a_radii"], 3)}
+            worlds.append(world(mbody, mm_moon, a_au, {"host_kg": g_kg, "a_m": am, "el": mel, "obliquity": 0.0},
+                                parent, mrng))
+    return worlds
 
 
 # ---------------------------------------------------------------------- minds
@@ -378,108 +464,130 @@ def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[D
             / biosphere.metabolic_factor(metabolism, strat, home_flux=flux, home_gravity=gravity, body_t=body_t))
 
 
-def lifetime(slot: Dict[str, Any]) -> float:
-    """A star's main-sequence life (Gyr): its fuel over its burn - mass over light, a sun's ten billion years."""
+def lifetime(slot: Dict[str, Any], laws: Any = None) -> float:
+    """A star's main-sequence life (Gyr): its fuel over its burn - mass x the share hydrogen gives up fusing over
+    light, a sun's ten billion years in ours."""
     from fractions import Fraction
     spec = slot.get("spec") or {}
     m = float(Fraction(str(spec.get("mass", slot.get("mass", 1)))))
-    lum = float(Fraction(str(spec.get("luminosity", 1)))) if spec else luminosity(m)
-    return SUN_MS_GYR * m / max(1e-9, lum)
+    lum = float(Fraction(str(spec.get("luminosity", 1)))) if spec else luminosity(m, laws)
+    return SUN_MS_GYR * (laws.nuclear if laws is not None else 1.0) * m / max(1e-9, lum)
 
 
-def chemistries(seed: int, slot: Dict[str, Any], world: Dict[str, Any]) \
-        -> List[Tuple[str, float, float, float, float, float]]:
-    """(region, mean wait per hard step, survival, window end, extinctions per Gyr, energy factor) for each chemistry
-    the world's physics allows (worlds.py): a step's rate is the chemistry's pace x its richness x the energy
-    reaching it. The first step - life itself - is chemistry and time, not throughput: it waits mean x energy
-    factor; the later ones (complexity, a mind) need the biomass energy feeds."""
+def area_m2(world: Dict[str, Any]) -> float:
+    """The area a world's life has: its surface (a giant's habitable band of its envelope)."""
+    from fractions import Fraction
+    from xylarium.kernel import biosphere, interior
+    b = world.get("body") or {}
+    r = float(Fraction(str(b.get("radius", 1)))) * interior.R_EARTH_M
+    return 4.0 * math.pi * r * r * (float(biosphere.GIANT_LIVING_BAND) if b.get("giant") else 1.0)
+
+
+def exposure(slot: Dict[str, Any]) -> float:
+    """How much of its orbit a star spends in the crowded plane of the disc (1 for a star that never leaves it)."""
+    return float((slot.get("vertical") or {}).get("exposure", 1.0))
+
+
+def chemistries(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Each chemistry the world's physics allows that can copy itself at all (life.ladder): its best medium's ladder
+    to a mind, the chance it is never sterilised, when its window ends (its star's death; never, for a sea in the
+    dark), and its rate of life-ending impacts - all from the world, its star and its place in the galaxy."""
+    from xylarium.kernel import life
     cosmos = _disc()
     bb = big_bang(seed)
-    out = []
+    L = laws(seed)
     by: Dict[str, Dict[str, Any]] = {}
     for m in world.get("media", []):
         if m["region"] not in by or m["richness"] * m["energy"] > by[m["region"]]["richness"] * \
                 by[m["region"]]["energy"]:
             by[m["region"]] = m
-    star_end = slot["born"] + lifetime(slot)
-    density = cosmos.density(slot["r"]) * bb["stars"]
+    star_end = slot["born"] + lifetime(slot, L)
+    crowd = cosmos.density(slot["r"]) * bb["stars"] * exposure(slot)
+    area = area_m2(world)
+    out = []
     for region in sorted(by):
         m = by[region]
-        rate = m["pace"] * m["richness"] * m["energy"] / (m["energy"] + ENERGY_HALF)
-        if rate <= 0:
+        lad = life.ladder(m, area, L)
+        if lad is None or not lad["steps"]:
             continue
         dark = m["where"] in ("under_ice", "deep")
         end = float("inf") if dark else star_end         # a dark sea runs on its world's heat, not its star
-        hazard = STERILISE_AT_R0 * density * MOLECULAR.get(region, 1.0) * (0.5 if dark else 1.0)
-        ef = m["energy"] / (m["energy"] + ENERGY_HALF)
-        out.append((region, bb["step_gyr"] / rate, math.exp(-hazard), end, EXTINCTIONS_PER_GYR * density, ef))
+        window = min(HORIZON_GYR, end) - slot["born"]
+        hazard = life.STERILISE_AT_R0 * crowd * window / 10.0 * (0.5 if dark else 1.0)
+        out.append({"region": region, "ladder": lad, "live": math.exp(-hazard), "end": end,
+                    "mu": life.EXTINCTIONS_PER_GYR * crowd})
     return out
 
 
-def lineage(seed: int, i: int, j: int, k: int, w: int, slot: Dict[str, Any], world: Dict[str, Any],
+def lineage(seed: Any, i: int, j: int, k: int, w: int, slot: Dict[str, Any], world: Dict[str, Any],
             seeded: Optional[Dict[str, float]] = None) -> Optional[Dict[str, Any]]:
-    """A world's life, as the seed's dice give it: for each chemistry, the hard steps it passes and when (a step is
-    progress an extinction can undo; the first, life itself, is never undone), its setbacks, and whether it was
-    sterilised. The furthest lineage (soonest, at a tie) is the world's life.
-    Life is abundant: it arises soon wherever a solvent is (ORIGIN_GYR, slower for slow, poor chemistry), and once one
-    world of a region has it, the region's others with the same chemistry receive it (seeded: region -> epoch).
-    Each extinction survived hardens the lineage: its later steps come sooner and its next blows land softer."""
-    bb = big_bang(seed)
-    n = bb["steps"]
+    """A world's life, as the seed's dice give it: for each chemistry, the rungs it climbs and when (each step an
+    exponential wait of its ladder's mean; an impact sends a lineage back to the start of its current rung - life
+    itself, once begun, is never undone), and whether it was sterilised. The furthest lineage (soonest, at a tie)
+    is the world's life. seeded: region -> the epoch life of that chemistry could arrive from a neighbour."""
     t0 = slot["born"] + CRUST_GYR
     if t0 >= HORIZON_GYR:
         return None
     best = None
-    for region, mean, live, end, mu, ef in chemistries(seed, slot, world):
+    for ch in chemistries(seed, slot, world):
+        region, steps, mu = ch["region"], ch["ladder"]["steps"], ch["mu"]
         rng = _rng(seed, "life", i, j, k, w, region)
-        horizon = min(end, HORIZON_GYR)
-        steril = t0 + rng.random() * (horizon - t0) if rng.random() >= live and horizon > t0 else float("inf")
+        horizon = min(ch["end"], HORIZON_GYR)
+        steril = t0 + rng.random() * (horizon - t0) if rng.random() >= ch["live"] and horizon > t0 else float("inf")
         t, times, setbacks = t0, [], 0
-        chem = bb["step_gyr"] / max(1e-12, mean * ef)               # pace x richness of this chemistry
-        for step in range(n):
-            hard = 1.0 + HARDEN * setbacks
-            if step == 0:
-                need = rng.expovariate(1.0 / (ORIGIN_GYR / math.sqrt(max(1e-6, chem))))   # life: chemistry and time
+        for s, step in enumerate(steps):
+            need = rng.expovariate(1.0 / max(1e-12, step["mean_gyr"]))
+            if s == 0:
                 if seeded and region in seeded:
-                    need = min(need, max(0.0, seeded[region] - t0))   # or carried here from a neighbour
-            else:
-                need = rng.expovariate(hard / mean)
-            if step == 0 or mu <= 0:
+                    need = min(need, max(0.0, seeded[region] - t0))     # or carried here from a neighbour
+                t += need
+            elif mu <= 0:
                 t += need
             else:
                 while t < horizon:
-                    x = rng.expovariate(mu / hard)
+                    x = rng.expovariate(mu)
                     if x >= need:
                         t += need
                         break
-                    t += x
+                    t += x                               # an impact: this rung's progress is lost
                     setbacks += 1
-                    hard = 1.0 + HARDEN * setbacks
             if t > horizon or t > steril:
                 break
             times.append(round(t, 6))
-        rec = {"region": region, "steps": times, "setbacks": setbacks, "sterilised": steril < horizon,
-               "mean": mean, "mu": mu, "live": live, "end": end}
-        if best is None or (len(times), -(times[-1] if times else 0)) > (len(best["steps"]),
-                                                                         -(best["steps"][-1] if best["steps"] else 0)):
-            best = rec
-    return best
+        rec = {"region": region, "steps": times, "n": len(steps), "complete": ch["ladder"]["complete"],
+               "setbacks": setbacks, "sterilised": steril < horizon, "mu": mu, "live": ch["live"], "end": ch["end"],
+               "eps0": ch["ladder"]["eps0"], "means": [x["mean_gyr"] for x in steps]}
+        mind = rec["complete"] and len(times) == rec["n"]
+        key = (mind, len(times) / max(1, rec["n"]), -(times[-1] if times else 0))
+        if best is None or key > best[0]:
+            best = (key, rec)
+    return best[1] if best else None
 
 
-def region_life(seed: Any, i: int, j: int) -> Dict[str, float]:
-    """When life of each chemistry could first reach the worlds of a cell: its earliest origin there, plus the
-    transfer time - life that exists outside will exist inside."""
-    key = ("region_life", seed, i, j)
+def system_life(seed: Any, i: int, j: int, k: int, slot: Dict[str, Any]) -> List[Optional[Dict[str, Any]]]:
+    """Every world of a system's life, with what its neighbours carry to it: rock an impact throws off one world
+    reaches the others in about a million of its orbits (life.transfer_gyr) - microbes travel, minds do not."""
+    from fractions import Fraction
+    from xylarium.kernel import life
+    key = ("system_life", seed, i, j, k)
     if key in _CACHE:
         return _CACHE[key]
-    first: Dict[str, float] = {}
-    for slot in cell(seed, i, j):
-        for w, world in enumerate(slot.get("worlds", [])):
-            lin = lineage(seed, i, j, slot["k"], w, slot, world)
-            if lin and lin["steps"]:
-                first[lin["region"]] = min(first.get(lin["region"], float("inf")), lin["steps"][0])
-    _CACHE[key] = {r: t + TRANSFER_GYR for r, t in first.items()}
-    return _CACHE[key]
+    ws = slot.get("worlds") or []
+    first = [lineage(seed, i, j, k, w, slot, world) for w, world in enumerate(ws)]
+    star = float(slot.get("mass", 1.0))
+    arrivals: List[Dict[str, float]] = [{} for _ in ws]
+    for w, lin in enumerate(first):
+        if not lin or not lin["steps"]:
+            continue
+        a_au = float(Fraction(str(ws[w]["body"].get("q", 1)))) ** 2
+        when = lin["steps"][0] + life.transfer_gyr(a_au, star)
+        for v in range(len(ws)):
+            if v != w:
+                arrivals[v][lin["region"]] = min(arrivals[v].get(lin["region"], float("inf")), when)
+    out = [lineage(seed, i, j, k, w, slot, world, arrivals[w]) if arrivals[w] else first[w]
+           for w, world in enumerate(ws)]
+    _CACHE[key] = out
+    return out
 
 
 def _erlang_n(x: float, n: int) -> float:
@@ -495,7 +603,7 @@ def _erlang_n(x: float, n: int) -> float:
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "runs",
                          "creation")
 LAWS = ("creation.py", "cosmos.py", "physics.py", "universe.py", "scheduler.py", "worlds.py", "biosphere.py",
-        "fertility.py", "../config.py")
+        "fertility.py", "fundamental.py", "interior.py", "orbits.py", "geometry.py", "life.py", "../config.py")
 
 
 def laws_digest() -> str:
@@ -537,43 +645,48 @@ def schedule(seed: int) -> Dict[str, Any]:
     return out
 
 
-def _compute(seed: int) -> Dict[str, Any]:
+def _compute(seed: Any) -> Dict[str, Any]:
+    from xylarium.kernel import life
     cosmos = _disc()
-    n = big_bang(seed)["steps"]
     minds: List[Dict[str, Any]] = []
     npts = int(HORIZON_GYR / CURVE_STEP) + 1
     curve = [0.0] * npts
     bins: Dict[Tuple[Any, ...], int] = {}
-    life = {"worlds": 0, "alive": 0, "stages": [0] * (n + 1)}
+    stages = [0] * (life.MAX_RUNGS + 1)
+    rungs: Dict[int, int] = {}
+    tally = {"worlds": 0, "alive": 0, "stages": stages, "rungs": rungs}
     for (i, j) in cosmos.cells():
-        seeded = region_life(seed, i, j)
         for slot in cell(seed, i, j):
             if "worlds" not in slot:
                 continue
             t0 = slot["born"] + CRUST_GYR
             if t0 >= HORIZON_GYR:
                 continue
+            lins = system_life(seed, i, j, slot["k"], slot)
             for w, world in enumerate(slot["worlds"]):
-                life["worlds"] += 1
-                lin = lineage(seed, i, j, slot["k"], w, slot, world, seeded)
+                tally["worlds"] += 1
+                lin = lins[w]
                 if lin is None:
                     continue
-                life["stages"][len(lin["steps"])] += 1
+                stages[len(lin["steps"])] += 1
+                rungs[lin["n"]] = rungs.get(lin["n"], 0) + 1
                 if lin["steps"]:
-                    life["alive"] += 1
-                if len(lin["steps"]) == n and foragers(world, lin["region"], slot) >= VIABLE:
+                    tally["alive"] += 1
+                if lin["complete"] and len(lin["steps"]) == lin["n"] and foragers(world, lin["region"], slot) >= VIABLE:
                     minds.append({"cell": [i, j], "k": slot["k"], "w": w, "epoch": lin["steps"][-1],
                                   "metab": lin["region"], "mass": round(slot["mass"], 3),
                                   "steps": lin["steps"], "setbacks": lin["setbacks"]})
-                # the expectation: each chemistry's chance of a mind by each epoch (resets lengthen the later steps)
+                # the expectation: each chemistry's chance of a mind by each epoch (impacts lengthen the later steps)
                 terms = []
-                for region, mean, live, end, mu, ef in chemistries(seed, slot, world):
-                    if foragers(world, region, slot) < VIABLE:
+                for ch in chemistries(seed, slot, world):
+                    if not ch["ladder"]["complete"] or foragers(world, ch["region"], slot) < VIABLE:
                         continue
-                    later = (math.exp(min(50.0, mu * mean)) - 1.0) / mu if mu > 0 else mean
-                    eff = (mean * ef + (n - 1) * later) / n
-                    terms.append((region, round(math.log(eff) * 100), round(live, 3),
-                                  npts if end >= HORIZON_GYR else int(math.ceil(end / CURVE_STEP))))
+                    mu = ch["mu"]
+                    means = [x["mean_gyr"] if n == 0 or mu <= 0 else (math.exp(min(50.0, mu * x["mean_gyr"])) - 1.0) / mu
+                             for n, x in enumerate(ch["ladder"]["steps"])]
+                    m1, m2 = sum(means), sum(x * x for x in means)
+                    terms.append((round(math.log(m1) * 50), round(math.log(m2) * 50), round(ch["live"], 3),
+                                  npts if ch["end"] >= HORIZON_GYR else int(math.ceil(ch["end"] / CURVE_STEP))))
                 if terms:
                     key = (int(math.ceil(t0 / CURVE_STEP)),) + tuple(terms)
                     bins[key] = bins.get(key, 0) + 1
@@ -581,55 +694,52 @@ def _compute(seed: int) -> Dict[str, Any]:
         c0, terms, cnt = key[0], key[1:], bins[key]
         for c in range(c0, npts):
             miss = 1.0
-            for region, lm, live, ce in terms:
-                miss *= 1.0 - _erlang_n((min(c, ce) - c0) * CURVE_STEP / math.exp(lm / 100.0), n) * live
+            for lm1, lm2, live, ce in terms:
+                m1, m2 = math.exp(lm1 / 50.0), math.exp(lm2 / 50.0)
+                shape, scale = m1 * m1 / m2, m2 / m1
+                miss *= 1.0 - life.gamma_cdf(shape, (min(c, ce) - c0) * CURVE_STEP / scale) * live
             curve[c] += cnt * (1.0 - miss)
     minds.sort(key=lambda e: (e["epoch"], e["cell"], e["k"], e["w"]))
-    return {"minds": minds, "curve": [round(x, 2) for x in curve], "life": life}
+    return {"minds": minds, "curve": [round(x, 2) for x in curve], "life": tally}
 
 
 def limits(seed: Any, every: int = 7) -> Dict[str, Any]:
     """What stops life in a universe, world by world (a sample of its cells): the first gate each world fails - no
-    solvent at all, a chemistry too poor in bonds and elements, too little energy reaching it, kinetics too slow, its
-    star dying first, sterilised - and how far the rest got. The audit for choosing a stronger or richer Big Bang."""
+    solvent at all; a solvent whose bonds cannot copy faithfully (life.fidelity); a ladder too long for the time it
+    has; its star dying first; sterilised; too few bodies fed to make a people - and how far the rest got. The
+    audit for choosing other laws or a richer Big Bang."""
     cosmos = _disc()
-    out = {"worlds": 0, "no_solvent": 0, "poor_chemistry": 0, "starved": 0, "slow": 0, "star_died": 0,
-           "sterilised": 0, "stalled": 0, "minds": 0, "by_region": {}}
-    n = big_bang(seed)["steps"]
+    out = {"worlds": 0, "no_solvent": 0, "cannot_copy": 0, "star_died": 0, "sterilised": 0, "too_slow": 0,
+           "unfed": 0, "minds": 0, "alive": 0, "by_region": {}, "rungs": {}}
     for (i, j) in cosmos.cells()[::every]:
         for slot in cell(seed, i, j):
-            for w, world in enumerate(slot.get("worlds", [])):
-                if slot["born"] + CRUST_GYR >= HORIZON_GYR:
-                    continue
+            if not slot.get("worlds") or slot["born"] + CRUST_GYR >= HORIZON_GYR:
+                continue
+            lins = system_life(seed, i, j, slot["k"], slot)
+            for w, world in enumerate(slot["worlds"]):
                 out["worlds"] += 1
-                chems = chemistries(seed, slot, world)
                 if not world.get("media"):
                     out["no_solvent"] += 1
                     continue
-                lin = lineage(seed, i, j, slot["k"], w, slot, world, region_life(seed, i, j))
-                if lin is None or not chems:
-                    out["poor_chemistry"] += 1
+                lin = lins[w]
+                if lin is None:
+                    out["cannot_copy"] += 1
                     continue
                 out["by_region"][lin["region"]] = out["by_region"].get(lin["region"], 0) + 1
-                if len(lin["steps"]) == n:
-                    out["minds"] += 1
-                    continue
-                m = max((md for md in world["media"] if md["region"] == lin["region"]),
-                        key=lambda md: md["richness"] * md["energy"])
-                energy = m["energy"] / (m["energy"] + ENERGY_HALF)
-                if lin["sterilised"]:
+                out["rungs"][lin["n"]] = out["rungs"].get(lin["n"], 0) + 1
+                if lin["steps"]:
+                    out["alive"] += 1
+                if lin["complete"] and len(lin["steps"]) == lin["n"]:
+                    if foragers(world, lin["region"], slot) >= VIABLE:
+                        out["minds"] += 1
+                    else:
+                        out["unfed"] += 1
+                elif lin["sterilised"]:
                     out["sterilised"] += 1
-                elif lin["end"] < HORIZON_GYR and (not lin["steps"] or lin["steps"][-1] < lin["end"]) and \
-                        lin["mean"] * n > lin["end"] - slot["born"]:
+                elif lin["end"] < HORIZON_GYR and sum(lin["means"]) > lin["end"] - slot["born"]:
                     out["star_died"] += 1
-                elif m["richness"] < 0.05:
-                    out["poor_chemistry"] += 1
-                elif energy < 0.2:
-                    out["starved"] += 1
-                elif m["pace"] < 0.05:
-                    out["slow"] += 1
                 else:
-                    out["stalled"] += 1
+                    out["too_slow"] += 1
     return out
 
 

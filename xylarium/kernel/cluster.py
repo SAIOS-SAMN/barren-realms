@@ -18,6 +18,7 @@ Witnessing: a home people that first reaches space charts the cluster (its obser
 mind in another galaxy is heard once its light has crossed the distance - and the rule at this tier boundary is
 written down: light between galaxies travels on deep time (cosmos.ruler), so Andromeda's 2.5 million years of light
 take ~2.5 clock years at the neighbourly pace. Every charting, first signal and the merger are ledger events.
+Distances are arcs of the universe's 3-sphere (geometry.py), not straight lines through a flat space.
 """
 
 import bisect
@@ -61,7 +62,7 @@ def _schechter(rng: Any) -> float:
 
 def genesis(kernel: Any) -> None:
     """Lay out the home cluster at the epoch the first mind arises (cosmos.genesis)."""
-    from xylarium.kernel import cosmos
+    from xylarium.kernel import cosmos, geometry
     from xylarium.kernel.natives import _name
     st = stats(kernel)
     rng = _rng(kernel, "layout")
@@ -77,7 +78,7 @@ def genesis(kernel: Any) -> None:
                      "r": round(r, 2)})
     total = sum(g["mass"] for g in gals) * HALO_TO_STARS
     for i, g in enumerate(gals):
-        d = math.dist(g["pos"], [0.0, 0.0, 0.0])
+        d = geometry.local_kpc(cosmos.cosmos_seed(kernel), g["pos"], [0.0, 0.0, 0.0])   # the arc on the 3-sphere
         g["dist_kpc"] = round(d, 2)
         g["v_kms"] = round(math.sqrt(G_KPC * total / max(50.0, g["r"] or d or 50.0)), 2)
         g["metals"] = round(min(1.0, (g["mass"] / HOME_MASS) ** MZ_SLOPE), 4)

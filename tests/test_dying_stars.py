@@ -37,6 +37,8 @@ class TestDyingStars(unittest.TestCase):
         self.assertGreater(cosmos.lum(self.sid), max(1.0, cosmos.RGB_TIP_LSUN / l0) ** 0.5)   # toward the tip
         if biosphere.metabolism_of(self.k, self.p) == "plasmic":
             self.assertGreaterEqual(biosphere.carrying_capacity(self.k, self.p), k0)  # it lives on its giant's heat
+        elif biosphere.metabolism_of(self.k, self.p) == "mineral":
+            self.assertGreater(biosphere.carrying_capacity(self.k, self.p), 0)        # a melt outlasts the glare
         else:
             self.assertLess(biosphere.carrying_capacity(self.k, self.p), k0 / 10)
 

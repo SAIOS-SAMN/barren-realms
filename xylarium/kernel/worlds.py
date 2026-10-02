@@ -86,8 +86,9 @@ SOLIDS = _solids()
 ICE_PER_ROCK = {k: v for k, v in SOLIDS.items() if k != "core"}
 COMET = {"H2O": 1.0, "CO2": 0.1, "CO": 0.1, "CH4": 0.01, "NH3": 0.01, "N2": 0.005}   # comets' ices by mass
                                 # (Mumma & Charnley 2011): mostly water - what impacts bring across the snow line
-PHOTOLYSIS_FLUX = 0.03          # light above which an atmosphere's ammonia and methane are broken within years
-                                # (declared; Titan, at ~0.01, keeps its methane)
+PHOTOLYSIS_UV = 0.03 * 0.065 * 1.4   # bond-breaking light (flux units) above which an atmosphere's ammonia and
+                                # methane are broken within years: 0.03 of a Sun-like star's light at its ~6.5%
+                                # bond-breaking share and middle-aged activity (declared; Titan, at ~0.01, keeps its methane)
 MMSN_ROCK = 7.1                 # g/cm^2 of rock at 1 AU around a Sun (Hayashi 1981): the disc's calibration (declared)
 GIANT_IMPACT_GROWTH = 8.0       # how many isolation masses an inner planet gathers by giant impacts (Kokubo 2006; ~5-10)
 CRITICAL_CORE = 10.0            # unit masses: a core this heavy captures the disc's gas (Mizuno 1980)
@@ -95,7 +96,13 @@ DISC_LIFE_MYR = 3.0             # how long a disc keeps its gas (observed disc l
 GROWTH_MYR_5AU = 1.0            # a critical core's growth time at 5 AU in a unit disc (declared; ~ a^2 / Sigma)
 DELIVERED = 1.0e-4              # volatiles an impact-fed rocky world gets per unit comet flux (declared)
 OUTGAS_GYR = 1.0                # e-folding of a rocky interior's outgassing at unit heat (declared)
-STRIP_RATE = 2.0e-6             # air (mass fraction) an unshielded unit world loses per Gyr under unit wind (declared)
+STRIP_RATE = 2.0e-6             # air (mass fraction) a unit world's sky has broken per Gyr under unit wind (declared)
+TRANSPORT_BAR = 0.1             # a sky this thick carries heat poleward about as fast as the poles radiate it (declared:
+                                # thin skies collapse onto their poles, Wordsworth et al. 2015)
+FRAGMENT = {"H2O": 1.0, "NH3": 1.0, "CH4": 1.0, "CO2": 16.0, "CO": 14.0, "N2": 14.0}   # the lightest piece light
+                                # breaks each into (in proton masses): water, ammonia and methane lose hydrogen
+STRIP_PASSES = (0.25, 1.0 / 3.0, 0.5, 1.0)   # the wind's dose spent in quarters, the climate settling between them
+HOT_EV = 2.5                    # eV a fragment of a broken molecule flies with (dissociative recombination of O2+)
 WEATHER_E_K = 11.5              # silicate weathering's e-fold in temperature: R T^2 / Ea, Ea ~ 60 kJ/mol (lab kinetics)
 WEATHER_SCALE = 1.0e-3          # bar of CO2 at which unit outgassing balances weathering at water's triple point
                                 # (declared: the carbonate-silicate cycle's one free number)
@@ -103,29 +110,55 @@ JEANS_HOLD = 15.0               # lambda above which a gas is held over Gyr (esc
 THERMOSPHERE = 4.0              # exobase over equilibrium temperature at quiet ultraviolet (declared)
 RUNAWAY_FLUX = 282.0 / 340.0    # a moist atmosphere radiates at most ~282 W/m^2 (Nakajima et al. 1992); in flux units
                                 # absorbed (unit flux = 340 W/m^2 averaged over a sphere)
-GREENHOUSE_TAU = 5.0            # tau per sqrt(bar) of greenhouse gas: Venus, Earth, Mars together (declared)
+GREENHOUSE_TAU = 6.4            # tau per sqrt(bar) of greenhouse gas at a bar of air (declared: Venus, Earth and Mars
+BROADENING = 0.2                # together); absorption lines widen with the whole air's pressure, tau ~ P^0.2
 MELT_K = 1400.0                 # rock melts
 GIANT_PLASMA_MASS = 10.0        # unit masses: a world that holds a hydrogen envelope deep enough to ionise
 SOLVENT_BARRIER = 25.0          # activation energy in units of k x the solvent's own mid-liquid temperature (declared)
 BOND_EV = {"covalent": 3.6, "silicate": 4.6, "melt_network": 1.0}   # backbone bonds, a melt's network (eV)
 STRONG_KT = 40.0                # a backbone must outlast a structure: bond energy over kT above ~40 (h/kT e^40 ~ years)
 WEAK_KT = 10.0                  # weak bonds hold yet flex near ~10 kT (Trouton: every liquid at its boiling point)
-GEO_FLUX = 0.087 / 340.0       # a unit world's heat flowing out per area (0.087 W/m^2, the unit of heat), in flux units
+GEO_FLUX = 0.087 / 340.0       # the unit of heat flow per area (0.087 W/m^2), in flux units (interior.py computes it)
+HEAT_UNIT_W = 0.087 * 4.0 * math.pi * 6.371e6 ** 2   # the unit of a world's heat (W): the unit flow over a unit world
 GIANT_FLUX = 5.4 / 340.0        # a giant of 318 unit masses' internal heat per area (contraction; declared scaling ~M)
 PLASMA_WINDOW = 0.002           # how much structure ionised matter can hold, against a bonded chemistry's best (declared)
+PHOTO_LOW = 0.4                 # a photon that lifts an electron in a bonded molecule carries ~0.4 of a covalent bond or
+                                # more (conjugated molecules' excitation gaps; declared): below it, light only warms
+UNIT_G = 9.81                   # m/s^2: the unit of surface gravity
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, x))
 
 
+def _laws(laws: Any = None) -> Any:
+    if laws is not None:
+        return laws
+    from xylarium.kernel import fundamental
+    return fundamental.current()
+
+
+def _phase_of(species: str, laws: Any = None):
+    """A volatile's phase diagram under a universe's laws: its temperatures and heat of vaporisation scale with the
+    chemistry's energy (the Rydberg), its pressures with condensed matter's (fundamental.py); our values for ours."""
+    L = laws if laws is not None else _laws(None)
+    got = L.memo.get(species)
+    if got is None:
+        tt, pt, tb, tc, pc, l_kj = VOLATILES[species]["phase"]
+        c, p = L.chem, L.pressure
+        got = L.memo[species] = (tt * c, pt * p, tb * c, tc * c, pc * p, l_kj * c, p)
+    return got
+
+
 # ---------------------------------------------------------------------- a world's state
-def star_of(spec: Dict[str, Any]) -> Dict[str, float]:
-    """A star's mass, light and surface temperature from its spec (main sequence: R ~ M^0.8)."""
+def star_of(spec: Dict[str, Any], laws: Any = None) -> Dict[str, float]:
+    """A star's mass, light and surface temperature from its spec (main sequence: R ~ M^0.8, in its universe's
+    stellar scales: fundamental.py)."""
     from fractions import Fraction
+    L = _laws(laws)
     m = float(Fraction(str(spec.get("mass", 1))))
     lum = float(Fraction(str(spec.get("luminosity", 1))))
-    radius = max(0.08, m) ** 0.8
+    radius = max(0.08, m / L.star_mass) ** 0.8 * L.star_radius
     t_eff = 5772.0 * (max(1e-9, lum) / radius ** 2) ** 0.25
     return {"mass": m, "lum": lum, "t_eff": t_eff}
 
@@ -136,42 +169,52 @@ def activity(star_mass: float, age_gyr: float) -> float:
     return 1.0 + 9.0 * math.exp(-max(0.0, age_gyr) * spin_down)
 
 
-def condensed(t_form: float) -> Dict[str, float]:
+def dose(star_mass: float, age_gyr: float) -> float:
+    """The activity a world has been under from its star's birth to an age (Gyr x activity): its young star's fury
+    counts for what it was, not for what the star is now."""
+    k = max(0.05, star_mass) ** 2
+    t = max(0.0, age_gyr)
+    return t + 9.0 * (1.0 - math.exp(-t * k)) / k
+
+
+def condensed(t_form: float, laws: Any = None) -> Dict[str, float]:
     """Ices a world forming at t_form gathers, per unit rock."""
-    return {s: ICE_PER_ROCK[s] for s, v in VOLATILES.items() if t_form < v["cond"]}
+    c = _laws(laws).chem
+    return {s: ICE_PER_ROCK[s] for s, v in VOLATILES.items() if t_form < v["cond"] * c}
 
 
-def boiling(species: str, p_bar: float) -> float:
+def boiling(species: str, p_bar: float, laws: Any = None) -> float:
     """The boiling temperature of a volatile at pressure p (Clausius-Clapeyron), capped at its critical point."""
-    tt, pt, tb, tc, pc, l_kj = VOLATILES[species]["phase"]
+    tt, pt, tb, tc, pc, l_kj, pref = _phase_of(species, laws)
     if p_bar <= 0:
         return tt
-    inv = 1.0 / tb - 8.314 / (l_kj * 1000.0) * math.log(p_bar)
+    inv = 1.0 / tb - 8.314 / (l_kj * 1000.0) * math.log(p_bar / pref)
     return min(tc, 1.0 / inv) if inv > 0 else tc
 
 
-def phase(species: str, t: float, p_bar: float) -> str:
+def phase(species: str, t: float, p_bar: float, laws: Any = None) -> str:
     """'solid', 'liquid', 'gas' or 'supercritical' at (t, p)."""
-    tt, pt, tb, tc, pc, _ = VOLATILES[species]["phase"]
+    tt, pt, tb, tc, pc, _, _ = _phase_of(species, laws)
     if t >= tc and p_bar >= pc:
         return "supercritical"
     if t < tt:
         return "solid"
     if p_bar < pt:
         return "gas"
-    return "liquid" if t <= boiling(species, p_bar) else "gas"
+    return "liquid" if t <= boiling(species, p_bar, laws) else "gas"
 
 
-def form(star: Dict[str, Any], a_au: float, z: float, env: float, rng: Any) -> Dict[str, Any]:
+def form(star: Dict[str, Any], a_au: float, z: float, env: float, rng: Any, laws: Any = None) -> Dict[str, Any]:
     """A planet as its orbit built it: the solids its stretch of disc offered (rock and metal everywhere; each ice
     beyond its own line), gathered to the isolation mass (Kokubo & Ida 2002), grown by giant impacts, and - if its core
     passed the critical mass - wrapped in the disc's gas. Its layers settle by density: a metal core, a silicate
     mantle, ices above, an envelope over all. Inside the snow line its ices come late, by impact, as its galactic
     neighbourhood shakes comets loose. Radius follows from mass and layers."""
-    s = star_of(star)
+    L = _laws(laws)
+    s = star_of(star, L)
     zz = max(0.0, z)
     t_form = T_UNIT * (s["lum"] / max(1e-6, a_au) ** 2) ** 0.25
-    ices = {sp: f * zz for sp, f in ICE_PER_ROCK.items() if t_form < VOLATILES[sp]["cond"]}
+    ices = {sp: f * zz for sp, f in ICE_PER_ROCK.items() if t_form < VOLATILES[sp]["cond"] * L.chem}
     if "H2O" not in ices:                                # what comets bring across the snow line
         late = DELIVERED * env * zz
         ices = {sp: f * late for sp, f in COMET.items()}
@@ -189,10 +232,11 @@ def form(star: Dict[str, Any], a_au: float, z: float, env: float, rng: Any) -> D
         envelope = core * 10.0 ** (rng.random() * 1.5) * min(1.0, s["mass"])   # what gas the disc still had
     total = core + envelope
     ice_share = sum(ices.values()) / (1.0 + sum(ices.values()))
+    squeeze = L.density ** (-1.0 / 3.0)                  # denser matter, smaller worlds of a mass
     if envelope > 0:
-        radius = 11.0 * (1.0 - math.exp(-total / 30.0)) + core ** 0.27
+        radius = (11.0 * (1.0 - math.exp(-total / 30.0)) + core ** 0.27) * squeeze
     else:
-        radius = core ** 0.27 * (1.0 + 0.4 * ice_share)  # rock and metal ~ M^0.27; ice-rich worlds are puffier
+        radius = core ** 0.27 * (1.0 + 0.4 * ice_share) * squeeze   # rock and metal ~ M^0.27; ices are puffier
     return {"mass": total, "radius": radius, "giant": envelope > 0, "ices": ices,
             "layers": {"core": SOLIDS["core"] * (1 - ice_share) * core / total,
                        "mantle": (1 - SOLIDS["core"]) * (1 - ice_share) * core / total,
@@ -214,115 +258,180 @@ def label(w: Dict[str, Any]) -> str:
     return "BARREN"
 
 
-def build(seed: int, star: Dict[str, Any], a_au: float, radius: float, mass: float, giant: bool, z: float,
-          r_kpc: float, age_gyr: float, ices: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
-    """The world as physics makes it at an age: its formation, atmosphere and oceans, temperature and field."""
-    from xylarium.kernel import cosmos
-    s = star_of(star)
-    flux = s["lum"] / max(1e-6, a_au) ** 2
-    t_form = T_UNIT * flux ** 0.25                              # the nebula's temperature where it formed
+def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: float, giant: bool, z: float,
+          r_kpc: float, age_gyr: float, ices: Optional[Dict[str, float]] = None, born: Optional[float] = None,
+          orbit: Optional[Dict[str, Any]] = None, core: Optional[float] = None) -> Dict[str, Any]:
+    """The world as physics makes it at an age: its formation, interior, atmosphere and oceans, temperature and field.
+    orbit (orbits.py) carries its host and elements: its eccentricity (the light it gets over a year, and the tides
+    that heat it); born, its star's birth (the isotopes its rock was made with: interior.py)."""
+    from xylarium.kernel import cosmos, fundamental, interior, orbits
+    L = fundamental.of(seed) if seed is not None else _laws(None)
+    s = star_of(star, L)
+    e_now = 0.0
+    if orbit:
+        e_now = orbits.eccentricity(orbit["el"]["e0"], orbit["el"]["e_forced"], orbit["el"]["tau_e"], age_gyr)
+    flux = s["lum"] / max(1e-6, a_au) ** 2 / math.sqrt(max(1e-6, 1.0 - e_now * e_now))   # a year's mean
+    t_form = T_UNIT * (s["lum"] / max(1e-6, a_au) ** 2) ** 0.25    # the nebula's temperature where it formed
     env = cosmos.density(r_kpc)                                 # its neighbourhood: flybys, the tide, supernovae
     zz = max(0.0, z)
     if ices is None:                                           # a world laid out before formation was physics
-        ices = {k: v * zz for k, v in condensed(t_form).items()}
+        ices = {k: v * zz for k, v in condensed(t_form, L).items()}
         if not giant and "H2O" not in ices:
             ices = {sp: f * DELIVERED * env * zz for sp, f in COMET.items()}
-    heat = mass * (1.0 + 2.0 * math.exp(-age_gyr / 2.5)) * zz ** 0.5   # radiogenic (metals) and primordial heat
-    out = 1.0 - math.exp(-age_gyr * heat / OUTGAS_GYR) if not giant else 1.0
-    field = 0.0 if giant else _clamp(1.0 - 0.6 * max(1e-6, mass) ** (-1.0 / 3.0) / max(1e-6, heat / max(1e-6, mass)))
-    # escape: a hot exosphere under its star's ultraviolet, on a world of this mass and radius
     t_eq0 = T_UNIT * flux ** 0.25 * 0.7 ** 0.25
-    t_exo = THERMOSPHERE * t_eq0 * activity(s["mass"], age_gyr) ** 0.5 * (1.0 if field > 0 else 1.5)
+    if giant:                                           # an envelope with no surface: its cloud tops
+        return {"flux": flux, "t_form": round(t_form, 1), "t_surf": round(t_eq0, 1), "p_bar": 1.0e3, "air": {},
+                "seas": {}, "ices": ices, "heat": 0.0, "q": 0.0, "field": 0.0, "giant": True, "mass": mass,
+                "radius": radius, "env": env, "star_t": s["t_eff"], "albedo": 0.3, "light": 0.0, "e": round(e_now, 4),
+                "laws": L}
+    # the interior: isotopes from its star's birth, warmth from its formation, tides from its host
+    ice_share = sum(ices.values()) / (1.0 + sum(ices.values()))
+    core = SOLIDS["core"] * (1.0 - ice_share) if core is None else core
+    inv = interior.inventory(seed if born is not None else None, r_kpc,
+                             born if born is not None else interior.SUN_BORN_GYR, zz, L)
+    tide = None
+    if orbit and orbit.get("host_kg"):
+        el, host, a_m, icy = orbit["el"], orbit["host_kg"], orbit["a_m"], ice_share > 0.2
+        tide = lambda t: interior.tidal_w(host, a_m, orbits.eccentricity(el["e0"], el["e_forced"], el["tau_e"], t),
+                                          mass, radius, icy)
+    inside = interior.evolve(mass, radius, core, inv, age_gyr, t_eq0, tide, ice_share > 0.2, L)
+    heat = inside["heat_w"] / HEAT_UNIT_W                       # in units of a unit world's heat
+    out = 1.0 - math.exp(-inside["processed"])                  # the share of its volatiles its heat has degassed
+    field = inside["field"]
+    # escape: a hot exosphere under its star's ultraviolet, on a world of this mass and radius
+    t_exo = THERMOSPHERE * t_eq0 * activity(s["mass"] / L.star_mass, age_gyr) ** 0.5 * (1.0 if field > 0 else 1.5)
     gm_r = GM_OVER_R_UNIT * mass / max(1e-6, radius)
     gas: Dict[str, float] = {}
     for sp, frac in ices.items():
-        lam = gm_r * VOLATILES[sp]["mu"] / (K_OVER_MH * max(1.0, t_exo))
+        lam = gm_r * VOLATILES[sp]["mu"] / (K_OVER_MH / L.proton * max(1.0, t_exo))
         held = _clamp((lam - 2.0) / (JEANS_HOLD - 2.0))          # blow-off below ~2, held above ~15
         gas[sp] = frac * out * held
-    if flux > PHOTOLYSIS_FLUX:                         # starlight's ultraviolet: nitrogen ends as N2, carbon as CO2
+    uv = flux * band(s["t_eff"], L)["break"] * activity(s["mass"] / L.star_mass, age_gyr)
+    if uv > PHOTOLYSIS_UV:                             # starlight's ultraviolet: nitrogen ends as N2, carbon as CO2
         for sp, to, ratio in (("NH3", "N2", 28.0 / 34.0), ("CH4", "CO2", 44.0 / 16.0), ("CO", "CO2", 44.0 / 28.0)):
             if sp in gas:
                 gas[to] = gas.get(to, 0.0) + gas.pop(sp) * ratio
-    # with no field to turn it, the star's wind takes a mass of air each year - the fiercer and nearer the star and
-    # the lighter the world, the more - lightest gases first: a thick atmosphere loses a little, a thin one all
-    stripped = 0.0 if giant else STRIP_RATE * age_gyr * flux * activity(s["mass"], age_gyr) * (1.0 - field) ** 4 \
-        / max(1e-6, mass)                               # a dynamo turns the wind's charges aside: shielding is steep
+    # the star's wind and ultraviolet break molecules high in the air, and what they break flies off with a few eV (the
+    # energy dissociative recombination releases - a chemistry energy); a product escapes if that beats its weight's
+    # binding, mu m_H v_esc^2 / 2 (photochemical escape): light worlds lose their air, heavy ones keep it - lightest
+    # gases first, a thick atmosphere losing a little, a thin one all
+    wind = STRIP_RATE * flux * dose(s["mass"] / L.star_mass, age_gyr) / max(1e-6, mass)
+    bind_ev = gm_r * 2.0 * 1.6726e-27 * L.proton / 1.602e-19       # per m_H: mu m_H v_esc^2 / 2 = mu m_H G M / R
     g = mass / max(1e-6, radius) ** 2
     to_bar = G_UNIT_PA_PER_MASSFRAC * mass * g / max(1e-6, radius) ** 2 / BAR
     hpm = heat / max(1e-6, mass)
-    if giant:                                           # an envelope with no surface: its cloud tops
-        t_top = T_UNIT * flux ** 0.25 * 0.7 ** 0.25
-        return {"flux": flux, "t_form": round(t_form, 1), "t_surf": round(t_top, 1), "p_bar": 1.0e3, "air": {},
-                "seas": {}, "ices": ices, "heat": heat, "field": 0.0, "giant": True, "mass": mass, "radius": radius,
-                "env": env, "star_t": s["t_eff"], "albedo": 0.3, "light": 0.0}
-    if stripped > 0:
-        # the wind takes what stands in the air of the world as its bare light leaves it (no rock has yet locked its
-        # carbon away), lightest first
-        cold, _ = _state(gas, to_bar, T_UNIT * flux ** 0.25 * 0.7 ** 0.25, hpm, giant)
-        budget = stripped
-        for sp in sorted(cold, key=lambda x: VOLATILES[x]["mu"]):
-            take = min(gas[sp], cold[sp] / max(1e-12, to_bar), budget)
-            gas[sp] -= take
-            budget -= take
-    t_surf, p_bar, air, seas, albedo = _climate(gas, to_bar, flux, hpm, giant)
-    if giant:
-        p_bar = max(p_bar, 1.0e3)                               # an envelope with no floor
+    budget = [wind]
+
+    def strip(air_now: Dict[str, float], share: float) -> None:
+        """The wind breaks the molecules standing in the air in proportion to their share of it; the fragments fast
+        enough fly off (the lightest most easily), and the molecule is gone from the world's inventory."""
+        total = sum(air_now.values())
+        spend = budget[0] * share
+        if total <= 0 or spend <= 0:
+            return
+        for sp, pp in air_now.items():
+            if sp not in gas:
+                continue
+            broken = spend * pp / total
+            escape = math.exp(-bind_ev * FRAGMENT.get(sp, VOLATILES[sp]["mu"] / 2.0) / (HOT_EV * L.chem))
+            gas[sp] -= min(gas[sp], pp / max(1e-12, to_bar), broken * escape)
+        budget[0] -= spend
+    obliquity = orbit["obliquity"] if orbit and orbit.get("obliquity") is not None else math.pi / 4.0
+    t_surf, p_bar, air, seas, albedo = _climate(gas, to_bar, flux, hpm, giant, L, obliquity)
+    lightest = min((FRAGMENT.get(sp, VOLATILES[sp]["mu"] / 2.0) for sp in gas), default=1.0)
+    reach = wind * math.exp(-bind_ev * lightest / (HOT_EV * L.chem))      # the most the wind could take
+    for share in STRIP_PASSES:
+        # what the climate holds aloft is what the wind can reach - a steam sky loses its hydrogen to space, and with
+        # it its water; a thin sky goes whole - and the climate settles again on what is left
+        if budget[0] <= 0 or not air or reach < 1e-4 * sum(gas.values()):
+            break
+        strip(air, share)
+        t_surf, p_bar, air, seas, albedo = _climate(gas, to_bar, flux, hpm, giant, L, obliquity)
     return {"flux": flux, "t_form": round(t_form, 1), "t_surf": round(t_surf, 1), "p_bar": p_bar, "air": air,
-            "seas": seas, "ices": ices, "heat": heat, "field": round(field, 3), "giant": giant, "mass": mass,
-            "radius": radius, "env": env, "star_t": s["t_eff"], "albedo": round(albedo, 3),
-            "light": flux * (1.0 - albedo) * math.exp(-0.1 * p_bar ** 0.5)}   # what reaches the surface
+            "seas": seas, "ices": ices, "heat": heat, "q": inside["q"], "q_tide": inside["q_tide"],
+            "t_int": inside["t_int"], "field": round(field, 3), "giant": giant, "mass": mass, "radius": radius,
+            "env": env, "star_t": s["t_eff"], "albedo": round(albedo, 3), "e": round(e_now, 4), "g": g,
+            "light": flux * (1.0 - albedo) * math.exp(-0.1 * p_bar ** 0.5), "laws": L}   # what reaches the surface
 
 
-def saturation(species: str, t: float) -> float:
+def saturation(species: str, t: float, laws: Any = None) -> float:
     """Vapour pressure over a volatile's liquid or ice at t (Clausius-Clapeyron from its triple point), bar."""
-    tt, pt, _, _, _, l_kj = VOLATILES[species]["phase"]
+    tt, pt, _, _, _, l_kj, _ = _phase_of(species, laws)
     return pt * math.exp(l_kj * 1000.0 / 8.314 * (1.0 / tt - 1.0 / max(1.0, t)))
 
 
-def _state(gas: Dict[str, float], to_bar: float, t: float, hpm: float, giant: bool):
+def _state(gas: Dict[str, float], to_bar: float, t: float, hpm: float, giant: bool, laws: Any = None):
     """The air and seas a world would have at surface temperature t."""
+    L = _laws(laws)
     inv = {sp: f * to_bar for sp, f in gas.items()}
     air: Dict[str, float] = {}
     seas: Dict[str, float] = {}
     for sp, pp in inv.items():
         if sp in ("H2O", "NH3", "CH4", "CO2", "N2"):
-            vap = min(pp, saturation(sp, t))            # what the air holds of it at saturation
+            vap = min(pp, saturation(sp, t, L))         # what the air holds of it at saturation
             if vap > 0:
                 air[sp] = vap
             if pp - vap > 0:
                 seas[sp] = pp - vap
     p = sum(air.values())
-    wet = "H2O" in seas and phase("H2O", t, max(p, 1e-9)) == "liquid" and not giant
+    wet = "H2O" in seas and phase("H2O", t, max(p, 1e-9), L) == "liquid" and not giant
     if wet and "CO2" in air:
         # the carbonate-silicate cycle: where liquid water meets rock, weathering turns CO2 to carbonate until it
         # balances what the interior outgasses - faster the warmer (Walker, Hays & Kasting 1981)
-        balance = WEATHER_SCALE * hpm ** 2 * math.exp(-2.0 * (t - VOLATILES["H2O"]["phase"][0]) / WEATHER_E_K)
+        balance = WEATHER_SCALE * hpm ** 2 * math.exp(-2.0 * (t - _phase_of("H2O", L)[0]) / (WEATHER_E_K * L.chem))
         air["CO2"] = min(air["CO2"], max(1e-6, balance))
         seas.pop("CO2", None)                           # the rest is carbonate rock, not a sea
     return air, seas
 
 
-def _climate(gas: Dict[str, float], to_bar: float, flux: float, hpm: float, giant: bool):
+def polar_share(obliquity: float) -> float:
+    """A pole's year-round sunlight over the world's mean: 4 sin(obliquity) / pi (none for an upright world)."""
+    return min(1.0, 4.0 * abs(math.sin(obliquity)) / math.pi)
+
+
+def _cold_trap(air: Dict[str, float], seas: Dict[str, float], t: float, obliquity: float, laws: Any) -> None:
+    """A world is not one temperature: its poles are colder by as much as its sky fails to carry heat to them (a
+    thick sky evens them out). A gas whose frost point the pole is below freezes there - the air holds no more of it
+    than the pole's ice allows (Mars's carbon dioxide caps)."""
+    p = sum(air.values())
+    carry = p / TRANSPORT_BAR
+    t_pole = t * ((polar_share(obliquity) + carry) / (1.0 + carry)) ** 0.25
+    for sp in ("CO2", "N2", "CH4", "NH3"):
+        if sp in air:
+            cap = saturation(sp, t_pole, laws)
+            if air[sp] > cap:
+                seas[sp] = seas.get(sp, 0.0) + air[sp] - cap      # frozen at the pole
+                air[sp] = cap
+
+
+def _climate(gas: Dict[str, float], to_bar: float, flux: float, hpm: float, giant: bool, laws: Any = None,
+             obliquity: float = math.pi / 4.0):
     """Surface temperature, pressure, air, seas and albedo: the warmest stable state (worlds begin hot) at which
     the temperature the atmosphere makes is the temperature it was assumed at."""
+    L = _laws(laws)
+    runaway = RUNAWAY_FLUX * L.chem ** 4                # a moist sky's limit is water's own radiating temperature
+    opacity = L.atom ** 2                               # molecules' cross-sections grow as atoms do
+
     def model(t: float):
-        air, seas = _state(gas, to_bar, t, hpm, giant)
-        icy = sum(v for sp, v in seas.items() if t < VOLATILES[sp]["phase"][0])
+        air, seas = _state(gas, to_bar, t, hpm, giant, L)
+        _cold_trap(air, seas, t, obliquity, L)
+        icy = sum(v for sp, v in seas.items() if t < _phase_of(sp, L)[0])
         albedo = 0.3 + 0.4 * _clamp(icy / (icy + 1.0)) if icy else 0.3
         gh = sum(v for sp, v in air.items() if VOLATILES[sp]["greenhouse"])
         t_eq = T_UNIT * flux ** 0.25 * (1.0 - albedo) ** 0.25
-        return t_eq * (1.0 + 0.75 * GREENHOUSE_TAU * math.sqrt(gh)) ** 0.25, air, seas, albedo
+        tau = GREENHOUSE_TAU * math.sqrt(gh * opacity) * max(1e-9, sum(air.values())) ** BROADENING
+        return t_eq * (1.0 + 0.75 * tau) ** 0.25, air, seas, albedo
     base = T_UNIT * flux ** 0.25 * 0.3 ** 0.25                # the coldest it could be: a bright, bare world
-    grid = [max(15.0, base) * 1.08 ** i for i in range(40)]   # up to ~20x that: the thickest greenhouse
+    grid = [max(15.0, base) * 1.16 ** i for i in range(21)]   # up to ~20x that: the thickest greenhouse
     vals = [model(t)[0] - t for t in grid]
     root = None
     for i in range(len(grid) - 1, 0, -1):                   # the warmest crossing from warming to cooling
         if vals[i - 1] >= 0 > vals[i]:
             _, _, seas_i, alb_i = model(grid[i])
-            if gas.get("H2O", 0) > 0 and "H2O" not in seas_i and flux * (1.0 - alb_i) < RUNAWAY_FLUX:
+            if gas.get("H2O", 0) > 0 and "H2O" not in seas_i and flux * (1.0 - alb_i) < runaway:
                 continue                                    # below the runaway limit a steam sky rains out
             lo, hi = grid[i - 1], grid[i]
-            for _ in range(22):
+            for _ in range(16):
                 mid = (lo + hi) / 2
                 if model(mid)[0] - mid >= 0:
                     lo = mid
@@ -336,89 +445,142 @@ def _climate(gas: Dict[str, float], to_bar: float, flux: float, hpm: float, gian
     return root, sum(air.values()), air, seas, albedo
 
 
+# ---------------------------------------------------------------------- light by its colours
+def planck_above(x: float) -> float:
+    """The share of a black body's energy carried by photons above x kT."""
+    if x <= 0:
+        return 1.0
+    if x > 60:
+        return 0.0
+    s = 0.0
+    for n in range(1, 40):
+        e = math.exp(-n * x)
+        s += e * (x ** 3 / n + 3 * x * x / n ** 2 + 6 * x / n ** 3 + 6 / n ** 4)
+        if e < 1e-12:
+            break
+    return min(1.0, 15.0 / math.pi ** 4 * s)
+
+
+def band(t_eff: float, laws: Any = None) -> Dict[str, float]:
+    """Starlight's colours against chemistry's: the share of a star's light whose photons can drive chemistry -
+    enough to lift an electron (PHOTO_LOW of a covalent bond) but not enough to break one - and the share that
+    breaks bonds (ultraviolet). Both bonds scale with the chemistry's energy (fundamental.py)."""
+    bond = BOND_EV["covalent"] * _laws(laws).chem
+    kt = KB_EV * max(1.0, t_eff)
+    hi = planck_above(bond / kt)
+    return {"drive": max(0.0, planck_above(PHOTO_LOW * bond / kt) - hi), "break": hi}
+
+
 # ---------------------------------------------------------------------- chemistry from the world
 def geothermal(w: Dict[str, Any]) -> float:
     """The world's own heat flowing out through each unit of its surface, in flux units (its heat over its area)."""
     return GEO_FLUX * w["heat"] / max(1e-6, w["radius"]) ** 2
 
 
+def free_heat(w: Dict[str, Any], t_medium: float) -> float:
+    """The work the world's heat can do for a chemistry at t_medium (flux units): its flow out through each unit of
+    surface x Carnot's share between its interior and the medium."""
+    t_hot = max(t_medium, float(w.get("t_int") or t_medium))
+    return geothermal(w) * (1.0 - t_medium / max(1.0, t_hot))
+
+
 def solvents(w: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Every medium on the world a chemistry could run in, with its temperature and the energy that reaches it (per
-    unit area, in flux units: light through its sky; its own heat flowing out; a giant's slow contraction)."""
+    """Every medium on the world a chemistry could run in, with its temperature and the free energy that reaches it
+    (per unit area, in flux units: starlight of the colours that drive chemistry, through its sky; the work its own
+    heat can do; a giant's slow contraction)."""
+    from xylarium.kernel import interior
+    L = w.get("laws") or _laws(None)
     out: List[Dict[str, Any]] = []
     t, p = w["t_surf"], max(w["p_bar"], 1e-9)
-    geo = geothermal(w)
+    drive = band(w.get("star_t", 5772.0), L)["drive"]
+    light = w["light"] * drive
     for sp, amount in w["seas"].items():
-        ph = phase(sp, t, p)
+        ph = phase(sp, t, p, L)
         if ph == "liquid" or ph == "supercritical":
-            out.append({"solvent": sp, "where": "surface", "t": t, "energy": w["light"] + geo,
+            out.append({"solvent": sp, "where": "surface", "t": t, "energy": light + free_heat(w, t),
                         "amount": amount, "dark": False})
-        elif ph == "solid" and sp in ("H2O", "NH3") and w["heat"] > 0.05 and not w["giant"]:
-            # a liquid ocean under an ice shell, kept by the world's own heat (and ammonia's antifreeze)
-            t_under = VOLATILES[sp]["phase"][0] + (5.0 if sp == "H2O" else 0.0)
-            out.append({"solvent": sp, "where": "under_ice", "t": t_under, "energy": geo,
-                        "amount": amount, "dark": True})
+        elif ph == "solid" and sp in ("H2O", "NH3") and not w["giant"]:
+            # a liquid ocean under an ice shell, where the world's heat (and tides) keep the shell's base melted: the
+            # shell a heat flow can hold is thinner than the ice there is (water's ice; ammonia an antifreeze)
+            t_under = _phase_of(sp, L)[0] + (5.0 * L.chem if sp == "H2O" else 0.0)
+            layer_km = amount * BAR / (UNIT_G * max(1e-6, w.get("g", 1.0)) * 1000.0) / 1000.0
+            q = float(w.get("q") or geothermal(w) * 340.0)
+            if interior.shell_km(q, t, t_under) < layer_km:
+                out.append({"solvent": sp, "where": "under_ice", "t": t_under, "energy": free_heat(w, t_under),
+                            "amount": amount, "dark": True})
     for sp, pp in w["air"].items():
-        if phase(sp, t, p) == "supercritical":
-            out.append({"solvent": sp, "where": "supercritical", "t": t, "energy": w["light"] + geo,
+        if phase(sp, t, p, L) == "supercritical":
+            out.append({"solvent": sp, "where": "supercritical", "t": t, "energy": light + free_heat(w, t),
                         "amount": pp, "dark": False})
-    if not w["giant"] and t >= MELT_K:
-        out.append({"solvent": "melt", "where": "surface", "t": t, "energy": w["light"] + 100.0 * geo, "amount": 1.0,
+    if not w["giant"] and t >= MELT_K * L.chem:
+        out.append({"solvent": "melt", "where": "surface", "t": t, "energy": light + geothermal(w), "amount": 1.0,
                     "dark": False})
     if w["giant"] and w["mass"] >= GIANT_PLASMA_MASS:
-        out.append({"solvent": "plasma", "where": "deep", "t": 1.0e4, "energy": GIANT_FLUX * (w["mass"] / 318.0) * (11.0 / max(1.0, w["radius"])) ** 2,
+        out.append({"solvent": "plasma", "where": "deep", "t": 1.0e4 * L.chem,
+                    "energy": GIANT_FLUX * (w["mass"] / 318.0) * (11.0 / max(1.0, w["radius"])) ** 2,
                     "amount": 1.0, "dark": True})
     return out
 
 
-def _mid(solvent: str) -> float:
+def _mid(solvent: str, laws: Any = None) -> float:
     """The middle of a solvent's own liquid range (K)."""
+    c = _laws(laws).chem
     if solvent == "melt":
-        return 2000.0
+        return 2000.0 * c
     if solvent == "plasma":
-        return 1.0e4
-    tt, _, tb, tc, _, _ = VOLATILES[solvent]["phase"]
+        return 1.0e4 * c
+    tt, _, tb, tc, _, _, _ = _phase_of(solvent, laws)
     top = tb if tb > tt else tc                         # a solvent that sublimes at 1 bar is liquid only under pressure
     return (tt + min(top, tc)) / 2.0
 
 
-def pace(solvent: str, t: float) -> float:
+def pace(solvent: str, t: float, laws: Any = None) -> float:
     """How fast a chemistry runs, relative to the unit temperature (Eyring: kT/h x exp(-Ea/kT), Ea scaled to its
     solvent's range): at the middle of its range a chemistry runs as its mid temperature over the unit; within its
     range, faster when warmer."""
-    mid = _mid(solvent)
+    mid = _mid(solvent, laws)
     if solvent in VOLATILES:
-        tt, _, _, tc, _, _ = VOLATILES[solvent]["phase"]
+        tt, _, _, tc, _, _, _ = _phase_of(solvent, laws)
         if t > tc:                                       # a supercritical fluid runs at its own temperature
             return t / T_UNIT
         t = max(tt, t)
     return (t / T_UNIT) * math.exp(SOLVENT_BARRIER * (1.0 - mid / max(1.0, t)))
 
 
-def body_temperature(solvent: str) -> float:
+def body_temperature(solvent: str, laws: Any = None) -> float:
     """A minded body keeps itself where its chemistry works best: the middle of its solvent's own liquid range
     (a bonded chemistry's thermostat; its world's weather is outside it)."""
-    return _mid(solvent)
+    return _mid(solvent, laws)
 
 
-def body_pace(solvent: str) -> float:
+def body_pace(solvent: str, laws: Any = None) -> float:
     """The pace of a body held at its chemistry's best (Eyring at the middle of its range: its temperature over the
     unit's)."""
-    return body_temperature(solvent) / T_UNIT
+    return body_temperature(solvent, laws) / T_UNIT
 
 
-def region(m: Dict[str, Any]) -> str:
+def region(m: Dict[str, Any], laws: Any = None) -> str:
     """The engine's name for a medium's region of chemistry space."""
+    c = _laws(laws).chem
     s = m["solvent"]
     if s == "plasma":
         return "plasmic"
-    if s == "melt" or m["where"] == "supercritical" or m["t"] > 450.0:
+    if s == "melt" or m["where"] == "supercritical" or m["t"] > 450.0 * c:
         return "mineral"
     if m["dark"] and m["where"] == "under_ice" and s == "H2O":
         return "umbral"
-    if m["t"] < 230.0 or s in ("CH4", "N2", "NH3"):
+    if m["t"] < 230.0 * c or s in ("CH4", "N2", "NH3"):
         return "cryogenic"
     return "biotic" if not m["dark"] else "umbral"
+
+
+def weak_bond_ev(solvent: str, laws: Any = None) -> float:
+    """The solvent's cohesion per molecule (eV): its heat of vaporisation over Avogadro (a melt's network bond)."""
+    if solvent == "melt":
+        return BOND_EV["melt_network"] * _laws(laws).chem
+    if solvent == "plasma":
+        return 0.0
+    return _phase_of(solvent, laws)[5] * 1000.0 / 96485.0
 
 
 def richness(w: Dict[str, Any], m: Dict[str, Any], z: float) -> float:
@@ -428,27 +590,28 @@ def richness(w: Dict[str, Any], m: Dict[str, Any], z: float) -> float:
     cohesion (its heat of vaporisation per molecule over kT near ~10 - Trouton's rule puts every liquid near its
     boiling point there, so any solvent inside its own liquid range has them; a fluid far above its critical point
     does not)."""
+    L = w.get("laws") or _laws(None)
     t = max(1.0, m["t"])
     elements = 1.0 + min(1.0, z) + (1.0 if w["ices"].get("CO2") or w["ices"].get("CH4") else 0.0) + \
         (1.0 if w["ices"].get("NH3") or w["ices"].get("N2") or "N2" in w["air"] else 0.0)
     if m["solvent"] == "plasma":
         return _clamp(elements / 4.0) * PLASMA_WINDOW    # ionised matter holds no bonds: structure in fields
-    strong_ev = BOND_EV["silicate"] if m["solvent"] == "melt" else BOND_EV["covalent"]
+    strong_ev = (BOND_EV["silicate"] if m["solvent"] == "melt" else BOND_EV["covalent"]) * L.chem
     strong = 1.0 / (1.0 + math.exp(-(strong_ev / (KB_EV * t) - STRONG_KT) / 4.0))
-    weak_ev = BOND_EV["melt_network"] if m["solvent"] == "melt" else \
-        VOLATILES[m["solvent"]]["phase"][5] * 1000.0 / 96485.0          # kJ/mol -> eV per molecule
-    weak = math.exp(-((math.log(weak_ev / (KB_EV * t)) - math.log(WEAK_KT)) / 0.6) ** 2)
+    weak = math.exp(-((math.log(weak_bond_ev(m["solvent"], L) / (KB_EV * t)) - math.log(WEAK_KT)) / 0.6) ** 2)
     return _clamp(elements / 4.0) * strong * weak
 
 
-def media(seed: int, star: Dict[str, Any], a_au: float, radius: float, mass: float, giant: bool, z: float,
+def media(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: float, giant: bool, z: float,
           r_kpc: float, age_gyr: float, ices: Optional[Dict[str, float]] = None,
           world: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Every chemistry the world allows, with its region, richness, energy and pace."""
     w = world or build(seed, star, a_au, radius, mass, giant, z, r_kpc, age_gyr, ices)
+    L = w.get("laws") or _laws(None)
     out = []
     for m in solvents(w):
-        m = dict(m, region=region(m), richness=round(richness(w, m, z), 4), pace=round(pace(m["solvent"], m["t"]), 4))
+        m = dict(m, region=region(m, L), richness=round(richness(w, m, z), 4),
+                 pace=round(pace(m["solvent"], m["t"], L), 4))
         out.append(m)
     return out
 
@@ -490,13 +653,17 @@ def of_planet(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
     from xylarium.kernel import creation
     z = creation.metals_at(creation.universe(kernel), float(g.get("r", cosmos.R0_KPC)), float(g.get("born", 9.2))) \
         if g else 1.0
-    ices = None
-    if g and "cell" in g and sec is not None and planet in sec.planets:   # the ices its orbit gathered (form)
-        made = creation.cell(creation.universe(kernel), *g["cell"])[g["k"]].get("worlds") or []
+    ices, make = None, {}
+    seed = creation.universe(kernel)
+    if g and "cell" in g and sec is not None and planet in sec.planets:   # the world its orbit built (creation)
+        made = creation.cell(seed, *g["cell"])[g["k"]].get("worlds") or []
         n = sec.planets.index(planet)
         if n < len(made):
-            ices = made[n].get("ices")
-    ms = media(kernel.seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
-               bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices)
+            ices, make = made[n].get("ices"), made[n].get("make") or {}
+    ms = media(seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
+               bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices,
+               world=build(seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
+                           bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices, born=make.get("born"),
+                           orbit=make.get("orbit"), core=make.get("core")))
     planet.society["_media"] = {"key": list(key), "media": ms}
     return ms

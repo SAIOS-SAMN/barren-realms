@@ -11,6 +11,10 @@ physics moves in lockstep with it.
 | **Galactic** | deep time, Gyr since the Big Bang (`cosmos.deep_gyr`): the universal clock times the universe's pace | the stars' births, ageing and deaths, the galaxy's turning, minds arising |
 | **Local** | each homeworld's year, its orbit about its own star (`clock.local_years`) | how a people reckons its age, seasons and rites |
 
+Each star's own time also runs slow against the universal clock by its place in the galaxy's gravity and its speed
+(geometry.lapse, reported by `cosmos.position`): a clock near the centre loses about a second a week against one at
+the rim, parts in a million - computed, and too small to move a game year.
+
 A people is never aged on the galactic clock. One that is 300 universal years old at the teeming pace has seen 3 Gyr
 of the galaxy and is 300 years old - or so many of its own years as its world has gone round its sun
 (`clock.age_of_people`). Its lifespan is its species' physics in universal years (lifespan.py); its longevity is

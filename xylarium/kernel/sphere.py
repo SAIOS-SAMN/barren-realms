@@ -163,9 +163,8 @@ def genesis(kernel: Any) -> None:
 
 def distance(kernel: Any, a: List[float], b: List[float]) -> float:
     """The comoving distance between two points of the sphere: the arc, the shorter way round."""
-    r = float(stats(kernel).get("radius_mpc") or 0.0)
-    dot = max(-1.0, min(1.0, sum(x * y for x, y in zip(a, b))))
-    return math.acos(dot) * r
+    from xylarium.kernel import geometry
+    return geometry.arc_kpc(a, b, float(stats(kernel).get("radius_mpc") or 0.0))   # Mpc in, Mpc out
 
 
 def proper_mpc(kernel: Any, chi_mpc: float, at_gyr: Optional[float] = None) -> float:

@@ -6,13 +6,14 @@ until a mind arises; a people then lives on the universal clock and reckons on i
 
 | Layer | Made from | Gives | Module |
 |---|---|---|---|
-| Big Bang | the seed | sigma8, baryon fraction, curvature; the number of hard steps to a mind | creation.big_bang |
-| Galaxy | Big Bang | inside-out star formation, element gradients by mass, rotation, environment (density, supernovae, the centre's active episodes) | cosmos, creation |
+| Laws | the progenitors | alpha, beta, alpha_G, fusion yield: every scale below (fundamental.py) | fundamental |
+| Big Bang | the seed | sigma8, baryon fraction, curvature | creation.big_bang |
+| Galaxy | Big Bang | inside-out star formation, element gradients by mass, rotation, each star's oscillation through the plane, curved space and slowed clocks (geometry.py) | cosmos, creation, geometry |
 | Star | its cell, its birth date | mass, light, metals, life, death | creation.cell |
-| Planet | its star, its orbit | mass, radius, bulk composition (rock, metal, ices by the snow line), interior heat | creation.cell, worlds |
+| Planet | its star, its orbit | mass, radius, bulk composition (rock, metal, ices by the snow line); six orbital elements, spin, moons; interior heat from isotopes, cooling and tides | creation.cell, worlds, orbits, interior |
 | Atmosphere and ocean | the planet, its star, its environment, deep time | volatiles gathered + outgassed - escaped; pressure; greenhouse; surface temperature; field | worlds |
 | Chemistry | atmosphere and ocean | solvent, bond window, richness, energy sources, kinetics; a region of chemistry space | worlds |
-| Life | chemistry, deep time, luck | when life starts, the hard steps, impacts and extinctions, lineages and traits, the shape of a mind | (step 4) |
+| Life | chemistry, deep time, luck | fidelity, the rungs to a mind, the time to write each, impacts that erase, rock that carries microbes within a system | life, creation.lineage |
 | Body | traits, world | mass, metabolic power, maturity, lifespan, fecundity | (step 5) |
 | People | a mind, its world | capacity from captured energy, ways, culture, disease, history | biosphere, lifespan, culture ... |
 
@@ -48,6 +49,22 @@ until a mind arises; a people then lives on the universal clock and reckons on i
   thought run at that pace; its size from its world's gravity and its life history.
 * **Peoples**: capacity from the energy reaching their chemistry; crowd disease from transmission dynamics;
   ways and art in their own chemistry's terms.
+
+## Since: the laws, the interiors, the geometry, life as information
+
+* **Laws** (fundamental.py): four dimensionless constants set every scale; change one in the genesis key and the
+  same dice rebuild the universe under it.
+* **Interiors and orbits** (interior.py, orbits.py): radiogenic heat from the isotopes the star was born with,
+  mantle and core convection (the core's dynamo while it outruns its adiabat), tides from host stars and giants;
+  eccentricities stirred, forced by neighbours and damped; inclinations; spins braked to lock; giants' moons in
+  resonant chains. A world around a dim star or a giant can be warmed from below.
+* **Geometry** (geometry.py): the universe's 3-sphere, the galaxy's weak-field metric (proper lengths, light delay,
+  clock rates), stars' vertical orbits through the plane; the IMF's break warmer near the crowded centre.
+* **Light by its colours** (worlds.band): only photons between an electron's lift and a bond's break drive chemistry.
+* **Life** (life.py): fidelity from the solvent's cohesion, rungs from the error threshold, time from copying
+  kinetics. Earth-as-test (`tools/progenitor.py --earth`, our laws, Earth's place and time): 283 K under 1.2 bar,
+  0.052 W/m^2 of heat, three rungs, a mind in ~7.6 Gyr on average (a 71% chance within its star's life) - against
+  288 K, 1 bar, 0.087 W/m^2 and one history of ~4 Gyr.
 
 ## What limits life (creation.limits)
 
