@@ -132,7 +132,7 @@ def homeworld(kernel: Any, player_id: str) -> Optional[Any]:
 
 
 def status(kernel: Any, player_id: str) -> Dict[str, Any]:
-    from xylarium.kernel import biosphere, knowledge, sustenance, ways
+    from xylarium.kernel import biosphere, knowledge, society, sustenance, ways
     p = homeworld(kernel, player_id)
     if p is None:
         return {}
@@ -145,6 +145,9 @@ def status(kernel: Any, player_id: str) -> Dict[str, Any]:
             "treasury": p.treasury, "morale": p.morale, "yards": bool(sustenance.yards(p)),
             "focus": knowledge.stats(kernel)["focus"].get(h), "knowledge": {d: round(v, 1) for d, v in st.items()},
             "policy": getattr(p, "growth_policy", None) or "expand",
+            "gauges": dict(society.gauges(p)), "dogma": round(float(getattr(p.civilization, "dogma", 0.0) or 0.0), 3),
+            "stress": dict(p.society.get("stress") or society.stress(kernel, p)),
+            "trades": society.trades(kernel, p), "myths": list(p.society.get("myths", [])),
             "firsts": dict((kernel.state.get("genesis") or {}).get("firsts", {}))}
 
 
@@ -178,6 +181,14 @@ def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> st
                     f"{1.0 - HOUSEHOLD_INCOME_SHARE:.0%}. Breed the crops further first.")
         p.society["way"] = "state"
         return "A council, a granary, a tax: your people found a state."
+    if what == "gauge":
+        from xylarium.kernel import society
+        try:
+            key, _, val = (arg or "").partition("=")
+            society.set_gauge(p, key.strip(), float(val))
+        except (KeyError, ValueError):
+            return f"Gauges: {', '.join(society.GAUGES)} - each 0 to 1 (e.g. temple=0.3)."
+        return f"Your people's {key.strip()} is set to {society.gauges(p)[key.strip()]:.0%}."
     if what == "works":
         if ways.stateless(p):
             return "Without a state there is no treasury to build with."

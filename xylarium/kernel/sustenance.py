@@ -257,6 +257,7 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
     if victim is not None:
         staples.move(victim, food, -take)
         victim.morale = max(10, victim.morale - 5)
+        victim.society["raided_cycle"] = kernel.cycle_count           # its council arms against it (society.py)
     else:
         port.stock[food] = port.stock.get(food, 0) - take
     staples.move(planet, food, take)                      # a transfer: the stores change hands

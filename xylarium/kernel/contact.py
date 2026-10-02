@@ -133,6 +133,13 @@ def _information(kernel: Any, people: str) -> float:
     return laws.mastery(knowledge.experience(kernel, people, "information"), KNOWLEDGE_UNIT)
 
 
+def _openness(by: Dict[str, List[Any]], a: str, b: str) -> float:
+    """How open the two peoples are to each other (society.py's gauge, at their largest worlds; 0.5 each if unset)."""
+    from xylarium.kernel import society
+    vals = [society.openness(max(by[x], key=lambda p: p.population)) for x in (a, b) if by.get(x)]
+    return sum(vals) / len(vals) if vals else 0.5
+
+
 def quarter(kernel: Any) -> List[str]:
     st = stats(kernel)
     by = _by(kernel)
@@ -151,7 +158,7 @@ def quarter(kernel: Any) -> List[str]:
                 st["first_contacts"] += 1
                 from xylarium.kernel import primordial
                 primordial.first(kernel, "first_contact", k)
-            learn = 0.5 * (_information(kernel, a) + _information(kernel, b))
+            learn = 0.5 * (_information(kernel, a) + _information(kernel, b)) * (0.5 + _openness(by, a, b))
             fam[k] = round(fam.get(k, 0.0) + (1.0 - fam.get(k, 0.0)) * learn * years, 5)
     for k in list(fam):
         if k not in touched:

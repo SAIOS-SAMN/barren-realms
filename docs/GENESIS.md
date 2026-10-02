@@ -117,6 +117,31 @@ Unpaid policing becomes unrest; unrest that reaches a quarter's whole need throw
 is its people's own again. Orbital assaults fire their expected volleys and ground invasions resolve by Lanchester's
 square law - no dice in either.
 
+## A people's institutions (society.py)
+
+What a people carries into the lanes is formed before it gets there:
+
+* **Gauges** - temple (rites against inquiry), levy (the share under arms, who do not work), openness (what it takes
+  from strangers), commerce (how free its markets are to make trades). A steward sets them; a council arms itself
+  as far as it is attacked (raids, bombardment, siege) and keeps its rites as far as its creed is not yet explained.
+* **Creed and myth** - dogma is pulled toward the temple gauge over a generation, raised by a generation's
+  experience of blows it cannot explain (famine, blight, bombardment, a failing sky) in proportion to how little it
+  knows of information, worn down by every newly explained thing and by the strangers' ideas its openness lets in.
+  Dogma impedes inquiry and past a priesthood's line brands it heresy. The first blow of each kind becomes a myth,
+  told in the terms of its own sky (its star's colour, its moons) - in the chronicle and on the steward's screen.
+* **Stress and strife** - Turchin's structural-demographic reading: immiseration (unmet need x crowding) x what
+  fails to legitimise the order (neither creed nor prosperity) x fiscal distress (morale). When more would rise
+  than are under arms, the people turns on itself: deaths in proportion to the clash, the vaults plundered into
+  the mobs' purses, the creed overturned; an exhausted generation passes before it can rise again. On a shared
+  world a host pressed against its land drives a competing community out of its share.
+* **Guilds** - trades number as the log of the market (people x surplus x commerce, Smith's extent of the market);
+  practising them teaches materials, and materials mastery is what makes a people's firms waste less once it has
+  ports (enterprise.py) - its guilds are what it takes into the lanes.
+
+Measured (seed 7 primordial, 30 years): mean creed 5% (to 37% for famine- and blight-struck peoples), 15 myths,
+5 civil strifes among hungry peoples with nothing to hold their order, levies of 8-14% where raided, ~2 trades a
+people.
+
 ## The human at genesis: from TradeWars console to a people's steward
 
 A primordial start changes what the player *is*. There is no ship to fly for the first two decades - so the human

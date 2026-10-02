@@ -28,6 +28,16 @@ def _screen(kernel: Any, pid: str) -> None:
     else:
         print(f"  {c_gold('Citadel')} {s['citadel']}    {c_gold('Treasury')} {s['treasury']:,}    "
               f"{c_gold('Yards')} {'raised' if s['yards'] else 'none'}")
+    g, st = s["gauges"], s["stress"]
+    print(f"  {c_gold('Gauges')} temple {g['temple']:.0%}  levy {g['levy']:.0%}  openness {g['openness']:.0%}  "
+          f"commerce {g['commerce']:.0%}    {c_gold('Creed')} {s['dogma']:.0%}    {c_gold('Trades')} {s['trades']}")
+    rising = st.get("rising", 0.0)
+    print(f"  {c_gold('Stress')} would rise {rising:.0%} vs {g['levy']:.0%} under arms"
+          f"{c_red('  - unrest!') if rising > g['levy'] else ''}    (hunger {st.get('immiseration', 0):.0%}, "
+          f"unheld order {st.get('illegitimacy', 0):.0%}, distress {st.get('distress', 0):.0%})")
+    if s["myths"]:
+        m = s["myths"][-1]
+        print(c_gray(f"  They tell how {m['text']} (year {m['year']})"))
     know = ", ".join(f"{d} {v}" for d, v in sorted(s["knowledge"].items()) if v) or "nothing written down"
     print(f"  {c_gold('Knowledge')} {know}    {c_gold('Inquiry')} {s['focus'] or 'as needs call'}    "
           f"{c_gold('Growth')} {s['policy']}")
@@ -40,7 +50,8 @@ def _screen(kernel: Any, pid: str) -> None:
 def _menu(kernel: Any, pid: str) -> None:
     s = ages.status(kernel, pid)
     opts = [("Z", "Wake me when something happens"), ("A", "Advance one season"),
-            ("R", "Point their inquiry"), ("P", "Set their growth (expand / steady)")]
+            ("R", "Point their inquiry"), ("P", "Set their growth (expand / steady)"),
+            ("G", "Set a gauge (temple / levy / openness / commerce)"), ("M", "Their myths")]
     if s["way"] == "forage":
         opts.append(("F", "Take up farming"))
     if s["way"] == "farm":
@@ -84,6 +95,13 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
         elif cmd == "P":
             raw = input(c_gold("Growth (expand / steady) > ")).strip().lower()
             print("  " + ages.act(kernel, pid, "policy", raw))
+        elif cmd == "G":
+            raw = input(c_gold("Gauge=value, e.g. temple=0.3 > ")).strip().lower()
+            print("  " + ages.act(kernel, pid, "gauge", raw))
+        elif cmd == "M":
+            myths = ages.status(kernel, pid)["myths"]
+            for m in myths or [{"year": "-", "text": "they have no stories yet"}]:
+                print(c_gray(f"  year {m['year']}: they say that {m['text']}."))
         elif cmd == "F":
             print("  " + ages.act(kernel, pid, "farm"))
         elif cmd == "S":
