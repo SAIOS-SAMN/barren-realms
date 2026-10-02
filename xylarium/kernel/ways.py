@@ -109,8 +109,9 @@ def forage(kernel: Any) -> None:
     for sec in kernel.sectors.values():
         for p in sec.planets:
             n = getattr(p, "natives", None)
-            if n:                                      # the natives too are in their Stone Age (natives.py stages)
-                n["stage"], n["progress"] = 0, 0.0
+            if n:                                      # the natives too are in their Stone Age, as many as it fed
+                n["population"] = max(100, int(n["population"] / 1.6 ** int(n["stage"])))   # (each age x1.6)
+                n["stage"], n["progress"], n["crop_z"] = 0, 0.0, 0.0       # and their crops as wild as anyone's
                 continue
             if p.population <= 0:
                 continue

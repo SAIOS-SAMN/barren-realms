@@ -226,6 +226,9 @@ class TestNativesAndPrimeDirective(unittest.TestCase):
     def test_first_flight_turns_a_people_into_a_spacefaring_civilization(self):
         sec, planet = self._place()
         planet.natives.update({"stage": 6, "sapience": 9.0, "progress": 0.999, "stability": 1.0})
+        from xylarium.kernel import knowledge                 # one more doubling of what they know: the sky
+        for d in knowledge.DOMAINS:
+            knowledge.learn(self.kernel, f"natives:{planet.id}", d, 400)
         NativeManager.tick(self.kernel)
         self.assertIsNone(planet.natives)
         self.assertIsNotNone(planet.civilization)

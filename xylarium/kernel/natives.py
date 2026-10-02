@@ -39,7 +39,6 @@ from xylarium.config import (
     NATIVE_WORLD_SHARE,
     NATIVE_STAGES,
     NATIVE_STAGE_WEIGHTS,
-    NATIVE_ADVANCE_RATE,
     NATIVE_FIRST_FLIGHT_SAPIENCE,
     NATIVE_COLLAPSE_CONTAMINATION,
     NATIVE_EXPLOIT_YIELD,
@@ -526,6 +525,44 @@ class NativeManager:
                                              channel="COMM-1", sector_id=planet.sector_id)
 
     @classmethod
+    def _practise(cls, kernel: Any, planet: Planet, n: Dict[str, Any]) -> float:
+        """A native people learns as every people does before writing (ways.py): by living - a season's practice
+        is its numbers (in thousands) at its minds' depth, as steady as its society and quickened by what outsiders
+        show it; it fades as all knowledge does (knowledge.py). Its age is how many times it has doubled what it
+        knows (Wright: each stage costs a doubling of experience): stage = log2(experience / unit + 1)."""
+        import math
+        from xylarium.config import HOUSEHOLD_INCOME_SHARE, KNOWLEDGE_UNIT
+        from xylarium.kernel import biosphere, genome, knowledge, laws, ways
+        from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+        holder = f"natives:{planet.id}"
+        depth = laws.cognition(n["metabolism"])["depth"] * (n["sapience"] / 5.0)
+        # its numbers in the units every people is counted in: no more than its world feeds them (its tales
+        # count millions; its land, at its way of life, feeds what it feeds)
+        farmed = "crop_z" not in n or n["stage"] >= 1
+        crop = 1.0 if "crop_z" not in n else min(1.0, ways.TROPHIC_EFFICIENCY * math.exp(float(n["crop_z"])))
+        try:
+            fed = biosphere.carrying_capacity(kernel, planet, citadel=0, metabolism=n["metabolism"])
+        except Exception:
+            fed = n["population"]
+        people = min(n["population"], fed * (crop if farmed else ways.TROPHIC_EFFICIENCY))
+        units = people / 1000.0 * depth * n["stability"] * (1 + 0.5 * n["contamination"]) * FISCAL_QUARTER_CYCLES / 100.0
+        for d in knowledge.DOMAINS:
+            knowledge.learn(kernel, holder, d, units / len(knowledge.DOMAINS), "practice")
+        experience = sum(knowledge.stocks(kernel, holder).values())
+        level = math.log2(experience / KNOWLEDGE_UNIT + 1.0)
+        if "crop_z" in n:
+            # a forager universe's natives breed their crops as every people does (ways.py, Lande): they leave the
+            # Stone Age when farming pays, and found kingdoms only when their surplus can bear one
+            m = laws.mastery(knowledge.experience(kernel, holder, "biology"), KNOWLEDGE_UNIT)
+            z = float(n["crop_z"]) + genome.VARIANCE * m * FISCAL_QUARTER_CYCLES / 100.0
+            n["crop_z"] = round(min(math.log(1.0 / ways.TROPHIC_EFFICIENCY), z), 6)
+            if math.exp(n["crop_z"]) - 1.0 <= 1.0 - m:
+                level = min(level, 0.999)                          # farming does not yet pay: the Stone Age
+            elif 1.0 - 1.0 / math.exp(n["crop_z"]) < 1.0 - HOUSEHOLD_INCOME_SHARE:
+                level = min(level, 2.999)                          # no surplus to bear a kingdom yet
+        return level
+
+    @classmethod
     def first_flight(cls, kernel: Any, planet: Planet) -> None:
         """An Orbital-age people reaches the stars: they become a spacefaring civilization."""
         from xylarium.kernel.civilization import Civilization
@@ -582,10 +619,10 @@ class NativeManager:
                 if n["contamination"] >= NATIVE_COLLAPSE_CONTAMINATION and n["stability"] < 0.3:
                     cls.collapse(kernel, planet, "a culture drowned in outsiders' wonders")
                     continue
+                level = cls._practise(kernel, planet, n)
                 if n["stage"] < ORBITAL:
-                    rate = NATIVE_ADVANCE_RATE * (n["sapience"] / 5.0) * n["stability"] * (1 + 0.5 * n["contamination"])
-                    n["progress"] = round(n["progress"] + rate, 5)
-                    if n["progress"] >= 1.0:
+                    n["progress"] = round(max(0.0, level - n["stage"]), 5)
+                    if level >= n["stage"] + 1:
                         old = stage_name(n)
                         n["stage"] += 1
                         n["progress"] = 0.0
@@ -596,8 +633,8 @@ class NativeManager:
                         chronicle.native_event(kernel, planet, n, f"The {stage_name(n)} of the {n['name']}",
                                                _advance_text(n, old), ["advance"])
                 elif n["sapience"] >= NATIVE_FIRST_FLIGHT_SAPIENCE:
-                    n["progress"] = round(n["progress"] + NATIVE_ADVANCE_RATE * (n["sapience"] / 5.0) * n["stability"], 5)
-                    if n["progress"] >= 1.0:
+                    n["progress"] = round(max(0.0, level - ORBITAL), 5)
+                    if level >= ORBITAL + 1:                      # one more doubling of what they know: the sky
                         cls.first_flight(kernel, planet)
                         continue
                 if n.get("protector"):

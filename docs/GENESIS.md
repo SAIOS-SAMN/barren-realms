@@ -92,8 +92,13 @@ Measured, not assumed:
 Measured (seeds 7 / 42, 425 / 550 years): peoples of ~1,000 foragers breed their crops at ~0.1% of an e-fold a
 year, so the forager age lasts centuries. First fields at year 2 / 0.75 (a hot, noisy mind taking them up early, by
 misjudgement); the first states at year 340 / 444; by then 5 peoples farm and 2-3 are states, 16 of 21 still forage
-- the largest peoples domesticate first. Natives begin in their Stone Age too (natives.py still advances them on
-its own stage clock - the next thing to put on the same physics).
+- the largest peoples domesticate first. Natives begin in their Stone Age too, and advance on the same physics
+(natives.py): they learn by living, at the numbers their own world feeds them (its carrying capacity for their
+biology, a tenth of it while they forage), and an age is a doubling of what they know (Wright: stage = log2 of
+experience over the knowledge unit); in a forager universe they breed their crops by the same Lande selection and
+cannot leave the Stone Age before farming pays, nor found kingdoms before their surplus can bear one. In a settled
+galaxy this reproduces the old rate (12 native first flights in 15 years on seed 7, as the timer gave) - from each
+people's own practice instead of a clock.
 
 ## Making peoples, and making worlds for them
 
