@@ -570,9 +570,16 @@ def _due(kernel: Any) -> List[str]:
 
 
 def _name(kernel: Any, rec: Dict[str, Any]) -> str:
+    """A name no other people bears (a people is known by its name: two of one name would be one people)."""
     from xylarium.kernel import scheduler
     from xylarium.kernel.natives import _name as syllables
-    return syllables(scheduler.rng(kernel, "name", *rec["cell"], rec["k"]))
+    taken = set(stats(kernel).setdefault("names", []))
+    rng = scheduler.rng(kernel, "name", *rec["cell"], rec["k"])
+    name = syllables(rng)
+    while name in taken:
+        name = syllables(rng)
+    stats(kernel)["names"].append(name)
+    return name
 
 
 def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:

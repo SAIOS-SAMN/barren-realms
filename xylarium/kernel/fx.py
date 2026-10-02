@@ -202,7 +202,7 @@ class FXMarket:
             return False, "Choose two different currencies and a positive amount.", 0
         for c in (from_cur, to_cur):
             if c != SOL and c not in self.pools:
-                return False, f"Unknown currency '{c}'. Listed: {', '.join(CURRENCIES)}.", 0
+                return False, f"Unknown currency '{c}'. Listed: {', '.join(['SOL'] + sorted(self.pools))}.", 0
         if balance(captain, from_cur) < amount:
             return False, f"Insufficient {from_cur}: you hold {balance(captain, from_cur):,}.", 0
         from xylarium.kernel import ledger, regimes
@@ -350,6 +350,8 @@ class FXMarket:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FXMarket":
         fx = cls()
+        if "pools" in data:
+            fx.pools = {}                     # exactly the pools saved (a founding universe may have none yet)
         for c, p in data.get("pools", {}).items():
             fx.pools[c] = {"sol": float(p["sol"]), "local": float(p["local"])}
         fx.volume_sol.update({c: float(v) for c, v in data.get("volume_sol", {}).items()})

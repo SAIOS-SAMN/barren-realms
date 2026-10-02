@@ -6,10 +6,12 @@ circulation, no central bank, no exchange, no Reserve, no great powers' vaults. 
 solves first appears:
 
   COIN      a people founds its money when it founds its state (ways.py): a state taxes, and a tax needs a unit.
-            The money is its region's currency code, issued by the people's own treasury on commodity backing (the
-            reserve regime - a coin is a claim on the staple or metal at par, regimes.py); its supply is what its
-            taxes mint from then on. A second state in a region whose money is already issued adopts it (a
-            de facto union, recorded as such); a people may later change its regime by the one rule (regimes.py).
+            It is issued by the people's own treasury on commodity backing (the reserve regime - a coin is a claim
+            on the staple or metal at par, regimes.py); its supply is what its taxes mint from then on. A people
+            takes up a money already in its region only if it has met that money's issuers (contact.py: one cannot
+            use a coin from people one has never traded with) - a union, recorded as such; otherwise it strikes its
+            own, under a code of its own name, and every world of the people - and every daughter it settles -
+            uses it. A people may later change its regime by the one rule (regimes.py).
   EXCHANGE  long-distance trade needs a clearing house: the exchange is founded when two peoples with different
             monies first meet (contact.py), or when the first starport opens, whichever comes first. Each issuing
             state deposits a quarter of its treasury as the local side of its money's pool; the exchange's own
@@ -97,11 +99,15 @@ def found_currency(kernel: Any, planet: Any) -> Optional[str]:
     holder = knowledge.holder_of_planet(planet)
     if cur in st["currencies"]:
         rec = st["currencies"][cur]
-        if holder not in rec["peoples"]:
+        if holder in rec["peoples"]:
+            return None
+        if _met(kernel, holder, rec["peoples"]):
             rec["peoples"].append(holder)
             _event(kernel, "MONETARY_UNION", f"The {people} take up the {rec['name']}", [holder, rec["issuer"]],
                    planet, cause="a neighbour's money was already in their markets")
-        return None
+            return None
+        cur = _code_for(kernel, people)                    # strangers' coin is no coin: it strikes its own
+        _rebase(kernel, holder, cur)
     name = f"coin of the {people}"
     bank = CentralBank(currency=cur, name=f"Treasury of the {people}", federation=people,
                        governor=f"the first keeper of {planet.name}",
@@ -117,6 +123,37 @@ def found_currency(kernel: Any, planet: Any) -> Optional[str]:
     if st["exchange"]:
         _open_pool(kernel, cur)
     return f"[MONEY] The {people} of {planet.name} found their money ({cur})."
+
+
+def _met(kernel: Any, holder: str, peoples: List[str]) -> bool:
+    from xylarium.kernel import contact
+    fam = contact.stats(kernel)["familiarity"]
+    return any(contact._key(holder, q) in fam for q in peoples)
+
+
+def _code_for(kernel: Any, people: str) -> str:
+    """A money's code from its people's name (three letters), unique among every money there is or was meant to be."""
+    from xylarium.config import CURRENCIES
+    taken = set(CURRENCIES) | set(stats(kernel)["currencies"])
+    letters = [c for c in people.upper() if "A" <= c <= "Z"] or ["X"]
+    for i in range(1, len(letters)):
+        for j in range(i + 1, len(letters)):
+            code = letters[0] + letters[i] + letters[j]
+            if code not in taken:
+                return code
+    n = 2
+    while f"{letters[0]}{letters[-1]}{n}" in taken:
+        n += 1
+    return f"{letters[0]}{letters[-1]}{n}"
+
+
+def _rebase(kernel: Any, holder: str, cur: str) -> None:
+    """Every world of a people takes its own money (they were stateless: nothing in them was money yet)."""
+    from xylarium.kernel import knowledge
+    for s in kernel.sectors.values():
+        for p in s.planets:
+            if p.population > 0 and knowledge.holder_of_planet(p) == holder:
+                p.currency = cur
 
 
 def _issuers(kernel: Any, cur: str) -> List[Any]:

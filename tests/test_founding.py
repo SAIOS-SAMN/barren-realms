@@ -42,6 +42,28 @@ class TestFounding(unittest.TestCase):
         self.assertGreater(pool["sol"], 0)                                         # the house's unit, minted against it
         self.assertIsNone(institutions.found_reserve(self.k))                       # one bank: no Reserve yet
 
+    def test_a_stranger_coin_is_not_taken_up_and_a_saved_founding_reloads_as_it_was(self):
+        import os
+        import tempfile
+        from xylarium.persistence.store import StatePersistence
+        p = self.home
+        p.society["way"] = "state"
+        institutions.found_currency(self.k, p)
+        other = next(w for s in self.k.sectors.values() for w in s.planets if w is not p and w.population == 0)
+        from xylarium.kernel.civilization import CivilizationIntelligenceEngine
+        other.civilization = CivilizationIntelligenceEngine.create_civilization({
+            "name": "Strangers", "species_name": "x", "clade": "bimaniform", "class_code": 0, "sigil": "*",
+            "metabolism": "biotic", "disposition": "industry", "motto": "", "station": "arisen", "tech_level": 0})
+        other.population, other.currency = 1000, p.currency
+        other.society["way"] = "state"
+        institutions.found_currency(self.k, other)
+        self.assertNotEqual(other.currency, p.currency)                            # never met: its own money
+        self.assertIn(other.currency, self.k.banking.banks)
+        path = os.path.join(tempfile.mkdtemp(), "s.json")
+        StatePersistence.save_to_file(self.k, path)
+        k2 = StatePersistence.load_from_file(path)
+        self.assertEqual(k2.fx_market.pools, {})                                   # no exchange appears on load
+
     def test_unfounded_moneys_are_not_governed(self):
         from xylarium.kernel import regimes
         for _ in range(400):
