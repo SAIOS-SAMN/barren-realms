@@ -87,7 +87,10 @@ binding asks.
 | Hearing | the light a people's works leak, against a listener's instruments and the light-time between | signals.py |
 | Federations | blocs of crossed peoples founding common law when it beats its dues; charters and doctrines chosen by members | federation.py |
 | Elders | every mind of the galaxy given a life at the level of history - crossing, falling, expanding, settling, doctrine - across declared ranges | prehistory.py, tools/elders.py |
-| Earth by our rules | a people woken on a Sun-like system at our place and time, lived year by year | tools/earth_run.py |
+| Earth by our rules | a people woken on a Sun-like system at our place and time, lived year by year; or begun in its Mesozoic, a rung short of a mind (`--mesozoic`) | tools/earth_run.py |
+| Annals | every people's deep ages lived at the level of history: bridges in its own generations, falls shared over its dominion, pacts and galactic wars where dominions meet | annals.py |
+| Lore | the galaxy's chronicle read from its ledger | tools/lore.py |
+| The bridges' clock | life's rungs and peoples' ways timed from the engine beside Earth's record | tools/bridges.py |
 
 ## What limits life (creation.limits)
 

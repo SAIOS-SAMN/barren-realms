@@ -15,6 +15,12 @@ Each star's own time also runs slow against the universal clock by its place in 
 (geometry.lapse, reported by `cosmos.position`): a clock near the centre loses about a second a week against one at
 the rim, parts in a million - computed, and too small to move a game year.
 
+A people's own history and the galaxy's deep time are reconciled by its annals (annals.py): each year every people
+is carried, at the level of history, through the deep years that passed since it woke and that it has not lived -
+its farming, state, works, yards and crossing as waits in its own generations, its falls, its dominion among the
+stars, its pacts and wars - so a people woken a billion years before another is a billion years older in what it
+has become, not only in the dates on its ledger. The full engine then lives on from there, year by year.
+
 A people is never aged on the galactic clock. One that is 300 universal years old at the teeming pace has seen 3 Gyr
 of the galaxy and is 300 years old - or so many of its own years as its world has gone round its sun
 (`clock.age_of_people`). Its lifespan is its species' physics in universal years (lifespan.py); its longevity is
