@@ -291,8 +291,8 @@ def _build_slot(kernel: Any, cell: Tuple[int, int], k: int) -> int:
     place = {"r": slot["r"], "theta0": slot["theta0"], "cell": [cell[0], cell[1]], "k": k}
     stats(kernel)["place"][str(sid)] = place
     if "star" not in slot:
-        sec.belts = [{"id": f"BELT-{sid:03d}-{n + 1}", "type": t, "composition": dict(BELT_TYPES[t]), "reserve": q,
-                      "max_reserve": q} for n, (t, q) in enumerate(slot["belts"])]
+        sec.belts = [{"id": f"BELT-{sid:03d}-{n + 1}", "type": b[0], "composition": dict(BELT_TYPES[b[0]]),
+                      "reserve": b[1], "max_reserve": b[1]} for n, b in enumerate(slot["belts"])]
         return sid
     place["born"] = slot["born"]
     if slot["born"] <= deep_gyr(kernel):
@@ -311,7 +311,12 @@ def _light(kernel: Any, sid: int, slot: Dict[str, Any]) -> None:
     sec = kernel.sectors[sid]
     sec.kind, sec.star_type = "SYSTEM", slot["star"]
     sec.star = dict(slot["spec"]) if slot.get("spec") else physics.star_for(sec.star_type)   # its own mass and light
-    sec.belts = []
+    from xylarium.config import BELT_TYPES
+    sec.belts = [{"id": f"BELT-{sid:03d}-{n + 1}", "type": b[0],
+                  "composition": dict(b[2] if len(b) > 2 and b[2] else BELT_TYPES.get(b[0], {})),
+                  "reserve": b[1], "max_reserve": b[1]} for n, b in enumerate(slot.get("belts", []))]
+    for b in sec.belts:
+        matter.source("star_formation", "BELT_ROCK", b["reserve"])      # its belts are born with it
     currency = currency_for_security(sec.security)
     ids: Dict[int, Any] = {}
     letters, moons = 0, {}

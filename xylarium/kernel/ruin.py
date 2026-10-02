@@ -114,4 +114,8 @@ def worth_striking(kernel: Any, captain: Any, planet: Any) -> Optional[Dict[str,
     weight = max(0.0, 1.0 + float(getattr(captain, "cosmic_alignment", 0.0)))   # how dear a life is to this mind
     value = share * (wealth + planet.population * sc["sol"] / max(1.0, sc["lives"]))
     cost = units * COMMODITY_CONFIG["AM"]["base_price"] + lives * weight * sc["sol"] / max(1.0, sc["lives"])
+    from xylarium.kernel import federation, knowledge, sustenance
+    me, them = knowledge.holder_of_captain(captain), sustenance.people_of(planet)
+    if federation.forbids(kernel, me, "exploit", them):
+        cost += federation.sanction_sol(kernel, me)         # its fellows' arm, turned on a member that breaks faith
     return decide.option("strike_world", cost, value, units=units, share=share)

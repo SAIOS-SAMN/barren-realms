@@ -57,6 +57,7 @@ class Laws:
     """A universe's laws as ratios to ours, and the scales they set."""
 
     def __init__(self, ratios: Optional[Dict[str, float]] = None):
+        self.ftl = float((ratios or {}).get("ftl", 1.0)) >= 0.5      # whether space can be folded at all (mastery.py)
         r = {n: 1.0 for n in NAMES}
         r.update({k: float(v) for k, v in (ratios or {}).items() if k in NAMES})
         self.ratios = r
@@ -75,12 +76,13 @@ class Laws:
         self.jeans = a ** 3 * b ** 1.5 / g ** 0.25
         self.nuclear = e
         self.alpha = a
-        self.ours = all(abs(v - 1.0) < 1e-12 for v in r.values())
+        self.ours = all(abs(v - 1.0) < 1e-12 for v in r.values()) and self.ftl
         self.memo: Dict[Any, Any] = {}                       # derived tables, kept per law (worlds._phase_of)
 
     def tag(self) -> str:
         """The laws as the creation key carries them ('' for ours)."""
-        return ",".join(f"{n}={self.ratios[n]:g}" for n in NAMES if abs(self.ratios[n] - 1.0) > 1e-12)
+        out = [f"{n}={self.ratios[n]:g}" for n in NAMES if abs(self.ratios[n] - 1.0) > 1e-12]
+        return ",".join(out + ([] if self.ftl else ["ftl=0"]))
 
     def star_teff(self) -> float:
         """A star's surface temperature at a given mass share, over ours."""
@@ -109,7 +111,7 @@ def parse(tag: str) -> Dict[str, float]:
     out: Dict[str, float] = {}
     for part in (tag or "").split(","):
         k, _, v = part.partition("=")
-        if k.strip() in NAMES and v:
+        if (k.strip() in NAMES or k.strip() == "ftl") and v:
             out[k.strip()] = float(v)
     return out
 

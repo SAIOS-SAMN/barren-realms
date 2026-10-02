@@ -91,6 +91,88 @@ CLASSES = [(0.45, "M-class red dwarf"), (0.9, "K-class orange dwarf"), (1.1, "G-
            (float("inf"), "O-class blue giant")]       # names by mass; each star keeps its own mass and light
 PRIMORDIAL = ("H", "He-3")      # made in the Big Bang: no gradient of enrichment
 
+BELT_INNER = (0.40, 0.63)       # a giant's resonances keep a zone inside its orbit from gathering into a planet: the
+                                # main belt's span over Jupiter's orbit (2.1-3.3 / 5.2 AU)
+BELT_OUTER = (1.0, 1.6)         # beyond the outermost world, the disc's edge never gathered (the Kuiper belt's 30-48 AU)
+DEPLETION_INNER = 4.0e-4        # what a giant's resonances leave of a belt's primordial solids (the main belt: ~5e-4
+                                # Earth masses of an MMSN's ~1.2; Petit et al. 2001 - declared)
+DEPLETION_OUTER = 1.0e-2        # what migration and scattering leave of an outer belt (declared, the Kuiper belt's)
+COMET_SHARE = 0.05              # of the solids a giant scatters, the share flung out to a star's comet cloud (declared)
+UNITS_PER_EARTH_MASS = 2.0e6    # mining units in an Earth mass of rock (a ruler: a main belt holds ~1,000)
+
+
+def _disc_mass(L: Any, slot: Dict[str, Any], z: float, a1: float, a2: float) -> float:
+    """Solids the disc held between a1 and a2 AU (Earth masses): Sigma ~ a^-3/2 normalised as worlds.form does."""
+    from xylarium.kernel import worlds as W
+    s = W.star_of(slot["spec"], L)
+    sigma1 = W.MMSN_ROCK * max(0.0, z) * s["mass"]
+    return 4.0 * math.pi * sigma1 * (1.496e13 ** 2) * (math.sqrt(a2) - math.sqrt(a1)) / 5.972e27
+
+
+def _composition(L: Any, slot: Dict[str, Any], r: float, a_mid: float, z: float) -> Tuple[str, Dict[str, float]]:
+    """What a belt is made of: the solids that condensed where it formed - metal and silicate everywhere, each ice
+    beyond its own line (worlds.condensed); the heaviest elements as the galaxy spread them (cosmos.abundance)."""
+    from xylarium.kernel import worlds as W
+    s = W.star_of(slot["spec"], L)
+    t_form = W.T_UNIT * (s["lum"] / max(1e-6, a_mid) ** 2) ** 0.25
+    ices = W.condensed(t_form, L)
+    ice = sum(ices.values())
+    rock = 1.0 / (1.0 + ice)
+    metal, silicate = W.SOLIDS["core"] * rock, (1.0 - W.SOLIDS["core"]) * rock
+    cos = _disc()
+    out = {"Fe": metal * 0.9, "Ni": metal * 0.08, "Pt": metal * 0.002 * cos.abundance("Pt", r),
+           "Si": silicate * 0.5, "ORE": silicate * 0.48, "Ti": silicate * 0.02 * cos.abundance("Ti", r)}
+    carbon = sum(ices.get(sp, 0.0) for sp in ("CO2", "CO", "CH4")) / (1.0 + ice)
+    if ices.get("H2O"):
+        out["H2O"] = ices["H2O"] / (1.0 + ice)
+    if carbon:
+        out["C"] = carbon
+    nitro = sum(ices.get(sp, 0.0) for sp in ("NH3", "N2")) / (1.0 + ice)
+    if nitro:
+        out["cryogenite"] = nitro
+    total = sum(out.values())
+    out = {k2: round(v / total, 4) for k2, v in out.items() if v / total >= 0.0005}
+    kind = ("ICE" if out.get("H2O", 0) >= 0.3 else "CARBONACEOUS" if out.get("C", 0) >= 0.1 else
+            "METALLIC" if out.get("Fe", 0) + out.get("Ni", 0) >= 0.4 else "SILICATE")
+    return kind, out
+
+
+def _belts(L: Any, slot: Dict[str, Any], r: float, z: float) -> Tuple[List[Tuple[str, int, Dict[str, float]]],
+                                                                    Dict[str, float]]:
+    """A system's belts: the disc's solids that never became worlds - inside a giant's orbit where its resonances
+    stirred them too fast to gather (and cleared most), and beyond the outermost world where the disc thinned out -
+    each made of what condensed where it lay; and its comet cloud, what its giants flung outward, kept as the
+    neighbourhood's passing stars allow. A system without giants has no inner belt; one without worlds, none."""
+    from fractions import Fraction
+    planets = [w for w in slot.get("worlds", []) if "host" not in w]
+    if not planets:
+        return [], {}
+    orbit = [(float(Fraction(str(w["body"]["q"]))) ** 2, bool(w["body"].get("giant")),
+              float(Fraction(str(w["body"]["mass"])))) for w in planets]
+    belts = []
+    giants = [o for o in orbit if o[1]]
+    if giants:
+        a_g = min(a for a, g, _ in giants)
+        lo, hi = a_g * BELT_INNER[0], a_g * BELT_INNER[1]
+        if not any(lo <= a <= hi for a, _, _ in orbit):            # no world took that ground
+            mass = _disc_mass(L, slot, z, lo, hi) * DEPLETION_INNER
+            kind, comp = _composition(L, slot, r, (lo + hi) / 2, z)
+            belts.append((kind, mass, comp))
+    a_out = max(a for a, _, _ in orbit)
+    lo, hi = a_out * BELT_OUTER[0], a_out * BELT_OUTER[1]
+    kind, comp = _composition(L, slot, r, (lo + hi) / 2, z)
+    belts.append((kind, _disc_mass(L, slot, z, lo, hi) * DEPLETION_OUTER, comp))
+    out = [(kind, int(round(m * UNITS_PER_EARTH_MASS)), comp) for kind, m, comp in belts
+           if m * UNITS_PER_EARTH_MASS >= 50]
+    comets = {}
+    if giants:
+        scattered = sum(m for _, _, m in giants) * 0.1                 # the solids around a giant's feeding zone
+        kept = math.exp(-_disc().density(r) * float((slot.get("vertical") or {}).get("exposure", 1.0)))
+        _, cc = _composition(L, slot, r, 30.0 * max(1.0, a_out), z)
+        comets = {"mass_earth": round(scattered * COMET_SHARE * kept, 5), "composition": cc}
+    return out, comets
+
+
 # ---------------------------------------------------------------------- minds (life.py holds life's own laws)
 SUN_MS_GYR = 10.0               # main-sequence life of a solar-mass star; ~ M^-2.5
 CRUST_GYR = 0.6                 # a rocky world's crust settles and its bombardment ends
@@ -314,11 +396,13 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
         names = (rng.randrange(8), rng.randrange(8))
         slot: Dict[str, Any] = {"k": k, "r": round(r, 4), "theta0": round(theta0, 6), "names": names}
         if rng.random() >= 1.0 - math.exp(-n0 * cosmos.density(r) * bb["stars"]):
-            slot["belts"] = []
+            # the space between stars: its rock was gathered by the stars that formed (the dice are rolled as they
+            # were, so every star's own draws stay where they were)
             if rng.random() < BELT_CHANCE:
-                slot["belts"].append((rng.choice(sorted(BELT_TYPES)), rng.randint(*BELT_RESERVE_RANGE)))
+                rng.choice(sorted(BELT_TYPES)), rng.randint(*BELT_RESERVE_RANGE)
                 if rng.random() < 0.25:
-                    slot["belts"].append((rng.choice(sorted(BELT_TYPES)), rng.randint(*BELT_RESERVE_RANGE)))
+                    rng.choice(sorted(BELT_TYPES)), rng.randint(*BELT_RESERVE_RANGE)
+            slot["belts"] = []
             out.append(slot)
             continue
         born = first_stars(seed) + rng.expovariate(1.0 / infall_gyr(seed, r))
@@ -336,6 +420,7 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
         v = geometry.vertical(r, SETTLED_GYR, vr.random(), 2 * math.pi * vr.random())
         slot["vertical"] = {kk: round(v[kk], 5) for kk in ("amp_kpc", "vz_kms", "period_myr", "exposure", "phase")}
         slot["worlds"] = _worlds(seed, L, i, j, k, slot, sec, r, z, born, rng)
+        slot["belts"], slot["comets"] = _belts(L, slot, r, z)
         out.append(slot)
     _CACHE[key] = out
     return out

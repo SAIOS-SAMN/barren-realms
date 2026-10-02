@@ -367,10 +367,28 @@ def settler_reach(kernel: Any, planet: Any) -> int:
     cell - reaction mass per jump falls as 1/v_e, so the same tanks carry a fleet sqrt(v_e) times further in the
     time a voyage allows. A hydrogen torch reaches its yards' range; helium-3 twice it; fission about three times."""
     from xylarium.config import FUEL_CELLS
-    from xylarium.kernel import propulsion
+    from xylarium.kernel import knowledge, mastery, propulsion
+    if not mastery.crossed(kernel, knowledge.holder_of_planet(planet)):
+        return 0                          # sublight: its own system's worlds and moons, not the next star's
     base = DAUGHTER_RADIUS_BY_TIER.get(planet.citadel_level, 6 if planet.citadel_level >= 3 else 3)
     v_e = FUEL_CELLS.get(propulsion.world_fuel(kernel, planet), FUEL_CELLS["H"]).get("v_e") or 1.0
     return max(base, int(round(base * math.sqrt(max(1.0, v_e)))))
+
+
+def resource_worth(kernel: Any, home: Any, cand: Any) -> float:
+    """The matter a candidate world's system offers a people, in SOL: each element of its ground and its system's
+    belts at its price, weighted by its scarcity at home (1 / (1 + held at home / offered))."""
+    from xylarium.config import COMMODITY_CONFIG
+    sec = kernel.sectors.get(cand.sector_id)
+    offered: Dict[str, float] = {}
+    for el, q in (cand.element_deposits or {}).items():
+        offered[el] = offered.get(el, 0.0) + q
+    for b in (getattr(sec, "belts", None) or []):
+        for el, share in b.get("composition", {}).items():
+            offered[el] = offered.get(el, 0.0) + share * b.get("reserve", 0)
+    held = home.element_deposits or {}
+    return sum(q * COMMODITY_CONFIG.get(el, {}).get("base_price", 10) / (1.0 + held.get(el, 0) / max(1.0, q))
+               for el, q in offered.items() if q > 0)
 
 
 def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
@@ -436,7 +454,13 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
                     if k >= 2 * DAUGHTER_EMIGRANTS_MIN:
                         ring_cands.append((cand, k, kit_domes))
         if ring_cands:
-            best = max(ring_cands, key=lambda c: (c[1], -c[2]))
+            # what a world is worth to these settlers: the people it can feed, as this universe values a life, and
+            # the matter its system holds of what their homeworld lacks (its belts and ground, at market value,
+            # weighted by how scarce each is at home) - peoples go where what they need is
+            from xylarium.kernel import alignment
+            sc = alignment.scales(kernel)
+            life = sc["sol"] / max(1.0, sc["lives"])
+            best = max(ring_cands, key=lambda c: (c[1] * life + resource_worth(kernel, planet, c[0]), -c[2]))
             break
     if best is None:
         st["no_room"] += 1

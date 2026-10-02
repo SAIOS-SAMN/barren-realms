@@ -34,11 +34,6 @@ class NullSpaceManager:
     # ------------------------------------------------------------------ scanning
     @staticmethod
     def scan(captain: Captain, sector: Sector, kernel: Any = None) -> ActionResult:
-        if not sector.is_null_space:
-            return ActionResult(
-                success=False, action=ActionType.SCAN_SPACE,
-                message=f"Sector {sector.id:03d} lies inside a star system; deep-space scans need null space between systems.",
-            )
         found = []
         for belt in sector.belts:
             if belt["id"] not in captain.scanned_belts:
@@ -69,9 +64,9 @@ class NullSpaceManager:
 
     @classmethod
     def mine(cls, captain: Captain, sector: Sector, belt_id: Optional[str] = None, kernel: Any = None) -> ActionResult:
-        if not sector.is_null_space or not sector.belts:
+        if not sector.belts:
             return ActionResult(success=False, action=ActionType.MINE_ASTEROIDS,
-                                message="No asteroid belt here. Belts lie in null space between star systems.")
+                                message="No asteroid belt here: belts are what a system's disc left ungathered.")
         belts = [b for b in sector.belts if (belt_id is None or b["id"] == belt_id)]
         belts = [b for b in belts if b["id"] in captain.scanned_belts]
         if not belts:

@@ -347,7 +347,7 @@ def _cores(kernel: Any) -> List[str]:
                 st["dynamo_stalls"] += 1
                 logs.append(f"[ENERGY] {p.name}'s core falters: its magnetic field fails, and the stars' wind "
                             f"begins to take its air.")
-            if d >= 0.5 or geology.airless(p):
+            if d >= 0.5 or geology.airless(p) or soc.get("shield"):   # a shield stands the wind off (skies.py)
                 continue
             k0 = biosphere.carrying_capacity(kernel, p) if p.population > 0 else 0
             a = float(soc.get("atmosphere", 1.0))

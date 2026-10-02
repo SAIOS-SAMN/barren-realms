@@ -137,7 +137,10 @@ def quarter(kernel: Any) -> List[str]:
         port = max(elders[elder], key=lambda p: (p.population, p.id))
         if _light(port) <= 0:
             continue                                          # strangers' lives weigh nothing to it
+        from xylarium.kernel import federation
         for y in sorted(young):
+            if federation.forbids(kernel, elder, "uplift", y):
+                continue                                      # its federation leaves the young to find the stars
             if contact._key(elder, y) in fam:
                 line = _uplift(kernel, elder, port, y, young[y])
                 if line:

@@ -844,9 +844,11 @@ class ColonyManager:
         would carry - its surplus out, its shortfalls in, at the carrier's share of their value that import
         orders pay - is worth the hull to its council (decide.py). One hull in service per world.
         """
-        from xylarium.kernel import populace, sustenance
+        from xylarium.kernel import knowledge, mastery, populace, sustenance
         if not kernel or getattr(planet, "natives", None) or not sustenance.yards(planet):
             return None
+        if not mastery.crossed(kernel, knowledge.holder_of_planet(planet)):
+            return None                                   # a hull for the lanes needs a people that can fold space
         if (kernel.cycle_count % 25) != (zlib.crc32(planet.id.encode()) % 25):
             return None                                   # the council sits once a season
         active_id = getattr(planet, "active_indigenous_captain_id", None)
