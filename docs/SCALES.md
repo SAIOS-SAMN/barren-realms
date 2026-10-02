@@ -112,6 +112,20 @@ geometry from deep-time positions and their traffic from historical time. Any la
 materialised when a people can cross to it) obeys the same contract: each tier's physics on its own clock, and the
 boundary translated by the pace.
 
+## What a people is remembered for (culture.py)
+
+A people is linked to the interstellar community once it lives on more than one world, harvests its sun directly,
+or trades its money on the exchange. Until then its ledger keeps no banking or currency entries (counted in
+`history.muted`, not told), and the galaxy's histories wait for someone to be in it. What is told is its culture,
+weighed once a generation or when something new comes: its COSMOLOGY (its sky as physics makes it - crowded or
+sparse, the galaxy's heart in it or not, its moons, its sun's colour - read through its knowledge against its creed
+and whether it has met anyone or heard a signal), the HURDLES it faces and passes, what it IMAGINES (from its body,
+biology, sky and fears) and its ART (medium from its senses, palette from its sun, symmetries from the mathematics
+its crystals express, mood from its creed and fortune). Seed 7's Zishamar, 765 years: 25 ledger events - a sky that
+was a roof, then "the eyes of the dead, and the great glowing heart among them is where all souls go"; stone art
+of turning patterns that grew sacred as their creed rose; the sickness of crowds, the turning from the wild and the
+founding of order, each faced and passed.
+
 ## History
 
 Everything that happens is written once to the ledger (history.py): when (clock year, deep-time epoch, age), where

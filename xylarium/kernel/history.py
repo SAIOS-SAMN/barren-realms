@@ -24,6 +24,7 @@ import weakref
 from typing import Any, Dict, List, Optional
 
 RECENT = 2000                   # events kept in the kernel (the file keeps them all)
+MONEY_KINDS = ("MONETARY_REGIME", "MONETARY_UNION", "COINAGE", "FACTION_DECREE")
 PER_PEOPLE = 300                # events indexed per people in the kernel
 
 
@@ -62,6 +63,9 @@ def event(kernel: Any, kind: str, title: str, actors: Optional[List[str]] = None
     if kernel is None or not hasattr(kernel, "state"):
         return {}
     st = stats(kernel)
+    if _muted(kernel, kind, list(actors or [])):
+        st["muted"][kind] = st["muted"].get(kind, 0) + 1         # counted, not told (culture.py)
+        return {}
     st["next"] += 1
     sid = sector_id if sector_id is not None else (getattr(planet, "sector_id", None) if planet is not None else None)
     cyc = int(getattr(kernel, "cycle_count", 0))
@@ -92,6 +96,22 @@ def event(kernel: Any, kind: str, title: str, actors: Optional[List[str]] = None
     return rec
 
 
+def _muted(kernel: Any, kind: str, actors: List[str]) -> bool:
+    """A people not yet among the stars keeps no banking or currency entries: its money matters to no one but itself
+    until it trades on the exchange (institutions.py, culture.py). The galaxy's histories wait for someone to be in it."""
+    from xylarium.kernel import culture, institutions
+    if not institutions.founding(kernel):
+        return False
+    if kind in MONEY_KINDS:
+        if not institutions.stats(kernel)["exchange"]:
+            return True
+        civs = [a for a in actors if str(a).startswith("civ:")]
+        return bool(civs) and not any(culture.is_linked(kernel, a) for a in civs)
+    if kind == "GALACTIC_HISTORY":
+        return not culture.linked_peoples(kernel)
+    return False
+
+
 def find(kernel: Any, event_id: str) -> Optional[Dict[str, Any]]:
     for rec in reversed(stats(kernel)["recent"]):
         if rec["id"] == event_id:
@@ -107,7 +127,7 @@ def of_people(kernel: Any, people: str) -> List[Dict[str, Any]]:
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     return {"events": st["next"], "by_kind": dict(sorted(st["counts"].items(), key=lambda kv: -kv[1])[:12]),
-            "peoples": len(st["by_people"])}
+            "peoples": len(st["by_people"]), "muted": dict(st.get("muted", {}))}
 
 
 from xylarium.kernel import state  # noqa: E402
@@ -115,6 +135,6 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="history",
-    state=lambda: {"next": 0, "recent": [], "counts": {}, "by_people": {}},
+    state=lambda: {"next": 0, "recent": [], "counts": {}, "by_people": {}, "muted": {}},
     summary=summary,
 ))
