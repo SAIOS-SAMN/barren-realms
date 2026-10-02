@@ -123,14 +123,21 @@ def other_minds(kernel: Any, holder: str) -> Optional[List[Dict[str, Any]]]:
 
 def memory(kernel: Any, holder: str, n: int = 8) -> List[str]:
     from xylarium.kernel import history
-    keep = ("TURNING", "INTROSPECTION", "CONTACT", "EMERGENCE", "FORECAST", "EXODUS", "UPLIFT", "SIGNAL")
+    keep = ("TURNING", "INTROSPECTION", "CONTACT", "EMERGENCE", "FORECAST", "EXODUS", "UPLIFT", "SIGNAL",
+            "EPITAPH", "EPIDEMIC")
     return [f"y{e['year']:.0f} {e['title']}" for e in history.of_people(kernel, holder) if e["kind"] in keep][-n:]
 
 
 def counsel(kernel: Any, planet: Any) -> Dict[str, Any]:
     from xylarium.kernel import knowledge, syntropy
     holder = knowledge.holder_of_planet(planet)
+    from xylarium.kernel import lifespan
+    life = planet.society.get("life") or {}
     return {"rungs": rungs(kernel, holder), "foresight": foresight(kernel, planet),
+            "life": {"expectancy_years": life.get("expectancy"), "thr": life.get("thr"),
+                     "cohorts": lifespan.cohorts(planet), "dependency": round(
+                         (lifespan.cohorts(planet)["youth"] + lifespan.cohorts(planet)["elder"])
+                         / max(1e-6, lifespan.cohorts(planet)["prime"]), 3)},
             "syntropy": syntropy.reading(kernel, holder) or None, "plans": breadth(kernel, planet, holder),
             "self": self_model(kernel, holder), "others": other_minds(kernel, holder),
             "memory": memory(kernel, holder)}
@@ -147,6 +154,12 @@ def render(c: Dict[str, Any]) -> str:
     if sy:
         lines.append(f"Syntropy: {sy.get('slope', 0.0):+.4f} a year - "
                      + ("growing" if sy.get("slope", 0) > 0 else "declining" if sy.get("slope", 0) < 0 else "still"))
+    lf = c.get("life") or {}
+    if lf.get("expectancy_years") is not None:
+        co = lf["cohorts"]
+        lines.append(f"Life: {lf['expectancy_years']:.0f} years expected, health resilience {lf['thr']:.2f}; "
+                     f"young {co['youth']:.0%}, prime {co['prime']:.0%}, old {co['elder']:.0%} "
+                     f"(dependency {lf['dependency']:.2f}).")
     lines.append("Plans held at once:")
     for p in c["plans"]:
         lines.append(f"  {p['chance']:>5.0%}  {p['what']}" + (f" (net {p['net']:,.0f})" if p["net"] is not None else ""))

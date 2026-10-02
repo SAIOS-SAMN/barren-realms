@@ -41,6 +41,18 @@ def _screen(kernel: Any, pid: str) -> None:
     know = ", ".join(f"{d} {v}" for d, v in sorted(s["knowledge"].items()) if v) or "nothing written down"
     print(f"  {c_gold('Knowledge')} {know}    {c_gold('Inquiry')} {s['focus'] or 'as needs call'}    "
           f"{c_gold('Growth')} {s['policy']}")
+    life = s.get("life") or {}
+    if life.get("expectancy_years") is not None:
+        age = life.get("age") or {}
+        co = life["cohorts"]
+        print(f"  {c_gold('Life')} {life['expectancy_years']:.0f} years expected, health {life['thr']:.0%}; "
+              f"young {co['youth']:.0%} / prime {co['prime']:.0%} / old {co['elder']:.0%}; "
+              f"{life['ancestors']:,} ancestors" + (f"; they {('lay their dead to rest' if life['practice'] == 'rest' else 'burn their dead for warmth' if life['practice'] == 'pyre' else 'return their dead to the ground')}" if life.get("practice") else ""))
+        if age:
+            print(c_gray(f"  Their age: {age['years']:,.0f} years, {age['local_years']:,.0f} of their own world's, "
+                         f"{age['galactic_myr']:,.1f} Myr of the galaxy's"))
+        if life.get("remembered"):
+            print(c_gray("  They remember " + ", ".join(life["remembered"])))
     firsts = s["firsts"]
     if firsts:
         recent = sorted(firsts.items(), key=lambda kv: kv[1]["cycle"])[-3:]

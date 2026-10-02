@@ -499,8 +499,11 @@ def quarter(kernel: Any) -> List[str]:
     near = _neighbours(kernel, peoples)
     for holder, rec in peoples.items():
         _learn(kernel, holder, rec, near.get(holder, []))
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    if (kernel.cycle_count // FISCAL_QUARTER_CYCLES) % 4:
+        return []                                       # its ladders are climbed once a year, on a year's thinking
     for holder, rec in peoples.items():
-        budget = rec["effort"] * OPS_PER_UNIT
+        budget = rec["effort"] * OPS_PER_UNIT * 4
         reached, proofs, minted = _attempt(kernel, holder, budget, seed)
         st["gauge"][holder] = reached
         st["proofs"][holder] = proofs[-2:]               # the hardest planar and volumetric feats, for anyone to check

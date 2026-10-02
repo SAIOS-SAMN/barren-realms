@@ -110,7 +110,9 @@ def fork(kernel: Any, planet: Any, record: bool = True) -> str:
     st = stats(kernel)
     st["forks"][choice] = st["forks"].get(choice, 0) + 1
     was = (planet.society.get("fork") or {}).get("choice")
+    from xylarium.kernel import knowledge, lifespan
     planet.society["fork"] = {"cycle": kernel.cycle_count, "choice": choice, "was": was, "room": room,
+                              "died": lifespan.died(kernel, knowledge.holder_of_planet(planet)),
                               "outward": round(out_value - out_cost, 1), "enough": round(enough_value - enough_cost, 1)}
     return choice
 
@@ -118,10 +120,14 @@ def fork(kernel: Any, planet: Any, record: bool = True) -> str:
 def due(kernel: Any, planet: Any) -> bool:
     """Whether the council weighs its fork again: once a generation."""
     from xylarium.kernel import fertility
-    last = (planet.society.get("fork") or {}).get("cycle")
-    if last is None:
+    from xylarium.kernel import knowledge, lifespan
+    rec = planet.society.get("fork") or {}
+    if rec.get("cycle") is None:
         return True
-    return kernel.cycle_count - int(last) >= fertility.generation_of(kernel, planet) * 100
+    holder = knowledge.holder_of_planet(planet)
+    if "died" in rec and lifespan.died(kernel, holder) > 0:          # a new generation of minds weighs it again
+        return lifespan.turned_over(kernel, holder, rec["died"], planet.population)
+    return kernel.cycle_count - int(rec["cycle"]) >= fertility.generation_of(kernel, planet) * 100
 
 
 # ---------------------------------------------------------------------- the season

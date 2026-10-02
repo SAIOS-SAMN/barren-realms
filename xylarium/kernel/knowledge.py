@@ -21,6 +21,7 @@ drive, an artificial womb or a sanitation works is available at any knowledge an
 mastery rises - species and polities come to know different things because they need and value different things.
 """
 
+import math
 from typing import Any, Dict, List, Optional
 
 from xylarium.config import KNOWLEDGE_UNIT, PROCESSES
@@ -130,12 +131,29 @@ def effort(kernel: Any, planet: Any) -> float:
     free = max(0.0, 1.0 - 1.0 / ss) if ss > 0 else 0.0
     leisure = 1.0 + laws.clamp(float(soc.get("lux_access", 0.0) or 0.0))
     depth = biosphere.cognition_of(kernel, planet)["depth"]
-    e = planet.population / 1000.0 * free * leisure * depth
+    from xylarium.kernel import lifespan
+    e = planet.population / 1000.0 * free * leisure * depth * lifespan.prime_factor(planet)   # the prime think
     civ = getattr(planet, "civilization", None)
     faction = getattr(planet, "faction_id", None) or (getattr(civ, "faction_id", None) if civ is not None else None)
     if faction == "IMPERIUM":
         e *= 0.5                            # only the sanctioned sciences of the ancient rites
     return e * impedance(kernel, planet)
+
+
+HUMAN_LIFE_YEARS = 70.0         # the life expectancy behind the measured depreciation (Earth's people)
+
+
+def forgetting(kernel: Any, holder: Optional[str]) -> float:
+    """A people's yearly loss of what it knows: the measured R&D depreciation (laws), with the share its knowers'
+    deaths make of it (1 / Earth's life expectancy) replaced by its own (lifespan.py) - a long-lived people holds
+    what it learns longer, a short-lived one must keep relearning."""
+    from xylarium.kernel import lifespan
+    life = lifespan.expectancy(kernel, holder)
+    if not life:
+        return laws.KNOWLEDGE_DEPRECIATION
+    # knowers die at 1/life a year: what they carried leaves exponentially; the rest of the measured rate stays
+    keep = (1.0 - laws.KNOWLEDGE_DEPRECIATION) * math.exp(1.0 / HUMAN_LIFE_YEARS - 1.0 / max(1e-3, life))
+    return 1.0 - keep
 
 
 def impedance(kernel: Any, planet: Any) -> float:
@@ -164,9 +182,10 @@ def quarter(kernel: Any) -> List[str]:
     st = stats(kernel)
     years = _quarter() / 100.0
     before = {h: sum(s.values()) for h, s in st["stocks"].items()}
-    for holder, s in st["stocks"].items():          # forgetting first: knowledge unused decays
+    for holder, s in st["stocks"].items():          # forgetting first: knowledge unused decays, and dies with knowers
+        rate = forgetting(kernel, holder)
         for d in DOMAINS:
-            s[d] = round(laws.depreciate(s.get(d, 0.0), years), 4)
+            s[d] = round(laws.depreciate(s.get(d, 0.0), years, rate), 4)
     for sec in kernel.sectors.values():
         for planet in sec.planets:
             if planet.population <= 0 or getattr(planet, "natives", None):

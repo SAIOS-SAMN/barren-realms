@@ -3,6 +3,20 @@
 One time for the whole universe - the cycle, 100 to a standard year - and everything that moves under the same
 physics moves in lockstep with it.
 
+## Three clocks, one time
+
+| Clock | What it counts | What runs on it |
+|---|---|---|
+| **Universal** | the cycle, 100 to a standard year | everything that integrates: food, births, deaths, thought, money - and every life as a physical duration (biology runs on chemical kinetics, not on orbits) |
+| **Galactic** | deep time, Gyr since the Big Bang (`cosmos.deep_gyr`): the universal clock times the universe's pace | the stars' births, ageing and deaths, the galaxy's turning, minds arising |
+| **Local** | each homeworld's year, its orbit about its own star (`clock.local_years`) | how a people reckons its age, seasons and rites |
+
+A people is never aged on the galactic clock. One that is 300 universal years old at the teeming pace has seen 3 Gyr
+of the galaxy and is 300 years old - or so many of its own years as its world has gone round its sun
+(`clock.age_of_people`). Its lifespan is its species' physics in universal years (lifespan.py); its longevity is
+judged on that, never on deep time. Its intelligence ladders are climbed once a universal year, on a year's
+thinking - not on its local year, which runs from days to centuries across worlds.
+
 ## Three kinds of motion
 
 | Kind | What | How it advances | Where |

@@ -188,7 +188,12 @@ def art(planet: Any, kernel: Any, holder: str) -> Dict[str, str]:
     recent_strife = planet.society.get("strife_cycle", -10 ** 9) > kernel.cycle_count - 2500
     mood = ("grief" if recent_strife else "the sacred and iconic" if d > max(0.3, i) else
             "the abstract and geometric" if i > 0.3 else "ornament and plenty")
-    return {"medium": medium, "palette": palette, "symmetry": symmetry, "mood": mood}
+    out = {"medium": medium, "palette": palette, "symmetry": symmetry, "mood": mood}
+    from xylarium.kernel import lifespan
+    gone = lifespan.remembered(kernel, holder) if "lifespan" in kernel.state else []
+    if gone:                                           # the ability to remember someone who is gone
+        out["elegy"] = f"{gone[0]['name']}, their {gone[0]['role']}"
+    return out
 
 
 def _capable(kernel: Any, planet: Any) -> bool:
@@ -213,9 +218,16 @@ def quarter(kernel: Any) -> List[str]:
         # beliefs and styles change over generations - or at once when something new comes (a stranger, a signal,
         # a dying sun)
         news = (cos["met"], cos["heard"], bool(cap.society.get("forecast")))
-        due = kernel.cycle_count - rec.get("weighed", -10 ** 9) >= gen * 100 or list(news) != rec.get("news")
+        from xylarium.kernel import lifespan
+        people = sum(w.population for w in worlds)
+        if "lifespan" in kernel.state and lifespan.died(kernel, holder) > 0:
+            turned = lifespan.turned_over(kernel, holder, rec.get("weighed_died", -10 ** 12), people)
+        else:
+            turned = kernel.cycle_count - rec.get("weighed", -10 ** 9) >= gen * 100
+        due = turned or list(news) != rec.get("news")     # a new generation of minds, or something new
         if due:
             rec["weighed"], rec["news"] = kernel.cycle_count, list(news)
+            rec["weighed_died"] = lifespan.died(kernel, holder)
         if due and cos["stance"] != rec.get("stance"):
             rec["stance"] = cos["stance"]
             history.event(kernel, "PHILOSOPHY", f"The {name} come to believe {cos['text'].split(':')[0].split(',')[0]}",
@@ -243,7 +255,9 @@ def quarter(kernel: Any) -> List[str]:
             rec["art"] = sig
             history.event(kernel, "ART", f"The {name} make {style['medium']} of {style['mood']}", actors=[holder],
                           planet=cap, text=f"The {name} work in {style['medium']}, in {style['palette']}, in "
-                                           f"{style['symmetry']}, toward {style['mood']}.", data=style)
+                                           f"{style['symmetry']}, toward {style['mood']}"
+                                           + (f" - and in elegy for {style['elegy']}" if style.get("elegy") else "")
+                                           + ".", data=style)
     return logs
 
 

@@ -67,3 +67,33 @@ its people:
 | memory | always | its turnings, coming to self-knowledge, contacts, exoduses and signals |
 
 The counsel changes nothing; it is a lens.
+
+## Life and death (lifespan.py)
+
+A people is born, grows, ages and dies by its species' physics. Every span is a multiple of its generation (body
+mass^(1/4) over its chemistry's pace), read off Earth's people: maturity 0.6 generations, the end of the productive
+span 1.7, adult life expectancy 2.5, the longest lives 4.3 - reached as it masters biology. Its people are three
+cohorts: youth (fed, not yet working or bearing), prime (working, bearing, thinking, making) and elders (its memory;
+they carry the exit). What the prime do - births, inquiry, work - scales with their share against the people's own
+stable share, so a youth bulge waits and an ageing people slows.
+
+**Total health resilience (THR)** is the chance a newborn reaches old age: nutrition x air x its star's light x its
+world's cleanliness x how its biome suits it x shelter x what its crowd diseases spare. Mortality before old age is
+-ln(THR) over the span to it, and fertility is TFR x THR. Crowd diseases are species living on the people: endemic
+only above a critical community (Bartlett's ~250,000 for Earth's generation, scaled by the people's own), milder as
+host and pathogen co-evolve, and carried on first meeting to a people of the same chemistry that has never had them
+(EPIDEMIC, virgin soil).
+
+A people sees its own fertility fall only if it can see itself: one that knows itself, or has climbed the ladders of
+abstraction, plays the propagation card when it drops below replacement; one that cannot simply dwindles.
+
+**The dead** return to the world as their people's staple (declared: decomposition) - or warm it, where its
+chemistry burns and it has works to use the heat (a pyre: a declared energy source) - as it believes of its dead: a
+people whose sky is a roof, or the eyes of the dead, lays them to rest. **The eminent** - the minds who carried a
+turning, a founding, a first field, a coming to self-knowledge - are named (EMINENT), mourned (EPITAPH), sung in
+its art's elegies, and forgotten over generations, slower where the dead are laid to rest and elders are many.
+
+**Turnover** is the engine of change: a people has replaced itself when as many have died as now live, and only then
+does it weigh its beliefs, art and fork again. What it knows dies with its knowers: Earth's measured 15% a year of
+forgetting, its human-mortality share replaced by the people's own - a long-lived people holds what it learns, a
+short-lived one must keep relearning.

@@ -168,7 +168,18 @@ def status(kernel: Any, player_id: str) -> Dict[str, Any]:
             "stress": dict(p.society.get("stress") or society.stress(kernel, p)),
             "trades": society.trades(kernel, p), "myths": list(p.society.get("myths", [])),
             "forecast": p.society.get("forecast"),
+            "life": _life(kernel, p, h),
             "firsts": dict((kernel.state.get("genesis") or {}).get("firsts", {}))}
+
+
+def _life(kernel: Any, p: Any, h: Optional[str]) -> Dict[str, Any]:
+    """How long its people live, how healthy they are, how old they are by each clock, and whom they remember."""
+    from xylarium.kernel import clock, lifespan
+    life = dict(p.society.get("life") or {})
+    return {"expectancy_years": life.get("expectancy"), "thr": life.get("thr"), "cohorts": lifespan.cohorts(p),
+            "practice": life.get("practice"), "ancestors": life.get("ancestors", 0),
+            "age": clock.age_of_people(kernel, p),
+            "remembered": [f"{f['name']} ({f['role']})" for f in lifespan.remembered(kernel, h)[:5]]}
 
 
 def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> str:

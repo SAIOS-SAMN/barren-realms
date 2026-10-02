@@ -833,7 +833,7 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
     p.treasury = 0
     p.society["way"] = "forage"
     p.society["crop_z"] = 0.0
-    p.society["arisen"] = {"epoch": rec["epoch"], "cell": list(cell)}
+    p.society["arisen"] = {"epoch": rec["epoch"], "cell": list(cell), "cycle": kernel.cycle_count}
     ways._refresh(kernel, p)
     p.population = max(500, int(biosphere.carrying_capacity(kernel, p)))
     from xylarium.config import FOOD_PER_THOUSAND

@@ -268,6 +268,11 @@ def fertility(kernel: Any, planet: Any) -> Tuple[float, Dict[str, Any]]:
         f *= card["fertility"]
     if "fertility_cap" in card:
         f = min(f, card["fertility_cap"])
+    life = planet.society.get("life") or {}
+    if "thr" in life:                                   # TFR x total health resilience (lifespan.py)
+        f *= float(life["thr"])
+    from xylarium.kernel import lifespan
+    f *= lifespan.prime_factor(planet)                  # only the prime bear: a youth bulge waits, an old people slows
     unstressed = f
     hit = stressed(kernel, planet)
     if hit:
@@ -287,13 +292,27 @@ def choose_natal(kernel: Any, planet: Any, f_natural: float) -> Optional[str]:
     if planet.faction_id == "ZEALOT" or (civ is not None and getattr(civ, "faction_id", None) == "ZEALOT"):
         return "hatching"
     from xylarium.kernel import demography
-    policy = getattr(planet, "growth_policy", None) or demography.choose_policy(kernel, planet)
+    # its council's fork, if it has weighed one (syntropy.py); a captain's house by temperament
+    policy = getattr(planet, "growth_policy", None) or (demography.choose_policy(kernel, planet) if owner else None)
     if policy == "steady":
         return "ascetic"
     dogma = float(getattr(civ, "dogma", 0.0) or 0.0) if civ is not None else 0.0
-    if f_natural < 1.0 or dogma > 0.5:
-        return "propagation"          # an expansionist people below replacement pays for its children
+    if dogma > 0.5:
+        return "propagation"          # its creed commands it
+    if f_natural < 1.0 and perceives(kernel, planet):
+        return "propagation"          # an expansionist people that sees itself falling below replacement pays for its children
     return None
+
+
+def perceives(kernel: Any, planet: Any) -> bool:
+    """Whether a people can see its own fertility fall: it must know itself (introspect.py) or have climbed some way
+    up the ladders of abstraction (intellect.py). A people that cannot see it simply dwindles."""
+    from xylarium.kernel import intellect, introspect, knowledge
+    owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
+    if owner is not None:
+        return True                   # a captain's colony keeps its census
+    holder = knowledge.holder_of_planet(planet)
+    return introspect.introspective(kernel, holder) or intellect.fluid(kernel, holder) > 0
 
 
 def set_natal(kernel: Any, captain: Any, planet: Any, card: str) -> str:

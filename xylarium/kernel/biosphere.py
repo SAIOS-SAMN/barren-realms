@@ -242,6 +242,21 @@ def metabolic_factor(metabolism: str, strat: str, birth: float = 1.0, temperatur
     return mass ** 0.75 * laws.thermal_speed(t)
 
 
+def body_mass(planet: Any, kernel: Any = None) -> float:
+    """A body's mass over a K-strategist carbon body's on an Earth (metabolic_factor's mass: life history and
+    homeworld gravity)."""
+    from xylarium.kernel import fertility, genome
+    kernel = _kernel(kernel)
+    c = fertility.CEILING.get(fertility.strategy(kernel, planet), fertility.CEILING["K"]) * \
+        max(1e-6, genome.birth_factor(planet))
+    mass = (fertility.CEILING["K"] / c) ** 4
+    civ = getattr(planet, "civilization", None)
+    if metabolism_of(kernel, planet) != "plasmic":
+        g = float(F(civ.home_gravity)) if civ is not None and getattr(civ, "home_gravity", None) else 1.0
+        mass *= max(1e-3, g) ** -GRAVITY_MASS_POWER
+    return mass
+
+
 def home_flux(planet: Any) -> Optional[float]:
     """The light this world's people evolved under (its homeworld's), if known."""
     civ = getattr(planet, "civilization", None)

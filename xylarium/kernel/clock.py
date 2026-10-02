@@ -16,6 +16,14 @@ ORBITAL VELOCITY is measured, not assumed: each body's phase rate is 1/its year 
 angular velocity 360 deg / year, its orbital speed 2 pi a / P, its spin rate the cycle's days over its day.
 measure() reports them for every body so orbits can later be automated from the measurements alone.
 
+THREE CLOCKS, one time. The UNIVERSAL clock is the cycle: everything that integrates (food, births, deaths, thought,
+money) steps on it, and a body's life is a physical duration on it - biology runs on chemical kinetics, not on
+orbits. The GALACTIC clock is deep time, Gyr since the Big Bang (cosmos.deep_gyr): the universal clock scaled by the
+universe's pace, on which stars are born, age and die, the galaxy turns and minds arise - nothing that lives a
+lifetime runs on it. The LOCAL clock is each homeworld's year (its orbit about its own star): how a people counts
+its age, its seasons and its rites (local_years). A people 300 universal years old at the teeming pace has seen
+3 Gyr of the galaxy and is 300 years old - or so many of its own years as its world has gone round its sun.
+
 VELOCITY of the universe is how many cycles pass per wall-second - a throttle on the runner, never on the physics:
 the same seed gives the same universe at any velocity (scheduler.lock). 0 means as fast as the machine allows.
 """
@@ -55,6 +63,24 @@ def phase(kernel: Any, planet: Any, t: Optional[int] = None) -> F:
     """Exact fraction of its year the body has completed at time t (now if omitted)."""
     from xylarium.kernel import physics
     return physics.orbital_phase(_sector(kernel, planet), planet, now(kernel) if t is None else int(t))
+
+
+def local_years(kernel: Any, planet: Any, cycles: float) -> float:
+    """A span of universal cycles in a world's own years (its orbits about its star)."""
+    return float(cycles) / max(1e-9, float(year_of(kernel, planet)))
+
+
+def age_of_people(kernel: Any, planet: Any) -> Optional[Dict[str, float]]:
+    """How old a people is - in universal years, in its homeworld's years, and in the galaxy's - since it arose."""
+    rose = (planet.society or {}).get("arisen")
+    if not rose:
+        return None
+    from xylarium.kernel import cosmos
+    born = int(rose.get("cycle", 0)) if "cycle" in rose else \
+        int(round((float(rose["epoch"]) - float(cosmos.stats(kernel)["epoch0"])) * 1e9 / cosmos.ruler(kernel) * 100))
+    span = max(0, kernel.cycle_count - born)
+    return {"years": round(span / CYCLES_PER_YEAR, 2), "local_years": round(local_years(kernel, planet, span), 2),
+            "galactic_myr": round(span / CYCLES_PER_YEAR * cosmos.ruler(kernel) / 1e6, 3)}
 
 
 def velocity_of(kernel: Any, planet: Any) -> Dict[str, float]:
