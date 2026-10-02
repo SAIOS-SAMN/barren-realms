@@ -60,7 +60,11 @@ def chart(kernel: Any, why: str) -> Optional[str]:
 
 
 def arrived(kernel: Any, sector_id: int) -> Optional[str]:
-    """A ship entered a sector: if it stands on the charted edge, it sees what lies beyond."""
+    """A ship entered a sector: if it stands on the charted edge, it sees what lies beyond (in a cosmic universe:
+    entering a cell for the first time, it sees the cells around it - cosmos.py)."""
+    from xylarium.kernel import cosmos
+    if cosmos.is_cosmic(kernel):
+        return cosmos.entered(kernel, sector_id)
     if sector_id in edge(kernel):
         return chart(kernel, f"a ship reached Sector {sector_id:03d}")
     return None
@@ -68,6 +72,9 @@ def arrived(kernel: Any, sector_id: int) -> Optional[str]:
 
 def folding_into(kernel: Any, destination: int) -> Optional[str]:
     """A fold aimed at the next cluster's coordinates charts it; space beyond that has not been seen at all."""
+    from xylarium.kernel import cosmos
+    if cosmos.is_cosmic(kernel):
+        return None                                   # a fold reaches only what has been witnessed
     if destination not in kernel.sectors and destination in span(next_index(kernel)):
         return chart(kernel, f"a fold toward Sector {destination:03d}")
     return None
@@ -75,7 +82,9 @@ def folding_into(kernel: Any, destination: int) -> Optional[str]:
 
 def quarter(kernel: Any) -> List[str]:
     """Worlds with shipyards look as far as their settler fleets can sail."""
-    from xylarium.kernel import demography, sustenance, topology
+    from xylarium.kernel import cosmos, demography, sustenance, topology
+    if cosmos.is_cosmic(kernel):
+        return []                                     # cosmos.quarter does it, cell by cell
     rim = set(edge(kernel))
     if not rim or not (rim & set(kernel.sectors)):
         return []

@@ -65,6 +65,12 @@ class ChronicleEngine:
         self.next_id += 1
         self.entries.append(entry)
         self.counts[kind] += 1
+        if kernel is not None and kind != "MYTH":  # every written history is also a ledger event (history.py; myths
+            # are written to it by society.py, with what they build on)
+            from xylarium.kernel import history
+            planet = kernel.get_planet(subject_id) if (subject_id and str(subject_id).startswith("planet")) else None
+            history.event(kernel, kind, title, actors=[subject], planet=planet, sector_id=sector_id, text=body,
+                          data={"chronicle": entry["id"], "tags": entry["tags"], "alignment": entry["alignment"]})
         if len(self.entries) > CHRONICLE_MAX_ENTRIES:
             # Keep the galaxy's memory bounded: drop the oldest routine logs first, never history or manifestos
             for i, e in enumerate(self.entries):

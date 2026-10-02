@@ -64,6 +64,9 @@ def conquer(kernel: Any, planet: Any, by: Any, how: str) -> None:
     st = stats(kernel)
     st["conquests"] += 1
     primordial.first(kernel, "first_occupation", f"{planet.name} by {by.name}")
+    from xylarium.kernel import history
+    history.event(kernel, "CONQUEST", f"{by.name} takes {planet.name}", actors=[f"captain:{by.id}", str(prior)],
+                  planet=planet, magnitude=planet.population, cause=how)
 
 
 def _occupier_metab(kernel: Any, planet: Any) -> str:
@@ -183,6 +186,9 @@ def quarter(kernel: Any) -> List[str]:
                 p.faction_id = None
                 p.society.pop("occupation", None)
                 st["revolts"] += 1
+                from xylarium.kernel import history
+                history.event(kernel, "REVOLT", f"{p.name} throws out its occupier", actors=[f"captain:{rec['by']}"],
+                              planet=p, magnitude=p.population, cause=f"unrest {rec['unrest']:.2f}: policing unpaid")
                 logs.append(f"[OCCUPATION] {p.name} rises and throws out "
                             f"{occupier.name if occupier else 'its occupier'}: it is its people's own again.")
                 continue

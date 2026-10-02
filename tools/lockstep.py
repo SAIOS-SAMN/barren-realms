@@ -78,7 +78,7 @@ def _load(path: str):
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--genesis", default="primordial", choices=("settled", "primordial", "forager"))
+    ap.add_argument("--genesis", default="primordial", choices=("settled", "primordial", "forager", "cosmic"))
     ap.add_argument("--from", dest="source", default="", help="start from a saved universe instead of a genesis")
     ap.add_argument("--cycles", type=int, default=100)
     ap.add_argument("--hashseeds", default="0,1", help="PYTHONHASHSEED for each run")

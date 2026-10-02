@@ -131,6 +131,10 @@ class ArchaeologyManager:
         planet.morale = 0
         msg = (f"CIVILIZATION LOST: famine has ended the {planet.ruins['culture']} on {planet.name}. "
                f"Its cities are silent; archaeologists may now survey the ruins.")
+        if kernel is not None:
+            from xylarium.kernel import history
+            history.event(kernel, "EXTINCTION", f"The {civ.name} of {planet.name} are gone", actors=[f"civ:{civ.name}"],
+                          planet=planet, cause="famine below the last viable number", text=msg)
         if kernel is not None and getattr(kernel, "event_bus", None):
             kernel.event_bus.broadcast_radio(sender="XENO-ARCHIVE", text=msg, channel="COMM-1", sector_id=planet.sector_id)
         return msg

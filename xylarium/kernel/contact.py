@@ -156,8 +156,11 @@ def quarter(kernel: Any) -> List[str]:
             touched.add(k)
             if k not in fam:
                 st["first_contacts"] += 1
-                from xylarium.kernel import primordial
+                from xylarium.kernel import history, primordial
                 primordial.first(kernel, "first_contact", k)
+                history.event(kernel, "CONTACT", f"{a.split(':', 1)[-1]} and {b.split(':', 1)[-1]} meet",
+                              actors=[a, b], planet=max(by[a], key=lambda w: w.population) if by.get(a) else None,
+                              cause="their ships reach each other's worlds")
             learn = 0.5 * (_information(kernel, a) + _information(kernel, b)) * (0.5 + _openness(by, a, b))
             fam[k] = round(fam.get(k, 0.0) + (1.0 - fam.get(k, 0.0)) * learn * years, 5)
     for k in list(fam):

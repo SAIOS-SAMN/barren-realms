@@ -296,6 +296,11 @@ def _war(kernel: Any, planet: Any, me: str, them: str, food: str, take: int, sec
     war["raids"] += 1
     war["seized"] += take
     war["last"] = kernel.cycle_count
+    from xylarium.kernel import history
+    history.event(kernel, "WAR" if war["raids"] == 1 else "RAID",
+                  f"{people_name(kernel, me)} {'go to war with' if war['raids'] == 1 else 'raid'} {people_name(kernel, them)}",
+                  actors=[me, them], planet=planet, sector_id=sector_id, magnitude=take,
+                  cause=f"hunger: {food} the land no longer gave", data={"war": key, "raid": war["raids"]})
 
 
 def _peace(kernel: Any) -> List[str]:

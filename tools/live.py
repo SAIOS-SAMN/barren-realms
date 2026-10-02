@@ -74,7 +74,7 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
         "fx": {c: round(kernel.fx_market.rate(c), 3) for c in kernel.fx_market.pools},
         "m_over_mstar": {c: round(supply[c] / t, 3) for c, t in pol.current.items() if t and c in supply},
     }
-    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest", "mirror", "contact", "cohabit", "clock", "scheduler", "ways"):
+    for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest", "mirror", "contact", "cohabit", "clock", "scheduler", "ways", "society", "cosmos", "history"):
         if name in sums:
             obs[name] = sums[name]
     g = kernel.state.get("genesis") or {}
@@ -148,7 +148,7 @@ def main() -> None:
     ap.add_argument("--show", type=int, default=0)
     ap.add_argument("--velocity", type=float, default=None,
                     help="cycles per wall-second (0: as fast as the machine allows); also read live from <dir>/seedN/velocity")
-    ap.add_argument("--genesis", default="settled", choices=("settled", "primordial", "forager"),
+    ap.add_argument("--genesis", default="settled", choices=("settled", "primordial", "forager", "cosmic"),
                     help="primordial: every people on its homeworld, nothing spacefaring (no bots)")
     args = ap.parse_args()
     home = os.path.join(args.dir, f"seed{args.seed}")
@@ -174,7 +174,9 @@ def main() -> None:
     kernel.register_player = lambda pid, *a, **kw: kernel.captains.get(pid) or real_register(pid, *a, **kw)
     rng = random.Random(args.seed * 7919 + kernel.cycle_count)
     random.seed(args.seed * 7919 + kernel.cycle_count)
-    primordial = (kernel.state.get("genesis") or {}).get("mode") in ("primordial", "forager")
+    primordial = (kernel.state.get("genesis") or {}).get("mode") in ("primordial", "forager", "cosmic")
+    from xylarium.kernel import history
+    history.sink(kernel, os.path.join(home, "history.jsonl"))       # the whole ledger, every event
     bots = [] if primordial else harness.make_players(kernel, rng)      # nothing to trade with yet: we watch
     kernel.register_player = real_register
     stats = harness.RunStats()

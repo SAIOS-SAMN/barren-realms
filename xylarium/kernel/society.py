@@ -130,28 +130,71 @@ _MYTH = {
 }
 
 
-def _myth(kernel: Any, planet: Any, kind: str) -> Optional[Dict[str, Any]]:
+def _myth(kernel: Any, planet: Any, kind: str, told: Optional[str] = None, source: Optional[Dict[str, Any]] = None
+          ) -> Optional[Dict[str, Any]]:
+    """A people's myth: told in the terms of its own sky, and built on the myth before it (each retelling carries
+    the last); written to the ledger with what it remembers (`source`) and what it builds on."""
     soc = planet.society
     myths = soc.setdefault("myths", [])
-    if any(m["kind"] == kind for m in myths):
+    if source is None and any(m["kind"] == kind for m in myths):
         return None
     sky = _sky(kernel, planet)
     moons_say = ("the moon looked on and said nothing" if sky["moons"] == 1 else
                  f"its {sky['moons']} moons looked on and said nothing" if sky["moons"] > 1 else
                  "and there was no moon to witness it")
-    text = _MYTH.get(kind, "something happened that no one could explain; {moons_say}").format(
-        colour=sky["colour"], moons_say=moons_say)
-    myth = {"kind": kind, "year": kernel.cycle_count // 100, "text": text}
-    myths.append(myth)
+    text = told or _MYTH.get(kind, "something happened that no one could explain; {moons_say}")
+    text = text.format(colour=sky["colour"], moons_say=moons_say)
+    prev = myths[-1] if myths else None
+    if prev is not None:
+        text += f" - as it was when {prev['text'].split(';')[0].split(' - ')[0]}"
     people = getattr(planet.civilization, "name", planet.name)
+    from xylarium.kernel import history, knowledge, primordial
+    refs = [x for x in ((source or {}).get("id"), (prev or {}).get("id")) if x]
+    rec = history.event(kernel, "MYTH", f"The {people} tell how {text.split(',')[0]}",
+                        actors=[knowledge.holder_of_planet(planet)], planet=planet, refs=refs,
+                        text=f"The {people} of {planet.name} say that {text}.", data={"myth": kind})
+    myth = {"id": rec.get("id"), "kind": kind, "year": kernel.cycle_count // 100, "text": text,
+            "builds_on": (prev or {}).get("id"), "remembers": (source or {}).get("id")}
+    myths.append(myth)
+    del myths[:-40]
     chron = getattr(kernel, "chronicle", None)
     if chron is not None:
         chron.record(kernel, "MYTH", planet.id, people, f"The {people} tell how {text.split(',')[0]}",
                      f"The {people} of {planet.name} say that {text}.", sector_id=planet.sector_id,
                      tags=["myth", kind])
-    from xylarium.kernel import primordial
     primordial.first(kernel, "first_myth", f"{people}: {kind}")
     return myth
+
+
+LEGENDARY = {"WAR": "the {them} came for their {what} under the {colour} sun, and they fought",
+             "STRIFE": "brother rose against brother under the {colour} sun, and the old creed fell",
+             "CONQUEST": "strangers from the sky took their world, and the {colour} sun did not stop them",
+             "REVOLT": "they threw the strangers back into the sky",
+             "CONTACT": "the {them} first came out of the dark, speaking in a tongue no one knew",
+             "SUBJUGATION": "the {them} held them by force, and they paid",
+             "REBELLION": "they broke the {them}'s hold",
+             "FARMING": "the first seed was put into the ground",
+             "STATEHOOD": "the first granary was raised and the first tax was taken",
+             "EMERGENCE": "they first looked up, and the {colour} sun looked back"}
+
+
+def _legends(kernel: Any, planet: Any, gen_years: float) -> None:
+    """The gravest thing a generation ago that no one has yet made a legend of, becomes one."""
+    from xylarium.kernel import history, knowledge
+    holder = knowledge.holder_of_planet(planet)
+    soc = planet.society
+    done = set(soc.setdefault("legended", []))
+    horizon = kernel.cycle_count - gen_years * 100
+    old = [e for e in history.of_people(kernel, holder)
+           if e["kind"] in LEGENDARY and e["cycle"] <= horizon and e["id"] not in done]
+    if not old:
+        return
+    e = max(old, key=lambda x: (float(x.get("magnitude") or 0), -x["cycle"]))
+    them = next((a for a in e["actors"] if a != holder), "strangers").split(":", 1)[-1]
+    what = (e.get("cause") or "").split(":")[-1].strip().split(" ")[0] or "harvests"
+    told = LEGENDARY[e["kind"]].replace("{them}", them).replace("{what}", what) + "; {moons_say}"
+    _myth(kernel, planet, f"legend:{e['kind'].lower()}", told=told, source=e)
+    soc["legended"] = (list(done) + [e["id"]])[-200:]
 
 
 def _believe(kernel: Any, planet: Any, gen_years: float) -> None:
@@ -218,8 +261,12 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
     st["strife"] += 1
     if dead:
         sustenance._shift_civ(planet, alignment.measure(kernel, lives_lost=dead))
-    _myth(kernel, planet, "strife")
     people = getattr(planet.civilization, "name", planet.name)
+    from xylarium.kernel import history, knowledge
+    history.event(kernel, "STRIFE", f"The {people} turn on themselves", actors=[knowledge.holder_of_planet(planet)],
+                  planet=planet, magnitude=dead, cause=f"{s['rising']:.0%} would rise, {g['levy']:.0%} under arms "
+                  f"(hunger {s['immiseration']:.0%}, unheld order {s['illegitimacy']:.0%})")
+    _myth(kernel, planet, "strife")
     primordial.first(kernel, "first_civil_strife", people)
     return (f"[SOCIETY] The {people} of {planet.name} turn on themselves: {dead:,} dead, the vaults plundered, "
             f"the creed overturned.")
@@ -296,6 +343,7 @@ def quarter(kernel: Any) -> List[str]:
         gen = fertility.generation_years(fertility.strategy(kernel, p))
         _council(kernel, p)                                   # moves only what no steward has set
         _believe(kernel, p, gen)
+        _legends(kernel, p, gen)
         _guilds(kernel, p)
         s = stress(kernel, p)
         p.society["stress"] = s

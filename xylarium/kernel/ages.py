@@ -1,8 +1,8 @@
 """
 Xylarium ages: one clock, from foragers to the lanes - and where a new player steps into it.
 
-Every age is a point on the same run of the same universe. The clock starts with every people foraging on its
-homeworld (genesis "forager") and runs: fields, states, works, yards, ships, empires come when the peoples' own
+Every age is a point on the same run of the same universe. The clock starts when the galaxy's first mind arises
+(genesis "cosmic": cosmos.py - minds arise from chemistry and biology, each in its own year) and runs: fields, states, works, yards, ships, empires come when the peoples' own
 physics brings them, in whatever year that is in this universe. An age begins when its milestone first happens
 anywhere (genesis.firsts) - and the galaxy is then wherever it got to: some peoples ahead, most behind, a sector
 crowded or empty. Nothing stops at spaceflight; the clock simply goes on.
@@ -94,7 +94,7 @@ def begin(seed: int, key: str, progress: Optional[Callable[[int, Dict[str, Any]]
             if kernel is not None:
                 break
     if kernel is None:
-        kernel = GameKernel(seed=seed, genesis="forager")
+        kernel = GameKernel(seed=seed, genesis="cosmic")        # the clock starts when the first mind arises
         _keep(kernel, seed, "forager", root)
     kernel.activate()
     firsts = kernel.state.setdefault("genesis", {}).setdefault("firsts", {})

@@ -162,6 +162,10 @@ def quarter(kernel: Any) -> List[str]:
                 _refresh(kernel, p)
                 st["farmed"] += 1
                 primordial.first(kernel, "first_farms", name)
+                from xylarium.kernel import history, knowledge
+                history.event(kernel, "FARMING", f"The {name} sow their first fields",
+                              actors=[knowledge.holder_of_planet(p)], planet=p, magnitude=p.population,
+                              cause=f"half-wild crops (x{math.exp(crop_z(p)):.2f}) against the toil")
                 logs.append(f"[WAYS] The {name} of {p.name} sow their first fields.")
         else:
             # the room a state's first works would make, as a flow over its horizon, against what it would tax
@@ -175,6 +179,9 @@ def quarter(kernel: Any) -> List[str]:
                 p.society["way"] = "state"
                 st["states"] += 1
                 primordial.first(kernel, "first_state", name)
+                from xylarium.kernel import history, knowledge
+                history.event(kernel, "STATEHOOD", f"The {name} found a state", actors=[knowledge.holder_of_planet(p)],
+                              planet=p, magnitude=p.population, cause=f"a surplus of {surplus(kernel, p):.0%}")
                 logs.append(f"[WAYS] The {name} of {p.name} found a state: a council, a granary, a tax.")
     st["counts"] = counts
     return logs

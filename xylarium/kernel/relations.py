@@ -443,8 +443,10 @@ def offer(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], t: Optional
     contact.stats(kernel)["protocol"][sub] = contact.protocol(kernel, root(kernel, sup))   # it takes the root's tongue
     st = stats(kernel)
     st["formed"] += 1
-    from xylarium.kernel import primordial
+    from xylarium.kernel import history, primordial
     primordial.first(kernel, "first_tributary", f"{sub} under {sup}")
+    history.event(kernel, "TRIBUTARY", f"{_name(kernel, sub)} accepts the protection of {_name(kernel, sup)}",
+                  actors=[sub, sup], planet=_capital(by[sub]), magnitude=t["tribute"], cause="the threat it faced")
     if sum(1 for x in ties(kernel).values() if x["patron"] == sup) >= 3:
         primordial.first(kernel, "first_empire", sup)
     return f"[RELATIONS] {_name(kernel, sub)} accepts the protection of {_name(kernel, sup)} for a tribute."
@@ -476,8 +478,10 @@ def _subjugate(kernel: Any, sub: str, tie: Dict[str, Any], by: Dict[str, List[An
         return False
     tie.update(kind="subjugated", arrears=0.0, since_held=kernel.cycle_count)
     stats(kernel)["subjugated"] = stats(kernel).get("subjugated", 0) + 1
-    from xylarium.kernel import primordial
+    from xylarium.kernel import history, primordial
     primordial.first(kernel, "first_subjugation", f"{sub} held by {sup}")
+    history.event(kernel, "SUBJUGATION", f"{_name(kernel, sup)} holds {_name(kernel, sub)} by force", actors=[sup, sub],
+                  planet=_capital(by[sub]), magnitude=tie.get("tribute_sol", 0.0), cause="a year of tribute unpaid")
     return True
 
 
@@ -503,8 +507,10 @@ def _review(kernel: Any, sub: str, tie: Dict[str, Any], by: Dict[str, List[Any]]
             ties(kernel).pop(sub, None)
             stats(kernel)["ended"] += 1
             stats(kernel)["rebellions"] = stats(kernel).get("rebellions", 0) + 1
-            from xylarium.kernel import primordial
+            from xylarium.kernel import history, primordial
             primordial.first(kernel, "first_rebellion", f"{sub} throws off {sup}")
+            history.event(kernel, "REBELLION", f"{_name(kernel, sub)} throws off {_name(kernel, sup)}",
+                          actors=[sub, sup], planet=_capital(by[sub]), cause="its strength and its allies' outweighed its patron's")
             return f"[RELATIONS] {_name(kernel, sub)} rises and throws off {_name(kernel, sup)}."
         return None
     t = _terms(kernel, sub, sup, by, base, existing=True)
@@ -622,8 +628,10 @@ def _pacts(kernel: Any, by: Dict[str, List[Any]], base: float) -> List[str]:
                 continue
             pacts(kernel)[_pair(a, b)] = {"since": kernel.cycle_count}
             st["pacts_formed"] = st.get("pacts_formed", 0) + 1
-            from xylarium.kernel import primordial
+            from xylarium.kernel import history, primordial
             primordial.first(kernel, "first_pact", _pair(a, b))
+            history.event(kernel, "PACT", f"{_name(kernel, a)} and {_name(kernel, b)} make a pact", actors=[a, b],
+                          planet=_capital(by[a]), cause="each stronger for the other")
             logs.append(f"[RELATIONS] {_name(kernel, a)} and {_name(kernel, b)} make a pact of mutual defence.")
     return logs
 

@@ -19,7 +19,7 @@ class TestAges(unittest.TestCase):
 
     def test_a_forager_steward_decides_within_physics(self):
         k = ages.begin(3, "forager", root=self.root)
-        self.assertEqual(k.state["genesis"]["mode"], "forager")
+        self.assertEqual(k.state["genesis"]["mode"], "cosmic")
         home = ages.peoples(k)[0]
         ages.bind(k, "p1", "Steward", home)
         self.assertIsNotNone(ages.shape(k, "p1", {"tolerance": 0.3}))
@@ -37,7 +37,7 @@ class TestAges(unittest.TestCase):
         self.assertEqual(ages.cached(3, self.root), ["forager"])
         # a later age runs the same clock from the earliest kept age (bounded here for the test's sake)
         k2 = ages.begin(3, "agrarian", root=self.root, max_years=2)
-        self.assertEqual(k2.state["genesis"]["mode"], "forager")
+        self.assertEqual(k2.state["genesis"]["mode"], "cosmic")
         self.assertGreater(k2.cycle_count, 0)
 
     def test_wake_me_when_returns_what_happened(self):
