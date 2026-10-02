@@ -110,6 +110,8 @@ SOLVENT_BARRIER = 25.0          # activation energy in units of k x the solvent'
 BOND_EV = {"covalent": 3.6, "silicate": 4.6, "melt_network": 1.0}   # backbone bonds, a melt's network (eV)
 STRONG_KT = 40.0                # a backbone must outlast a structure: bond energy over kT above ~40 (h/kT e^40 ~ years)
 WEAK_KT = 10.0                  # weak bonds hold yet flex near ~10 kT (Trouton: every liquid at its boiling point)
+GEO_FLUX = 0.087 / 340.0       # a unit world's heat flowing out per area (0.087 W/m^2, the unit of heat), in flux units
+GIANT_FLUX = 5.4 / 340.0        # a giant of 318 unit masses' internal heat per area (contraction; declared scaling ~M)
 PLASMA_WINDOW = 0.002           # how much structure ionised matter can hold, against a bonded chemistry's best (declared)
 
 
@@ -335,29 +337,36 @@ def _climate(gas: Dict[str, float], to_bar: float, flux: float, hpm: float, gian
 
 
 # ---------------------------------------------------------------------- chemistry from the world
+def geothermal(w: Dict[str, Any]) -> float:
+    """The world's own heat flowing out through each unit of its surface, in flux units (its heat over its area)."""
+    return GEO_FLUX * w["heat"] / max(1e-6, w["radius"]) ** 2
+
+
 def solvents(w: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Every medium on the world a chemistry could run in, with its temperature and the energy that reaches it."""
+    """Every medium on the world a chemistry could run in, with its temperature and the energy that reaches it (per
+    unit area, in flux units: light through its sky; its own heat flowing out; a giant's slow contraction)."""
     out: List[Dict[str, Any]] = []
     t, p = w["t_surf"], max(w["p_bar"], 1e-9)
+    geo = geothermal(w)
     for sp, amount in w["seas"].items():
         ph = phase(sp, t, p)
         if ph == "liquid" or ph == "supercritical":
-            out.append({"solvent": sp, "where": "surface", "t": t, "energy": w["light"] + 0.01 * w["heat"],
+            out.append({"solvent": sp, "where": "surface", "t": t, "energy": w["light"] + geo,
                         "amount": amount, "dark": False})
         elif ph == "solid" and sp in ("H2O", "NH3") and w["heat"] > 0.05 and not w["giant"]:
             # a liquid ocean under an ice shell, kept by the world's own heat (and ammonia's antifreeze)
             t_under = VOLATILES[sp]["phase"][0] + (5.0 if sp == "H2O" else 0.0)
-            out.append({"solvent": sp, "where": "under_ice", "t": t_under, "energy": 0.01 * w["heat"],
+            out.append({"solvent": sp, "where": "under_ice", "t": t_under, "energy": geo,
                         "amount": amount, "dark": True})
     for sp, pp in w["air"].items():
         if phase(sp, t, p) == "supercritical":
-            out.append({"solvent": sp, "where": "supercritical", "t": t, "energy": w["light"] + 0.01 * w["heat"],
+            out.append({"solvent": sp, "where": "supercritical", "t": t, "energy": w["light"] + geo,
                         "amount": pp, "dark": False})
     if not w["giant"] and t >= MELT_K:
-        out.append({"solvent": "melt", "where": "surface", "t": t, "energy": w["light"] + w["heat"], "amount": 1.0,
+        out.append({"solvent": "melt", "where": "surface", "t": t, "energy": w["light"] + 100.0 * geo, "amount": 1.0,
                     "dark": False})
     if w["giant"] and w["mass"] >= GIANT_PLASMA_MASS:
-        out.append({"solvent": "plasma", "where": "deep", "t": 1.0e4, "energy": 0.02 * w["mass"] ** 1.5,
+        out.append({"solvent": "plasma", "where": "deep", "t": 1.0e4, "energy": GIANT_FLUX * (w["mass"] / 318.0) * (11.0 / max(1.0, w["radius"])) ** 2,
                     "amount": 1.0, "dark": True})
     return out
 
@@ -384,6 +393,18 @@ def pace(solvent: str, t: float) -> float:
             return t / T_UNIT
         t = max(tt, t)
     return (t / T_UNIT) * math.exp(SOLVENT_BARRIER * (1.0 - mid / max(1.0, t)))
+
+
+def body_temperature(solvent: str) -> float:
+    """A minded body keeps itself where its chemistry works best: the middle of its solvent's own liquid range
+    (a bonded chemistry's thermostat; its world's weather is outside it)."""
+    return _mid(solvent)
+
+
+def body_pace(solvent: str) -> float:
+    """The pace of a body held at its chemistry's best (Eyring at the middle of its range: its temperature over the
+    unit's)."""
+    return body_temperature(solvent) / T_UNIT
 
 
 def region(m: Dict[str, Any]) -> str:
@@ -456,17 +477,21 @@ def of_planet(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
     b = physics.body(planet)
     age = max(0.0, cosmos.deep_gyr(kernel) - float(g.get("born", cosmos.deep_gyr(kernel) - 4.6))) \
         if g else 4.6
-    key = (round(age, 1), planet.planet_type)
+    swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
+    key = (round(age, 1), planet.planet_type, round(swell, 3))
     cache = planet.society.get("_media")
     if cache and tuple(cache.get("key", ())) == key:
         return cache["media"]
-    star = getattr(sec, "star", None) or physics.star_for(getattr(sec, "star_type", None))
+    star = dict(getattr(sec, "star", None) or physics.star_for(getattr(sec, "star_type", None)))
+    if swell != 1.0:                                     # its star as it shines now: a giant's glare boils its seas
+        from fractions import Fraction
+        star["luminosity"] = str(Fraction(star["luminosity"]) * Fraction(swell).limit_denominator(10 ** 6))
     from xylarium.kernel import creation
-    z = creation.metals_at(kernel.seed, float(g.get("r", cosmos.R0_KPC)), float(g.get("born", 9.2))) \
+    z = creation.metals_at(creation.universe(kernel), float(g.get("r", cosmos.R0_KPC)), float(g.get("born", 9.2))) \
         if g else 1.0
     ices = None
     if g and "cell" in g and sec is not None and planet in sec.planets:   # the ices its orbit gathered (form)
-        made = creation.cell(kernel.seed, *g["cell"])[g["k"]].get("worlds") or []
+        made = creation.cell(creation.universe(kernel), *g["cell"])[g["k"]].get("worlds") or []
         n = sec.planets.index(planet)
         if n < len(made):
             ices = made[n].get("ices")

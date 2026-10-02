@@ -52,8 +52,11 @@ ELDER_GEN = 1.7                 # end of the productive span (Earth: ~48)
 LIFE_MEDIAN_GEN = 2.5           # adult life expectancy (Earth: ~70)
 LIFE_MAX_GEN = 4.3              # the longest lives (Earth: ~120)
 BODY_CYCLES = 13                # a body's mass in its own meals (Earth: ~70 kg over ~1.5 kg a day ~ 47 days ~ 13 cycles)
-CRITICAL_COMMUNITY = 250_000    # Bartlett (1957): measles persists only in communities above this (Earth's people)
-CFR_VIRGIN = 0.25               # virgin-soil lethality (Fiji, measles, 1875: about a quarter died)
+TROUGH = 330                    # the infected a crowd infection needs at its lowest ebb not to die out (declared)
+INFECTION_YEARS = 0.04          # an infection's course in a body at unit pace (declared); it runs at the body's pace
+CFR_VIRGIN = 0.5                # the virulence-transmission trade-off (Anderson & May 1982): with transmission rising as
+                                # the square root of virulence, the pathogen's best virulence equals recovery plus
+                                # death, so it kills half of those it meets in a host that has never adapted to it
 EMINENT_KEPT = 12               # named dead a people keeps in its annals at once
 EMINENT_ON = {"INTROSPECTION": "philosopher", "STATEHOOD": "lawgiver", "EXODUS": "captain", "UPLIFT": "teacher",
               "LEGEND": "hero", "FARMING": "founder", "TURNING": "leader", "PHILOSOPHY": "sage"}   # gravest first
@@ -96,8 +99,13 @@ def elder_factor(planet: Any) -> float:
 
 # ---------------------------------------------------------------------- health
 def critical_community(kernel: Any, planet: Any) -> float:
-    from xylarium.kernel import fertility
-    return CRITICAL_COMMUNITY * fertility.generation_of(kernel, planet) / fertility.generation_years("K", 1.0)
+    """The smallest people a crowd infection persists in (SIR with births): its trough of infected x the host's
+    generation (how slowly new susceptibles are born) over the infection's course - both run at the host body's
+    pace, so the pace cancels and only the body's size and life history remain."""
+    from xylarium.kernel import biosphere, fertility
+    t = biosphere.body_temperature(planet)
+    pace = (t / 278.0) if t else 1.0
+    return TROUGH * fertility.generation_of(kernel, planet) / (INFECTION_YEARS / pace)
 
 
 def disease(kernel: Any, planet: Any) -> Dict[str, float]:
@@ -125,7 +133,7 @@ def thr(kernel: Any, planet: Any) -> float:
     air = min(1.0, float(soc.get("atmosphere", 1.0)))
     sun = max(0.0, min(1.0, float(soc.get("star_k", 1.0))))
     land = biosphere.land(kernel, planet)
-    biome = min(1.0, float(land["light"]) * float(land["chemistry"]))
+    biome = min(1.0, float(land["chemistry"]))           # how its chemistry suits this ground (its light is its food)
     k = biosphere.carrying_capacity(kernel, planet)
     shelter = min(1.0, k / max(1, planet.population)) if k > 0 else 0.0
     d = disease(kernel, planet)

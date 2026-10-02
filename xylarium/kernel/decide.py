@@ -30,10 +30,11 @@ def _rng(*parts: Any) -> random.Random:
 
 
 def mind(kernel: Any, metabolism: Optional[str], temperature_factor: float = 1.0,
-         strat: Optional[str] = None, home_flux: Optional[float] = None) -> Dict[str, float]:
+         strat: Optional[str] = None, home_flux: Optional[float] = None,
+         body_t: Optional[float] = None) -> Dict[str, float]:
     from xylarium.config import METABOLISM_STRATEGY
     from xylarium.kernel import fertility
-    m = laws.cognition(metabolism or "biotic", temperature_factor, home_flux)
+    m = laws.cognition(metabolism or "biotic", temperature_factor, home_flux, body_t)
     strat = strat or METABOLISM_STRATEGY.get(metabolism or "biotic", "K")
     m["horizon_q"] = 4.0 * fertility.generation_years(strat, m["speed"])
     return m
@@ -62,7 +63,8 @@ def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
     from xylarium.kernel import biosphere, genome, knowledge
     from xylarium.kernel import fertility
     m = mind(kernel, biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet),
-             strat=fertility.strategy(kernel, planet), home_flux=biosphere.home_flux(planet))
+             strat=fertility.strategy(kernel, planet), home_flux=biosphere.home_flux(planet),
+             body_t=biosphere.body_temperature(planet))
     return _steadied(kernel, m, knowledge.holder_of_planet(planet))
 
 

@@ -95,7 +95,8 @@ HARD_STEPS = 4                  # Carter (1983) and Watson (2008) read ~4 off Ea
 STEP_GYR = 10.0                 # the old Earth-read mean wait (retired: settled galaxies only)
 STEPS_RANGE = (3, 6)            # hard steps from chemistry to a mind: drawn per universe (one history fixes nothing)
 STEP_LOG_RANGE = (-2.0, 0.0)    # log10 Gyr: a step's mean wait at unit pace, full richness, ample energy (drawn)
-ENERGY_HALF = 0.1               # flux units at which a chemistry's progress is half energy-limited (declared)
+ENERGY_HALF = 0.01              # flux units (~3 W/m^2: about what a biosphere fixes of full sunlight) at which a
+                                # chemistry's progress is half energy-limited (declared)
 EXTINCTIONS_PER_GYR = 2.0       # life-resetting impacts per Gyr at unit stellar density (declared): flybys and the
                                 # tide shake comets loose in proportion to the neighbourhood's stars
 SUN_MS_GYR = 10.0               # main-sequence life of a solar-mass star; ~ M^-2.5
@@ -117,14 +118,28 @@ def _rng(seed: int, *parts: Any) -> random.Random:
 
 
 # ---------------------------------------------------------------------- the Big Bang
-def big_bang(seed: int) -> Dict[str, float]:
-    """This universe's initial conditions and what follows from them."""
+UNIVERSES = {                   # the kind of Big Bang chosen at genesis: centres the seed's draw is made about
+    "measured": {"sigma8": 1.0, "f_baryon": 1.0},      # about our own universe's (Planck 2018)
+    "lush": {"sigma8": 1.3, "f_baryon": 1.5},          # lumpier and richer in baryons: stars sooner, more of them, and
+                                                       # more metals made early - a universe more abundant in life
+}
+
+
+def universe(kernel: Any) -> Any:
+    """The creation key of a kernel's universe: its seed, and the kind of Big Bang chosen at its genesis."""
+    kind = ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("universe") or "measured"
+    return kernel.seed if kind == "measured" else f"{kernel.seed}:{kind}"
+
+
+def big_bang(seed: Any) -> Dict[str, float]:
+    """This universe's initial conditions and what follows from them (seed may carry its kind: '7:lush')."""
     key = ("bb", seed)
     if key in _CACHE:
         return _CACHE[key]
+    kind = UNIVERSES.get(str(seed).partition(":")[2] or "measured", UNIVERSES["measured"])
     rng = _rng(seed, "big bang")
-    s8 = SIGMA8 * 10.0 ** rng.gauss(0.0, SPREAD_DEX)
-    fb = F_BARYON * 10.0 ** rng.gauss(0.0, SPREAD_DEX)
+    s8 = SIGMA8 * kind["sigma8"] * 10.0 ** rng.gauss(0.0, SPREAD_DEX)
+    fb = F_BARYON * kind["f_baryon"] * 10.0 ** rng.gauss(0.0, SPREAD_DEX)
     closed = abs(rng.gauss(0.0, FLATNESS)) + FLATNESS / 20.0             # Omega - 1 > 0: a 3-sphere
     steps = STEPS_RANGE[0] + int(rng.random() * (STEPS_RANGE[1] - STEPS_RANGE[0] + 1))
     step_gyr = 10.0 ** (STEP_LOG_RANGE[0] + rng.random() * (STEP_LOG_RANGE[1] - STEP_LOG_RANGE[0]))
@@ -196,7 +211,8 @@ def metals_at(seed: int, r: float, t: float) -> float:
     """Metallicity (solar = 1) of gas at radius r and epoch t: today's measured gradient, scaled by the share of the
     ring's stars made by then over the share made by today in ours (the age-metallicity relation)."""
     today = _formed_share_ours(r, TODAY_GYR)
-    return _disc().metals(r) * formed_share(seed, r, t) / max(1e-9, today)
+    # more baryons, more stars, more of the gas processed into metals (declared: metals scale with the stars made)
+    return _disc().metals(r) * formed_share(seed, r, t) / max(1e-9, today) * big_bang(seed)["stars"]
 
 
 # ---------------------------------------------------------------------- a cell
@@ -323,11 +339,11 @@ def _erlang(x: float) -> float:
 
 
 def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[Dict[str, Any]] = None) -> float:
-    """How many foragers the world feeds once a people has evolved to its light and ground (biosphere.py at the
-    Stone Age, one link up the food chain: ways.py): its living area x its seasons x the land's yield - and, for a
-    plasmic people, how well the giant's own mass feeds it (no adapting changes that). Divided among bodies by what
-    each burns (biosphere.metabolic_factor, Damuth's law): a variable world - a tilted axis, a flaring red dwarf -
-    breeds small r-strategists (cosmos.arise), a steady one large K-strategists."""
+    """How many foragers the world feeds once a people has evolved there (biosphere.py at the Stone Age, one link up
+    the food chain: ways.py): its living area x its seasons x the energy reaching its chemistry (light through its
+    sky, or heat from below: worlds.py) - divided among bodies by what each burns (biosphere.metabolic_factor at its
+    chemistry's own temperature, Damuth's law): a variable world - a tilted axis, a flaring red dwarf - breeds small
+    r-strategists (cosmos.arise), a steady one large K-strategists."""
     from fractions import Fraction
     from xylarium.config import PEOPLE_PER_EARTH_AREA, TECH_YIELD
     from xylarium.kernel import biosphere, ways
@@ -335,18 +351,19 @@ def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[D
     radius = float(Fraction(str(b.get("radius", 1))))
     area = radius * radius * (float(biosphere.GIANT_LIVING_BAND) if b.get("giant") else 1.0)
     season = 0.5 if b.get("locked") else 1.0 - int(b.get("tilt", 0)) / 90.0
-    fit = 1.0
-    if metabolism == "plasmic":
-        x = float(Fraction(str(b.get("mass", 1)))) / float(biosphere.PLASMIC_MASS_OPTIMUM)
-        fit = 4 * x / (1 + x) ** 2
-    from xylarium.kernel import physics
+    from xylarium.kernel import physics, worlds as W
+    med = W.best(world.get("media") or [], metabolism)
+    if world.get("media") is not None and med is None:
+        return 0.0
+    fit = med["energy"] if med else 1.0                  # what reaches its chemistry, flux units
+    body_t = W.body_temperature(med["solvent"]) if med else None
     star = (slot or {}).get("spec") or physics.star_for((slot or {}).get("star"))
     q = Fraction(str(b.get("q", 1)))
     flux = float(Fraction(star["luminosity"]) / q ** 4)
     gravity = radius * (float(physics.GIANT_DENSITY) if b.get("giant") else 1.0)
     strat = "r" if (int(b.get("tilt", 0)) > 23 or float(Fraction(star["mass"])) < 0.5) else "K"
     return (PEOPLE_PER_EARTH_AREA * float(Fraction(TECH_YIELD[0])) * area * season * fit * ways.TROPHIC_EFFICIENCY
-            / biosphere.metabolic_factor(metabolism, strat, home_flux=flux, home_gravity=gravity))
+            / biosphere.metabolic_factor(metabolism, strat, home_flux=flux, home_gravity=gravity, body_t=body_t))
 
 
 def lifetime(slot: Dict[str, Any]) -> float:
@@ -358,9 +375,12 @@ def lifetime(slot: Dict[str, Any]) -> float:
     return SUN_MS_GYR * m / max(1e-9, lum)
 
 
-def chemistries(seed: int, slot: Dict[str, Any], world: Dict[str, Any]) -> List[Tuple[str, float, float, float, float]]:
-    """(region, mean wait per hard step, survival, window end, extinctions per Gyr) for each chemistry the world's
-    physics allows (worlds.py): a step's rate is the chemistry's pace x its richness x the energy reaching it."""
+def chemistries(seed: int, slot: Dict[str, Any], world: Dict[str, Any]) \
+        -> List[Tuple[str, float, float, float, float, float]]:
+    """(region, mean wait per hard step, survival, window end, extinctions per Gyr, energy factor) for each chemistry
+    the world's physics allows (worlds.py): a step's rate is the chemistry's pace x its richness x the energy
+    reaching it. The first step - life itself - is chemistry and time, not throughput: it waits mean x energy
+    factor; the later ones (complexity, a mind) need the biomass energy feeds."""
     cosmos = _disc()
     bb = big_bang(seed)
     out = []
@@ -379,7 +399,8 @@ def chemistries(seed: int, slot: Dict[str, Any], world: Dict[str, Any]) -> List[
         dark = m["where"] in ("under_ice", "deep")
         end = float("inf") if dark else star_end         # a dark sea runs on its world's heat, not its star
         hazard = STERILISE_AT_R0 * density * MOLECULAR.get(region, 1.0) * (0.5 if dark else 1.0)
-        out.append((region, bb["step_gyr"] / rate, math.exp(-hazard), end, EXTINCTIONS_PER_GYR * density))
+        ef = m["energy"] / (m["energy"] + ENERGY_HALF)
+        out.append((region, bb["step_gyr"] / rate, math.exp(-hazard), end, EXTINCTIONS_PER_GYR * density, ef))
     return out
 
 
@@ -394,13 +415,13 @@ def lineage(seed: int, i: int, j: int, k: int, w: int, slot: Dict[str, Any], wor
     if t0 >= HORIZON_GYR:
         return None
     best = None
-    for region, mean, live, end, mu in chemistries(seed, slot, world):
+    for region, mean, live, end, mu, ef in chemistries(seed, slot, world):
         rng = _rng(seed, "life", i, j, k, w, region)
         horizon = min(end, HORIZON_GYR)
         steril = t0 + rng.random() * (horizon - t0) if rng.random() >= live and horizon > t0 else float("inf")
         t, times, setbacks = t0, [], 0
         for step in range(n):
-            need = rng.expovariate(1.0 / mean)
+            need = rng.expovariate(1.0 / (mean * ef if step == 0 else mean))   # life itself: chemistry and time
             if step == 0 or mu <= 0:
                 t += need
             else:
@@ -506,11 +527,11 @@ def _compute(seed: int) -> Dict[str, Any]:
                                   "steps": lin["steps"], "setbacks": lin["setbacks"]})
                 # the expectation: each chemistry's chance of a mind by each epoch (resets lengthen the later steps)
                 terms = []
-                for region, mean, live, end, mu in chemistries(seed, slot, world):
+                for region, mean, live, end, mu, ef in chemistries(seed, slot, world):
                     if foragers(world, region, slot) < VIABLE:
                         continue
                     later = (math.exp(min(50.0, mu * mean)) - 1.0) / mu if mu > 0 else mean
-                    eff = (mean + (n - 1) * later) / n
+                    eff = (mean * ef + (n - 1) * later) / n
                     terms.append((region, round(math.log(eff) * 100), round(live, 3),
                                   npts if end >= HORIZON_GYR else int(math.ceil(end / CURVE_STEP))))
                 if terms:
@@ -525,6 +546,51 @@ def _compute(seed: int) -> Dict[str, Any]:
             curve[c] += cnt * (1.0 - miss)
     minds.sort(key=lambda e: (e["epoch"], e["cell"], e["k"], e["w"]))
     return {"minds": minds, "curve": [round(x, 2) for x in curve], "life": life}
+
+
+def limits(seed: Any, every: int = 7) -> Dict[str, Any]:
+    """What stops life in a universe, world by world (a sample of its cells): the first gate each world fails - no
+    solvent at all, a chemistry too poor in bonds and elements, too little energy reaching it, kinetics too slow, its
+    star dying first, sterilised - and how far the rest got. The audit for choosing a stronger or richer Big Bang."""
+    cosmos = _disc()
+    out = {"worlds": 0, "no_solvent": 0, "poor_chemistry": 0, "starved": 0, "slow": 0, "star_died": 0,
+           "sterilised": 0, "stalled": 0, "minds": 0, "by_region": {}}
+    n = big_bang(seed)["steps"]
+    for (i, j) in cosmos.cells()[::every]:
+        for slot in cell(seed, i, j):
+            for w, world in enumerate(slot.get("worlds", [])):
+                if slot["born"] + CRUST_GYR >= HORIZON_GYR:
+                    continue
+                out["worlds"] += 1
+                chems = chemistries(seed, slot, world)
+                if not world.get("media"):
+                    out["no_solvent"] += 1
+                    continue
+                lin = lineage(seed, i, j, slot["k"], w, slot, world)
+                if lin is None or not chems:
+                    out["poor_chemistry"] += 1
+                    continue
+                out["by_region"][lin["region"]] = out["by_region"].get(lin["region"], 0) + 1
+                if len(lin["steps"]) == n:
+                    out["minds"] += 1
+                    continue
+                m = max((md for md in world["media"] if md["region"] == lin["region"]),
+                        key=lambda md: md["richness"] * md["energy"])
+                energy = m["energy"] / (m["energy"] + ENERGY_HALF)
+                if lin["sterilised"]:
+                    out["sterilised"] += 1
+                elif lin["end"] < HORIZON_GYR and (not lin["steps"] or lin["steps"][-1] < lin["end"]) and \
+                        lin["mean"] * n > lin["end"] - slot["born"]:
+                    out["star_died"] += 1
+                elif m["richness"] < 0.05:
+                    out["poor_chemistry"] += 1
+                elif energy < 0.2:
+                    out["starved"] += 1
+                elif m["pace"] < 0.05:
+                    out["slow"] += 1
+                else:
+                    out["stalled"] += 1
+    return out
 
 
 def after(seed: int, last: Optional[List[Any]], n: int) -> List[Dict[str, Any]]:

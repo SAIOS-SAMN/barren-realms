@@ -62,3 +62,22 @@ at Earth's own place and time.
 | KNOWLEDGE_DEPRECIATION 15% at HUMAN_LIFE_YEARS 70 | laws, knowledge | human R&D | keep as the rate of a human-like people (law, declared); its death share already the people's own | 8 checks it |
 | Geology per Earth mass (ore, outgassing, tailings, He-3) | geology | scaled to an Earth, per mass | law-by-scaling (declared) | 2 refines outgassing |
 | SYSTEMS_SHARE_R0 0.28 | creation | the settled galaxy's own share | unit of sampling | - |
+
+### Progress on the audit (cosmic universes)
+
+Retired: the habitability table and light optima (chemistry and energy from each world's physics); the seven world
+types as inputs (labels now); the fixed four hard steps (drawn per universe); the clade list (traits per world);
+Bartlett's 250,000 and Fiji's 25% (transmission dynamics: a trough of infected over the host's generation and the
+infection's course; the virulence trade-off's 1/2); "fields" for everyone (ways in each chemistry's terms).
+
+Kept as **units** of the simulation, stated as such: the life-history time of a unit body at unit pace (from
+BIRTH_RATE), people per unit of captured energy per unit area (PEOPLE_PER_EARTH_AREA), the unit of interior heat
+(0.087 W/m^2) and of light (340 W/m^2 over a sphere).
+
+Kept as **declared cross-species invariants**: the life-history ratios (maturity, productive span, life, longest
+life as multiples of a generation - Charnov's invariants), the works multipliers of a people's citadel tiers.
+
+Declared **assumptions** of the funnel (worlds.py, creation.py): the disc's normalisation and lifetime, giant-impact
+growth, comet composition, stripping rate and shielding, the weathering scale, the greenhouse fit, the photolysis
+threshold, the activation-energy scaling, the bond thresholds, plasma's structure, the energy half-saturation,
+extinction rate, the hard-step ranges, the trough and infection course.

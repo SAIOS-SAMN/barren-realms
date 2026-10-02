@@ -148,7 +148,8 @@ def main() -> None:
     ap.add_argument("--show", type=int, default=0)
     ap.add_argument("--velocity", type=float, default=None,
                     help="cycles per wall-second (0: as fast as the machine allows); also read live from <dir>/seedN/velocity")
-    ap.add_argument("--genesis", default="settled", choices=("settled", "primordial", "forager", "cosmic", "cosmic:lonely", "cosmic:neighbourly", "cosmic:teeming"),
+    ap.add_argument("--genesis", default="settled", choices=("settled", "primordial", "forager", "cosmic", "cosmic:lonely", "cosmic:neighbourly", "cosmic:teeming",
+                             "cosmic:lonely:lush", "cosmic:neighbourly:lush", "cosmic:teeming:lush"),
                     help="primordial: every people on its homeworld, nothing spacefaring (no bots)")
     args = ap.parse_args()
     home = os.path.join(args.dir, f"seed{args.seed}")

@@ -163,10 +163,11 @@ def quarter(kernel: Any) -> List[str]:
                 st["farmed"] += 1
                 primordial.first(kernel, "first_farms", name)
                 from xylarium.kernel import history, knowledge
-                history.event(kernel, "FARMING", f"The {name} sow their first fields",
+                w = words(p)
+                history.event(kernel, "FARMING", f"The {name} {w['tend']}",
                               actors=[knowledge.holder_of_planet(p)], planet=p, magnitude=p.population,
-                              cause=f"half-wild crops (x{math.exp(crop_z(p)):.2f}) against the toil")
-                logs.append(f"[WAYS] The {name} of {p.name} sow their first fields.")
+                              cause=f"half-tamed {w['crop']} (x{math.exp(crop_z(p)):.2f}) against the toil")
+                logs.append(f"[WAYS] The {name} of {p.name} {w['tend']}.")
         else:
             # the room a state's first works would make, as a flow over its horizon, against what it would tax
             from xylarium.config import HOUSEHOLD_INCOME_SHARE
@@ -184,11 +185,32 @@ def quarter(kernel: Any) -> List[str]:
                 st["states"] += 1
                 primordial.first(kernel, "first_state", name)
                 from xylarium.kernel import history, knowledge
-                history.event(kernel, "STATEHOOD", f"The {name} found a state", actors=[knowledge.holder_of_planet(p)],
-                              planet=p, magnitude=p.population, cause=f"a surplus of {surplus(kernel, p):.0%}")
-                logs.append(f"[WAYS] The {name} of {p.name} found a state: a council, a granary, a tax.")
+                history.event(kernel, "STATEHOOD", f"The {name} order their surplus", actors=[knowledge.holder_of_planet(p)],
+                              planet=p, magnitude=p.population, cause=f"a surplus of {surplus(kernel, p):.0%}",
+                              text=f"The {name} raise {words(p)['order']}.")
+                logs.append(f"[WAYS] The {name} of {p.name} order their surplus: {words(p)['order']}.")
     st["counts"] = counts
     return logs
+
+
+def words(planet: Any) -> Dict[str, str]:
+    """What a people's ways are called, in its own chemistry's terms (its medium and senses: cosmos.select) - a
+    sea of light is sown, a dark sea's warmth is tended, a cold sea's blooms are herded, a giant's plasma is shaped."""
+    traits = getattr(getattr(planet, "civilization", None), "traits", None) or {}
+    solvent, sense = traits.get("solvent", "H2O"), traits.get("sense", "light")
+    if solvent == "plasma":
+        return {"tend": "shape their first standing field-swarms", "crop": "field-swarms",
+                "order": "a lattice of keepers, a store of charge, a share for the whole"}
+    if solvent in ("melt",) or sense == "heat":
+        return {"tend": "cultivate their first mineral beds", "crop": "mineral growths",
+                "order": "a council of the hot places, a hoard, a tithe"}
+    if sense == "heat and pressure":
+        return {"tend": "tend their first vent-gardens", "crop": "vent-mats",
+                "order": "a council of the warm springs, a cache, a share"}
+    if solvent in ("CH4", "N2", "NH3") or sense == "chemistry":
+        return {"tend": "herd their first cold blooms", "crop": "brine-blooms",
+                "order": "a council of the shoals, a store, a levy"}
+    return {"tend": "sow their first fields", "crop": "crops", "order": "a council, a granary, a tax"}
 
 
 def summary(kernel: Any) -> Dict[str, Any]:

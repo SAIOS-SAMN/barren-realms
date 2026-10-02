@@ -135,7 +135,7 @@ def genesis(kernel: Any) -> None:
     from xylarium.kernel import cluster, creation
     from xylarium.kernel.natives import _name
     st = stats(kernel)
-    bb = creation.big_bang(kernel.seed)
+    bb = creation.big_bang(creation.universe(kernel))
     r = bb["curvature_mpc"]
     st["radius_mpc"] = r
     st["circumference_mpc"] = round(2 * math.pi * r, 1)

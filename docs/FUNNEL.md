@@ -28,5 +28,33 @@ until a mind arises; a people then lives on the universal clock and reckons on i
   recycled matter - ever touches a world.
 * **A mind need not become spacefaring.** A people that never leaves its world lives its whole history - its ways,
   beliefs, art, dead and eminent - in the ledger (history.py), to be read and replayed (tools/history.py).
-EOF
-echo ok
+
+## What is built (cosmic universes)
+
+* **Big Bang** (creation.big_bang): sigma8, baryon fraction, curvature, the number of hard steps (3-6) and their
+  timescale - drawn per seed about a chosen kind of universe: `measured` (about our own) or `lush` (lumpier, richer in
+  baryons: stars sooner and more of them, metals made faster). Genesis `cosmic:<pace>:<kind>`, e.g.
+  `cosmic:teeming:lush`.
+* **Stars** (creation.cell): Kroupa's mass function, its break heavier in metal-poor gas; light from mass; lifetime
+  fuel over burn; deaths by mass (white dwarf, Type Ia, core collapse to a neutron star or black hole).
+* **Planets** (worlds.form): what each orbit gathered of the disc's elements; layers by density; giants where a core
+  passed the critical mass before the disc dispersed.
+* **Atmospheres and seas** (worlds.build): outgassing, escape, stripping, photolysis, the weathering thermostat,
+  vapour feedback, the runaway limit; the Solar System is the test (tests/test_worlds.py).
+* **Chemistry** (worlds.media): solvents, bond hierarchy, energy per area, Eyring pace; metabolisms are region names.
+* **Life** (creation.lineage): the origin of life by chemistry and time; complexity by chemistry, time and energy;
+  extinctions by the neighbourhood's comet flux; deep history to the chronicle; traits and mind shapes per world.
+* **Bodies** (biosphere, laws): a minded body holds its chemistry's best temperature; its metabolism, generation and
+  thought run at that pace; its size from its world's gravity and its life history.
+* **Peoples**: capacity from the energy reaching their chemistry; crowd disease from transmission dynamics;
+  ways and art in their own chemistry's terms.
+
+## What limits life (creation.limits)
+
+`creation.limits(seed)` sorts a sample of a universe's worlds by the first gate each fails. Seed 7, measured: of
+9,023 worlds sampled, 42% have no solvent at all (dry), 49% have one but too little energy reaches it to go beyond
+microbes (ice-covered and cold seas, fed by their world's heat alone), a few percent are too slow, sterilised or
+outlived by their star. A `lush` Big Bang makes more stars and worlds, but the binding limit is energy reaching
+cold seas, not matter: life begins on ~44% of worlds (the cold first rung) and complexity needs the energy of a lit
+surface. What would feed the first rung further: tidal heating of moons around giants (not yet modelled), and hotter
+interiors as the galaxy's metals rise.

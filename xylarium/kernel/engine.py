@@ -158,7 +158,7 @@ class GameKernel:
         self.event_bus = EventBus()
         self.cycle_count: int = 0
         self.action_logs: deque[str] = deque(maxlen=20)
-        self.state: Dict[str, Any] = {"genesis": dict(zip(("mode", "pace"), genesis.split(":", 1)))}   # "cosmic:teeming"
+        self.state: Dict[str, Any] = {"genesis": dict(zip(("mode", "pace", "universe"), genesis.split(":", 2)))}   # "cosmic:teeming:lush"
         self.caches: Dict[str, Any] = {}         # memoized derived values (cache.py), never saved
         self.graph_version: int = 0              # advances whenever the warp graph changes (topology.py)
         self.market_manager = MarketManager()

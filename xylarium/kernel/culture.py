@@ -174,6 +174,9 @@ def art(planet: Any, kernel: Any, holder: str) -> Dict[str, str]:
     metab = biosphere.metabolism_of(kernel, planet)
     medium = {"biotic": "painted colour", "mineral": "carved and struck stone", "cryogenic": "ice grown over seasons",
               "plasmic": "patterned light", "umbral": "sound and echo"}.get(metab, "shaped matter")
+    sense = (getattr(planet.civilization, "traits", None) or {}).get("sense")
+    medium = {"light": medium, "heat": "heat-shaped stone", "heat and pressure": "pressure and resonance",
+              "chemistry": "scent and taste laid in patterns", "fields": "patterned fields"}.get(sense, medium)
     colour = sky(kernel, planet)["colour"]
     palette = {"red": "reds and umbers", "orange": "ambers and ochres", "yellow": "the full spectrum",
                "white": "cold whites and blues", "pale": "pale and washed tones"}.get(colour, "its sun's tones")

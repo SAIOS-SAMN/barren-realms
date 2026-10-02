@@ -90,6 +90,12 @@ def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "cosmos")
 
 
+def cosmos_seed(kernel: Any) -> Any:
+    """The key everything the Big Bang fixed is drawn from: the seed, and the kind of universe chosen at genesis."""
+    from xylarium.kernel import creation
+    return creation.universe(kernel)
+
+
 def is_cosmic(kernel: Any) -> bool:
     return ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("mode") == "cosmic"
 
@@ -196,7 +202,7 @@ def schedule(kernel: Any) -> Dict[str, Any]:
     """Every mind the home galaxy raises before the horizon, on the worlds its cells hold, with the expectation the
     dice are drawn from (the audit of the scales). A pure function of the seed (creation.schedule)."""
     from xylarium.kernel import creation
-    return creation.schedule(kernel.seed)
+    return creation.schedule(cosmos_seed(kernel))
 
 
 def expected_by(kernel: Any, epoch: float) -> float:
@@ -211,7 +217,7 @@ def _refill(kernel: Any) -> None:
     """Keep the next WINDOW minds in the kernel."""
     from xylarium.kernel import creation
     st = stats(kernel)
-    st["minds"] = creation.after(kernel.seed, st.get("last"), WINDOW)
+    st["minds"] = creation.after(cosmos_seed(kernel), st.get("last"), WINDOW)
     st["next"] = 0
 
 
@@ -276,7 +282,7 @@ def _build_slot(kernel: Any, cell: Tuple[int, int], k: int) -> int:
     sid = sector_of_slot(kernel, cell, k)
     if sid in kernel.sectors:
         return sid
-    slot = creation.cell(kernel.seed, *cell)[k]
+    slot = creation.cell(cosmos_seed(kernel), *cell)[k]
     sec = Sector(id=sid, name=f"{ADJECTIVES[slot['names'][0]]} {NOUNS[slot['names'][1]]} #{sid}",
                  security=SecurityLevel.ANARCHY, warps=[], port=None, planets=[], captains=[])
     sec.cluster_name = f"Ring {cell[0]}, arc {cell[1]}"
@@ -332,7 +338,7 @@ def _ignite(kernel: Any) -> List[str]:
         sid = int(key)
         st["unborn"].pop(key)
         g = st["place"][key]
-        slot = creation.cell(kernel.seed, *g["cell"])[g["k"]]
+        slot = creation.cell(cosmos_seed(kernel), *g["cell"])[g["k"]]
         _light(kernel, sid, slot)
         sec = kernel.sectors[sid]
         history.event(kernel, "STAR_BORN", f"A star is born in {sec.name}", sector_id=sid,
@@ -751,7 +757,7 @@ def genesis(kernel: Any) -> None:
     st = stats(kernel)
     sched = schedule(kernel)
     st["curve"], st["ever"] = sched["curve"], len(sched["minds"])
-    st["big_bang"] = dict(creation.big_bang(kernel.seed))
+    st["big_bang"] = dict(creation.big_bang(cosmos_seed(kernel)))
     st["minds"] = sched["minds"][:WINDOW]
     if not st["minds"]:
         st["epoch0"] = 0.0
@@ -901,6 +907,7 @@ def select(kernel: Any, planet: Any, metab: str, strategy: str, rng: Any) -> Dic
     hands = rng.choice(["grasping limbs", "tendrils", "mouths and tongues", "jointed palps"]) \
         if med["solvent"] != "plasma" else "shaped fields"
     out = {"strategy": strategy, "medium": f"{'a dark ' if dark else ''}{med['solvent']} {med['where'].replace('_', ' ')}",
+           "solvent": med["solvent"], "body_t": round(worlds.body_temperature(med["solvent"]), 1),
            "sense": sense, "form": form, "hands": hands, "social": round(social, 3), "shape": shape}
     # its size as the biosphere reckons a body (life history and its world's gravity: biosphere.body_mass)
     size = (fertility.CEILING["K"] / fertility.CEILING.get(strategy, fertility.CEILING["K"])) ** 4

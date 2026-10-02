@@ -128,6 +128,14 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
     else:
         fit = light_fit(metab, fl, planet, optimum)
     chemistry = F(1) if (civ is not None and civ.home_type == planet.planet_type) else _world_fit(kernel, metab, planet)
+    from xylarium.kernel import cosmos, worlds
+    if kernel is not None and cosmos.is_cosmic(kernel) and getattr(planet, "body", None):
+        # in a universe made by physics: what feeds a people is the energy reaching its chemistry here (light through
+        # the sky, or heat from below), not a curve about an ideal light
+        med = worlds.best(worlds.of_planet(kernel, planet), metab)
+        energy = F(int(round((med["energy"] if med else 0.0) * 10 ** 6)), 10 ** 6)
+        area = physics.surface_area(planet) * (GIANT_LIVING_BAND if physics.body(planet).get("giant") else 1)
+        return {"area": area, "chemistry": chemistry, "light": energy, "season": season(planet)}
     if metabolism is None and chemistry < 1:
         chemistry = genome.fraction(genome.adapted_chemistry(float(chemistry), planet))   # a people adapts
     if (getattr(planet, "society", None) or {}).get("terraform"):
@@ -227,7 +235,8 @@ GRAVITY_MASS_POWER = 3.0        # square-cube: a skeleton's stress ~ M^(1/3) g, 
 
 
 def metabolic_factor(metabolism: str, strat: str, birth: float = 1.0, temperature: float = 1.0,
-                     home_flux: Optional[float] = None, home_gravity: Optional[float] = None) -> float:
+                     home_flux: Optional[float] = None, home_gravity: Optional[float] = None,
+                     body_t: Optional[float] = None) -> float:
     """A body's need, per head, over a K-strategist carbon body's on Earth under the Sun (Brown et al. 2004, the
     metabolic theory of ecology): B ~ M^(3/4) x the kinetic pace of its chemistry at its body's temperature.
 
@@ -248,6 +257,8 @@ def metabolic_factor(metabolism: str, strat: str, birth: float = 1.0, temperatur
         t = laws.stefan_boltzmann_temperature(home_flux if home_flux else float(_OPT.get(metabolism, F(1)))) \
             * temperature
         mass *= max(1e-3, home_gravity if home_gravity else 1.0) ** -GRAVITY_MASS_POWER
+    if body_t:                                          # a body held at its chemistry's best: Eyring's pace
+        return mass ** 0.75 * (body_t * temperature) / laws.T_EARTH
     return mass ** 0.75 * laws.thermal_speed(t)
 
 
@@ -272,10 +283,17 @@ def home_flux(planet: Any) -> Optional[float]:
     return float(F(civ.light_optimum)) if civ is not None and getattr(civ, "light_optimum", None) else None
 
 
+def body_temperature(planet: Any) -> Optional[float]:
+    """The temperature its people's bodies keep (its chemistry's best), if its world selected one (cosmos.select)."""
+    traits = getattr(getattr(planet, "civilization", None), "traits", None)
+    return float(traits["body_t"]) if traits and traits.get("body_t") else None
+
+
 def cognition_of(kernel: Any, planet: Any) -> dict:
-    """This world's people's minds (laws.cognition) at its own homeworld's temperature, as its genome tunes them."""
+    """This world's people's minds (laws.cognition) at its bodies' own temperature, as its genome tunes them."""
     from xylarium.kernel import genome, laws
-    return laws.cognition(metabolism_of(_kernel(kernel), planet), genome.temperature_factor(planet), home_flux(planet))
+    return laws.cognition(metabolism_of(_kernel(kernel), planet), genome.temperature_factor(planet), home_flux(planet),
+                          body_temperature(planet))
 
 
 def need_factor(planet: Any, kernel: Any = None) -> float:
@@ -286,7 +304,8 @@ def need_factor(planet: Any, kernel: Any = None) -> float:
     flux = float(F(civ.light_optimum)) if civ is not None and getattr(civ, "light_optimum", None) else None
     grav = float(F(civ.home_gravity)) if civ is not None and getattr(civ, "home_gravity", None) else None
     return metabolic_factor(metabolism_of(kernel, planet), fertility.strategy(kernel, planet),
-                            genome.birth_factor(planet), genome.temperature_factor(planet), flux, grav)
+                            genome.birth_factor(planet), genome.temperature_factor(planet), flux, grav,
+                            body_temperature(planet))
 
 
 def consumption(planet: Any) -> int:
