@@ -47,14 +47,17 @@ def _menu(kernel: Any, pid: str) -> None:
         opts.append(("S", "Found a state"))
     if s["way"] == "state":
         opts.append(("W", "Weigh the council's works now"))
-    if s["yards"]:
-        opts.append(("C", "Become your people's first captain (the lanes open)"))
+    if kernel.get_player(pid) is not None:
+        opts.append(("C", "Return to your ship"))
+    elif s["yards"]:
+        opts.append(("C", "Take ship as your people's captain (the lanes open; HOMEWORLD brings you back)"))
     opts.append(("Q", "Save and quit"))
     print("  " + "   ".join(f"{c_gold('[' + k + ']')} {t}" for k, t in opts))
 
 
-def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None) -> Optional[Any]:
-    """The steward's loop. Returns the captain if the steward takes ship, else None (quit)."""
+def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bool = False) -> Optional[Any]:
+    """The steward's loop. Returns the captain if the steward takes (or returns to) ship, else None (quit).
+    Taking ship does not end the stewardship: the people stays the player's, and HOMEWORLD returns here."""
     while True:
         _screen(kernel, pid)
         _menu(kernel, pid)
@@ -63,6 +66,8 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None) -> Optiona
         except (KeyboardInterrupt, EOFError):
             cmd = "Q"
         if cmd == "Q":
+            if aboard:
+                return kernel.get_player(pid)
             if save:
                 save()
             print(c_green("Your people will be here when you return."))
@@ -86,6 +91,8 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None) -> Optiona
         elif cmd == "W":
             print("  " + ages.act(kernel, pid, "works"))
         elif cmd == "C":
+            if kernel.get_player(pid) is not None:
+                return kernel.get_player(pid)
             cap = ages.first_captain(kernel, pid, name)
             if cap is not None:
                 print(c_green(f"You take ship from {ages.status(kernel, pid)['world']}. The lanes are yours to open."))
@@ -95,15 +102,20 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None) -> Optiona
             print(c_gray("  Choose one of the letters above."))
 
 
-def choose_age() -> str:
-    print(bold(c_cyan("\n=== XYLARIUM: CHOOSE YOUR AGE ===")))
+def choose_age(seed: int = 0) -> str:
+    print(bold(c_cyan("\n=== XYLARIUM: WHERE ON THE CLOCK WILL YOU STEP IN? ===")))
+    print(c_gray("One universe, one clock: every age is this universe run to the moment its milestone first happens."))
+    kept = ages.cached(seed)
     for i, a in enumerate(ages.AGES, 1):
-        print(f"  {c_gold(f'[{i}]')} {bold(a['name'])}  {c_gray(a['blurb'])}")
+        ready = c_green(" [kept]") if a["key"] in kept else ""
+        print(f"  {c_gold(f'[{i}]')} {bold(a['name'])}{ready}  {c_gray(a['blurb'])}")
+    print(c_gray("  Ages not yet kept for this seed are reached by running the clock (it can take a while; each is "
+                 "kept for next time)."))
     try:
-        raw = input(c_gold("Age [4] > ")).strip()
+        raw = input(c_gold("Age [1] > ")).strip()
     except (KeyboardInterrupt, EOFError):
         raw = ""
-    return ages.AGES[int(raw) - 1]["key"] if raw.isdigit() and 1 <= int(raw) <= len(ages.AGES) else "spacefaring"
+    return ages.AGES[int(raw) - 1]["key"] if raw.isdigit() and 1 <= int(raw) <= len(ages.AGES) else "forager"
 
 
 def choose_people(kernel: Any) -> Any:

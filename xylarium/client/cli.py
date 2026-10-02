@@ -356,6 +356,14 @@ class TerminalClient:
             if sure == "RETIRE":
                 self._print_result(self.kernel.dispatch(self.player_id, ActionType.RETIRE_LINEAGE, confirm=True))
             return
+        if choice in ("HOMEWORLD", "STEWARD"):
+            from xylarium.client import steward as steward_ui
+            from xylarium.kernel import ages
+            if ages.homeworld(self.kernel, self.player_id) is None:
+                print(c_red("You steward no people: your house is a captain's, not a homeworld's."))
+            else:
+                steward_ui.run(self.kernel, self.player_id, "", aboard=True)
+            return
         if choice == "LIBRARY":
             self._prompt_library()
             return

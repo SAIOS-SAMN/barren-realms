@@ -1,58 +1,105 @@
 """
-Xylarium ages: where a universe begins, and who the player is in it.
+Xylarium ages: one clock, from foragers to the lanes - and where a new player steps into it.
 
-A new player may drop into any age. Each is either its own genesis or a universe run forward on the clock until a
-measured milestone first happens in it (genesis.firsts) - never a timer: the age of first flight begins when some
-people first commissions a hull, in whatever year that is in this universe.
+Every age is a point on the same run of the same universe. The clock starts with every people foraging on its
+homeworld (genesis "forager") and runs: fields, states, works, yards, ships, empires come when the peoples' own
+physics brings them, in whatever year that is in this universe. An age begins when its milestone first happens
+anywhere (genesis.firsts) - and the galaxy is then wherever it got to: some peoples ahead, most behind, a sector
+crowded or empty. Nothing stops at spaceflight; the clock simply goes on.
 
-  forager      every people forages on its homeworld (ways.py)             genesis "forager"
-  agrarian     every people a young state at citadel 0 (primordial.py)     genesis "primordial"
-  first_flight the agrarian universe, run until the first starship         primordial -> first_starship
-  spacefaring  a galaxy already among the stars (TradeWars console)        genesis "settled"
+  forager      year 0: every people forages
+  agrarian     the first state
+  first_flight the first starship
+  lanes        the first empire
+  classic      a ready-made galaxy already among the stars (the settled genesis; the TradeWars console)
 
-Before spaceflight the player is a STEWARD: bound to one people's homeworld, with no ship. The steward may do what
-the people's own council could - point its inquiry, set its growth, take up farming, found a state, raise works -
-each only when the people's physics allows it (a state needs a surplus that can bear it; works need a treasury).
-The council still decides what the steward leaves to it. When the steward's people commissions its first hull, the
-steward may become its first captain, and the console opens. "Wake me when" runs the clock until something happens
-to the steward's people.
+Running to a later age takes the clock time it takes; each age reached is kept (runs/eras/seed<N>/<age>.json), so
+the next player of that seed steps in at once - the same universe, since the clock is lockstep (scheduler.py).
+
+A player is a STEWARD of one people, whatever the age: bound to its homeworld, deciding what its council could -
+its inquiry, its growth, farming, a state, works, and its society's gauges (society.py) - each only as its physics
+allows; the council decides what the steward leaves to it. When the people raises yards the steward may also take
+ship as its captain (the console opens; HOMEWORLD returns to the people). "Wake me when" runs the clock until
+something happens to the steward's people.
 """
 
+import os
 from typing import Any, Callable, Dict, List, Optional
 
 AGES: List[Dict[str, Any]] = [
-    {"key": "forager", "name": "Age of Foragers", "genesis": "forager", "until": None,
-     "blurb": "Bands living off the wild. No fields, no states, no money. Centuries before anyone sows."},
-    {"key": "agrarian", "name": "Age of Fields", "genesis": "primordial", "until": None,
-     "blurb": "Young states on their homeworlds: councils, granaries, taxes. Nobody has left the ground."},
-    {"key": "first_flight", "name": "Age of First Flight", "genesis": "primordial", "until": "first_starship",
-     "blurb": "The first hull has just risen from some world's yards. The lanes are empty."},
-    {"key": "spacefaring", "name": "Age of the Lanes", "genesis": "settled", "until": None,
-     "blurb": "A galaxy already among the stars: ports, houses, great powers. You are a captain (TradeWars)."},
+    {"key": "forager", "name": "Age of Foragers", "until": None,
+     "blurb": "Year 0. Bands living off the wild: no fields, no states, no money. The whole clock is ahead of you."},
+    {"key": "agrarian", "name": "Age of Fields", "until": "first_state",
+     "blurb": "The first state has risen somewhere. Most peoples still forage; some sow."},
+    {"key": "first_flight", "name": "Age of First Flight", "until": "first_starship",
+     "blurb": "Some people's first hull has risen. Others are still in their fields - or their forests."},
+    {"key": "lanes", "name": "Age of the Lanes", "until": "first_empire",
+     "blurb": "The first empire: peoples with ships protect, prey, and tax. The galaxy is as advanced as it got."},
+    {"key": "classic", "name": "Classic: a ready-made galaxy", "until": None, "genesis": "settled",
+     "blurb": "Skip the history: a settled galaxy of ports, houses and great powers. You are a captain (TradeWars)."},
 ]
-FAST_FORWARD_YEARS = 600        # a universe that has not reached the milestone by then is handed over as it is
+ORDER = [a["key"] for a in AGES if a["key"] != "classic"]
+ERAS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "runs", "eras")
 
 
 def age(key: str) -> Dict[str, Any]:
     return next(a for a in AGES if a["key"] == key)
 
 
-def begin(seed: int, key: str, progress: Optional[Callable[[int, Dict[str, Any]], None]] = None) -> Any:
-    """A universe at the start of this age (run forward on the clock to its milestone if it has one)."""
+def _era_path(seed: int, key: str, root: Optional[str] = None) -> str:
+    return os.path.join(root or ERAS_DIR, f"seed{seed}", f"{key}.json")
+
+
+def cached(seed: int, root: Optional[str] = None) -> List[str]:
+    """The ages of this seed already reached (and kept)."""
+    return [k for k in ORDER if os.path.exists(_era_path(seed, k, root))]
+
+
+def begin(seed: int, key: str, progress: Optional[Callable[[int, Dict[str, Any]], None]] = None,
+          root: Optional[str] = None, max_years: Optional[int] = None) -> Any:
+    """The universe of this seed at the start of this age: the latest age already kept at or before it, run on the
+    clock until the age's milestone first happens (keeping every age passed on the way)."""
     from xylarium.kernel.engine import GameKernel
+    from xylarium.persistence.store import StatePersistence
     a = age(key)
-    kernel = GameKernel(seed=seed, genesis=a["genesis"])
+    if a.get("genesis") == "settled":
+        kernel = GameKernel(seed=seed, genesis="settled")
+        kernel.activate()
+        kernel.state.setdefault("genesis", {})["age"] = key
+        return kernel
+    target = ORDER.index(key)
+    kernel = None
+    for k in reversed(ORDER[:target + 1]):
+        if os.path.exists(_era_path(seed, k, root)):
+            kernel = StatePersistence.load_from_file(_era_path(seed, k, root))
+            if kernel is not None:
+                break
+    if kernel is None:
+        kernel = GameKernel(seed=seed, genesis="forager")
+        _keep(kernel, seed, "forager", root)
     kernel.activate()
-    kernel.state.setdefault("genesis", {})["age"] = key
-    until = a.get("until")
-    if until:
-        firsts = kernel.state["genesis"].setdefault("firsts", {})
-        while until not in firsts and kernel.cycle_count < FAST_FORWARD_YEARS * 100:
+    firsts = kernel.state.setdefault("genesis", {}).setdefault("firsts", {})
+    limit = (max_years if max_years is not None else 10 ** 6) * 100
+    start = kernel.cycle_count
+    for k in ORDER[1:target + 1]:
+        until = age(k)["until"]
+        while until not in firsts and kernel.cycle_count - start < limit:
             kernel.tick_simulation()
             if progress is not None and kernel.cycle_count % 100 == 0:
                 progress(kernel.cycle_count, firsts)
-        kernel.state["genesis"]["handed_over"] = {"cycle": kernel.cycle_count, "reached": until in firsts}
+        if until not in firsts:
+            break
+        if not os.path.exists(_era_path(seed, k, root)):
+            _keep(kernel, seed, k, root)
+    kernel.state["genesis"]["age"] = key
     return kernel
+
+
+def _keep(kernel: Any, seed: int, key: str, root: Optional[str]) -> None:
+    from xylarium.persistence.store import StatePersistence
+    path = _era_path(seed, key, root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    StatePersistence.save_to_file(kernel, path)
 
 
 # ---------------------------------------------------------------------- the steward

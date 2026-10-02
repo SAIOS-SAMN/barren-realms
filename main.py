@@ -51,8 +51,8 @@ def main():
         if single_player:
             # The first question of a new universe: which age to begin in (ages.py)
             from xylarium.client import steward as steward_ui
-            key = steward_ui.choose_age()
-            if key == "spacefaring":
+            key = steward_ui.choose_age(args.seed)
+            if key == "classic":
                 # Lineage Genesis: this save is bound to one lineage for its whole life
                 from xylarium.client.cli import lineage_genesis
                 kernel, player_id = lineage_genesis(args.seed, args.name)
@@ -142,19 +142,18 @@ def _begin_steward(args, key, player_id, save_file):
     from xylarium.client import steward as steward_ui
     from xylarium.kernel import ages
     age = ages.age(key)
-    print(c_gray(f"Making the universe of seed {args.seed} in the {age['name']}..."))
+    print(c_gray(f"Running the universe of seed {args.seed} on its clock to the {age['name']}..."))
 
     def progress(cycle, firsts):
         if cycle % 1000 == 0:
-            print(c_gray(f"  year {cycle // 100}: {len(firsts)} firsts so far"), flush=True)
+            latest = max(firsts.items(), key=lambda kv: kv[1]["cycle"])[0].replace("_", " ") if firsts else "-"
+            print(c_gray(f"  year {cycle // 100}: {len(firsts)} firsts so far (latest: {latest})"), flush=True)
     kernel = ages.begin(args.seed, key, progress)
-    handed = kernel.state["genesis"].get("handed_over")
-    if handed:
-        print(c_gray(f"  handed over in year {handed['cycle'] // 100}" +
-                     ("" if handed["reached"] else " (the milestone had not yet come)")))
+    print(c_green(f"  You step in at year {kernel.cycle_count // 100}."))
     planet = steward_ui.choose_people(kernel)
     ages.bind(kernel, player_id, args.name, planet)
-    steward_ui.progenitor(kernel, player_id)
+    if kernel.cycle_count == 0:
+        steward_ui.progenitor(kernel, player_id)
     save = lambda: StatePersistence.save_to_file(kernel, save_file)
     cap = steward_ui.run(kernel, player_id, args.name, save=save)
     return kernel if cap is not None else None

@@ -148,13 +148,15 @@ everyone else's) look further. Firms, waystations, daughter worlds and realms ap
 it to weaker peoples, pays or collects tribute - the same contracts the AI peoples make, judged by the same rule.
 An empire is what a player's contracts add up to; so is a ruined people.
 
-**Built (ages.py, xylarium/client/steward.py, main.py):** a new single-player universe first asks which age to begin
-in - the Age of Foragers (genesis "forager"), the Age of Fields (primordial), the Age of First Flight (primordial,
-run on the clock until the first starship, in whatever year it comes), or the Age of the Lanes (settled; the
-TradeWars console and lineage genesis as before). Before spaceflight the player picks a people (or shapes its
-genome at genesis - the Progenitor's hand) and stewards it: inquiry, growth, farming, a state, works - each only
-when its physics allows - or "wake me when" something happens to it. When its yards rise the steward may become its
-first captain, and the console opens. A saved steward resumes as a steward.
+**Built (ages.py, xylarium/client/steward.py, main.py):** one universe, one clock. A new single-player universe
+asks where on its clock to step in: the Age of Foragers (year 0), of Fields (the first state), of First Flight
+(the first starship) or of the Lanes (the first empire) - each this universe run until that milestone first
+happens anywhere, in whatever year its own physics brings it, with every other people wherever it got to; or a
+Classic ready-made galaxy (the settled genesis, lineage genesis, the TradeWars console). Each age reached is kept
+(runs/eras/seed<N>/, `tools/eras.py` builds them ahead), so stepping in again is instant. The player picks a people
+(at year 0 it may shape its genome - the Progenitor's hand) and stewards it: inquiry, growth, farming, a state,
+works, the society's gauges - each as its physics allows - or "wake me when". Nothing ends at spaceflight: when
+its yards rise the steward may take ship as its captain, and HOMEWORLD in the console brings it back to its people.
 
 Still to build: steward commands for commissioning a hull and offering/accepting protection, and several human
 stewards in one universe (multiplayer).
