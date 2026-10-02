@@ -141,7 +141,9 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     civ = getattr(planet, "civilization", None)
     tailings = (getattr(planet, "element_deposits", {}) or {}).get("TAILINGS", 0)
     from xylarium.kernel import genome
+    from xylarium.kernel import cosmos
     key = (tier, habs, metab, planet.planet_type, str(getattr(planet, "body", None)), planet.owner_id,
+           cosmos.lum(planet.sector_id),
            getattr(civ, "light_optimum", None), tailings // 500,
            round(genome.value(planet, "light"), 3), round(genome.value(planet, "tolerance"), 3),
            round(genome.value(planet, "chemistry"), 3), str((getattr(planet, "society", None) or {}).get("terraform")))

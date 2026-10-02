@@ -578,6 +578,8 @@ class NativeManager:
         civ.alignment = natives["alignment"]
         civ.native_policy = "ALPHA" if natives["alignment"] >= 0.3 else None  # they remember being watched
         planet.civilization = civ
+        from xylarium.kernel import biosphere
+        biosphere.adapt(kernel, civ, planet)                   # adapted to the world they evolved on
         planet.population = max(planet.population, min(20000, natives["population"] // 200))
         planet.morale = 90
         # A new sovereign economy enters the galaxy: its founding treasury is declared new territory

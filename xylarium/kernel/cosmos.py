@@ -1,9 +1,13 @@
 """
 Xylarium cosmos: the scales of the simulated universe, the galaxy's clockwork, and where and when minds arise.
 
+THE BIG BANG. Deep time is counted from the universe's beginning: deep_gyr is Gyr since the Big Bang. The home
+galaxy's first stars form 0.3 Gyr after it (the oldest stars measured are ~13.5 Gyr old), its disc inside-out after
+that; the present universe is 13.8 Gyr old - a reading on this clock, not where it stops.
+
 THE SCALES (largest first)
 
-  universe          the whole run: one seed, one clock (scheduler.py, clock.py)
+  universe          the whole run: one seed, one clock, from the Big Bang (scheduler.py, clock.py)
   galactic cluster  the galaxies bound together; the home cluster - only its home galaxy is simulated, the rest are
                     a count kept for later tiers
   galaxy            an exponential disc (scale length R_D) of rings and cells; a CELL is a region of the disc
@@ -128,7 +132,8 @@ def density(r: float) -> float:
 
 
 def formed_gyr(r: float) -> float:
-    """Inside-out: when a radius forms its stars (Chiappini et al. 2001)."""
+    """Inside-out: when a radius forms its stars, Gyr after the Big Bang (Chiappini et al. 2001; the first 0.3 Gyr
+    after the Big Bang - the age of the oldest stars measured)."""
     return max(0.3, 1.033 * r - 1.267)
 
 
@@ -173,7 +178,7 @@ def ruler(kernel: Any) -> float:
 
 
 def deep_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
-    """The deep-time epoch (Gyr since the galaxy began forming) at a clock cycle."""
+    """The deep-time epoch (Gyr since the Big Bang) at a clock cycle."""
     st = stats(kernel)
     c = kernel.cycle_count if cycle is None else cycle
     return float(st.get("epoch0", 0.0)) + (c / 100.0) * ruler(kernel) / 1.0e9
@@ -214,7 +219,10 @@ def schedule(kernel: Any) -> Dict[str, Any]:
     """Every mind the home galaxy raises before HORIZON_GYR: cell, epoch (Gyr), its star's mass and world's fitness
     - with the expectation the dice are drawn from, as a curve over deep time (the audit of the scales)."""
     from xylarium.kernel import scheduler
-    per_cell, hs = _candidates_at_r0(kernel)
+    st = stats(kernel)
+    if not st.get("hs"):                                  # measured once, from the first witnessed region, and kept:
+        st["per_cell_r0"], st["hs"] = _candidates_at_r0(kernel)   # the future is the seed's, not the map's
+    per_cell, hs = st["per_cell_r0"], st["hs"]
     out = []
     curve = [0.0] * (int(HORIZON_GYR / CURVE_STEP) + 1)
     for (i, j) in cells():
@@ -373,11 +381,17 @@ def _join(kernel: Any, cell: Tuple[int, int]) -> None:
 
 
 # ---------------------------------------------------------------------- the stars' lives
-AGEING_SHARE = 0.1              # the last tenth of a star's main-sequence life: it brightens toward the giant phase
+AGEING_SHARE = 0.1              # the last tenth of a star's main-sequence life: the giant branch
+RGB_TIP_LSUN = 2500.0           # luminosity at the red-giant branch tip (solar; measured)
+GIANT_REACH_AU = 1.0            # a giant near its tip is ~200 solar radii (~1 AU): what lies inside is engulfed
+WD_LSUN = 1.0e-3                # a young white dwarf's light
+WD_MASS = 0.6                   # what a white dwarf keeps of its star (solar masses)
+EJECTA_PER_SUN = 150            # deposit units a solar mass of shed matter seeds (a world's worth of an element)
+R_BULGE_KPC = 2.0               # within it, a dying star's remains fall to the galactic centre (blackhole.py)
 
 
 def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
-    """(when the star formed, when it leaves the main sequence), in deep Gyr: its ring's formation, its mass's life."""
+    """(when the star formed, when it leaves the main sequence), in Gyr since the Big Bang."""
     from xylarium.kernel import physics
     g = stats(kernel)["place"].get(str(sector_id))
     sec = kernel.sectors.get(sector_id)
@@ -393,49 +407,189 @@ def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
     return born, born + SUN_MS_GYR * max(0.1, m) ** -2.5
 
 
-def star_factor(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> float:
-    """1 on the main sequence; falling to 0 over its last tenth; 0 once it has died."""
+def death_kind(kernel: Any, sector_id: int) -> str:
+    """How it ends: a binary's white dwarf takes its companion's matter until it detonates (a Type Ia supernova);
+    a single star sheds its envelope and leaves a white dwarf. (No star the generator makes is massive enough,
+    above 8 suns, to collapse its core.)"""
+    sec = kernel.sectors.get(sector_id)
+    return "supernova" if sec is not None and "binary" in (sec.star_type or "").lower() else "white_dwarf"
+
+
+def phase(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> Tuple[str, float]:
+    """('main' | 'giant' | 'dead', how far through the giant branch 0..1)."""
     life = star_life(kernel, sector_id)
     if life is None:
-        return 1.0
+        return "main", 0.0
     born, ends = life
+    if ends <= born:
+        return "dead", 1.0
     t = deep_gyr(kernel) if at_gyr is None else at_gyr
     if t >= ends:
-        return 0.0
+        return "dead", 1.0
     span = AGEING_SHARE * (ends - born)
-    return 1.0 if t <= ends - span else max(0.0, (ends - t) / span)
+    return ("giant", (t - (ends - span)) / span) if t > ends - span else ("main", 0.0)
+
+
+def luminosity_factor(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> float:
+    """The star's light now over its main-sequence light: climbing the giant branch toward the tip as the square of
+    its progress (the climb is steepest at the end); after death a remnant's or nothing."""
+    from xylarium.kernel import physics
+    ph, s = phase(kernel, sector_id, at_gyr)
+    if ph == "main":
+        return 1.0
+    sec = kernel.sectors.get(sector_id)
+    try:
+        l0 = float(physics.star(sec)["luminosity"])
+    except Exception:
+        l0 = 1.0
+    if ph == "giant":
+        return max(1.0, RGB_TIP_LSUN / max(1e-6, l0)) ** (s * s)
+    return 1.0                                       # dead: the sector's star is already its remnant (_death)
+
+
+def lum(sector_id: int) -> float:
+    """The luminosity factor this season (physics.planet_flux reads it)."""
+    from xylarium.kernel import ledger
+    k = ledger.active_kernel()
+    if k is None or "cosmos" not in getattr(k, "state", {}):
+        return 1.0
+    return float(stats(k)["lum"].get(str(sector_id), 1.0))
+
+
+def star_factor(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> float:
+    """1 while the star lives (its light, however fierce, is the biology's problem: light fit); 0 once dead."""
+    return 0.0 if phase(kernel, sector_id, at_gyr)[0] == "dead" else 1.0
+
+
+def years_left(kernel: Any, sector_id: int) -> Optional[float]:
+    """Clock years until the star dies."""
+    life = star_life(kernel, sector_id)
+    if life is None:
+        return None
+    return max(0.0, (life[1] - deep_gyr(kernel)) * 1.0e9 / ruler(kernel))
+
+
+def forecasts(kernel: Any, sector_id: int, mastery: float) -> bool:
+    """Whether a people that knows this much of stellar physics (its energy mastery) can read its star's end now:
+    once the fraction of the star's life still ahead falls to what it knows."""
+    life = star_life(kernel, sector_id)
+    if life is None or life[1] <= life[0]:
+        return False
+    ahead = (life[1] - deep_gyr(kernel)) / (life[1] - life[0])
+    return ahead <= mastery or phase(kernel, sector_id)[0] == "giant"
 
 
 def _stars(kernel: Any, sector_ids: Optional[List[int]] = None) -> List[str]:
-    """Each witnessed star's worlds feed what its light still allows; its swelling and its death are history."""
+    """Each witnessed star's light, its swelling and its death."""
     from xylarium.kernel import history
+    st = stats(kernel)
     logs = []
-    ids = sector_ids if sector_ids is not None else [int(s) for s in stats(kernel)["place"]]
+    quiet = sector_ids is not None                   # found as it is when first witnessed: no news
+    ids = sector_ids if quiet else [int(s) for s in st["place"]]
     for sid in ids:
         sec = kernel.sectors.get(sid)
         if sec is None or not sec.planets:
             continue
-        f = round(star_factor(kernel, sid), 4)
-        was = float(sec.planets[0].society.get("star_k", 1.0))
-        if f == was:
+        ph, _ = phase(kernel, sid)
+        f = round(luminosity_factor(kernel, sid), 4)
+        if f != 1.0:
+            st["lum"][str(sid)] = f
+        else:
+            st["lum"].pop(str(sid), None)
+        was = st["phase"].get(str(sid), "main")
+        if ph == was:
             continue
-        for p in sec.planets:
-            p.society["star_k"] = f
+        st["phase"][str(sid)] = ph
         peopled = [p for p in sec.planets if p.population > 0]
-        if sector_ids is not None:
-            continue                                   # found as it is when first witnessed: no news
-        if was >= 1.0 > f:
-            history.event(kernel, "STAR_AGEING", f"The star of {sec.name} begins to swell", sector_id=sid,
-                          actors=[getattr(getattr(p, "civilization", None), "name", p.name) for p in peopled],
-                          cause="the last tenth of its main-sequence life")
+        who = [getattr(getattr(p, "civilization", None), "name", p.name) for p in peopled]
+        if ph == "giant" and not quiet:
+            history.event(kernel, "STAR_AGEING", f"The star of {sec.name} begins to swell", sector_id=sid, actors=who,
+                          cause=f"its giant branch: {years_left(kernel, sid):,.0f} clock years left")
             if peopled:
-                logs.append(f"[COSMOS] The star of {sec.name} begins to swell: its worlds will feed fewer each year.")
-        if was > 0.0 >= f:
-            history.event(kernel, "STAR_DEATH", f"The star of {sec.name} dies", sector_id=sid,
-                          actors=[getattr(getattr(p, "civilization", None), "name", p.name) for p in peopled],
-                          magnitude=sum(p.population for p in peopled), cause="it left the main sequence")
-            logs.append(f"[COSMOS] The star of {sec.name} dies.")
+                logs.append(f"[COSMOS] The star of {sec.name} begins to swell.")
+        if ph == "dead":
+            line = _death(kernel, sid, quiet)
+            if line and not quiet:
+                logs.append(line)
     return logs
+
+
+def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
+    """A star dies: a white dwarf (worlds inside the giant engulfed, the rest frozen in its faint light) or a Type Ia
+    supernova (every world flung out of the dead system, a rogue). Its shed matter seeds its region - or, inside the
+    bulge, falls with what it unbound to the galactic centre (blackhole.py)."""
+    from xylarium.kernel import blackhole, history, physics
+    sec = kernel.sectors[sid]
+    kind = death_kind(kernel, sid)
+    r = float(stats(kernel)["place"].get(str(sid), {}).get("r", R0_KPC))
+    try:
+        m = float(physics.star(sec)["mass"])
+    except Exception:
+        m = 1.0
+    to_centre = r < R_BULGE_KPC
+    lost = 0
+    for p in sec.planets:
+        if p.population > 0:
+            lost += p.population
+            _perish(kernel, p, kind)
+        p.society["star_k"] = 0.0
+        a = float(physics.body(p).get("q", 1) or 1) ** 2
+        unbound = kind == "supernova" or a < GIANT_REACH_AU
+        if unbound:
+            if to_centre:
+                blackhole.capture(kernel, dict(p.element_deposits), f"the worlds of {sec.name}")
+            elif a < GIANT_REACH_AU and kind != "supernova":
+                for el, q in p.element_deposits.items():
+                    matter.sink("stellar_engulfment", el, q)        # swallowed by its own star
+            if to_centre or (a < GIANT_REACH_AU and kind != "supernova"):
+                p.element_deposits = {el: 0 for el in p.element_deposits}
+            if kind == "supernova":
+                p.planet_type = "ROGUE"                              # flung out: dark, drifting
+        if hasattr(p, "_orbit_cache"):
+            del p._orbit_cache
+    shed = (m - WD_MASS) if kind == "white_dwarf" else m                # a Type Ia leaves nothing
+    yields = ({"C": 0.5, "H2O": 0.3, "Si": 0.2} if kind == "white_dwarf" else
+              {"Fe": 0.6, "Ni": 0.2, "Si": 0.15, "U": 0.05})          # what each death makes
+    units = {el: int(max(0.0, shed) * EJECTA_PER_SUN * w) for el, w in yields.items()}
+    if to_centre:
+        blackhole.capture(kernel, units, f"the remains of the star of {sec.name}", made=True)
+    else:
+        worlds = [p for s2 in kernel.sectors.values() if s2.id in _region_sectors(kernel, sid) for p in s2.planets]
+        for i, (el, q) in enumerate(sorted(units.items())):
+            for j, w in enumerate(worlds):
+                share = q // max(1, len(worlds)) + (1 if j < q % max(1, len(worlds)) else 0)
+                if share:
+                    w.element_deposits[el] = w.element_deposits.get(el, 0) + share
+                    matter.source("stellar_ejecta", el, share)          # made in the star, now in the worlds
+    sec.star_type = "White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant"
+    sec.star = physics.star_for(sec.star_type)
+    st = stats(kernel)
+    st["deaths"][kind] = st["deaths"].get(kind, 0) + 1
+    if quiet:
+        return None
+    history.event(kernel, "STAR_DEATH", f"The star of {sec.name} dies" + (" in a supernova" if kind == "supernova"
+                                                                           else ", leaving a white dwarf"),
+                  sector_id=sid, magnitude=lost, cause=f"it left the main sequence ({m:.2f} suns)",
+                  data={"kind": kind, "to_centre": to_centre, "ejecta": units})
+    return f"[COSMOS] The star of {sec.name} dies ({kind.replace('_', ' ')})" + (f": {lost:,} perish." if lost else ".")
+
+
+def _perish(kernel: Any, planet: Any, kind: str) -> None:
+    """Those still on a world when its star dies die with it (the government that could have moved them answers
+    for it - exodus.py); a people's ruins remain where a world remains."""
+    from xylarium.kernel import exodus
+    exodus.perished(kernel, planet, planet.population, kind)
+    from xylarium.kernel.archaeology import ArchaeologyManager
+    planet.population = 1
+    ArchaeologyManager.check_collapse(planet, True, kernel)
+    planet.population = 0
+
+
+def _region_sectors(kernel: Any, sector_id: int) -> List[int]:
+    cell = cell_of_sector(kernel, sector_id)
+    if cell is None:
+        return [sector_id]
+    return [s for s in _sectors_of_region(region_of_cell(kernel, cell)) if s in kernel.sectors]
 
 
 # ---------------------------------------------------------------------- the shear
@@ -635,6 +789,7 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
         "name": name, "species_name": f"{plan}-{name.lower()}", "clade": plan, "class_code": 0, "sigil": "*",
         "metabolism": metab, "disposition": "industry", "motto": "we looked up", "station": "arisen", "tech_level": 0})
     p.civilization = civ
+    biosphere.adapt(kernel, civ, p)                       # it evolved under this light, on this ground
     p.owner_id = None
     p.citadel_level = 0
     p.treasury = 0
@@ -722,7 +877,7 @@ register_subsystem(Subsystem(
     name="cosmos",
     state=lambda: {"epoch0": 0.0, "minds": [], "next": 0, "arisen": 0, "silent": 0, "curve": [], "ever": 0,
                    "region_of": {}, "next_region": 2, "materialised": [], "entered": [], "per_cell_r0": 0,
-                   "place": {}, "cross": {}, "stretch": {}},
+                   "place": {}, "cross": {}, "stretch": {}, "lum": {}, "phase": {}, "deaths": {}},
     season=quarter,
     summary=summary,
 ))

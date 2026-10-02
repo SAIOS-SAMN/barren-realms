@@ -148,12 +148,28 @@ def _code_for(kernel: Any, people: str) -> str:
 
 
 def _rebase(kernel: Any, holder: str, cur: str) -> None:
-    """Every world of a people takes its own money (they were stateless: nothing in them was money yet)."""
-    from xylarium.kernel import knowledge
+    """Every world of a people takes its own money. Whatever it held in another (a stranger's coin that reached it)
+    is a currency reform: the old money retired, the same value issued in the new at par (both declared)."""
+    from xylarium.config import PRICE_LEVEL
+    from xylarium.kernel import knowledge, ledger
     for s in kernel.sectors.values():
         for p in s.planets:
-            if p.population > 0 and knowledge.holder_of_planet(p) == holder:
-                p.currency = cur
+            if p.population <= 0 or knowledge.holder_of_planet(p) != holder or p.currency == cur:
+                continue
+            old = p.currency
+            rate = PRICE_LEVEL.get(cur, 1.0) / PRICE_LEVEL.get(old, 1.0)
+            for attr in ("treasury", "household_purse", "diaspora_escrow"):
+                held = int(getattr(p, attr, 0) or 0)
+                if held:
+                    ledger.burn("currency_reform", held, old)
+                    setattr(p, attr, int(held * rate))
+                    ledger.mint("currency_reform", int(held * rate), cur)
+            esc = int(p.society.get("tribute_escrow", 0) or 0)
+            if esc:
+                ledger.burn("currency_reform", esc, old)
+                p.society["tribute_escrow"] = int(esc * rate)
+                ledger.mint("currency_reform", int(esc * rate), cur)
+            p.currency = cur
 
 
 def _issuers(kernel: Any, cur: str) -> List[Any]:

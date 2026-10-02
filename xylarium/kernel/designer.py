@@ -179,6 +179,8 @@ def seed(kernel: Any, holder: Optional[str], design: Dict[str, Any], planet: Any
         "sigil": design.get("sigil", "*"), "metabolism": metab, "disposition": design.get("disposition", "industry"),
         "motto": design.get("motto", "we were made, and then we chose"), "station": "seeded", "tech_level": 0})
     planet.civilization = civ
+    from xylarium.kernel import biosphere
+    biosphere.adapt(kernel, civ, planet)                  # bred for its world's light (its genome tunes from there)
     planet.owner_id = None
     planet.faction_id = None
     planet.citadel_level = 0

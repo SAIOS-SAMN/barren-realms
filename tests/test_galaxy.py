@@ -87,8 +87,10 @@ class TestPaceAndStars(unittest.TestCase):
         sid, life = next((s.id, cosmos.star_life(k, s.id)) for s in k.sectors.values()
                          if s.planets and cosmos.star_life(k, s.id) and cosmos.star_life(k, s.id)[1] > cosmos.deep_gyr(k))
         born, ends = life
-        self.assertEqual(cosmos.star_factor(k, sid, born + 0.5 * (ends - born)), 1.0)
-        self.assertAlmostEqual(cosmos.star_factor(k, sid, ends - 0.05 * (ends - born)), 0.5, places=6)
+        self.assertEqual(cosmos.luminosity_factor(k, sid, born + 0.5 * (ends - born)), 1.0)
+        self.assertGreater(cosmos.luminosity_factor(k, sid, ends - 0.05 * (ends - born)), 1.0)    # the giant branch
+        self.assertGreater(cosmos.luminosity_factor(k, sid, ends - 0.001 * (ends - born)), 100.0)  # near its tip
+        self.assertEqual(cosmos.star_factor(k, sid, ends - 0.05 * (ends - born)), 1.0)
         self.assertEqual(cosmos.star_factor(k, sid, ends + 0.01), 0.0)
         p = k.sectors[sid].planets[0]
         p.society["star_k"] = 0.0

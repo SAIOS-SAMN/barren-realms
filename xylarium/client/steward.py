@@ -52,6 +52,8 @@ def _menu(kernel: Any, pid: str) -> None:
     opts = [("Z", "Wake me when something happens"), ("A", "Advance one season"),
             ("R", "Point their inquiry"), ("P", "Set their growth (expand / steady)"),
             ("G", "Set a gauge (temple / levy / openness / commerce)"), ("M", "Their myths")]
+    if s.get("forecast"):
+        opts.append(("E", f"Order the exodus (their sun: {s['forecast']['years_left']:,.0f} years left at the reckoning)"))
     if s["way"] == "forage":
         opts.append(("F", "Take up farming"))
     if s["way"] == "farm":
@@ -98,6 +100,8 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
         elif cmd == "G":
             raw = input(c_gold("Gauge=value, e.g. temple=0.3 > ")).strip().lower()
             print("  " + ages.act(kernel, pid, "gauge", raw))
+        elif cmd == "E":
+            print("  " + ages.act(kernel, pid, "exodus"))
         elif cmd == "M":
             myths = ages.status(kernel, pid)["myths"]
             for m in myths or [{"year": "-", "text": "they have no stories yet"}]:

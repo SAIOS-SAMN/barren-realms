@@ -48,17 +48,42 @@ when they touch. The audit (`cosmos.audit`, in observations) measures the scales
 the galaxy's, sectors per people, the share of charted space no people can reach, and minds arisen against minds
 expected by now.
 
-## The pace, and the lives of stars
+## The Big Bang, the pace, and the lives of stars
+
+Deep time is Gyr since the Big Bang: the home galaxy's first stars form 0.3 Gyr after it (the oldest stars
+measured are ~13.5 Gyr old), its disc inside-out after that; 13.8 Gyr is today's reading, not an end.
 
 The pace is a law of each universe, chosen once at genesis and kept for its whole run (kept ages are filed under
 it). Seed 7's second mind arrives 13,639 clock years after the first when lonely, 1,364 when neighbourly, 136 when
 teeming - order and relative spacing are the physics; the pace is how much evolution a year of history stands for.
 
-Every witnessed star lives 10 Gyr x M^-2.5 from when its ring formed. Over its last tenth it brightens toward the
-giant phase and its worlds' carrying capacity falls with what remains of it (a people sees it coming for centuries
-at the neighbourly pace, within a reign at the teeming one); then it dies and its worlds feed no one (ledger events
-STAR_AGEING, STAR_DEATH; the swelling sun becomes a myth). A star already dead when its region is witnessed is
-found as it is: seed 7's first region holds nine stars already dead or dying - its blue-white stars and remnants.
+Every witnessed star lives 10 Gyr x M^-2.5 from when its ring formed. Over its last tenth it climbs the giant
+branch: its light rises toward the measured tip (~2,500 suns) as the square of its progress - its worlds' biology
+burns (light fit collapses: physics.planet_flux), while arrays and fields take a windfall of energy. Then it dies:
+a single star sheds its envelope and leaves a white dwarf (a thousandth of the Sun's light: its worlds frozen, those
+inside ~1 AU engulfed); a binary's white dwarf detonates as a Type Ia supernova (every world flung out as a rogue).
+Its shed matter seeds its region (carbon and water from a white dwarf's envelope, iron, nickel and uranium from a
+supernova) - or, inside the bulge (2 kpc), falls to the galactic centre. No star the generator makes exceeds 8 suns,
+so there are no core-collapse supernovae yet.
+
+## Dying suns and the duty of governments (exodus.py)
+
+A people reads its star's end once the share of its life still ahead falls to its mastery of energy (FORECAST).
+From the moment the years left no longer exceed the move plus its council's horizon, a government with ships must
+choose to carry its people away - a settler fleet per yards world per season, to its own worlds with room or to
+empty ones under lasting stars - weighing the lives against the fleets. Peoples without ships may be rescued by
+peoples that have met them, as far as those value strangers' lives (their alignment toward the Light; rescue moves
+them further toward it). When the star dies, those left die with it (PERISHED), and whatever their government could
+have carried and did not is harm against it - toward the Dark - and its surviving worlds lose faith in it
+(ABANDONED). Peoples with ships may also strip the doomed worlds first (SALVAGE). A steward can order the exodus.
+
+## The galactic centre: an Einstein-Cartan recycler (blackhole.py)
+
+Spin-torsion coupling halts collapse at the Cartan density and bounces it: the central black hole takes matter in
+and gives it back. What dies within the bulge - a star's shed matter, the worlds its death unbinds - falls to the
+centre, which shines as it feeds (L = 0.1 Mdot c^2: millions of suns for a star's meal; a quiet floor at Sgr A*'s
+1e-8 suns a year otherwise; CENTRE_FLARE), and returns its reservoir to the bulge's witnessed worlds as jets over an
+active episode's e-folding time (100 Myr). Capture and return are declared to the matter ledger.
 
 ## The shear
 

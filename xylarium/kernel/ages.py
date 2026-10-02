@@ -167,6 +167,7 @@ def status(kernel: Any, player_id: str) -> Dict[str, Any]:
             "gauges": dict(society.gauges(p)), "dogma": round(float(getattr(p.civilization, "dogma", 0.0) or 0.0), 3),
             "stress": dict(p.society.get("stress") or society.stress(kernel, p)),
             "trades": society.trades(kernel, p), "myths": list(p.society.get("myths", [])),
+            "forecast": p.society.get("forecast"),
             "firsts": dict((kernel.state.get("genesis") or {}).get("firsts", {}))}
 
 
@@ -210,6 +211,13 @@ def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> st
         except (KeyError, ValueError):
             return f"Gauges: {', '.join(society.GAUGES)} - each 0 to 1 (e.g. temple=0.3)."
         return f"Your people's {key.strip()} is set to {society.gauges(p)[key.strip()]:.0%}."
+    if what == "exodus":
+        holder = knowledge.holder_of_planet(p)
+        for s in kernel.sectors.values():
+            for w in s.planets:
+                if w.population > 0 and knowledge.holder_of_planet(w) == holder:
+                    w.society["exodus_ordered"] = True
+        return "Your council will carry every one of your people it can away from a dying sun, whatever it costs."
     if what == "works":
         if ways.stateless(p):
             return "Without a state there is no treasury to build with."

@@ -44,6 +44,7 @@ STAR_CLASSES: Dict[str, Tuple[F, Optional[F]]] = {
     "A-class": (F(13, 10), None),        # M = 1.69, L = 6.3
     "Binary": (F(7, 5), F(2)),           # two suns: M = 1.96, L = 2
     "White dwarf": (F(3, 4), F(1, 1000)),
+    "Supernova remnant": (F(1, 10), F(1, 1000000)),   # what a Type Ia leaves: a shell of gas, nearly no light
     "Brown dwarf": (F(3, 10), F(1, 100000)),
     "Precursor": (F(6, 5), F(1, 100)),   # an engineered pulsar: heavy, dim in the visible
 }
@@ -350,6 +351,10 @@ def planet_flux(sector: Any, planet: Any) -> F:
     shaded = harvest.shade(getattr(sector, "id", 0)) if sector is not None else 0.0
     if shaded > 0:                                  # the star's arrays take their share of its light first
         fl = fl * F(int(round((1.0 - shaded) * 10 ** 9)), 10 ** 9)
+    from xylarium.kernel import cosmos
+    swell = cosmos.lum(getattr(sector, "id", 0)) if sector is not None else 1.0
+    if swell != 1.0:                                # a star on its giant branch (cosmos.py)
+        fl = fl * F(swell).limit_denominator(10 ** 6)
     return fl
 
 
