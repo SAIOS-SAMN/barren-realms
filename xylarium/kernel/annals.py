@@ -234,6 +234,10 @@ def _meetings(kernel: Any, now: float) -> List[str]:
                               text=f"The {win.split(':', 1)[-1]} prevailed; the {lose.split(':', 1)[-1]} lost half "
                                    f"their dominion.", data={"winner": win, "loser": lose})
                 logs.append(f"[ANNALS] War between the {na} and the {nb}: the {win.split(':', 1)[-1]} prevail.")
+            elif opposed:
+                history.event(kernel, "DOMINION", f"The {na} and the {nb} meet among the stars", actors=[a, b],
+                              cause=f"{POLICY_CARDS_NAME(ca)} against {POLICY_CARDS_NAME(cb)}: an uneasy truce, "
+                                    f"no pact")
             else:
                 # peoples whose doctrines agree make a pact of the ages: the bloc a federation can be founded from
                 from xylarium.kernel import relations
