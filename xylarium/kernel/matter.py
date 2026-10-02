@@ -181,7 +181,9 @@ def declared(kind: str):
                 return fn(*a, **kw)
             finally:
                 after, n1 = totals(k), ACTIVE.net()
-                for c in set(before) | set(after):
+                # every commodity counted or declared: one made and destroyed within the event (worlds charted and
+                # engulfed at once) is in neither census, but its inner declarations must still be balanced
+                for c in set(before) | set(after) | set(n0) | set(n1):
                     d = (after.get(c, 0) - before.get(c, 0)) - (n1.get(c, 0) - n0.get(c, 0))
                     if d > 0:
                         source(kind, c, d)

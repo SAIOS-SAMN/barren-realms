@@ -135,6 +135,7 @@ def _stabilizer(g: Grid) -> Tuple[Tuple[int, int], ...]:
 
 
 # ---------------------------------------------------------------------- reading a coordinate off a pair
+@functools.lru_cache(maxsize=1 << 16)
 def read_pair(i: Grid, o: Grid) -> Optional[Tuple[Tuple[Tuple[int, int], Tuple[int, ...]], ...]]:
     """Every (frame, colour map) that carries input i onto output o: canonical(o) = canonical(i) fixes the frame
     up to i's own symmetry (the coset frame(i)^-1 . stab . frame(o)), and the colour map is read cell by cell."""

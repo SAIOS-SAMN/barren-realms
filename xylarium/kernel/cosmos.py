@@ -263,6 +263,11 @@ def materialised(kernel: Any, cell: Tuple[int, int]) -> bool:
 
 @matter.declared("cluster_genesis")
 def build_slot(kernel: Any, cell: Tuple[int, int], k: int) -> int:
+    """One sample volume of a cell onto the map (declared: what it brings is new to the census)."""
+    return _build_slot(kernel, cell, k)
+
+
+def _build_slot(kernel: Any, cell: Tuple[int, int], k: int) -> int:
     """One sample volume of a cell onto the map, as the Big Bang made it: a star (lit if born by now, gas until
     then), or the null space between, with its belts."""
     from xylarium.config import BELT_TYPES
@@ -366,6 +371,7 @@ def _lanes_within(kernel: Any, cell: Tuple[int, int]) -> None:
         kernel.sectors[sb].warps = sorted(set(kernel.sectors[sb].warps) | {sa})
 
 
+@matter.declared("cluster_genesis")
 def materialise(kernel: Any, cell: Tuple[int, int], why: str) -> Optional[str]:
     """A cell is charted: every sector it carries is laid out as the Big Bang made it, its own lanes drawn, and it
     is joined to whatever neighbours are already charted."""
@@ -375,7 +381,7 @@ def materialise(kernel: Any, cell: Tuple[int, int], why: str) -> Optional[str]:
         return None
     region = region_of_cell(kernel, cell)
     for k in range(SLOTS):
-        build_slot(kernel, cell, k)
+        _build_slot(kernel, cell, k)                      # one census for the whole cell (materialise is declared)
     _lanes_within(kernel, cell)
     _stars(kernel, [sector_of_slot(kernel, cell, k) for k in range(SLOTS)])   # found as its stars are now
     st["materialised"].append(key)

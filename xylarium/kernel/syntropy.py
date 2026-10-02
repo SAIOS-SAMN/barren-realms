@@ -33,7 +33,6 @@ every generation, so no covenant is forever.
 import math
 from typing import Any, Dict, List
 
-SMOOTHING = 0.25                # the newest season's weight in the slope (a year's memory)
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -110,7 +109,8 @@ def fork(kernel: Any, planet: Any, record: bool = True) -> str:
         return choice
     st = stats(kernel)
     st["forks"][choice] = st["forks"].get(choice, 0) + 1
-    planet.society["fork"] = {"cycle": kernel.cycle_count, "choice": choice, "room": room,
+    was = (planet.society.get("fork") or {}).get("choice")
+    planet.society["fork"] = {"cycle": kernel.cycle_count, "choice": choice, "was": was, "room": room,
                               "outward": round(out_value - out_cost, 1), "enough": round(enough_value - enough_cost, 1)}
     return choice
 
@@ -139,8 +139,9 @@ def quarter(kernel: Any) -> List[str]:
             continue
         years = max(1e-6, (kernel.cycle_count - rec["cycle"]) / 100.0)
         slope = (now["S"] - rec["S"]) / years
-        smooth = (1 - SMOOTHING) * rec["slope"] + SMOOTHING * slope
         gen = fertility.generation_of(kernel, max(worlds, key=lambda p: (p.population, p.id)))
+        w = min(1.0, years / max(years, gen))                  # smoothed over its own generation
+        smooth = (1 - w) * rec["slope"] + w * slope
         sign = (smooth > 0) - (smooth < 0)
         rec.update(now, slope=round(smooth, 6), cycle=kernel.cycle_count)
         # a turning is a change of direction that has held for a generation

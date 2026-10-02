@@ -190,9 +190,9 @@ def develop(kernel: Any, planet: Any) -> Optional[str]:
     if planet.citadel_level >= DAUGHTER_CITADEL_TIER or is_diaspora:
         if policy is None:
             policy = planet.growth_policy = choose_policy(kernel, planet)
-            if policy == "steady":
+            if policy == "steady" and (planet.society.get("fork") or {}).get("was") != "steady":
                 st["steady"] += 1
-                _covenant(kernel, planet)
+                _covenant(kernel, planet)                   # a covenant is made once, when a people turns to enough
                 if not is_diaspora:
                     return f"[DEMOGRAPHY] {planet.name} adopted population controls: it will live within its world."
         if policy == "expand" or is_diaspora:
