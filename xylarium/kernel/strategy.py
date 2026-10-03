@@ -72,8 +72,18 @@ def _worths(kernel: Any, who: str, worlds: List[Any], by: Dict[str, List[Any]]) 
     # secure: what the neighbours that can reach it would take, as it reads them
     loss, _ = relations.threat(kernel, who, worlds, by, {}, relations._pressed_share(kernel))
     from xylarium.kernel import technology
-    feared = sum(math.log1p(hostility(kernel, o)) + (1.0 if technology.has(kernel, o, "cyber") else 0.0)
-                 for o in by if o != who)
+    from xylarium.kernel import contact
+    feared = 0.0
+    for o in by:
+        if o == who:
+            continue
+        # its model of a neighbour: what it has done, what it can do to it unseen, and - as far as it understands
+        # that neighbour - what it is now set on (a neighbour turned to growing is coming for room)
+        f = math.log1p(hostility(kernel, o)) + (1.0 if technology.has(kernel, o, "cyber") else 0.0)
+        theirs = of(kernel, o).get("posture")
+        if theirs in ("grow", "secure"):
+            f += contact.intelligibility(kernel, who, o, by) * (1.0 if theirs == "grow" else 0.5)
+        feared += f
     out["secure"] = decide.worth(kernel, loss, m) * (1.0 + feared)
     # hold: its sky lost, its star's years against its horizon
     air = sum((1.0 - float(p.society.get("atmosphere", 1.0))) * p.population for p in worlds)

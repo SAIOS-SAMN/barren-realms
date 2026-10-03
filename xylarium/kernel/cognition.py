@@ -2048,8 +2048,21 @@ class CognitiveOrgan:
             alt = SeatGrow.propose(captain, kernel)
             selected_deed = alt if (alt and cooldowns.get(alt.deed_name, -1) <= cycle) else None
 
+        from xylarium.kernel import learning
+        me = f"captain:{captain.id}"
+        # 4b. EXPERIENCE: what deeds of this kind have brought this captain before (learning.py) - a deed that has
+        # cost it more than it usually fares gives way to what its growing seat proposes, if that has served it better
+        if selected_deed is not None:
+            if learning.multiplier(kernel, me, selected_deed.deed_name) < 1.0:
+                alt = SeatGrow.propose(captain, kernel)
+                if alt is not None and cooldowns.get(alt.deed_name, -1) <= cycle and \
+                        learning.multiplier(kernel, me, alt.deed_name) > learning.multiplier(kernel, me,
+                                                                                            selected_deed.deed_name):
+                    selected_deed = alt
+
         if not selected_deed:
             return ActionResult(success=False, action=ActionType.REST, message="No actionable residual.")
+        learning.record(kernel, me, selected_deed.deed_name)
 
         # 5. DISPATCH THE DEED THROUGH THE KERNEL
         res = cls._execute_deed(selected_deed, captain, kernel)

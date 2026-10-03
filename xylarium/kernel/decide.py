@@ -65,7 +65,7 @@ def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
     m = mind(kernel, biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet),
              strat=fertility.strategy(kernel, planet), home_flux=biosphere.home_flux(planet),
              body_t=biosphere.body_temperature(planet))
-    m = _steadied(kernel, m, knowledge.holder_of_planet(planet))
+    m = dict(_steadied(kernel, m, knowledge.holder_of_planet(planet)), holder=knowledge.holder_of_planet(planet))
     from xylarium.kernel import strategy
     rec = strategy.of(kernel, knowledge.holder_of_planet(planet))     # how its council has chosen to stand
     if rec.get("posture"):
@@ -74,7 +74,8 @@ def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
 
 
 def mind_of_captain(kernel: Any, captain: Any) -> Dict[str, float]:
-    return _steadied(kernel, mind(kernel, getattr(captain, "metabolism", None)), f"captain:{captain.id}")
+    return dict(_steadied(kernel, mind(kernel, getattr(captain, "metabolism", None)), f"captain:{captain.id}"),
+                holder=f"captain:{captain.id}")
 
 
 def rate(kernel: Any, currency: str) -> float:
@@ -96,12 +97,19 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     """The option worth most over its cost, as this mind judges it; None if nothing is worth doing."""
     if not options:
         return None
+    from xylarium.kernel import learning, prices, strategy
+    holder = m.get("holder")
+    # a mind weighs only as many options as its thought allows: those it first judges worth most
+    room = learning.attention(m)
+    if len(options) > room:
+        options = sorted(options, key=lambda o: -(o["value"] - o["cost"]))[:room]
+    # what such choices have brought it before (learning.py), and where its council has chosen to stand (strategy)
+    lesson = [learning.multiplier(kernel, holder, o["name"]) for o in options]
     # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
     # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
-    from xylarium.kernel import prices
-    from xylarium.kernel import strategy
-    nets = [o["value"] * strategy.weight(m, o) - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
-                                            o.get("currency", "SOL")) if o.get("cash") else 0.0) for o in options]
+    nets = [o["value"] * strategy.weight(m, o) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
+                                            o.get("currency", "SOL")) if o.get("cash") else 0.0)
+            for o, lz in zip(options, lesson)]
     scale = max(abs(n) for n in nets) or 1.0
     from xylarium.kernel import scheduler
     rng = scheduler.rng(kernel, "decide", kernel.cycle_count, *salt)     # this universe's own misjudgements
@@ -113,6 +121,7 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     if best is not None:
         st = stats(kernel)
         st["chosen"][best["name"]] = st["chosen"].get(best["name"], 0) + 1
+        learning.record(kernel, holder, best["name"])
     return best
 
 
