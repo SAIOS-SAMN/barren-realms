@@ -78,6 +78,19 @@ def _speed(kernel: Any, home: Any) -> float:
     return s
 
 
+CAPS_AT = (("radio", 3), ("computation", 3), ("medicine", 3), ("fission", 4), ("orbit", 4), ("networks", 4),
+           ("genetics", 4), ("robotics", 4), ("synthesis", 5))
+
+
+def _grant(kernel: Any, who: str, home: Any, idx: int) -> None:
+    """What a people finds in its long ages, as its world allows, by the stage it has reached."""
+    from xylarium.kernel import technology
+    held = technology.stats(kernel)["of"].setdefault(who, {})
+    for cap, at in CAPS_AT:
+        if idx >= at and cap not in held and technology.feasible(kernel, who, cap, home):
+            held[cap] = kernel.cycle_count
+
+
 def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
     """Set a people's world to what its annals carried it to."""
     from xylarium.config import DAUGHTER_CITADEL_TIER
@@ -96,12 +109,7 @@ def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
             pass
     if idx >= 3:
         home.citadel_level = max(home.citadel_level, 1 if idx == 3 else home.citadel_level)
-    from xylarium.kernel import technology
-    held = technology.stats(kernel)["of"].setdefault(who, {})
-    for cap, at in (("radio", 3), ("computation", 3), ("medicine", 3), ("fission", 4), ("orbit", 4),
-                    ("networks", 4), ("genetics", 4), ("robotics", 4), ("synthesis", 5)):
-        if idx >= at and cap not in held and technology.feasible(kernel, who, cap, home):
-            held[cap] = kernel.cycle_count                     # found in its long ages, as its world allowed
+    _grant(kernel, who, home, idx)
     if idx >= 4:
         home.citadel_level = max(home.citadel_level, DAUGHTER_CITADEL_TIER)
     if idx >= 5:
@@ -182,8 +190,11 @@ def season(kernel: Any) -> List[str]:
                 if rng.expovariate(1.0) < hazard:
                     fell = t + left * rng.random()
                 break
+            from xylarium.kernel import mastery as _mastery
             if STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
                 nxt_blocked = True                            # its gravity holds it: it lives on, on its world
+            elif STAGES[nxt] == "crossed" and not _mastery.genome_ready(kernel, who, worlds):
+                nxt_blocked = True                            # it cannot yet live under another sun
             else:
                 nxt_blocked = False
             wait_up = float("inf") if nxt_blocked else rng.expovariate(speed / SPANS[STAGES[nxt]])
@@ -197,6 +208,7 @@ def season(kernel: Any) -> List[str]:
                 break
             t += wait_up
             stage = STAGES[nxt]
+            _grant(kernel, who, home, nxt)                    # what that stage brings, it holds from then on
             rec["passed"].append(stage)
             kind = "ASCENT" if stage == "crossed" else "ERA"
             text = {"farm": "takes up farming", "state": "founds a state", "works": "raises its first great works",

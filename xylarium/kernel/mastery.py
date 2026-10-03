@@ -102,6 +102,17 @@ def theory(kernel: Any, holder: str) -> bool:
     return held and int(intellect.gauge(kernel, holder).get("4", 0)) >= 1
 
 
+def genome_ready(kernel: Any, holder: str, worlds: List[Any]) -> bool:
+    """Can this people live beyond its own star? Its bodies are tuned to its home - the star's light, its world's
+    gravity, heat, radiation and chemistry (biosphere.adapt) - and only a people that can rewrite its own genome
+    (technology: genetics) can retune them for another sun. Life without a genome - information held in fields, not
+    copied molecules (plasmic) - has nothing to rewrite, and is not held back by it."""
+    from xylarium.kernel import biosphere, technology
+    if technology.has(kernel, holder, "genetics"):
+        return True
+    return bool(worlds) and biosphere.metabolism_of(kernel, home(worlds)) == "plasmic"
+
+
 def ftl_law(kernel: Any) -> bool:
     from xylarium.kernel import creation, fundamental
     return fundamental.of(creation.universe(kernel)).ftl
@@ -153,11 +164,13 @@ def season(kernel: Any) -> List[str]:
             if m[key] >= 1.0 > float(prev.get(key, 0.0)):
                 history.event(kernel, kind, f"{who.split(':', 1)[-1]} {text}", sector_id=home(worlds).sector_id, actors=[who],
                               data={"power_w": float(f"{m['power_w']:.3g}")})
-        if law and who not in st["crossed"] and theory(kernel, who) and energy_held_j(worlds) >= E_BRIDGE_J:
+        if law and who not in st["crossed"] and theory(kernel, who) and energy_held_j(worlds) >= E_BRIDGE_J \
+                and genome_ready(kernel, who, worlds):
             st["crossed"][who] = kernel.cycle_count
             history.event(kernel, "FTL_CROSSED", f"{who.split(':', 1)[-1]} folds space and crosses to the stars",
                           sector_id=home(worlds).sector_id, actors=[who],
-                          cause="its mathematics holds the fourth axis, and it can raise the energy to open a passage",
+                          cause="its mathematics holds the fourth axis, it can raise the energy to open a passage, "
+                                "and it can rewrite itself for another sun",
                           data={"kardashev": round(m["kardashev"], 3)})
             logs.append(f"[FRONTIER] {who.split(':', 1)[-1]} crosses the boundary: its ships can now reach other stars.")
     return logs

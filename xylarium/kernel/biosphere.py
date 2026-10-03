@@ -108,6 +108,17 @@ def _world_fit(kernel: Any, metabolism: str, planet: Any) -> F:
     return _surface_fit(metabolism, planet.planet_type)
 
 
+def engineers_itself(kernel: Any, planet: Any) -> bool:
+    """Does the people of this world rewrite its own genome to fit the worlds it settles? A people among the stars
+    that holds genetics (mastery.genome_ready) has made itself congruent with each new star and world - with the
+    life it chooses to live among - so a foreign sun or ground costs it nothing its home did not."""
+    from xylarium.kernel import knowledge, mastery, technology
+    if kernel is None or "technology" not in getattr(kernel, "state", {}):
+        return False
+    holder = knowledge.holder_of_planet(planet)
+    return bool(holder) and technology.has(kernel, holder, "genetics") and mastery.crossed(kernel, holder)
+
+
 def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str, F]:
     """The world's natural capacity for a people of ``metabolism`` (independent of technology)."""
     kernel = _kernel(kernel)
@@ -118,6 +129,9 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
     if civ is not None and not getattr(civ, "light_optimum", None):
         adapt(kernel, civ, planet)             # first sight of a people is its homeworld (genesis, first flight)
     optimum = F(civ.light_optimum) if (civ is not None and civ.light_optimum) else None
+    engineered = civ is not None and metabolism is None and engineers_itself(kernel, planet)
+    if engineered and fl > 0:
+        optimum = fl                           # it rewrites its genome for the light it settles under
     from xylarium.kernel import genome
     if metabolism is None and metab != "plasmic":
         # the people's genome tunes its light (optimum x e^light) and widens it (tolerance, at constant area)
@@ -127,7 +141,8 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
                                                genome.value(planet, "tolerance")))
     else:
         fit = light_fit(metab, fl, planet, optimum)
-    chemistry = F(1) if (civ is not None and civ.home_type == planet.planet_type) else _world_fit(kernel, metab, planet)
+    chemistry = F(1) if (civ is not None and (civ.home_type == planet.planet_type or engineered)) \
+        else _world_fit(kernel, metab, planet)
     from xylarium.kernel import cosmos, worlds
     if kernel is not None and cosmos.is_cosmic(kernel) and getattr(planet, "body", None):
         # in a universe made by physics: what feeds a people is the energy reaching its chemistry here (light through
