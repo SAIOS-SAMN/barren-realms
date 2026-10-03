@@ -74,7 +74,7 @@ def mesozoic(seed: Any, found: Dict[str, Any], a: Any) -> Optional[float]:
     life.ERASURE, life.CLADES = a.erasure, a.clades
     rng = random.Random(a.seed)
     tries = []
-    for _ in range(a.rolls):                       # its dice rolled many times: the spread, then one history
+    for _ in range(a.rolls):                       # its chances drawn many times: the spread, then one history
         got = life.climb(rng, [1e-12, last], start, now + 1.0, float("inf"), ch["mu"])
         tries.append(got["times"][-1] if len(got["times"]) == 2 else None)
     hits = sorted(t for t in tries if t is not None)

@@ -48,7 +48,7 @@ own needs:
               with it: complex molecules (1), shielded under ice or bound in lattices (1/2), plasma (0).
   window      its star's main-sequence life (10 Gyr x M^-2.5); a rogue world's dark biology waits on no star.
 
-Each biology passes Carter's hard steps (4; Watson 2008) on its own dice - each an exponential wait of mean
+Each biology passes Carter's hard steps (4; Watson 2008) on its own initial conditions - each an exponential wait of mean
 10 Gyr / (fit x metals^need) - after the crust settles; the first to finish (inside the window, unsterilised) is the
 world's mind. The expectation of all of it is the audit curve.
 """
@@ -184,9 +184,9 @@ VIABLE = 500                    # Franklin's 50/500 rule: the number that keeps 
 _CACHE: Dict[Tuple[int, int], Dict[str, Any]] = {}       # (seed, cell) -> the cell; (seed,) -> the schedule
 
 
-def dice(seed: Any) -> Any:
-    """The part of a creation key the dice are rolled from: the seed and its kind of Big Bang, not its laws - the same
-    universe rebuilt under other laws rolls the same dice (fundamental.py)."""
+def origin(seed: Any) -> Any:
+    """The part of a creation key its initial conditions are drawn from: the seed and its kind of Big Bang, not its
+    laws - the same universe rebuilt under other laws starts from the same initial conditions (fundamental.py)."""
     parts = str(seed).split(":")
     if len(parts) <= 2:
         return seed
@@ -195,7 +195,7 @@ def dice(seed: Any) -> Any:
 
 def _rng(seed: Any, *parts: Any) -> random.Random:
     from xylarium.kernel import scheduler
-    return random.Random(scheduler.stream(SimpleNamespace(seed=dice(seed)), *parts))
+    return random.Random(scheduler.stream(SimpleNamespace(seed=origin(seed)), *parts))
 
 
 # ---------------------------------------------------------------------- the Big Bang
@@ -396,7 +396,7 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
         names = (rng.randrange(8), rng.randrange(8))
         slot: Dict[str, Any] = {"k": k, "r": round(r, 4), "theta0": round(theta0, 6), "names": names}
         if rng.random() >= 1.0 - math.exp(-n0 * cosmos.density(r) * bb["stars"]):
-            # the space between stars: its rock was gathered by the stars that formed (the dice are rolled as they
+            # the space between stars: its rock was gathered by the stars that formed (its initial conditions are drawn as they
             # were, so every star's own draws stay where they were)
             if rng.random() < BELT_CHANCE:
                 rng.choice(sorted(BELT_TYPES)), rng.randint(*BELT_RESERVE_RANGE)
@@ -627,7 +627,7 @@ def chemistries(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[
 
 def lineage(seed: Any, i: int, j: int, k: int, w: int, slot: Dict[str, Any], world: Dict[str, Any],
             seeded: Optional[Dict[str, float]] = None) -> Optional[Dict[str, Any]]:
-    """A world's life, as the seed's dice give it: for each chemistry, the rungs it climbs and when (each step an
+    """A world's life, as the seed's initial conditions give it: for each chemistry, the rungs it climbs and when (each step an
     exponential wait of its ladder's mean; an impact sends a lineage back to the start of its current rung - life
     itself, once begun, is never undone), and whether it was sterilised. The furthest lineage (soonest, at a tie)
     is the world's life. seeded: region -> the epoch life of that chemistry could arrive from a neighbour."""

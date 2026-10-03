@@ -2,7 +2,7 @@
 Xylarium fundamental: the laws a universe is made under - a few dimensionless constants - and every scale that
 follows from them.
 
-The progenitors (the people who run this engine) choose a universe's laws; its seed rolls its dice. The laws are
+The progenitors (the people who run this engine) choose a universe's laws; its seed fixes its initial conditions. The laws are
 four pure numbers, each the ratio of a force or a mass to another - the only things physics can vary without
 changing what its units mean. Everything the engine once wrote down as a fixed temperature, energy, mass or time
 is one of our universe's values of a scale derived here, times a pure number: change a constant and every layer

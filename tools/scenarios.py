@@ -6,12 +6,12 @@ Scenarios by conditioning, not tuning: what the cosmos looks like if a premise a
 
 No number is set to make a premise true. The engine's declared numbers (docs/DIMENSIONS.md) are given ranges -
 priors - and many universes are drawn from them. Each is first tested on our own system at its own place and time
-(a sun born 9.2 Gyr after the Big Bang, 8 kpc out): its Earth's climb to a mind (many rolls of its dice) and its
+(a sun born 9.2 Gyr after the Big Bang, 8 kpc out): its Earth's climb to a mind (many draws of its chances) and its
 Mars's history. Each universe is then weighted by how well its own formulas produce the premise:
 
   baseline   every universe drawn, unweighted
   dinosaurs  a mind arises on Earth in the Mesozoic window (252-66 Myr ago: 4.32-4.51 Gyr after the Sun's birth),
-             weighted by the share of the dice that put it there
+             weighted by the share of draws that put it there
   green mars Mars is green - liquid water at its surface, life on it - for at least GREEN_MIN at some point
   both       both at once
 
@@ -43,7 +43,7 @@ SUN_BORN = interior.SUN_BORN_GYR
 NOW = interior.SOLAR_AGE_GYR                    # Gyr after the Sun's birth
 MESOZOIC = (NOW - 0.252, NOW - 0.066)
 GREEN_MIN = 0.1                                 # Gyr: long enough to call a world green, not a passing thaw
-TRIALS = 300                                    # rolls of Earth's dice per universe
+TRIALS = 300                                    # draws of Earth's chances per universe
 
 # the priors: (module, name, kind, lo, hi); kind log / lin / choice / int-log
 PRIORS = [

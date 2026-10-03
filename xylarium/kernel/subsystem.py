@@ -53,7 +53,7 @@ def run_season(kernel: Any) -> None:
             continue
         if name == "federal_reserve" and not institutions.reserve_founded(kernel):
             continue                                     # no Reserve has been founded yet (institutions.py)
-        scheduler.lock(kernel, "season", name, kernel.cycle_count)    # each season rolls its own dice
+        scheduler.lock(kernel, "season", name, kernel.cycle_count)    # each season its own stream
         for line in sub.season(kernel) or []:
             kernel.action_logs.append(line)
 

@@ -51,7 +51,7 @@ its region is first witnessed is found as a remnant with lifeless worlds.
 
 MINDS ARISE (Carter's hard steps, creation.py). Every world of every system the cells hold is a candidate for every
 biology that can live on it, each with its own needs - metals (none for plasmic minds, the Big Bang's hydrogen),
-its vulnerability to sterilising supernovae, its star's window - and its own dice, fixed by the seed. There is no
+its vulnerability to sterilising supernovae, its star's window - and its own initial conditions, fixed by the seed. There is no
 one habitable zone: each biology has its own. The clock's year 0 is the epoch the first mind arises; each later one
 arises in its own year on its own world, is named, and begins as foragers (ways.py).
 """
@@ -200,7 +200,7 @@ CURVE_STEP = 0.25               # Gyr between points of the expectation curve (c
 
 def schedule(kernel: Any) -> Dict[str, Any]:
     """Every mind the home galaxy raises before the horizon, on the worlds its cells hold, with the expectation the
-    dice are drawn from (the audit of the scales). A pure function of the seed (creation.schedule)."""
+    initial conditions are drawn from (the audit of the scales). A pure function of the seed (creation.schedule)."""
     from xylarium.kernel import creation
     return creation.schedule(cosmos_seed(kernel))
 
@@ -864,7 +864,7 @@ def _name(kernel: Any, rec: Dict[str, Any]) -> str:
 
 
 def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
-    """A mind arises on the world the Big Bang's dice gave it, in the biology that finished its hard steps first. Its
+    """A mind arises on the world the Big Bang's initial conditions gave it, in the biology that finished its hard steps first. Its
     own system comes onto the map, nothing more: the rest of its sky is description until someone sails into it.
     Natural selection has given it its body: a variable world (a tilted axis, a flaring red dwarf) breeds
     r-strategists, a steady one K-strategists."""

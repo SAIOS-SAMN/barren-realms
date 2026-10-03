@@ -411,7 +411,7 @@ class AIManager:
         cleaved_count = getattr(captain, "cleaved_count", 0) + 1
         captain.cleaved_count = cleaved_count
 
-        # Manifold Walk: an offshoot inherits with variation - mutation is chance, not choice (the only dice here)
+        # Manifold Walk: an offshoot inherits with variation - mutation is chance, not choice (the only chance here)
         p_map = {
             AIPersonality.TRADER: [AIPersonality.INDUSTRIALIST, AIPersonality.TRADER, AIPersonality.MERCENARY],
             AIPersonality.INDUSTRIALIST: [AIPersonality.TRADER, AIPersonality.INDUSTRIALIST],

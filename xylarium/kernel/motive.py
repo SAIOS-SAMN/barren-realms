@@ -1,5 +1,5 @@
 """
-Xylarium motive: what a captain sees as worth doing - so it can choose instead of rolling dice.
+Xylarium motive: what a captain sees as worth doing - so it chooses by what it values, not by chance alone.
 
 A captain's choices go through the one rule (decide.choose): every option priced in what it costs and what it is
 worth, judged through the captain's own mind (its noise: a hot, noisy mind misjudges more; a fluid one less). The

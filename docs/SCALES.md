@@ -48,7 +48,7 @@ Every world of every system is a candidate, for every biology that can live on i
 biology has its own needs: metals (carbon life and lattice minds fully, ice-dwellers half - oxygen came early -
 plasmic minds none: they are the Big Bang's hydrogen), its tolerance of sterilising supernovae (plasma none,
 molecules fully), its star's window (a rogue's dark life waits on no star). Each passes Carter's four hard steps on
-its own dice; the first to finish is the world's mind. There is no single habitable zone.
+its own initial conditions; the first to finish is the world's mind. There is no single habitable zone.
 
 Seed 7 (measured before the giant-branch window): the first mind at 6.02 Gyr - plasmic, in a gas giant 2.7 kpc from the core under a red dwarf; the second
 0.31 Gyr later (cryogenic). ~1,850 minds by the 30 Gyr horizon, ~82 by 13.8 Gyr: half plasmic, a third

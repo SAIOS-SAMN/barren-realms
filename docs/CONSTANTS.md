@@ -91,7 +91,7 @@ measures how far each moves the universe.
 Every temperature, energy, pressure, density, stellar mass, light and lifetime the funnel uses is now our universe's
 value of a scale computed from four dimensionless constants - alpha, the electron-to-proton mass ratio, alpha_G and
 hydrogen's fusion yield - times a pure number. The progenitors change a law in the genesis key
-(`cosmic:teeming:measured:alpha=1.02`) and the same dice rebuild the universe under it: boiling points, bond
+(`cosmic:teeming:measured:alpha=1.02`) and the same initial conditions rebuild the universe under it: boiling points, bond
 energies, the colours of starlight that drive chemistry, the mass and life of stars, the half-lives of uranium and
 thorium, the density of rock and the speed of a body's thought all move together. No constant downstream has to be
 edited by hand.

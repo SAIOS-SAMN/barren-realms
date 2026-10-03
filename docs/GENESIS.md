@@ -4,7 +4,7 @@
 **every people lives on the world it evolved on** and nothing is spacefaring:
 
 * every civilization is at citadel 0 on its homeworld, numbering what its world feeds before industry (its
-  citadel-0 carrying capacity - not a dice roll), Sol's Terrans included, with the same vault, guns and garrison
+  citadel-0 carrying capacity - not a draw of chance), Sol's Terrans included, with the same vault, guns and garrison
   ranges as everyone else (Terra's old 50k vault and 1000 fighters were a gift of the settled board);
 * there are no starports, no ships, no companies, no great powers (the Imperium, the Choir), no genesis realms;
 * the worlds, stars, crusts, biospheres, natives and ruins are as physics made them; the money institutions (the
@@ -120,7 +120,7 @@ growing over a generation of living together), policing is ~20 per 1000 inhabita
 what a head of that world produces, paid from its treasury each quarter, and the resisting share withholds its work.
 Unpaid policing becomes unrest; unrest that reaches a quarter's whole need throws the occupier out, and the world
 is its people's own again. Orbital assaults fire their expected volleys and ground invasions resolve by Lanchester's
-square law - no dice in either.
+square law - no chance in either.
 
 ## A people's institutions (society.py)
 

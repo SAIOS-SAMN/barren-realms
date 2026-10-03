@@ -25,7 +25,7 @@ assimilated. What changes is who rules them, and what that rule costs:
                the occupier out - the world is its people's own again (a free people, or the people it was taken
                from). Paid policing lets unrest fade by half each quarter.
 
-Assault and invasion themselves resolve by Lanchester's square law (expected outcome, no dice): strength against
+Assault and invasion themselves resolve by Lanchester's square law (expected outcome, no chance): strength against
 strength, the winner keeping sqrt(A^2 - D^2).
 """
 

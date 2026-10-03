@@ -27,7 +27,7 @@ on which shape; it takes the numbers as that shape's measurement and computes ev
 
 Holding G, hbar, c and k fixed keeps the engine's units (solar masses, AU, years, kelvin) and Kepler's law; the
 particle masses carry the change. Progenitors change a law with a genesis such as `cosmic:teeming:measured:alpha=1.02`
-and rebuild the universe from the same dice (creation.dice): one star's mass draw, one orbit, one impact - now under
+and rebuild the universe from the same initial conditions (creation.origin): one star's mass draw, one orbit, one impact - now under
 other physics. `tools/progenitor.py` compares universes so made.
 
 ## The ledger

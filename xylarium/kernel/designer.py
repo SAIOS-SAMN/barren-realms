@@ -25,7 +25,7 @@ Nothing about a design is balanced. Three laws bound it:
     it was aimed (an error of (1 - u) of the change), and every edit spills into the axes not understood
     (pleiotropy: the edit's size shared equally over the six axes, by what is not understood of each). Previews
     show what is known as values, what is half-known as ranges, and the rest as mystery; the seeding reveals
-    it - with this universe's own dice (scheduler.rng), so the same design in the same universe comes out the same.
+    it - with this universe's own stream of chance (scheduler.rng), so the same design in the same universe comes out the same.
   * every deviation costs: the price is the edit distance (in additive deviations) at a habitat's price, along the
     designer's learning curve (genome editing's cost multiplier), plus the vats for the founders.
 
@@ -107,7 +107,7 @@ def expect(kernel: Any, holder: Optional[str], asked: Dict[str, float], full: bo
 def build(kernel: Any, holder: Optional[str], asked: Dict[str, float], full: bool = False,
           rng: Any = None) -> Dict[str, float]:
     """The genome a designer gets: the aim, and - without `rng` - nothing more (the expectation); with this
-    universe's dice, what it actually gets (aim + the spread of what it does not understand). The Progenitor's
+    universe's stream of chance, what it actually gets (aim + the spread of what it does not understand). The Progenitor's
     hand at genesis (`full`) gets exactly what it asks."""
     exp = expect(kernel, holder, asked, full)
     return {a: round(e["aim"] + (rng.gauss(0.0, e["sd"]) if rng is not None and e["sd"] > 0 else 0.0), 6)

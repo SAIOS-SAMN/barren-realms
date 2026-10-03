@@ -1,5 +1,5 @@
 """
-Xylarium scheduler: minds act when they get to it, and their dice are locked to the universe.
+Xylarium scheduler: minds act when they get to it, and their chances are locked to the universe.
 
 EVENTS. A mind acts at its own cadence, not on the engine's: a captain's next turn comes 1/speed cycles after its
 last, where speed is its substrate's kinetic pace (laws.cognition: hot minds are quick, cold minds slow). A turn
@@ -12,8 +12,8 @@ times as quick as ours acts six times a cycle.
 The engine's compute budget (config.AI_TURN_BUDGET) caps how many minds act in one cycle; the rest are not
 dropped, they are first in line the next cycle (they are the most overdue).
 
-LOCKED-IN CHANCE. Minds stay probabilistic - they roll their dice - but every roll comes from a stream fixed by
-(universe seed, what is acting, when). lock() seeds the dice before each mind's turn, each phase of the cycle and
+LOCKED-IN CHANCE. The universe is deterministic; minds are probabilistic - but every draw comes from a stream fixed by
+(universe seed, what is acting, when). lock() seeds the stream before each mind's turn, each phase of the cycle and
 each season: the same universe replays identically at any velocity, and a change to one mind's choices does not
 shift another's luck. stream() gives the same seed for code that keeps its own random.Random.
 """
@@ -38,7 +38,7 @@ def stream(kernel: Any, *parts: Any) -> int:
 
 
 def lock(kernel: Any, *parts: Any) -> None:
-    """Seed the dice for what acts next."""
+    """Seed the stream of chance for what acts next."""
     random.seed(stream(kernel, *parts))
 
 
@@ -71,7 +71,7 @@ def pending(kernel: Any, kind: Optional[str] = None) -> List[Tuple[int, str, str
 
 
 def run_due(kernel: Any, kinds: Tuple[str, ...], budget: Optional[int] = None) -> int:
-    """Run every event of these kinds due by the end of this cycle, in time order, each with its own dice;
+    """Run every event of these kinds due by the end of this cycle, in time order, each with its own stream;
     at most `budget` of them (the rest stay first in line)."""
     st = stats(kernel)
     q = st["queue"]

@@ -50,10 +50,20 @@ cargo, turns or research - doubles the wait, up to a fiscal quarter; any turn th
 `config.AI_TURN_BUDGET` caps minds per cycle; the overflow is first in line the next cycle. Time within a cycle is
 counted in `scheduler.MOMENTS` (1000).
 
+## Determined universe, probabilistic minds
+
+The universe is a function of its seed and its laws. Its initial conditions - every star, orbit, world and the
+climb of life on it - are drawn once from the seed, keyed by place (creation.origin, scheduler.rng keyed by cell),
+never by when anyone looks; after that, physics is evaluated in closed form at each epoch (orbits from their
+elements, a star from its age, a world from its age, the galaxy's turning as an angle). No physical season draws
+chance at run time (tests/test_determined.py enforces it). What is probabilistic is what lives: a mind's choices,
+a people's history (annals, prehistory), biology among organisms (drift, blight), contests between agents - each
+on its own stream.
+
 ## Locked-in chance
 
-Minds stay probabilistic, but every roll is drawn from a stream fixed by (universe seed, what acts, when):
-`scheduler.lock(kernel, *parts)` seeds the dice
+Minds stay probabilistic, but every draw is drawn from a stream fixed by (universe seed, what acts, when):
+`scheduler.lock(kernel, *parts)` seeds the stream of chance
 
 * at the start of each cycle (`"cycle"`),
 * before each mind's turn (`"mind", captain, moment`),

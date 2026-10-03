@@ -2,7 +2,7 @@
 The progenitors' bench: rebuild universes under other laws and measure what changes - never one run, always a spread.
 
   python3 tools/progenitor.py --seeds 1-5                          # an ensemble of our universe's laws
-  python3 tools/progenitor.py --seeds 1-5 --laws alpha=1.02         # the same dice under stronger electromagnetism
+  python3 tools/progenitor.py --seeds 1-5 --laws alpha=1.02         # the same initial conditions under stronger electromagnetism
   python3 tools/progenitor.py --seed 7 --sensitivity                # each law and declared number nudged: how far
                                                                     # the universe's outcomes move
   python3 tools/progenitor.py --earth                               # Earth as a test: its place and time, our laws

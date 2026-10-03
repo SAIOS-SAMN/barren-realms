@@ -22,7 +22,7 @@ until a mind arises; a people then lives on the universal clock and reckons on i
 * **No Earth baseline.** A number is a physical law, a unit, or a declared assumption (docs/CONSTANTS.md). Earth is
   a test the engine should be able to reproduce at Earth's own place and time - a quiet stretch of a disc, 8 kpc out,
   in a sparse group, 13.8 Gyr after the Big Bang - not the ruler of anything.
-* **Luck and timing.** Every layer draws its own dice from the seed; nothing is placed. Whether a world gets life,
+* **Luck and timing.** Every layer draws its own initial conditions from the seed; nothing is placed. Whether a world gets life,
   complex life, a mind - and when - is the outcome.
 * **Singularities are never entered.** The galactic centre bounces at finite density (Einstein-Cartan, a declared
   hypothesis); only what a black hole does outside it - light in its active episodes, jets, tidal disruption,
@@ -53,7 +53,7 @@ until a mind arises; a people then lives on the universal clock and reckons on i
 ## Since: the laws, the interiors, the geometry, life as information
 
 * **Laws** (fundamental.py): four dimensionless constants set every scale; change one in the genesis key and the
-  same dice rebuild the universe under it.
+  same initial conditions rebuild the universe under it.
 * **Interiors and orbits** (interior.py, orbits.py): radiogenic heat from the isotopes the star was born with,
   mantle and core convection (the core's dynamo while it outruns its adiabat), tides from host stars and giants;
   eccentricities stirred, forced by neighbours and damped; inclinations; spins braked to lock; giants' moons in
@@ -69,7 +69,7 @@ until a mind arises; a people then lives on the universal clock and reckons on i
 ## Scenarios by conditioning (tools/scenarios.py)
 
 No premise is written in as a constant. The declared numbers are given ranges; hundreds of universes are drawn;
-each is tested on our own system at its own place and time (Earth's climb by many rolls of its dice, Mars's
+each is tested on our own system at its own place and time (Earth's climb by many draws of its chances, Mars's
 history); universes are weighted by how well their own formulas produce a premise ("a mind in the Mesozoic",
 "Mars green at some time"); and the galaxies of the weighted universes are built and measured. Worlds can be
 stripped of air or broken apart (ruin.py) only by peoples and captains who choose it, at the energy each world's own

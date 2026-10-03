@@ -1,5 +1,5 @@
 """
-One universal clock: orbits are functions of time, minds act at their own pace, and every roll of the dice is locked
+One universal clock: orbits are functions of time, minds act at their own pace, and every draw of chance is locked
 to the universe - the same seed makes the same universe however it is run.
 """
 
@@ -27,7 +27,7 @@ class TestLockedChance(unittest.TestCase):
         scheduler.lock(k, "x")
         self.assertEqual(a, random.random())
 
-    def test_universe_ignores_the_callers_dice(self):
+    def test_universe_ignores_the_callers_chance(self):
         """Whatever the global random state before each cycle, the universe rolls its own."""
         runs = []
         for outside in (1, 99):
@@ -70,7 +70,7 @@ class TestScheduler(unittest.TestCase):
         scheduler.run_due(self.k, ("test",))
         self.assertEqual([c[1] for c in self.calls][:1], ["quick"])
 
-    def test_each_event_has_its_own_dice(self):
+    def test_each_event_has_its_own_stream(self):
         t = scheduler.now_moment(self.k)
         scheduler.at(self.k, t, "test", "a")
         scheduler.run_due(self.k, ("test",))

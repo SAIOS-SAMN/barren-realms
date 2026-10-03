@@ -2337,7 +2337,7 @@ class GameKernel:
         if self.cycle_count % CHRONICLE_ERA_INTERVAL == 0:
             chronicle_mod.galactic_history(self)
 
-        # 1. AI Rival turns: each mind at its own pace, its dice locked to it (scheduler.py)
+        # 1. AI Rival turns: each mind at its own pace, its stream of chance locked to it (scheduler.py)
         scheduler_mod.minds(self)
         scheduler_mod.lock(self, "world", self.cycle_count)
 
