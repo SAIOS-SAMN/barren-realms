@@ -77,10 +77,10 @@ def age_of_people(kernel: Any, planet: Any) -> Optional[Dict[str, float]]:
         return None
     from xylarium.kernel import cosmos
     born = int(rose.get("cycle", 0)) if "cycle" in rose else \
-        int(round((float(rose["epoch"]) - float(cosmos.stats(kernel)["epoch0"])) * 1e9 / cosmos.ruler(kernel) * 100))
+        cosmos.cycle_at(kernel, float(rose["epoch"]))
     span = max(0, kernel.cycle_count - born)
     return {"years": round(span / CYCLES_PER_YEAR, 2), "local_years": round(local_years(kernel, planet, span), 2),
-            "galactic_myr": round(span / CYCLES_PER_YEAR * cosmos.ruler(kernel) / 1e6, 3)}
+            "galactic_myr": round((cosmos.deep_gyr(kernel) - cosmos.deep_gyr(kernel, born)) * 1e3, 3)}
 
 
 def velocity_of(kernel: Any, planet: Any) -> Dict[str, float]:

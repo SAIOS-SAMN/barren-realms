@@ -51,7 +51,8 @@ def season(kernel: Any) -> List[str]:
     since = st["since"]
     for who in ps:
         since.setdefault(who, kernel.cycle_count)             # when it began to leak (first seen with works)
-    now_years = kernel.cycle_count / 100.0 * cosmos.ruler(kernel)   # deep years since the clock began
+    now_years = (cosmos.deep_gyr(kernel) - float(cosmos.stats(kernel).get("epoch0", 0.0))) * 1e9   # deep years since
+                                                                    # the clock began
     logs: List[str] = []
     for a in ps:
         for b in ps:
@@ -68,7 +69,7 @@ def season(kernel: Any) -> List[str]:
                 * (10.0 if technology.has(kernel, a, "orbit") else 1.0)      # apertures, and above the sky
             if d > reach_kpc(power[b] * LEAK_SHARE, ears):
                 continue
-            leaking_years = now_years - since[b] / 100.0 * cosmos.ruler(kernel)
+            leaking_years = (cosmos.deep_gyr(kernel) - cosmos.deep_gyr(kernel, since[b])) * 1e9
             if leaking_years < d * LY_PER_KPC:                   # its first light has not arrived yet
                 continue
             st["heard"].setdefault(a, {})[b] = {"cycle": kernel.cycle_count, "kpc": round(d, 4),

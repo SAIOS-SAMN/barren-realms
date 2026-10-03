@@ -181,16 +181,66 @@ def pace(kernel: Any) -> str:
     return p if p in PACES else "neighbourly"
 
 
-def ruler(kernel: Any) -> float:
-    """Deep years per clock year: a law of this universe, chosen once at its genesis."""
+def ceiling(kernel: Any) -> float:
+    """The fastest deep time runs (deep years per clock year): the pace chosen at genesis - how fast the galaxy turns
+    while no people is in the middle of its history."""
     return PACES[pace(kernel)]
 
 
-def deep_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
-    """The deep-time epoch (Gyr since the Big Bang) at a clock cycle."""
+def ruler(kernel: Any) -> float:
+    """Deep years per clock year now (tempo.py sets it from the living; the ceiling until it has)."""
+    segs = stats(kernel).get("tempo") if "cosmos" in getattr(kernel, "state", {}) else None
+    return float(segs[-1][2]) if segs else ceiling(kernel)
+
+
+def _segment(kernel: Any, c: float) -> List[float]:
     st = stats(kernel)
+    segs = st.get("tempo")
+    if not segs:
+        return [0, float(st.get("epoch0", 0.0)), ceiling(kernel)]
+    lo, hi = 0, len(segs) - 1
+    if c < segs[0][0]:
+        return segs[0]
+    while lo < hi:                                        # the last segment begun by cycle c
+        mid = (lo + hi + 1) // 2
+        if segs[mid][0] <= c:
+            lo = mid
+        else:
+            hi = mid - 1
+    return segs[lo]
+
+
+def deep_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
+    """The deep-time epoch (Gyr since the Big Bang) at a clock cycle: deep time accumulated through every change of
+    the clock's rate (tempo.py) - the camera's speed changes, never what it films."""
     c = kernel.cycle_count if cycle is None else cycle
-    return float(st.get("epoch0", 0.0)) + (c / 100.0) * ruler(kernel) / 1.0e9
+    c0, d0, rate = _segment(kernel, c)
+    return float(d0) + (c - c0) / 100.0 * float(rate) / 1.0e9
+
+
+def cycle_at(kernel: Any, epoch: float) -> int:
+    """The clock cycle at which deep time reaches an epoch (at the rates set so far; the current rate beyond)."""
+    st = stats(kernel)
+    segs = st.get("tempo") or [[0, float(st.get("epoch0", 0.0)), ceiling(kernel)]]
+    seg = segs[0]
+    for s in segs:
+        if float(s[1]) <= epoch:
+            seg = s
+    return int(round(seg[0] + (epoch - float(seg[1])) * 1.0e9 / float(seg[2]) * 100.0))
+
+
+def set_rate(kernel: Any, rate: float) -> None:
+    """From this cycle on, deep time runs at `rate` deep years per clock year."""
+    st = stats(kernel)
+    now = kernel.cycle_count
+    d = deep_gyr(kernel, now)
+    segs = st.setdefault("tempo", [])
+    if not segs:
+        segs.append([0, float(st.get("epoch0", 0.0)), ceiling(kernel)])   # the clock ran at the ceiling until now
+    if segs and segs[-1][0] == now:
+        segs[-1] = [now, d, float(rate)]
+    else:
+        segs.append([now, d, float(rate)])
 
 
 # ---------------------------------------------------------------------- minds arise (creation.py)

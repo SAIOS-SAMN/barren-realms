@@ -60,6 +60,17 @@ chance at run time (tests/test_determined.py enforces it). What is probabilistic
 a people's history (annals, prehistory), biology among organisms (drift, blight), contests between agents - each
 on its own stream.
 
+## Tempo: the camera's speed (tempo.py)
+
+Deep time is the universe's; the clock only films it, and how fast it films changes nothing it films. It runs as
+fast as it can without stepping over what the living are in the middle of - an integrator's rule (a Courant
+condition): no clock year holds more than 1/FRAMES of the shortest wait any living people has to its next turning
+(its next bridge of history, in its own generations at its own minds' pace, or its fall). A people held from the
+sky by its world waits only on its fall; a people among the stars holds nothing back. With no people mid-history,
+deep time runs at the pace chosen at genesis (cosmos.ceiling): the galaxy turns fast between minds and slows to
+watch each one rise. Changes of rate are kept as segments (cosmos.set_rate), so deep_gyr(cycle) is exact and
+cycle_at(epoch) inverts it.
+
 ## A world: its physics, and what minds did to it (imprint.py)
 
 A world in play is its base - what physics makes it at its age (worlds.state_of_planet, recomputed only when its
