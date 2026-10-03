@@ -21,6 +21,24 @@ Klein). In that reading these numbers are the shape of the dimensions too small 
 begins. The engine does not claim which shape; it takes the numbers as that shape's measurement, and everything it
 computes is the projection of it at the scales a world and a people live at (docs/DIMENSIONS.md).
 
+OUR PHYSICS OF TIME, GRAVITY AND ORIGIN (held as true in this universe, not offered as options):
+
+  TWO TIMES     Spacetime sits in its conformal embedding with two time directions (Cl(4,2); Bars' two-time
+                physics). One is gauge: COSMIC time (cosmos.deep_gyr), the direction creation reads - stars forming
+                and dying, minds waking - which no one lives in. The other is lived: PROPER time, kept by every place
+                on its own clock (clocks.py). Ordinary motion in three dimensions and one lived time is what remains
+                once the gauge is fixed, so orbits stay exact closed-form functions of whatever clock reads them.
+  NO SHARED NOW Peoples are ordered by the heights of their ledgers, h = 1 + max(own, other's) where their
+                worldlines meet; unlinked peoples are concurrent, permanently (Mycelium law 9).
+  ONE MOTION    Motions on one plane compose as t1 (+) t2 = (t1 + t2)/(1 + k t1 t2), k the plane's square: turns,
+                Einstein's boosts, and the null flow where amounts add - the fold (geometry.flow, clocks.fold).
+  TORSION       Matter's spin couples to torsion (Einstein-Cartan). At the Cartan density torsion repels and
+                collapse bounces: no singularity. What crosses a black hole's horizon becomes, on the other side,
+                the white hole that is a child universe's Big Bang, carrying the records of what fell (blackhole.py);
+                torsion is never destroyed, so information never is (Mycelium A.8). Our universe began as the white
+                hole of a parent's black hole. Turns return and boosts never do (Mycelium, A.7 refused): the arrow of
+                time is the metric's indefinite signature, not a declaration.
+
 UNITS. G, hbar, c and k are held fixed (the engine's solar masses, AU, years and kelvin keep their meaning, and
 Kepler's law with them); the proton and electron masses carry the change: m_p ~ alpha_G^(1/2), m_e = beta m_p.
 Each scale is a ratio to its value in our universe (1 for our laws exactly), with a = alpha / alpha_ours,

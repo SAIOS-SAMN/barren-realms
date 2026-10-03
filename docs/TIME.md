@@ -1,50 +1,55 @@
-# Time: many clocks, meeting when peoples meet
+# Time: two directions, a clock in every place, and peoples ordered by their ledgers
 
-Physics has no universal present. Every place's clock runs at its own rate, and events far apart have no agreed
-order until a signal joins them. Xylarium follows that: the universe is a function of its seed and laws evaluated
-at any time; what needs a clock is only what lives in it, and each part keeps its own.
+This is our universe's physics of time, held as true here (fundamental.py, Mycelium's laws 9 and A.7-A.10, the
+white-hole source of `physics::source`).
 
-## The clocks
+## Two times
 
-| Clock | What it times | How it runs |
+Spacetime lives in its conformal embedding with two time directions (Cl(4,2): two-time physics). One is gauge and
+one is lived.
+
+| Time | What it is | Who reads it |
 |---|---|---|
-| Universe and galaxy (`cosmos.deep_gyr`) | stars forming and dying, minds waking, the galaxy's turning | the pace chosen at genesis (`cosmos.ceiling`), slowed only for peoples that share it (`tempo.py`) |
-| A people's own (`clocks.py`) | a people no one has yet observed: its history, its world's star, climate and ageing | its own history's pace - a few frames to each of its turnings (`tempo.wait_years / FRAMES`) |
-| Orbits | where every body is | closed form at whatever time a clock reads: exact, never stepped |
+| Cosmic (`cosmos.deep_gyr`) | the gauge direction: the frontier at which creation happens | star formation and death, minds waking, the galaxy's turning |
+| Proper (`clocks.place_now`) | a clock kept by every place where life has woken, paced by the peoples living there, at the galaxy's pace where none do | that place's star, climate and world ageing (`cosmos.deep_gyr(kernel, sector_id=...)`) |
 
-A place reads the clock of the people that keeps its own there (`cosmos.deep_gyr(kernel, sector_id=...)`):
-`worlds.world_age`, a star's phase and years left, the climate's swing. Everywhere else reads the galaxy's.
+A place's clock never jumps: it keeps its reading through every change of pace. Two places never need to agree on
+a now. Orbits are closed-form functions of whatever clock reads them, so they stay exact.
 
-## When clocks meet
+## Peoples are ordered by their ledgers
 
-Two clocks must agree only where their peoples interact. A people keeps its own clock until another can see it:
+A people's time is the height of its ledger (`clocks.height`): one receipt for each year it lives, and wherever its
+worldline meets another's - ships or words meet (contact), light is heard (signals), space is folded - its next
+receipt cites the other's head:
 
-- it hears another people's light or is heard (`signals.py`);
-- it meets another people (`contact.py`);
-- it crosses to the stars (`mastery.py`).
+    h = 1 + max(h_own, h_other)
 
-Then its clock meets the galaxy's (`clocks.sync`, a CLOCKS_MEET event): the years of the galaxy's now that its
-history has not yet lived are lived at the level of history (`annals.py`, against the people's own now), and from
-then on it shares the galactic now with everyone it can reach - and holds the galactic clock to its own turnings
-(`tempo.py`).
+Peoples never linked are concurrent, permanently. No decision waits on an order between them, and nothing is ever
+"caught up": the ancients' millions of years and a young people's thousands are never laid on one line. They meet
+where their worldlines meet (WORLDLINES_MEET).
 
-So a rising people lives its history in full, year by year, while the galaxy runs on at its own pace; no single
-people freezes the galaxy, and nothing observable is out of order: no one could have seen it before its clock met
-theirs.
+## One law of motion; the fold
 
-## Stages
+Motions on one plane compose as `t1 (+) t2 = (t1 + t2) / (1 + k t1 t2)`, `k` the square of the plane
+(`geometry.flow`):
 
-1. **Built.** Per-people clocks for peoples no one can observe; places read their people's clock; clocks meet at
-   signals, contact and crossing; the galaxy runs at its pace; annals live each people's history against its own
-   clock.
-2. **Causal windows.** Two peoples a distance d apart can disagree by up to d / c without contradiction - each sees
-   the other as it was when its light left. Let peoples in contact keep their own clocks within that window, each
-   seeing the other's state as of the light-time ago (signals already date what is heard), and meet only when
-   their ships or words actually cross.
-3. **Lowest time first.** Advance whichever clock is furthest behind among those that can affect one another
-   (conservative parallel discrete-event simulation), so far-apart regions run independently and cost nothing
-   until they meet.
-4. **Proper time.** Each world's clock also carries its gravitational and kinematic rate (`geometry.lapse`): a
-   world deep in its galaxy's well ages slower than one on the rim, by the metric.
-5. **A progenitor's law.** Time with more than one dimension, offered as a law a universe can be begun under -
-   knowing that it costs predictability, orbits included.
+- `k < 0`, turns: tangents add, and turns return - orbits are periodic;
+- `k > 0`, boosts: Einstein's addition - no voyage reaches light, and boosts never return: the arrow of time;
+- `k = 0`, the null flow: amounts simply add. The fold is the null flow: no proper time passes for the one who
+  folds, and the passage is written in its ledger (`clocks.fold`).
+
+## Torsion, the black hole and the white hole
+
+Matter's spin couples to torsion (Einstein-Cartan). At the Cartan density torsion repels and collapse bounces.
+What crosses a black hole's horizon becomes, on the other side, the white hole that is a child universe's Big Bang
+(`blackhole.child`, CHILD_UNIVERSE), carrying the matter and the records of what fell: torsion is never destroyed,
+so information never is. The conformal inversion that swaps near and far is what turns the sink into its source.
+Our universe began as the white hole of a parent's black hole (BIG_BANG).
+
+## Still to build
+
+- Proper time from the metric as well as from watchers: a place deep in its galaxy's well (`geometry.lapse`) runs
+  slower by the metric's own rate.
+- The fold's cost and reach as a null flow's geometry, beyond its timing.
+- Descending into the child universe: a progenitor seat that begins the universe beyond our centre's horizon from
+  what crossed it.
