@@ -130,7 +130,7 @@ class TestEachBiologyItsOwnNeeds(unittest.TestCase):
             for p in [p for s in k.sectors.values() for p in s.planets if p.civilization and p.id not in judged]:
                 judged.add(p.id)                           # judged as it wakes: a world may lose its sea later
                 self.assertGreaterEqual(biosphere.carrying_capacity(k, p), creation.VIABLE)  # Franklin's 500
-        self.assertGreaterEqual(len(judged), 15)           # the witnessed fifteen, and what the unobserved raised
+        self.assertEqual(len(judged), 15)
 
 
 class TestEveryStarItsOwn(unittest.TestCase):
@@ -176,18 +176,3 @@ class TestChartedWhereTheyGo(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
-
-class TestTheUnobserved(unittest.TestCase):
-    def test_a_share_is_witnessed_and_the_rest_wakes_where_it_can(self):
-        share = creation.share_witnessed(7)
-        self.assertAlmostEqual(share, 1.0 / creation.WITNESSED, delta=0.01)
-        sched = creation.schedule(7)
-        self.assertGreater(sched["curve"][-1], len(sched["minds"]))     # the whole galaxy's expectation, not the sample's
-        rec = creation.potential(7, 8.0, 1)
-        self.assertIsNotNone(rec)
-        self.assertNotIn(tuple(rec["cell"]), set(creation.witnessed(7)))
-        slot = creation.cell(7, *rec["cell"])[rec["k"]]
-        self.assertGreater(slot["born"] + creation.lifetime(slot, creation.laws(7)), 8.0)   # its star still shines
-        world = creation.world_at(7, slot, slot["worlds"][rec["w"]], 8.0)
-        self.assertGreaterEqual(creation.foragers(world, rec["metab"], slot), creation.VIABLE)
-        self.assertEqual(rec, creation.potential(7, 8.0, 1))             # the seed's, every time

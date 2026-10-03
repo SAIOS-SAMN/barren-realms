@@ -804,8 +804,7 @@ def genesis(kernel: Any) -> None:
     institutions.genesis(kernel)                       # no money, bank, exchange or Reserve until founded
     st = stats(kernel)
     sched = schedule(kernel)
-    st["curve"] = sched["curve"]
-    st["ever"] = round(sched["curve"][-1], 1) if sched["curve"] else 0    # the whole galaxy's, by the horizon
+    st["curve"], st["ever"] = sched["curve"], len(sched["minds"])
     st["big_bang"] = dict(creation.big_bang(cosmos_seed(kernel)))
     st["minds"] = sched["minds"][:WINDOW]
     if not st["minds"]:
@@ -829,46 +828,10 @@ def genesis(kernel: Any) -> None:
     _due(kernel)
 
 
-UNSEEN_PER_STEP = 4             # potential minds woken in one step at most (a long leap of the clock catches up over
-                                # a few steps; the expectation is kept, not dropped)
-
-
-def _unseen(kernel: Any, now: float) -> List[str]:
-    """The minds of the galaxy no one has worked out: as the clock runs, the unobserved share of the expectation
-    (the curve, less the witnessed cells' share) accumulates, and each time it passes the next of the seed's
-    exponential draws a potential mind wakes where the dice look (creation.potential) - its world built only then."""
-    from xylarium.kernel import creation, scheduler
-    st = stats(kernel)
-    pot = st.setdefault("unseen", {"acc": 0.0, "E": None, "next": None, "draws": 0, "woken": []})
-    seed = cosmos_seed(kernel)
-    e = expected_by(kernel, now)
-    if pot["E"] is None:
-        pot["E"] = e
-    pot["acc"] += max(0.0, e - pot["E"]) * (1.0 - creation.share_witnessed(seed))
-    pot["E"] = e
-    logs: List[str] = []
-    for _ in range(UNSEEN_PER_STEP):
-        if pot["next"] is None:
-            pot["next"] = scheduler.rng(kernel, "unseen", pot["draws"]).expovariate(1.0)
-        if pot["acc"] < pot["next"]:
-            break
-        pot["acc"] -= pot["next"]
-        pot["next"] = None
-        pot["draws"] += 1
-        rec = creation.potential(seed, now, pot["draws"], pot["woken"])
-        if rec is None:
-            continue
-        pot["woken"].append(rec["cell"])
-        line = arise(kernel, rec)
-        if line:
-            logs.append(line)
-    return logs
-
-
 def _due(kernel: Any) -> List[str]:
     st = stats(kernel)
+    logs = []
     now = deep_gyr(kernel)
-    logs = _unseen(kernel, now) if st.get("curve") else []
     while True:
         if st["next"] >= len(st["minds"]):
             if len(st["minds"]) < WINDOW:
@@ -1062,7 +1025,7 @@ def audit(kernel: Any) -> Dict[str, Any]:
             "unreached_share": round(1.0 - len(reached & set(kernel.sectors)) / max(1, charted), 3),
             "minds_arisen": st["arisen"], "minds_expected_by_now": round(expected_by(kernel, now), 2),
             "minds_by_present_universe": round(expected_by(kernel, 13.8), 1), "minds_by_horizon": st.get("ever", 0),
-            "silent": st["silent"], "unseen_woken": len((st.get("unseen") or {}).get("woken", [])),
+            "silent": st["silent"],
             "deep_gyr": round(now, 4)}
 
 

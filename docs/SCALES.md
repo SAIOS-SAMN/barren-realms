@@ -50,30 +50,22 @@ plasmic minds none: they are the Big Bang's hydrogen), its tolerance of sterilis
 molecules fully), its star's window (a rogue's dark life waits on no star). Each passes Carter's four hard steps on
 its own dice; the first to finish is the world's mind. There is no single habitable zone.
 
-Seed 7 (measured under the earlier, whole-galaxy schedule): the first mind at 6.02 Gyr - plasmic, in a gas giant 2.7 kpc from the core under a red dwarf; the second
+Seed 7 (measured before the giant-branch window): the first mind at 6.02 Gyr - plasmic, in a gas giant 2.7 kpc from the core under a red dwarf; the second
 0.31 Gyr later (cryogenic). ~1,850 minds by the 30 Gyr horizon, ~82 by 13.8 Gyr: half plasmic, a third
 ice-dwellers, carbon life rare. The schedule is computed once per seed and kept on disk under the digest of the laws
 it follows (`runs/creation/`).
 
-## The witnessed and the unobserved
+## Determined, and rendered only where watched
 
-Not every world of the galaxy is worked out. At genesis a share of the cells (one in `creation.WITNESSED` = 8, a
-draw the seed's own dice make, every ring alike) is computed world by world: their minds are exact - where, when,
-in which chemistry, with every rung of their climb. The whole galaxy's expectation (the curve of minds by each
-epoch) is measured from that share and scaled to the whole. The rest is held as that expectation and nothing more:
-as the clock runs, the unobserved share of the curve accumulates, and each time it passes the next of the seed's
-exponential draws a mind wakes somewhere no one has looked (`creation.potential`, `cosmos._unseen`). Only then are
-cells worked out - one by one in the seed's order for that draw, each kept with the chance its worlds have raised a
-mind by now - and the mind wakes on the world, around a star still on its main sequence, likeliest to have raised
-it; its world is judged as it is that day. What no one observes is never built.
+The universe is deterministic: the seed and the laws are expanded once into its initial conditions (creation.py),
+and every mind the galaxy will raise - where, when, in which chemistry - follows from them. They are worked out
+once per universe, every cell its own pure function (in parallel, merged in the cells' own order: the same galaxy
+whatever the machine), and kept on disk. Nothing about the universe is sampled again in play, and how or when anyone
+looks never changes it: an unwatched region is not rendered - no sectors, no agents, no map - yet its minds wake at
+their own epochs on their own worlds.
 
 A lit world's window closes as its star leaves the main sequence: the giant branch (`cosmos.AGEING_SHARE`, the last
-tenth of its life) boils its seas, in creation as in play. The elders of deep history (`prehistory.homes`) are the
-witnessed minds, each standing for as many more of its kind as the witnessed share is short of the whole.
-
-The witnessed schedule costs an eighth of the whole galaxy's (~20 s per universe instead of ~175 s, once, kept on
-disk); each unobserved mind costs the few cells looked through to find it (about one cell in four holds a world that
-could raise one).
+tenth of its life) boils its seas, in creation as in play.
 
 ## Charted where they go
 
