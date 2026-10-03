@@ -50,6 +50,16 @@ def desired(kernel: Any) -> float:
     return min(top, max(1.0, min(waits) / FRAMES))
 
 
+def wake(kernel: Any) -> None:
+    """A mind has arisen: the clock is set to the living at once - not a year later, when a year at the galaxy's
+    pace would already have carried the new people through its whole history."""
+    from xylarium.kernel import cosmos
+    want = desired(kernel)
+    if want < cosmos.ruler(kernel):
+        cosmos.set_rate(kernel, want)
+        stats(kernel)["changes"] += 1
+
+
 def season(kernel: Any) -> List[str]:
     """Once a year the clock is set to the living."""
     from xylarium.kernel import cosmos

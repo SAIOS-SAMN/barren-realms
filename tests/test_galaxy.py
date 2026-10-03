@@ -63,6 +63,7 @@ class TestShear(unittest.TestCase):
         self.assertTrue(across)
         self.assertTrue(cosmos.stats(k)["cross"])
         lanes0 = dict(cosmos.stats(k)["cross"])
+        cosmos.set_rate(k, cosmos.ceiling(k))                                            # the galaxy's own pace
         k.cycle_count += 100 * 400                                                       # 400 clock years of shear
         cosmos._shear(k)
         self.assertNotEqual(lanes0, dict(cosmos.stats(k)["cross"]))
@@ -77,7 +78,7 @@ class TestPaceAndStars(unittest.TestCase):
             k = GameKernel(seed=7, genesis=f"cosmic:{pace}")
             self.assertEqual(cosmos.pace(k), pace)
             m = cosmos.stats(k)["minds"]
-            gaps[pace] = (m[1]["epoch"] - m[0]["epoch"]) * 1e9 / cosmos.ruler(k)
+            gaps[pace] = (m[1]["epoch"] - m[0]["epoch"]) * 1e9 / cosmos.ceiling(k)     # the pace between minds
         self.assertAlmostEqual(gaps["lonely"], 10 * gaps["neighbourly"], places=3)
         self.assertAlmostEqual(gaps["neighbourly"], 10 * gaps["teeming"], places=3)
 

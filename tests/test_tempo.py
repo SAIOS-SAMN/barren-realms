@@ -19,6 +19,7 @@ class TestTempo(unittest.TestCase):
         self.assertGreaterEqual(tempo.desired(self.k), 1.0)
 
     def test_deep_time_is_continuous_through_a_change_of_rate(self):
+        rate0 = cosmos.ruler(self.k)                                     # set when the first mind woke
         self.k.cycle_count = 400
         before = cosmos.deep_gyr(self.k)
         cosmos.set_rate(self.k, 50.0)
@@ -26,8 +27,8 @@ class TestTempo(unittest.TestCase):
         self.k.cycle_count = 500
         self.assertAlmostEqual(cosmos.deep_gyr(self.k) - before, 50.0 / 1e9, places=15)
         self.assertEqual(cosmos.cycle_at(self.k, cosmos.deep_gyr(self.k, 450)), 450)
-        self.assertAlmostEqual(cosmos.deep_gyr(self.k, 200), cosmos.stats(self.k)["epoch0"] +
-                               2.0 * cosmos.ceiling(self.k) / 1e9, places=12)
+        self.assertAlmostEqual(cosmos.deep_gyr(self.k, 200), cosmos.stats(self.k)["epoch0"] + 2.0 * rate0 / 1e9,
+                               places=12)
 
 
 if __name__ == "__main__":

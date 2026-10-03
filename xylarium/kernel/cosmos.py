@@ -986,6 +986,8 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
                   text=f"On {p.name}, {r:.1f} kpc from the galactic centre, under a star of {m:.2f} solar masses, "
                        f"in {traits['medium']}, a people became aware of itself: {traits['describe']} - "
                        f"the {name}.", data={"traits": traits})
+    from xylarium.kernel import tempo
+    tempo.wake(kernel)                                       # the clock slows at once to watch it rise
     return f"[COSMOS] A mind arises: the {name} of {p.name} ({metab}, {plan}), {r:.1f} kpc out."
 
 
