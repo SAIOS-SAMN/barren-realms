@@ -97,17 +97,19 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     """The option worth most over its cost, as this mind judges it; None if nothing is worth doing."""
     if not options:
         return None
-    from xylarium.kernel import learning, prices, strategy
+    from xylarium.kernel import learning, prices, steward, strategy
     holder = m.get("holder")
-    # a mind weighs only as many options as its thought allows: those it first judges worth most
+    # a mind weighs only as many options as its thought allows: those it first judges worth most - and any its
+    # steward asks it to consider (steward.py)
     room = learning.attention(m)
     if len(options) > room:
-        options = sorted(options, key=lambda o: -(o["value"] - o["cost"]))[:room]
+        options = steward.attend(kernel, holder, options, room,
+                                 sorted(options, key=lambda o: -(o["value"] - o["cost"])))
     # what such choices have brought it before (learning.py), and where its council has chosen to stand (strategy)
     lesson = [learning.multiplier(kernel, holder, o["name"]) for o in options]
     # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
     # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
-    nets = [o["value"] * strategy.weight(m, o) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
+    nets = [o["value"] * strategy.weight(m, o) * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
                                             o.get("currency", "SOL")) if o.get("cash") else 0.0)
             for o, lz in zip(options, lesson)]
     scale = max(abs(n) for n in nets) or 1.0
@@ -122,6 +124,7 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
         st = stats(kernel)
         st["chosen"][best["name"]] = st["chosen"].get(best["name"], 0) + 1
         learning.record(kernel, holder, best["name"])
+        steward.chosen(kernel, holder, best)
     return best
 
 

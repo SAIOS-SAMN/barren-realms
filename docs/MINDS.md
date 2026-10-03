@@ -86,6 +86,17 @@ A council's model of a neighbour (strategy.py) reads what that neighbour has don
 what it can do unseen (cyber) and, as far as the council understands it (contact.intelligibility), what it is now
 set on: a neighbour turned to growing is coming for room.
 
+## Stewards (steward.py)
+
+A steward - a player, or an intelligence set to the task - is one more voice in a people's collective mind, never
+its hand. It perceives what the people can see (the counsel, its posture, its lessons) and no more. It guides in
+three ways, all through the people's own weighing in decide.choose: urging an aim, drawing an option into the
+council's attention that its thought would have overlooked, or cautioning against one. How much it is heeded is
+learned like any lesson: each time the council chooses as its steward urged, that year is credited to the steward's
+voice by how the people fared. In a council attending to n options, an urged option weighs 1 + heed / n: one voice
+among the options in mind. The people still chooses on its own stream of chance and may refuse every word.
+Progenitors set laws; stewards counsel; peoples choose.
+
 ## Life and death (lifespan.py)
 
 A people is born, grows, ages and dies by its species' physics. Every span is a multiple of its generation (body
