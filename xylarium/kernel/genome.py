@@ -228,6 +228,28 @@ def _people_means(kernel: Any) -> Dict[str, Dict[str, Any]]:
     return out
 
 
+def _inherit_ways(kernel: Any, parent: str, child: str) -> None:
+    """A people that becomes another does not forget how to farm, write, compute, rewrite itself or fold space: its
+    capabilities, the stages its history passed and its crossing are its parent's on the day it becomes itself."""
+    from xylarium.kernel import technology
+    if "technology" in kernel.state:
+        held = technology.stats(kernel)["of"].get(parent)
+        if held:
+            technology.stats(kernel)["of"].setdefault(child, {}).update(dict(held))
+    if "annals" in kernel.state:
+        from xylarium.kernel import annals
+        rec = annals.stats(kernel)["of"].get(parent)
+        if rec and rec.get("passed"):
+            mine = annals.stats(kernel)["of"].setdefault(child, {"advanced": 0.0, "passed": [], "dominion": 1,
+                                                                 "reach": 0.0})
+            mine["passed"] = list(dict.fromkeys(list(rec["passed"]) + list(mine.get("passed", []))))
+    if "mastery" in kernel.state:
+        from xylarium.kernel import mastery
+        crossed = mastery.stats(kernel)["crossed"]
+        if parent in crossed and child not in crossed:
+            crossed[child] = kernel.cycle_count
+
+
 def speciate(kernel: Any, planet: Any, parent_holder: str) -> Optional[str]:
     """A world gone far enough from its people becomes another people."""
     from xylarium.kernel import intellect, knowledge
@@ -251,6 +273,7 @@ def speciate(kernel: Any, planet: Any, parent_holder: str) -> Optional[str]:
         intellect.stats(kernel)["vocab"][new_holder] = list(intellect.vocabulary(kernel, parent_holder))
         from xylarium.kernel import memory
         memory.inherit(kernel, parent_holder, new_holder)                # and it takes its parent's past with it
+        _inherit_ways(kernel, parent_holder, new_holder)                 # and what its people could already do
         who = new.name
     else:
         # a strain under its captain's rule: the same people, but a deme of its own from now on - it is measured

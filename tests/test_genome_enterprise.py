@@ -66,6 +66,23 @@ class TestGenome(unittest.TestCase):
         self.assertEqual(genome.stats(k)["speciations"], 1)
         self.assertGreater(len(knowledge.stocks(k, knowledge.holder_of_planet(w))), 0)
 
+    def test_a_new_people_keeps_what_its_parent_could_do(self):
+        from xylarium.kernel import technology
+        k = fresh()
+        home = civ_worlds(k)[0]
+        civ = home.civilization
+        parent = knowledge.holder_of_planet(home)
+        technology.stats(k)["of"].setdefault(parent, {})["computation"] = k.cycle_count
+        w = next(p for s in k.sectors.values() for p in s.planets
+                 if p.population <= 0 and p.owner_id is None and not p.natives and p.civilization is None)
+        w.civilization, w.population = civ, 2000
+        genome.of(home)
+        genome.of(w)["temperature"] = 5.0
+        genome.quarter(k)
+        child = knowledge.holder_of_planet(w)
+        self.assertNotEqual(child, parent)
+        self.assertTrue(technology.has(k, child, "computation"))   # it does not forget how to compute
+
     def test_daughters_inherit(self):
         k = fresh()
         a, b = civ_worlds(k)[:2]

@@ -57,7 +57,7 @@ def load(run: str):
 
 def peoples_of(kernel: Any) -> Dict[str, Dict[str, Any]]:
     """Each people the snapshot holds: its home, distance from the centre, dawn, ledger height and kind."""
-    from xylarium.kernel import annals, clocks, cosmos, relations, technology
+    from xylarium.kernel import annals, clocks, cosmos, memory, relations, technology
     out: Dict[str, Dict[str, Any]] = {}
     if kernel is None:
         return out
@@ -76,6 +76,8 @@ def peoples_of(kernel: Any) -> Dict[str, Dict[str, Any]]:
             "advanced_years": (annals.stats(kernel)["of"].get(who) or {}).get("advanced", 0.0),
             "capabilities": sorted(technology.stats(kernel)["of"].get(who, {})),
             "seeded": not arisen,
+            "media": list(((kernel.state.get("memory") or {}).get("of", {}).get(who) or {}).get("media", ["oral"])),
+            "myths": len(memory.myths(kernel, who)),
         }
     return out
 
@@ -95,6 +97,7 @@ def chronicle(who: str, rec: Dict[str, Any], events: List[Dict[str, Any]], show_
                      f"{rec['proper_gyr']:.6f} Gyr")
         lines.append(f"   stages {', '.join(rec['passed']) or 'none recorded'}; capabilities "
                      f"{', '.join(rec['capabilities']) or 'none'}")
+        lines.append(f"   keeps its past in {', '.join(rec.get('media', ['oral']))}; tells {rec.get('myths', 0)} myths")
         by_age: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
         for e in hist:
             by_age[int(float(e.get("year", 0.0)) // AGE_YEARS)].append(e)
@@ -140,7 +143,7 @@ def chronicle(who: str, rec: Dict[str, Any], events: List[Dict[str, Any]], show_
         gaps.append("no art")
     if not any(e.get("kind") == "EMINENT" for e in cult):
         gaps.append("no remembered figure")
-    if not any(e.get("kind") == "RECORDKEEPING" for e in cult):
+    if rec.get("media", ["oral"]) == ["oral"]:
         gaps.append("keeps its past only by telling it")
     if gaps:
         lines.append(f"   GAPS{' for ' + name if show_gaps_only else ''}")
