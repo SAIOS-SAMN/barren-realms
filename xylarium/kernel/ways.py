@@ -157,7 +157,7 @@ def quarter(kernel: Any) -> List[str]:
             # the room its half-wild crops would make, as pressed as it is, against the toil of farming unknowingly
             gain = pressure * k_now * (math.exp(crop_z(p)) - 1.0)
             toil = p.population * (1.0 - domestication(kernel, p))
-            if decide.choose(kernel, [decide.option("take_up_farming", toil, gain)], m, p.id, "farm") is not None:
+            if decide.choose(kernel, [decide.option("take_up_farming", toil, gain, aim="deepen")], m, p.id, "farm") is not None:
                 p.society["way"] = "farm"
                 _refresh(kernel, p)
                 st["farmed"] += 1
@@ -176,7 +176,7 @@ def quarter(kernel: Any) -> List[str]:
             room = biosphere.carrying_capacity(kernel, p, citadel=p.citadel_level + 1) - k_now
             value = decide.worth(kernel, max(0, room) * pressure / 4.0, m)
             cost = decide.worth(kernel, p.population * (1.0 - HOUSEHOLD_INCOME_SHARE) * (1.0 - pressure) / 4.0, m)
-            if decide.choose(kernel, [decide.option("found_state", cost, value)], m, p.id, "state") is not None:
+            if decide.choose(kernel, [decide.option("found_state", cost, value, aim="deepen")], m, p.id, "state") is not None:
                 p.society["way"] = "state"
                 from xylarium.kernel import institutions
                 line = institutions.found_currency(kernel, p)        # a state taxes: it strikes its coin

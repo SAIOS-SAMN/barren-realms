@@ -118,4 +118,4 @@ def worth_striking(kernel: Any, captain: Any, planet: Any) -> Optional[Dict[str,
     me, them = knowledge.holder_of_captain(captain), sustenance.people_of(planet)
     if federation.forbids(kernel, me, "exploit", them):
         cost += federation.sanction_sol(kernel, me)         # its fellows' arm, turned on a member that breaks faith
-    return decide.option("strike_world", cost, value, units=units, share=share)
+    return decide.option("strike_world", cost, value, units=units, share=share, aim="secure")

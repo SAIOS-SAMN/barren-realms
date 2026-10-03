@@ -41,7 +41,7 @@ def heard(kernel: Any, listener: str) -> Dict[str, Any]:
 
 def season(kernel: Any) -> List[str]:
     """Once a year every people listens."""
-    from xylarium.kernel import cosmos, history, mastery
+    from xylarium.kernel import cosmos, history, mastery, technology
     if not cosmos.is_cosmic(kernel) or (kernel.cycle_count // 25) % 4:
         return []
     st = stats(kernel)
@@ -64,7 +64,9 @@ def season(kernel: Any) -> List[str]:
                 d = cosmos.distance_kpc(kernel, ha.sector_id, hb.sector_id)
                 if d is None:
                     continue
-            if d > reach_kpc(power[b] * LEAK_SHARE, power[a]):
+            ears = power[a] * (10.0 if technology.has(kernel, a, "radio") else 1.0) \
+                * (10.0 if technology.has(kernel, a, "orbit") else 1.0)      # apertures, and above the sky
+            if d > reach_kpc(power[b] * LEAK_SHARE, ears):
                 continue
             leaking_years = now_years - since[b] / 100.0 * cosmos.ruler(kernel)
             if leaking_years < d * LY_PER_KPC:                   # its first light has not arrived yet

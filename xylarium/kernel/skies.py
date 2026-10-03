@@ -137,13 +137,13 @@ def _options(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
         share = (1.0 - a) * MIX_E_FOLD
         c = repair_cost(kernel, planet, share)
         value = base * share * life                                       # the lives its land feeds again
-        out.append(decide.option("repair_sky", c["eu"] * max(per_eu, 1e-9), value, share=share, plan=c))
+        out.append(decide.option("repair_sky", c["eu"] * max(per_eu, 1e-9), value, share=share, plan=c, aim="hold"))
     if not soc.get("shield") and float(soc.get("dynamo", 1.0)) < 0.5:
         j = shield_j(kernel, planet)
         from xylarium.kernel import ruin
         loss = (0.5 - float(soc.get("dynamo", 1.0))) * 0.02 * 4.0           # the air the wind takes in a year
         value = decide.worth(kernel, base * loss * a * life / 4.0, m)
-        out.append(decide.option("raise_shield", j / ruin.EU_J * max(per_eu, 1e-9), value, eu=j / ruin.EU_J))
+        out.append(decide.option("raise_shield", j / ruin.EU_J * max(per_eu, 1e-9), value, eu=j / ruin.EU_J, aim="hold"))
     return out
 
 

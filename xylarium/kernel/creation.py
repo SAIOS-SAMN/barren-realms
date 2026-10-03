@@ -549,6 +549,25 @@ def foragers(world: Dict[str, Any], metabolism: str = "biotic", slot: Optional[D
             / biosphere.metabolic_factor(metabolism, strat, home_flux=flux, home_gravity=gravity, body_t=body_t))
 
 
+def world_at(seed: Any, slot: Dict[str, Any], world: Dict[str, Any], epoch: float) -> Dict[str, Any]:
+    """A world as it is at an epoch - its media read at its star's age then (worlds.world_age's quarter-Gyr steps,
+    the same the game reads a world in play at) - for judging what a mind waking then can live on."""
+    from fractions import Fraction
+    from xylarium.kernel import worlds as W
+    age = max(CRUST_GYR, round((epoch - slot["born"]) / W.AGE_STEP_GYR) * W.AGE_STEP_GYR)
+    mk = world.get("make") or {}
+    b = world["body"]
+    if not mk or "host" in world and not b:
+        return world
+    a_au = float(Fraction(str(b["q"]))) ** 2
+    args = (seed, slot["spec"], a_au, float(Fraction(str(b["radius"]))), float(Fraction(str(b["mass"]))),
+            bool(b.get("giant")), slot["z"], slot["r"], age, world.get("ices"))
+    w = W.build(*args, born=mk.get("born"), orbit=mk.get("orbit"), core=mk.get("core"))
+    ms = W.media(*args, world=w)
+    return dict(world, media=[{kk: m[kk] for kk in ("solvent", "where", "region", "richness", "pace")}
+                              | {"energy": round(m["energy"], 6), "t": round(m["t"], 1)} for m in ms])
+
+
 def lifetime(slot: Dict[str, Any], laws: Any = None) -> float:
     """A star's main-sequence life (Gyr): its fuel over its burn - mass x the share hydrogen gives up fusing over
     light, a sun's ten billion years in ours."""
@@ -741,7 +760,8 @@ def _compute(seed: Any) -> Dict[str, Any]:
                 rungs[lin["n"]] = rungs.get(lin["n"], 0) + 1
                 if lin["steps"]:
                     tally["alive"] += 1
-                if lin["complete"] and len(lin["steps"]) == lin["n"] and foragers(world, lin["region"], slot) >= VIABLE:
+                if lin["complete"] and len(lin["steps"]) == lin["n"] and \
+                        foragers(world_at(seed, slot, world, lin["steps"][-1]), lin["region"], slot) >= VIABLE:
                     minds.append({"cell": [i, j], "k": slot["k"], "w": w, "epoch": lin["steps"][-1],
                                   "metab": lin["region"], "mass": round(slot["mass"], 3),
                                   "steps": lin["steps"], "setbacks": lin["setbacks"]})
@@ -799,7 +819,7 @@ def limits(seed: Any, every: int = 7) -> Dict[str, Any]:
                 if lin["steps"]:
                     out["alive"] += 1
                 if lin["complete"] and len(lin["steps"]) == lin["n"]:
-                    if foragers(world, lin["region"], slot) >= VIABLE:
+                    if foragers(world_at(seed, slot, world, lin["steps"][-1]), lin["region"], slot) >= VIABLE:
                         out["minds"] += 1
                         out["epochs"].append([round(lin["steps"][-1], 4), slot["r"], lin["region"]])
                     else:

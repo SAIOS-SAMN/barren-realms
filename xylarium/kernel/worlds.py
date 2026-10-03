@@ -681,6 +681,20 @@ def fit(ms: List[Dict[str, Any]], metabolism: str) -> float:
 
 # ---------------------------------------------------------------------- a planet in play
 _STATES: Dict[Any, Any] = {}
+AGE_STEP_GYR = 0.25             # a world in play is re-read as its star and interior age, a quarter-Gyr at a time
+
+
+def world_age(kernel: Any, planet: Any) -> float:
+    """The age a world in play is read at: in a universe begun at its Big Bang, its star's own age now (its light
+    brightened, its interior cooled, its air gathered and lost since); elsewhere the settled age."""
+    from xylarium.kernel import cosmos, creation
+    if kernel is None or not cosmos.is_cosmic(kernel):
+        return creation.SETTLED_GYR
+    g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {})
+    if "born" not in g:
+        return creation.SETTLED_GYR
+    age = cosmos.deep_gyr(kernel) - float(g["born"])
+    return max(creation.CRUST_GYR, round(age / AGE_STEP_GYR) * AGE_STEP_GYR)
 
 
 def state_of_planet(kernel: Any, planet: Any) -> Dict[str, Any]:
@@ -690,11 +704,10 @@ def state_of_planet(kernel: Any, planet: Any) -> Dict[str, Any]:
     g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {}) if kernel is not None and cosmos.is_cosmic(
         kernel) else {}
     b = physics.body(planet)
-    age = creation.SETTLED_GYR                           # the settled world its life evolved in (creation reads the
-                                                         # same); within a game it changes through its star's light
+    age = world_age(kernel, planet)                      # its star's age now: the world as it has become
     swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
     seed = creation.universe(kernel) if kernel is not None else None
-    key = (seed, planet.id, round(age, 1), planet.planet_type, round(swell, 3), str(b.get("radius")))
+    key = (seed, planet.id, round(age, 2), planet.planet_type, round(swell, 3), str(b.get("radius")))
     got = _STATES.get(planet.id)
     if got and got[0] == key:
         return got[1]
@@ -712,17 +725,18 @@ def state_of_planet(kernel: Any, planet: Any) -> Dict[str, Any]:
     args = (seed, star, float(b.get("q", 1)) ** 2, float(b.get("radius", 1)), float(b.get("mass", 1)),
             bool(b.get("giant")), z, float(g.get("r", cosmos.R0_KPC)), age, ices)
     w = build(*args, born=make.get("born"), orbit=make.get("orbit"), core=make.get("core"))
-    out = {"world": w, "media": media(*args, world=w), "key": [age, planet.planet_type, round(swell, 3)]}
+    out = {"world": w, "media": media(*args, world=w), "key": [age, planet.planet_type, round(swell, 3)],
+           "args": args, "make": make}
     _STATES[planet.id] = (key, out)
     return out
 
 
 def of_planet(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
     """The media of a planet on the map (cached on the world: its physics changes on deep time only)."""
-    from xylarium.kernel import cosmos, creation
-    age = creation.SETTLED_GYR
+    from xylarium.kernel import cosmos
+    age = world_age(kernel, planet)
     swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
-    key = (round(age, 1), planet.planet_type, round(swell, 3))
+    key = (round(age, 2), planet.planet_type, round(swell, 3))
     cache = planet.society.get("_media")
     if cache and tuple(cache.get("key", ())) == key:
         return cache["media"]

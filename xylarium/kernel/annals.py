@@ -57,6 +57,17 @@ def _stage(kernel: Any, who: str, home: Any) -> str:
     return {"forage": "forage", "farm": "farm"}.get(home.society.get("way"), "state")
 
 
+def _can_reach_orbit(kernel: Any, who: str, home: Any) -> bool:
+    """Whether its world lets it reach orbit at all - by chemistry, or by the atom where its ground has uranium."""
+    from xylarium.kernel import technology
+    v = technology.chemical_exhaust_kms()
+    if technology.orbit_ratio(home, v) <= technology.STRUCTURE:
+        return True
+    if technology.feasible(kernel, who, "fission", home):
+        return technology.orbit_ratio(home, v * technology.FISSION_GAIN) <= technology.STRUCTURE
+    return False
+
+
 def _speed(kernel: Any, home: Any) -> float:
     from xylarium.kernel import decide
     return max(0.05, float(decide.mind_of_planet(kernel, home).get("speed", 1.0)))
@@ -80,6 +91,12 @@ def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
             pass
     if idx >= 3:
         home.citadel_level = max(home.citadel_level, 1 if idx == 3 else home.citadel_level)
+    from xylarium.kernel import technology
+    held = technology.stats(kernel)["of"].setdefault(who, {})
+    for cap, at in (("radio", 3), ("computation", 3), ("medicine", 3), ("fission", 4), ("orbit", 4),
+                    ("networks", 4)):
+        if idx >= at and cap not in held and technology.feasible(kernel, who, cap, home):
+            held[cap] = kernel.cycle_count                     # found in its long ages, as its world allowed
     if idx >= 4:
         home.citadel_level = max(home.citadel_level, DAUGHTER_CITADEL_TIER)
     if idx >= 5:
@@ -160,8 +177,14 @@ def season(kernel: Any) -> List[str]:
                 if rng.expovariate(1.0) < hazard:
                     fell = t + left * rng.random()
                 break
-            wait_up = rng.expovariate(speed / SPANS[STAGES[nxt]])
+            if STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
+                nxt_blocked = True                            # its gravity holds it: it lives on, on its world
+            else:
+                nxt_blocked = False
+            wait_up = float("inf") if nxt_blocked else rng.expovariate(speed / SPANS[STAGES[nxt]])
             wait_fall = rng.expovariate(FALL_PER_GENERATION)
+            if nxt_blocked and t + wait_fall >= gens:
+                break
             if wait_fall <= wait_up and t + wait_fall < gens:
                 fell = t + wait_fall
                 break

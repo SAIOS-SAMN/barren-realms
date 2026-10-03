@@ -101,8 +101,8 @@ def fork(kernel: Any, planet: Any, record: bool = True) -> str:
                                 planet.currency)
     enough_cost = out_value if room else 0.0                 # the room it will not grow into
     tally = dict(decide.stats(kernel)["chosen"])
-    best = decide.choose(kernel, [decide.option("expand", out_cost, out_value),
-                                  decide.option("steady", enough_cost, enough_value)], m, planet.id, "fork")
+    best = decide.choose(kernel, [decide.option("expand", out_cost, out_value, aim="grow"),
+                                  decide.option("steady", enough_cost, enough_value, aim="hold")], m, planet.id, "fork")
     choice = best["name"] if best is not None else "steady"
     if not record:
         decide.stats(kernel)["chosen"] = tally

@@ -101,7 +101,19 @@ def _shift_civ(planet: Any, delta: float) -> None:
 
 
 def yards(planet: Any) -> bool:
-    return planet.citadel_level >= DAUGHTER_CITADEL_TIER
+    """Yards that can launch: works enough - and, in a universe begun at its Big Bang, a people that can reach orbit
+    from its own world at all (technology.py: its chemistry's or its atom's exhaust against its gravity)."""
+    if planet.citadel_level < DAUGHTER_CITADEL_TIER:
+        return False
+    from xylarium.kernel import ledger
+    k = ledger.active_kernel()
+    if k is None or "technology" not in getattr(k, "state", {}):
+        return True
+    from xylarium.kernel import cosmos, mastery, technology
+    if not cosmos.is_cosmic(k):
+        return True
+    who = people_of(planet)
+    return technology.has(k, who, "orbit") or mastery.crossed(k, who)
 
 
 def reach(kernel: Any, planet: Any) -> int:

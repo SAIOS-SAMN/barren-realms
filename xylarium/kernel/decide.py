@@ -65,7 +65,12 @@ def mind_of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
     m = mind(kernel, biosphere.metabolism_of(kernel, planet), genome.temperature_factor(planet),
              strat=fertility.strategy(kernel, planet), home_flux=biosphere.home_flux(planet),
              body_t=biosphere.body_temperature(planet))
-    return _steadied(kernel, m, knowledge.holder_of_planet(planet))
+    m = _steadied(kernel, m, knowledge.holder_of_planet(planet))
+    from xylarium.kernel import strategy
+    rec = strategy.of(kernel, knowledge.holder_of_planet(planet))     # how its council has chosen to stand
+    if rec.get("posture"):
+        m = dict(m, posture=rec["posture"], focus=rec.get("focus", 0.0))
+    return m
 
 
 def mind_of_captain(kernel: Any, captain: Any) -> Dict[str, float]:
@@ -94,7 +99,8 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
     # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
     from xylarium.kernel import prices
-    nets = [o["value"] - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
+    from xylarium.kernel import strategy
+    nets = [o["value"] * strategy.weight(m, o) - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
                                             o.get("currency", "SOL")) if o.get("cash") else 0.0) for o in options]
     scale = max(abs(n) for n in nets) or 1.0
     from xylarium.kernel import scheduler

@@ -137,6 +137,9 @@ def effort(kernel: Any, planet: Any) -> float:
     faction = getattr(planet, "faction_id", None) or (getattr(civ, "faction_id", None) if civ is not None else None)
     if faction == "IMPERIUM":
         e *= 0.5                            # only the sanctioned sciences of the ancient rites
+    from xylarium.kernel import technology
+    if technology.has(kernel, holder_of_planet(planet), "computation"):
+        e *= 1.0 + technology.COMPUTE_GAIN            # machines that think beside it
     return e * impedance(kernel, planet)
 
 

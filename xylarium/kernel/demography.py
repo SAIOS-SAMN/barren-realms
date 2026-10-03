@@ -259,18 +259,18 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
             gain = biosphere.carrying_capacity(kernel, planet, citadel=nxt) - k_now
             options.append(decide.option("raise_citadel", cost + cfg["upgrade_ore"] * ore_price,
                                          value_of_room(kernel, planet, gain, m), tier=nxt, cash=cost, currency=planet.currency,
-                                         ore=cfg["upgrade_ore"]))
+                                         ore=cfg["upgrade_ore"], aim="deepen"))
     if getattr(planet, "habitats", 0) < HABITATS_MAX_BY_TIER.get(planet.citadel_level, 0):
         cost = HABITAT_COST * level * (1 + planet.habitats)
         if planet.treasury - cost >= keep and planet.ore_silo >= HABITAT_ORE:
             gain = biosphere.carrying_capacity(kernel, planet, habitats=planet.habitats + 1) - k_now
             options.append(decide.option("dig_habitat", cost + HABITAT_ORE * ore_price,
                                          value_of_room(kernel, planet, gain, m), cash=cost,
-                                         currency=planet.currency))
+                                         currency=planet.currency, aim="grow"))
     if not nursery.has(planet) and nursery.why_not(kernel, planet) is None and \
             planet.treasury - nursery.cost(planet, kernel) >= keep:
         a = nursery.appraise(kernel, planet)
-        options.append(decide.option("build_nursery", a["cost"], a["worth"]))
+        options.append(decide.option("build_nursery", a["cost"], a["worth"], aim="grow"))
     from xylarium.kernel import terraform
     tf = terraform.option(kernel, planet, m)
     if tf is not None and planet.treasury - tf["cost"] >= keep:
@@ -393,6 +393,36 @@ def resource_worth(kernel: Any, home: Any, cand: Any) -> float:
                for el, q in offered.items() if q > 0)
 
 
+SIMULATED_WORLDS = 160            # peopled worlds the engine lives year by year in a cosmic universe (a ruler of the
+                                  # machine, not of the universe): beyond it, peoples settle at the level of history
+
+
+def simulated_worlds(kernel: Any) -> int:
+    from xylarium.kernel import cache
+    return cache.memo(kernel, "peopled_worlds", kernel.cycle_count // max(1, _quarter_len()),
+                      lambda: sum(1 for s in kernel.sectors.values() for p in s.planets if p.population > 0),
+                      max_age=1)
+
+
+def _beyond_the_witnessed(kernel: Any, planet: Any, emigrants: int, cost: int, quarter_now: int) -> Optional[str]:
+    """In a cosmic universe whose lived worlds have reached the machine's budget, a people that has crossed still
+    sends its daughters - to worlds the engine keeps at the level of history (annals.py: its dominion), not on the
+    map. Its people and its fleet's price leave home the same."""
+    from xylarium.kernel import annals, cosmos, knowledge, mastery
+    who = knowledge.holder_of_planet(planet)
+    if not cosmos.is_cosmic(kernel) or simulated_worlds(kernel) < SIMULATED_WORLDS or not mastery.crossed(kernel, who):
+        return None
+    if emigrants < DAUGHTER_EMIGRANTS_MIN or planet.treasury < cost:
+        return None
+    planet.last_daughter_quarter = quarter_now
+    _pay_contractor(kernel, planet, cost)
+    planet.population -= emigrants
+    rec = annals.stats(kernel)["of"].setdefault(who, {"advanced": 0.0, "passed": [], "dominion": 1, "reach": 0.0})
+    rec["dominion"] = min(annals.DOMINION_MAX, rec["dominion"] + 1)
+    stats(kernel)["beyond_witnessed"] = stats(kernel).get("beyond_witnessed", 0) + 1
+    return None
+
+
 def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     from xylarium.kernel.universe import habitability
     from xylarium.kernel import sustenance
@@ -421,6 +451,9 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
         return None
     metab = metabolism_of(kernel, planet)
     emigrants = min(DAUGHTER_EMIGRANTS_MAX, int(planet.population * DAUGHTER_EMIGRANT_SHARE))
+    beyond = _beyond_the_witnessed(kernel, planet, emigrants, cost, quarter_now)
+    if beyond:
+        return beyond
     emigrants = nursery.kit_room(kernel, planet, metab, emigrants)    # no more than its seeding kit can stock
     if emigrants < DAUGHTER_EMIGRANTS_MIN:
         return None

@@ -249,7 +249,7 @@ def season(kernel: Any) -> List[str]:
             # a people of the Light trusts its fellows' word: common law costs it less in dues and in watching
             trust = max(0.0, _alignment(kernel, by[m]))
             cost = gain / 2.0 * (1.0 - trust) + gain * gap / 3.0
-            if decide.choose(kernel, [decide.option("join_federation", cost, gain)], m_mind, m, "federation"):
+            if decide.choose(kernel, [decide.option("join_federation", cost, gain, aim="secure")], m_mind, m, "federation"):
                 agreed.append(m)
         if existing:
             fid = sorted(existing)[0]
