@@ -356,7 +356,9 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
             gas[sp] -= min(gas[sp], pp / max(1e-12, to_bar), broken * escape)
         budget[0] -= spend
     obliquity = orbit["obliquity"] if orbit and orbit.get("obliquity") is not None else math.pi / 4.0
+    held0 = sum(gas.values())                           # what it held before the wind broke any of it
     t_surf, p_bar, air, seas, albedo = _climate(gas, to_bar, flux, hpm, giant, L, obliquity)
+    air0 = sum(air.values())                            # the standing air before the wind took any of it
     lightest = min((FRAGMENT.get(sp, VOLATILES[sp]["mu"] / 2.0) for sp in gas), default=1.0)
     reach = wind * math.exp(-bind_ev * lightest / (HOT_EV * L.chem))      # the most the wind could take
     for share in STRIP_PASSES:
@@ -370,6 +372,8 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
             "seas": seas, "ices": ices, "heat": heat, "q": inside["q"], "q_tide": inside["q_tide"],
             "t_int": inside["t_int"], "field": round(field, 3), "giant": giant, "mass": mass, "radius": radius,
             "melted": melted, "processed": inside["processed"], "degassed": out, "wind": wind, "t_exo": t_exo,
+            "escaped": round(1.0 - sum(gas.values()) / held0, 6) if held0 > 0 else 0.0,
+            "air_escaped": round(max(0.0, 1.0 - p_bar / air0), 6) if air0 > 0 else 0.0,
             "env": env, "star_t": s["t_eff"], "albedo": round(albedo, 3), "e": round(e_now, 4), "g": g,
             "light": flux * (1.0 - albedo) * math.exp(-0.1 * p_bar ** 0.5), "laws": L}   # what reaches the surface
 

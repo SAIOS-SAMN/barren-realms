@@ -125,7 +125,7 @@ def main():
         rec = noble.air_xenon(mass, radius, a_au, 1.0, hist)
         meta, now = rec[0], next(r for r in rec[1:] if r["age"] == NOW)
         print(f"  {name:<6} natural: mantle closed at {meta['closure_myr']} Myr, crossover {meta['crossover_amu']} amu, "
-              f"first air lost {meta['first_air_lost']:.0%} -> now 129/132 {now['129/132']}, "
+              f"ion crossover {meta['ion_crossover_amu']} amu, first air lost {meta['first_air_lost']:.0%} -> now 129/132 {now['129/132']}, "
               f"136/132 {now['136/132']}")
     for joules in (1e18, 1e22, 1e26):
         rec = noble.air_xenon(MARS["mass"], MARS["radius"], MARS["a"], 1.0, mars,
@@ -135,8 +135,8 @@ def main():
               f"136/132 {now['136/132']}, 134/132 {now['134/132']}")
     print(f"  fission xenon, its iodine-129 fully decayed, holds 129/132 = {noble.fission_129_132():.2f}: a fission war "
           f"pulls an air toward that - it cannot raise 129/132 past the solar 1.04. Antimatter adds no xenon.")
-    print("  (absolute ratios run high: early xenon loss - ions in hydrogen winds, giant impacts - is not yet "
-          "modelled; the ordering by mantle closure and the fission bound do not depend on it)")
+    print("  (absolute ratios rest on declared inventories and loss numbers - best guesses; the ordering by mantle "
+          "closure and the fission bound do not depend on them)")
 
 
 if __name__ == "__main__":

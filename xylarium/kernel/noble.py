@@ -23,9 +23,12 @@ was built, when its mantle closed, what it lost young, and what was later done t
                (fission_129_132): a fission war pulls an air's 129/132 down toward that, never up past the solar mix.
                Antimatter adds no xenon at all.
 
-NOT YET MODELLED: the large early losses of xenon (its ions dragged off in a young world's hydrogen wind, Zahnle et
-al. 2019; giant impacts blowing off a magma ocean's air). Without them the absolute ratios run high; the ordering
-of worlds by how early they closed, and what fission can and cannot do, do not depend on them.
+EARLY LOSS, IONS AND IMPACTS: xenon ionises more easily than hydrogen, so in a young world's hydrogen wind its ions
+are dragged out by Coulomb collisions far stronger than its atoms' (ION_COULOMB; Zahnle et al. 2019) - the crossover
+for ions passes xenon's mass, and the first air's xenon goes in proportion to the hydrogen the world loses then
+(worlds.build: air_escaped). A world finished by giant impacts loses part of its magma ocean's air with each
+(GIANT_IMPACT_AIR_LOSS). The absolute ratios rest on these declared numbers and on the inventories (best guesses);
+the ordering of worlds by how early they closed, and what fission can and cannot do, do not.
 
 So the ratio xenon-129 / xenon-132 in an air says how early the world closed and how much of its first air it
 lost; xenon-136 / xenon-132 above the solar mix says plutonium-244 - or fission weapons.
@@ -54,6 +57,11 @@ EUV_1AU_W = 1.0e-3              # a quiet Sun's extreme ultraviolet at 1 AU (W/m
 EUV_HEATING = 0.15              # share of absorbed EUV that lifts gas out (energy-limited escape; Watson et al. 1981)
 B_H = 1.9e21                    # binary diffusion parameter of H in heavier gas, m^-1 s^-1 at 300 K (~ T^0.75)
 KB = 1.380649e-23
+ION_COULOMB = 300.0             # xenon ions' coupling to an escaping proton wind over a neutral's (Coulomb against
+                                # neutral collision cross-sections; Zahnle, Gacesa & Catling 2019): xenon ionises more
+                                # easily than hydrogen, and its ions are dragged where its atoms would stay
+GIANT_IMPACT_AIR_LOSS = 0.5     # share of a magma ocean's air each giant impact blows off (Schlichting et al. 2015:
+                                # tens of percent, more over an ocean; declared)
 
 
 def closure_myr(mass: float, a_au: float, star_mass: float = 1.0, z: float = 1.0) -> float:
@@ -103,7 +111,14 @@ def air_xenon(mass: float, radius: float, a_au: float, star_mass: float, history
     first = worlds.MAGMA_DEGAS * melted                              # share of the planet's gas its magma ocean gave up
     m_c = crossover_amu(mass, radius, a_au, float(young.get("t_exo", 1000.0)),
                         worlds.activity(star_mass, 0.0))
-    lost = 0.0 if m_c <= 132.0 else min(1.0, (m_c - 132.0) / max(1e-9, m_c - 1.0))
+    m_ion = 1.0 + (m_c - 1.0) * ION_COULOMB                        # its ions, dragged by the proton wind
+    h_lost = max((float(h.get("air_escaped", 0.0)) for h in history if float(h["age"]) <= 1.0), default=0.0)
+    drag = 0.0 if m_ion <= 132.0 else (m_ion - 132.0) / max(1e-9, m_ion - 1.0)
+    doublings = 0.0
+    m_iso = worlds.isolation_mass(star_mass, a_au, z)
+    if mass > 2.0 * m_iso:
+        doublings = math.log(mass / m_iso) / math.log(worlds.GIANT_IMPACT_GROWTH)
+    lost = 1.0 - (1.0 - drag * h_lost) * (1.0 - GIANT_IMPACT_AIR_LOSS) ** doublings
     air = {iso: prim[iso] * first * (1.0 - lost) for iso in prim}
     air[129] += early_129 * first * (1.0 - lost)
     for iso, y in PU_XE.items():
@@ -127,7 +142,8 @@ def air_xenon(mass: float, radius: float, a_au: float, star_mass: float, history
         x132 = max(1e-30, now[132])
         out.append({"age": h["age"], "129/132": round(now[129] / x132, 3), "136/132": round(now[136] / x132, 3),
                     "134/132": round(now[134] / x132, 3), "xe132_atoms": float(f"{now[132]:.3g}")})
-    return [{"closure_myr": round(close, 1), "crossover_amu": round(m_c, 2), "first_air_lost": round(lost, 3)}] + out
+    return [{"closure_myr": round(close, 1), "crossover_amu": round(m_c, 2), "ion_crossover_amu": round(m_ion, 1),
+             "first_air_lost": round(lost, 3)}] + out
 
 
 def fission_129_132() -> float:
