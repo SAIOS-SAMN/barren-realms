@@ -89,15 +89,16 @@ def _capacities(kernel: Any, planet: Any) -> Dict[str, int]:
 def step(kernel: Any, planet: Any, ground: str, dt: float, actor: Any = None) -> Dict[str, Any]:
     """Process the world dt e-folds toward `ground`. Measures who gained and who lost room (and judges the harm).
     Changing the target ground restarts the work."""
-    from xylarium.kernel import alignment, primordial, sustenance
+    from xylarium.kernel import alignment, imprint, primordial, sustenance
     soc = planet.society
     rec = soc.get("terraform")
-    if not rec or rec.get("ground") != ground:
-        rec = soc["terraform"] = {"ground": ground, "t": 0.0}
+    t0 = float(rec["t"]) if rec and rec.get("ground") == ground else 0.0
     before = _capacities(kernel, planet)
     natives = getattr(planet, "natives", None)
     native_fit = reshape(1.0, natives.get("metabolism", "biotic"), planet) if natives else None
-    rec["t"] = round(float(rec["t"]) + max(0.0, dt), 6)
+    by = getattr(actor, "name", None) or str(planet.owner_id or "")
+    rec = imprint.record(kernel, planet, "terraform", by,
+                         terraform={"ground": ground, "t": round(t0 + max(0.0, dt), 6)})["terraform"]
     after = _capacities(kernel, planet)
     lost = sum(max(0, before[k] - after.get(k, 0)) for k in before if k != "people")
     gained = max(0, after.get("people", 0) - before.get("people", 0))

@@ -60,6 +60,14 @@ chance at run time (tests/test_determined.py enforces it). What is probabilistic
 a people's history (annals, prehistory), biology among organisms (drift, blight), contests between agents - each
 on its own stream.
 
+## A world: its physics, and what minds did to it (imprint.py)
+
+A world in play is its base - what physics makes it at its age (worlds.state_of_planet, recomputed only when its
+age moves) - with the ledger of what minds have done to it folded over it: strikes, shields, air given back or bled
+away through a strained core, terraforming. Every act is one ordered entry with its maker; the folded result is kept
+on the world for its readers, and `imprint.at(planet, cycle)` refolds it as it stood at any moment. Physics is never
+re-simulated to show agency, and no mind writes into physics directly.
+
 ## Locked-in chance
 
 Minds stay probabilistic, but every draw is drawn from a stream fixed by (universe seed, what acts, when):

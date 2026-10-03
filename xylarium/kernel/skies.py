@@ -165,7 +165,7 @@ def season(kernel: Any) -> List[str]:
 
 def _act(kernel: Any, p: Any, pick: Optional[Dict[str, Any]]) -> List[str]:
     """Carry out what a people chose for its sky (None: it chose to let it be)."""
-    from xylarium.kernel import history, matter
+    from xylarium.kernel import history, imprint, matter
     st = stats(kernel)
     if pick is None:
         st["declined"] += 1
@@ -173,7 +173,7 @@ def _act(kernel: Any, p: Any, pick: Optional[Dict[str, Any]]) -> List[str]:
     if pick["name"] == "raise_shield":
         if not _spend(kernel, p, pick["eu"], "sky_shield"):
             return []
-        p.society["shield"] = kernel.cycle_count
+        imprint.record(kernel, p, "shield", str(p.owner_id or ""), shield=True)
         st["shields"] += 1
         history.event(kernel, "SKY_SHIELD", f"{p.name} raises a shield against its star's wind",
                       sector_id=p.sector_id, actors=[str(p.owner_id or "")],
@@ -186,8 +186,7 @@ def _act(kernel: Any, p: Any, pick: Optional[Dict[str, Any]]) -> List[str]:
         take = min(c["units"], int(c["belt"]["reserve"]))
         c["belt"]["reserve"] -= take
         matter.sink("volatiles_imported", "BELT_ROCK", take)
-    p.society["atmosphere"] = round(min(1.0, float(p.society.get("atmosphere", 1.0)) + pick["share"]), 6)
-    p.society.pop("_media", None)
+    imprint.record(kernel, p, "air_returned", str(p.owner_id or ""), air_add=round(pick["share"], 9))
     st["repairs"] += 1
     st["air_kg"] += c["kg"]
     how = "steered in from its belt" if c["how"] == "import" else "broken from its rock"

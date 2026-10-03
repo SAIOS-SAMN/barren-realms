@@ -56,7 +56,7 @@ def antimatter_needed(kernel: Any, planet: Any, share: float = 1.0) -> int:
 def strike(kernel: Any, captain: Any, planet: Any, units: int) -> Dict[str, Any]:
     """Detonates units of antimatter from the captain's hold against a world: the energy coupled into its air lifts
     that share of it to escape; enough to unbind the world itself shatters it. Returns what happened."""
-    from xylarium.kernel import alignment, energy, history, matter
+    from xylarium.kernel import alignment, energy, history, imprint, matter
     cargo = captain.ship.cargo
     held = int(cargo.elements.get("AM", 0))
     units = max(0, min(int(units), held))
@@ -71,16 +71,14 @@ def strike(kernel: Any, captain: Any, planet: Any, units: int) -> Dict[str, Any]
     before = planet.population
     soc = planet.society
     if e >= bind["shatter_j"]:
-        soc["atmosphere"] = 0.0
         soc["shattered"] = kernel.cycle_count
         planet.population = 0
-        planet.planet_type = "BARREN"
         kind, share = "WORLD_SHATTERED", 1.0
+        imprint.record(kernel, planet, "shattered", captain.name, air_set=0.0, type="BARREN")
     else:
         share = min(1.0, e * COUPLING / max(1.0, bind["strip_j"])) if bind["strip_j"] > 0 else 0.0
-        soc["atmosphere"] = round(max(0.0, float(soc.get("atmosphere", 1.0)) * (1.0 - share)), 6)
-        soc.pop("_media", None)
         kind = "WORLD_STRIPPED"
+        imprint.record(kernel, planet, "stripped", captain.name, air_scale=round(1.0 - share, 9))
     soc.setdefault("struck", []).append({"cycle": kernel.cycle_count, "by": captain.name, "share": round(share, 4),
                                          "antimatter": units})
     # the lives it costs: those it killed outright and those the land can no longer feed

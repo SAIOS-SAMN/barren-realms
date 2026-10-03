@@ -351,7 +351,8 @@ def _cores(kernel: Any) -> List[str]:
                 continue
             k0 = biosphere.carrying_capacity(kernel, p) if p.population > 0 else 0
             a = float(soc.get("atmosphere", 1.0))
-            soc["atmosphere"] = round(max(0.0, a - (0.5 - d) * 0.02), 5)
+            from xylarium.kernel import imprint             # its people's taps strained the core that held it
+            imprint.record(kernel, p, "core_stress", str(p.owner_id or ""), air_add=-round((0.5 - d) * 0.02, 9))
             st["atmosphere_lost"] += a - soc["atmosphere"]
             if p.population <= 0:
                 continue
