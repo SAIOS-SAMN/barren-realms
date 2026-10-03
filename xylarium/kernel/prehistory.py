@@ -44,14 +44,24 @@ def draw(rng: random.Random) -> Dict[str, float]:
 
 
 def homes(seed: Any, horizon: float) -> List[Dict[str, float]]:
-    """Every mind of the galaxy before an epoch: when it woke, its ring and its starting angle."""
+    """Every mind of the galaxy before an epoch: when it woke, its ring and its starting angle. The witnessed cells'
+    minds are worked out (creation.witnessed); each stands for the unobserved cells like it - as many more as the
+    witnessed share is short of the whole, on its ring, at its epoch, at angles the seed's dice give them."""
     from xylarium.kernel import creation
     out = []
-    for m in creation.schedule(seed)["minds"]:
+    per = 1.0 / creation.share_witnessed(seed)
+    owed = 0.0
+    for n, m in enumerate(creation.schedule(seed)["minds"]):
         if m["epoch"] > horizon:
             break
         slot = creation.cell(seed, *m["cell"])[m["k"]]
         out.append({"epoch": m["epoch"], "r": slot["r"], "theta0": slot["theta0"]})
+        owed += per - 1.0
+        rng = random.Random(f"{seed}:unseen-home:{n}")
+        while owed >= 1.0:
+            owed -= 1.0
+            out.append({"epoch": m["epoch"], "r": slot["r"], "theta0": rng.random() * 2.0 * math.pi})
+    out.sort(key=lambda h: h["epoch"])
     return out
 
 

@@ -181,8 +181,9 @@ class TestMindsArise(unittest.TestCase):
         k.cycle_count = int(years * 100) + 1
         lines = cosmos.quarter(k)
         self.assertTrue(any("A mind arises" in l for l in lines))
-        self.assertEqual(cosmos.stats(k)["arisen"], 2)
-        self.assertEqual(len(k.sectors), 2)                                              # its own system, no more
+        st = cosmos.stats(k)
+        self.assertGreaterEqual(st["arisen"], 2)                       # it, and any the unobserved galaxy raised
+        self.assertEqual(len(k.sectors), st["arisen"] + st["silent"])                    # their own systems, no more
         self.assertEqual(cosmos.stats(k)["materialised"], [])
 
 

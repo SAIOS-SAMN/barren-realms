@@ -68,6 +68,24 @@ its people:
 
 The counsel changes nothing; it is a lens.
 
+## Learning and attention (learning.py)
+
+Councils and captains choose by one loop (decide.choose): they perceive what their mind can see, value each option
+from it, and choose by value over cost through their own judgement's noise. Two things make the guesses judgement:
+
+- **Attention.** A mind weighs only as many options at once as its thought allows: two for a mind that has climbed
+  no ladder, one more per quarter of fluid intelligence, one more if it knows itself. Offered more, it weighs those
+  it first judges worth most, so a young people overlooks what an elder would see.
+- **Lessons.** Each year every mind sets what it chose against how it fared by its own measure (a people by its
+  syntropy index, a captain by the log of what it holds), against its own fading baseline. Each kind of choice it
+  made is credited with how much better or worse it did than usual, and is valued by exp(that advantage over its
+  usual swing) next time, weighted by how sure it is. Memory fades as knowledge does. A captain whose deed has
+  failed it turns to what its growing seat proposes, if that has served it better.
+
+A council's model of a neighbour (strategy.py) reads what that neighbour has done (its wars, raids, strikes),
+what it can do unseen (cyber) and, as far as the council understands it (contact.intelligibility), what it is now
+set on: a neighbour turned to growing is coming for room.
+
 ## Life and death (lifespan.py)
 
 A people is born, grows, ages and dies by its species' physics. Every span is a multiple of its generation (body

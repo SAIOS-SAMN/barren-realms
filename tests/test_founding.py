@@ -49,6 +49,10 @@ class TestFounding(unittest.TestCase):
         p = self.home
         p.society["way"] = "state"
         institutions.found_currency(self.k, p)
+        from xylarium.kernel import cosmos
+        if not any(w is not p and w.population == 0 for s in self.k.sectors.values() for w in s.planets):
+            m = cosmos.stats(self.k)["minds"][1]                                   # a stranger's system, charted
+            cosmos.build_slot(self.k, tuple(m["cell"]), int(m["k"]))
         other = next(w for s in self.k.sectors.values() for w in s.planets if w is not p and w.population == 0)
         from xylarium.kernel.civilization import CivilizationIntelligenceEngine
         other.civilization = CivilizationIntelligenceEngine.create_civilization({
