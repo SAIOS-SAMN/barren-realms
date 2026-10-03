@@ -116,7 +116,8 @@ def engineers_itself(kernel: Any, planet: Any) -> bool:
     if kernel is None or "technology" not in getattr(kernel, "state", {}):
         return False
     holder = knowledge.holder_of_planet(planet)
-    return bool(holder) and technology.has(kernel, holder, "genetics") and mastery.crossed(kernel, holder)
+    return bool(holder) and mastery.crossed(kernel, holder) and (
+        technology.has(kernel, holder, "genetics") or technology.has(kernel, holder, "transfer"))
 
 
 def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str, F]:

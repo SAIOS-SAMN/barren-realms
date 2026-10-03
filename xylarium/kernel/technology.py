@@ -36,6 +36,14 @@ were written a bit a generation by slow-breeding bodies; science lets it write f
   ROBOTICS     bodies built, not bred: work and thought no longer bound to how fast its people grow - where its
                system holds the metals to build them (knowledge.effort: ROBOTICS_GAIN; annals).
 
+  TRANSFER     a mind carried from one body to another: copying what it is - about a mind's blueprint of
+               information (life.I_MIND bits) - faithfully enough that the copy is still the mind. Its difficulty is
+               copying's own physics: a chemistry that copies faithfully keeps a mind legible and stable
+               (mind.profile: legible), and a mind that already rewrites itself is nearer (plastic). With it a
+               people wears bodies made for each world it goes to - the most robust way across the stars - and
+               survives what would end a body. Whether the copy is the same mind is not physics: the people that
+               finds it must decide, and a people whose creed forbids it gives it up (TRANSFER_FORBIDDEN).
+
   EMBODIMENT   life without a genome - minds held in fields, not in copied molecules (plasmic) - has no hands. Before
                it can build anything it must come into a vessel: a living body designed from outside, matter built
                to order, or a machine. It learns the terrestrial dimensions from nothing, through instruments it
@@ -61,13 +69,15 @@ GENETIC_GAIN = 1.0              # how much faster a people that rewrites its gen
 SYNTHESIS_GAIN = 1.0            # what designed chemistry adds to how fast it reshapes a world
 ROBOTICS_GAIN = 1.0             # what built bodies add to a people's work and thought
 CAPS = ("radio", "orbit", "fission", "computation", "networks", "cyber", "medicine", "genetics", "synthesis",
-        "robotics", "embodiment")
+        "robotics", "embodiment", "transfer")
 NEEDS = {"radio": "information", "orbit": "energy", "fission": "energy", "computation": "information",
          "networks": "information", "cyber": "information", "medicine": "biology", "genetics": "biology",
-         "synthesis": "materials", "robotics": "materials", "embodiment": "materials"}
+         "synthesis": "materials", "robotics": "materials", "embodiment": "materials",
+         "transfer": "information"}
 AFTER = {"networks": ("radio", "computation"), "cyber": ("networks",), "orbit": (), "fission": (),
          "radio": (), "computation": (), "medicine": (), "genetics": ("medicine", "computation"),
-         "synthesis": ("genetics",), "robotics": ("computation",), "embodiment": ()}
+         "synthesis": ("genetics",), "robotics": ("computation",), "embodiment": (),
+         "transfer": ("genetics", "synthesis")}
 GENOMELESS = ("plasmic",)       # chemistries whose minds are held in fields, not in a copied genome
 
 
@@ -182,6 +192,10 @@ def season(kernel: Any) -> List[str]:
             chance = min(1.0, chance * prof["affinity"].get(NEEDS[cap], 1.0))   # its kind of mind finds its own first
             if cap == "genetics":                    # a legible, self-rewriting heredity is easier to read
                 chance = min(1.0, chance * (0.5 + prof["legible"]) * (1.0 + prof["plastic"]))
+            if cap == "transfer":                    # a mind copies as faithfully as its chemistry keeps it
+                chance = min(1.0, chance * prof["legible"] * (1.0 + prof["plastic"]))
+            if who in st.setdefault("forbidden", {}).get(cap, {}):
+                continue                             # its creed has forbidden it
             if cap == "embodiment":                          # the terrestrial dimensions, learned from nothing
                 chance *= laws.mastery(stocks.get("energy", 0.0), KNOWLEDGE_UNIT)
             if rng.random() < chance:
@@ -192,7 +206,35 @@ def season(kernel: Any) -> List[str]:
                               cause=f"what they knew of {NEEDS[cap]}, on a world that allows it",
                               data={"capability": cap})
                 logs.append(f"[TECHNOLOGY] The {name} find {cap}.")
+                if cap == "transfer":
+                    line = _weigh_transfer(kernel, who, worlds, home)
+                    if line:
+                        logs.append(line)
     return logs
+
+
+def _weigh_transfer(kernel: Any, who: str, worlds: List[Any], home: Any) -> Optional[str]:
+    """A people that can carry a mind into another body must decide whether the one carried is still the one who
+    was: its council weighs wearing new bodies (what it would survive, and the worlds it could live on) against
+    forbidding it (what its creed holds a mind to be)."""
+    from xylarium.kernel import alignment, decide, history
+    civ = getattr(home, "civilization", None)
+    dogma = float(getattr(civ, "dogma", 0.0) or 0.0) if civ is not None else 0.0
+    sc = alignment.scales(kernel)
+    lives = sum(p.population for p in worlds) * sc["sol"] / max(1.0, sc["lives"])
+    opts = [decide.option("embrace_transfer", 0.0, lives * (1.0 - dogma), aim="reach"),
+            decide.option("forbid_transfer", 0.0, lives * dogma, aim="hold")]
+    pick = decide.choose(kernel, opts, decide.mind_of_planet(kernel, home), who, "transfer")
+    name = who.split(":", 1)[-1]
+    if pick is not None and pick["name"] == "forbid_transfer":
+        stats(kernel)["of"].get(who, {}).pop("transfer", None)
+        stats(kernel).setdefault("forbidden", {}).setdefault("transfer", {})[who] = kernel.cycle_count
+        history.event(kernel, "TRANSFER_FORBIDDEN", f"The {name} forbid the carrying of minds", actors=[who],
+                      planet=home, cause="their creed holds that the one carried is not the one who was")
+        return f"[TECHNOLOGY] The {name} forbid it: a mind carried is not the mind that was."
+    history.event(kernel, "TRANSFER_EMBRACED", f"The {name} learn to wear new bodies", actors=[who], planet=home,
+                  cause="they hold that a mind faithfully carried is still itself")
+    return None
 
 
 def summary(kernel: Any) -> Dict[str, Any]:

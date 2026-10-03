@@ -112,7 +112,7 @@ def genome_ready(kernel: Any, holder: str, worlds: List[Any]) -> bool:
         return False
     if technology.genomeless(kernel, home(worlds)):
         return technology.has(kernel, holder, "embodiment")   # its own hurdle: a vessel to move in
-    return technology.has(kernel, holder, "genetics")
+    return technology.has(kernel, holder, "genetics") or technology.has(kernel, holder, "transfer")
 
 
 def ftl_law(kernel: Any) -> bool:
