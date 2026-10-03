@@ -76,7 +76,7 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
     }
     for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest", "mirror", "contact", "cohabit", "clock", "scheduler", "ways", "society", "cosmos", "history", "tempo", "lifeline", "learning",
                  "steward", "technology", "mastery", "annals", "strategy", "kinship", "climate", "signals",
-                 "federation", "steward_ai"):
+                 "federation", "steward_ai", "clocks", "blackhole"):
         if name in sums:
             obs[name] = sums[name]
     g = kernel.state.get("genesis") or {}

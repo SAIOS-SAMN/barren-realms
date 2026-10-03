@@ -104,7 +104,7 @@ def own(kernel: Any, who: Optional[str]) -> bool:
 
 def home_of(kernel: Any, who: Optional[str]) -> Optional[int]:
     rec = _people(kernel, who)
-    return int(rec["home"]) if rec is not None else None
+    return int(rec["home"]) if rec is not None and rec.get("home") is not None else None
 
 
 def now(kernel: Any, who: Optional[str], cycle: Optional[int] = None) -> float:
@@ -124,7 +124,7 @@ def rate(kernel: Any, who: Optional[str]) -> float:
 
 def height(kernel: Any, who: Optional[str]) -> int:
     rec = _people(kernel, who)
-    return int(rec["h"]) if rec is not None else 0
+    return int(rec.get("h", 0)) if rec is not None else 0
 
 
 def begin(kernel: Any, who: str, home: Any) -> None:
@@ -186,10 +186,13 @@ def season(kernel: Any) -> List[str]:
     by = relations._peoples(kernel)
     paces: Dict[str, float] = {}
     for who, worlds in by.items():
-        rec = st["peoples"].get(who)
-        if rec is None:
-            continue
         home = max(worlds, key=lambda p: p.population)
+        rec = st["peoples"].get(who)
+        if rec is None:                                       # a seeded or settled people begins its own ledger
+            begin(kernel, who, home)
+            rec = st["peoples"].get(who)
+            if rec is None:
+                continue
         rec["home"] = home.sector_id
         rec["h"] = int(rec["h"]) + 1                          # the year's receipt
         pace = _pace(kernel, tempo.wait_years(kernel, who, home))
