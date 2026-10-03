@@ -271,7 +271,8 @@ def _meetings(kernel: Any, now: float) -> List[str]:
     from xylarium.kernel import cosmos, federation, history, scheduler, syntropy
     st = stats(kernel)
     peoples = syntropy._peoples(kernel)
-    crossed = [w for w, r in st["of"].items() if w in peoples and "crossed" in r["passed"]]
+    crossed = [w for w, r in st["of"].items() if w in peoples                 # however it crossed: by its own
+               and _stage(kernel, w, max(peoples[w], key=lambda p: p.population)) == "crossed"]   # mathematics too
     logs = []
     for i, a in enumerate(crossed):
         for b in crossed[i + 1:]:

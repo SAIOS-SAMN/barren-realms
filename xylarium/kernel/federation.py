@@ -105,13 +105,30 @@ def _gain(kernel: Any, people: str, members: List[str], by: Dict[str, List[Any]]
     """A member's yearly gain from common law: its trade with its fellows, as safe as their joint arm makes it."""
     from xylarium.kernel import contact, relations
     from xylarium.kernel.sustenance import _strength
-    others = contact.contacts(kernel, by).get(people, {})
+    others = dict(contact.contacts(kernel, by).get(people, {}))
+    met = (getattr(kernel, "state", {}).get("annals") or {}).get("met", {})
+    for b in members:                                     # dominions that met at the level of history trade across
+        if b != people and b in by and (f"{people}|{b}" in met or f"{b}|{people}" in met):   # their border
+            others[b] = others.get(b, 0) + 1
     total = sum(others.values())
     if total <= 0:
         return 0.0
     where = relations._capital(by[people]).sector_id
-    joint = sum(relations.projected(kernel, by[m], where) / max(1, relations.guarded(kernel, m, by))
-                for m in members if m in by)
+    annals_of = (getattr(kernel, "state", {}).get("annals") or {}).get("of", {})
+
+    def arm(m: str) -> float:
+        """What member m brings to bear where this people lives: its ships' reach, or - for a dominion that met it
+        at the level of history - its capital's strength across the gap its reach spans (falling as (1 + d/reach)^2,
+        as projection falls with hops)."""
+        got = relations.projected(kernel, by[m], where)
+        if got <= 0 and m != people and (f"{people}|{m}" in met or f"{m}|{people}" in met):
+            reach = float((annals_of.get(m) or {}).get("reach", 0.0))
+            from xylarium.kernel import cosmos
+            d = cosmos.distance_kpc(kernel, relations._capital(by[m]).sector_id, where)
+            if reach > 0 and d is not None:
+                got = _strength(relations._capital(by[m])) / (1.0 + d / reach) ** 2
+        return got / max(1, relations.guarded(kernel, m, by))
+    joint = sum(arm(m) for m in members if m in by)
     gain = 0.0
     for b, n in others.items():
         if b not in members or b not in by:
