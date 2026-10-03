@@ -68,6 +68,24 @@ def guide(kernel: Any, holder: str, steward: str, aim: Optional[str] = None,
     return g
 
 
+def share(kernel: Any, holder: Optional[str]) -> float:
+    """How much of a steward's word a people takes up when it is one thing to adopt or not (a focus, a gauge's
+    setting): heed / (1 + heed) - half, before it has learned anything of its steward."""
+    h = heed(kernel, holder)
+    return h / (1.0 + h)
+
+
+def counsel_more(kernel: Any, holder: str, steward: str, names: List[str]) -> Dict[str, Any]:
+    """Add options for the council to weigh (those already urged stay urged)."""
+    g = attach(kernel, holder, steward)
+    for n in names:
+        if n not in g["consider"]:
+            g["consider"].append(n)
+        if n in g["caution"]:
+            g["caution"].remove(n)
+    return g
+
+
 def voice(kernel: Any, holder: Optional[str]) -> str:
     return f"heed:{of(kernel, holder)['steward']}" if of(kernel, holder) else ""
 

@@ -142,8 +142,12 @@ def peoples(kernel: Any) -> List[Any]:
 
 
 def bind(kernel: Any, player_id: str, name: str, planet: Any) -> None:
+    from xylarium.kernel import knowledge, steward
     stats(kernel)["stewards"][player_id] = {"planet": planet.id, "name": name, "since": kernel.cycle_count}
     planet.society["steward"] = player_id
+    holder = knowledge.holder_of_planet(planet)
+    if holder:
+        steward.attach(kernel, holder, player_id)          # one voice in its people's mind (steward.py)
 
 
 def homeworld(kernel: Any, player_id: str) -> Optional[Any]:
@@ -184,60 +188,83 @@ def _life(kernel: Any, p: Any, h: Optional[str]) -> Dict[str, Any]:
 
 
 def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> str:
-    """A steward's decision for its people, where the people's physics allows it."""
-    from xylarium.config import HOUSEHOLD_INCOME_SHARE
-    from xylarium.kernel import demography, knowledge, ways
+    """A steward's word to its people. A steward is one voice in its people's mind (steward.py): it can urge, bring
+    an option to its council, or caution - and its people chooses, weighing it by how far heeding it has served them.
+    Nothing here decides for them."""
+    from xylarium.kernel import demography, knowledge, scheduler, steward, ways
     p = homeworld(kernel, player_id)
     if p is None:
         return "You steward no people."
     h = knowledge.holder_of_planet(p)
+    if not h:
+        return "Your people has no council to hear you yet."
+    heard = steward.share(kernel, h)
     if what == "focus":
-        knowledge.focus(kernel, h, arg)
-        return f"Your people's inquiry turns to {arg or 'whatever their needs call for'}."
+        rng = scheduler.rng(kernel, "steward_focus", h, kernel.cycle_count)
+        if rng.random() < heard:
+            knowledge.focus(kernel, h, arg)
+            return f"Your people take up your counsel: their inquiry turns to {arg or 'whatever their needs call for'}."
+        return "Your people heard you; their inquiry stays where their own needs call."
     if what == "policy":
         if arg not in demography.POLICIES:
             return f"Policies: {', '.join(demography.POLICIES)}."
-        p.growth_policy = arg
-        return f"Your people will {'grow into their land' if arg == 'expand' else 'hold their numbers steady'}."
+        other = [x for x in demography.POLICIES if x != arg]
+        g = steward.counsel_more(kernel, h, player_id, [arg])
+        g["caution"] = sorted(set(g["caution"]) | set(other))
+        return f"You counsel your people to {'grow into their land' if arg == 'expand' else 'hold their numbers steady'}; their council will weigh it."
     if what == "farm":
         if ways.way(p) != "forage":
             return "Your people already farm."
-        p.society["way"] = "farm"
-        ways._refresh(kernel, p)
-        return "Your people sow their first fields. Their crops are half-wild; they will breed them year by year."
+        steward.counsel_more(kernel, h, player_id, ["take_up_farming"])
+        return "You speak for the first fields. Their elders will weigh it against the toil, season by season."
     if what == "state":
         if ways.way(p) != "farm":
             return "Only a farming people can found a state."
-        if ways.surplus(kernel, p) < 1.0 - HOUSEHOLD_INCOME_SHARE:
-            return (f"Their harvests leave a surplus of {ways.surplus(kernel, p):.0%} - a state would take "
-                    f"{1.0 - HOUSEHOLD_INCOME_SHARE:.0%}. Breed the crops further first.")
-        p.society["way"] = "state"
-        from xylarium.kernel import institutions
-        institutions.found_currency(kernel, p)
-        return "A council, a granary, a tax: your people found a state."
+        steward.counsel_more(kernel, h, player_id, ["found_state"])
+        return "You speak for a council, a granary and a tax. Their elders will weigh it against what it takes."
     if what == "gauge":
         from xylarium.kernel import society
         try:
             key, _, val = (arg or "").partition("=")
-            society.set_gauge(p, key.strip(), float(val))
+            key = key.strip()
+            now = society.gauges(p)[key]
+            society.set_gauge(p, key, now + heard * (float(val) - now))   # moved as far as they heed you
         except (KeyError, ValueError):
             return f"Gauges: {', '.join(society.GAUGES)} - each 0 to 1 (e.g. temple=0.3)."
-        return f"Your people's {key.strip()} is set to {society.gauges(p)[key.strip()]:.0%}."
+        return f"Your people's {key} moves to {society.gauges(p)[key]:.0%} (they take up {heard:.0%} of your word)."
     if what == "exodus":
-        holder = knowledge.holder_of_planet(p)
-        for s in kernel.sectors.values():
-            for w in s.planets:
-                if w.population > 0 and knowledge.holder_of_planet(w) == holder:
-                    w.society["exodus_ordered"] = True
-        return "Your council will carry every one of your people it can away from a dying sun, whatever it costs."
-    if what == "counsel":
-        from xylarium.kernel import counsel
-        return counsel.render(counsel.counsel(kernel, p))
+        steward.counsel_more(kernel, h, player_id, ["exodus", "rescue"])
+        return "You counsel your people to leave their dying sun. Their council will weigh what it costs."
     if what == "works":
         if ways.stateless(p):
             return "Without a state there is no treasury to build with."
-        msg = demography._works(kernel, p)
-        return msg or "The council weighed its works and found none worth their price this season."
+        steward.counsel_more(kernel, h, player_id, ["raise_citadel", "dig_habitat", "build_nursery"])
+        return "You speak for great works. The council will weigh them against their price each season."
+    if what == "urge":
+        try:
+            steward.guide(kernel, h, player_id, aim=(arg or "").strip().lower())
+        except ValueError:
+            return f"Aims: {', '.join(steward.AIMS)}."
+        return f"You urge your people to {arg}. Their council will give it the weight they give you."
+    if what == "caution":
+        g = steward.attach(kernel, h, player_id)
+        name = (arg or "").strip()
+        if name and name not in g["caution"]:
+            g["caution"].append(name)
+            if name in g["consider"]:
+                g["consider"].remove(name)
+        return f"You caution your people against {name or 'nothing in particular'}."
+    if what == "withdraw":
+        steward.guide(kernel, h, player_id, aim="", consider=[], caution=[])
+        return "You fall silent. Your people choose by their own lights."
+    if what == "counsel":
+        from xylarium.kernel import counsel
+        view = steward.perceive(kernel, h)
+        g = view.get("guidance") or {}
+        extra = (f"\nThey heed you at {view.get('heed', 0):.2f} (1 = as much as any other voice); you urge "
+                 f"{g.get('aim') or 'nothing'}, ask them to weigh {', '.join(g.get('consider') or []) or 'nothing'}, "
+                 f"caution against {', '.join(g.get('caution') or []) or 'nothing'}.")
+        return counsel.render(counsel.counsel(kernel, p)) + extra
     return "Unknown decision."
 
 

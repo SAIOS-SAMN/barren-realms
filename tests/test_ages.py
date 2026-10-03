@@ -26,8 +26,10 @@ class TestAges(unittest.TestCase):
         self.assertAlmostEqual(home.society["genome"]["tolerance"], 0.3)
         self.assertIn("state", ages.act(k, "p1", "state"))           # foragers cannot found a state
         self.assertIn("fields", ages.act(k, "p1", "farm"))
-        self.assertEqual(ways.way(home), "farm")
-        self.assertIn("surplus", ages.act(k, "p1", "state"))          # half-wild crops cannot bear one yet
+        self.assertEqual(ways.way(home), "forage")                     # counsel, not command: its elders decide
+        from xylarium.kernel import knowledge, steward
+        g = steward.of(k, knowledge.holder_of_planet(home))
+        self.assertIn("take_up_farming", g["consider"])                # its council now weighs the fields
         k.tick_simulation()
         self.assertIsNone(ages.shape(k, "p1", {"tolerance": 1.0}))     # the Progenitor's hand is only at genesis
 

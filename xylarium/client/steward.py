@@ -62,17 +62,19 @@ def _screen(kernel: Any, pid: str) -> None:
 def _menu(kernel: Any, pid: str) -> None:
     s = ages.status(kernel, pid)
     opts = [("Z", "Wake me when something happens"), ("A", "Advance one season"),
-            ("R", "Point their inquiry"), ("P", "Set their growth (expand / steady)"),
-            ("G", "Set a gauge (temple / levy / openness / commerce)"), ("M", "Their myths"),
-            ("K", "Counsel (what your people's minds can see)")]
+            ("R", "Counsel their inquiry"), ("P", "Counsel their growth (expand / steady)"),
+            ("G", "Counsel a gauge (temple / levy / openness / commerce)"), ("M", "Their myths"),
+            ("K", "Counsel (what your people's minds can see, and how they heed you)"),
+            ("U", "Urge an aim (grow / deepen / secure / hold / reach)"), ("X", "Caution against a choice"),
+            ("N", "Fall silent")]
     if s.get("forecast"):
-        opts.append(("E", f"Order the exodus (their sun: {s['forecast']['years_left']:,.0f} years left at the reckoning)"))
+        opts.append(("E", f"Counsel the exodus (their sun: {s['forecast']['years_left']:,.0f} years left at the reckoning)"))
     if s["way"] == "forage":
-        opts.append(("F", "Take up farming"))
+        opts.append(("F", "Speak for farming"))
     if s["way"] == "farm":
-        opts.append(("S", "Found a state"))
+        opts.append(("S", "Speak for a state"))
     if s["way"] == "state":
-        opts.append(("W", "Weigh the council's works now"))
+        opts.append(("W", "Speak for great works"))
     if kernel.get_player(pid) is not None:
         opts.append(("C", "Return to your ship"))
     elif s["yards"]:
@@ -122,6 +124,14 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             myths = ages.status(kernel, pid)["myths"]
             for m in myths or [{"year": "-", "text": "they have no stories yet"}]:
                 print(c_gray(f"  year {m['year']}: they say that {m['text']}."))
+        elif cmd == "U":
+            raw = input(c_gold("Aim (grow / deepen / secure / hold / reach) > ")).strip().lower()
+            print("  " + ages.act(kernel, pid, "urge", raw))
+        elif cmd == "X":
+            raw = input(c_gold("Caution against (e.g. expand, raise_citadel, exodus) > ")).strip()
+            print("  " + ages.act(kernel, pid, "caution", raw))
+        elif cmd == "N":
+            print("  " + ages.act(kernel, pid, "withdraw"))
         elif cmd == "F":
             print("  " + ages.act(kernel, pid, "farm"))
         elif cmd == "S":
