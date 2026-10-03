@@ -145,8 +145,9 @@ def sublight_years(kernel: Any, a: int, b: int, planet: Any) -> Optional[float]:
     if d is None:
         return None
     v_e = FUEL_CELLS.get(propulsion.world_fuel(kernel, planet), FUEL_CELLS["H"]).get("v_e") or 1.0
-    v = min(0.99, 0.5 * v_e * V_E_UNIT_C)
-    return d * 3261.56 / v
+    import math
+    v = math.tanh(0.5 * v_e * V_E_UNIT_C)               # boosts compose by Einstein's law (geometry.flow): never c
+    return d * 3261.56 / max(1e-12, v)
 
 
 def season(kernel: Any) -> List[str]:

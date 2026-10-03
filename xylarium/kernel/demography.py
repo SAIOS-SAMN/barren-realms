@@ -530,6 +530,10 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     from xylarium.kernel import institutions
     if institutions.founding(kernel):
         institutions.rehome(kernel, daughter, planet.currency, "settlers_money")   # its money goes with its settlers
+    from xylarium.kernel import clocks, mastery, sustenance as _sus
+    holder = _sus.people_of(planet)
+    if holder and daughter.sector_id != planet.sector_id and mastery.crossed(kernel, holder):
+        clocks.fold(kernel, holder, planet.sector_id, daughter.sector_id)   # a null flow: no proper time passes
     nursery.stock_kit(kernel, planet, daughter, metab, emigrants)  # the clade's seeding kit sails with them
     daughter.morale = max(daughter.morale, 80)
     daughter.growth_policy = None

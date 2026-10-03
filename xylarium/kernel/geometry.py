@@ -203,3 +203,13 @@ def separation_au(p1: Sequence[float], p2: Sequence[float], star_suns: float = 1
     mid = [(x + y) / 2.0 for x, y in zip(p1, p2)]
     r = max(1e-6, math.sqrt(sum(c * c for c in mid)))
     return d * (1.0 + rs / (2.0 * r))
+
+
+def flow(t1: float, t2: float, k: float) -> float:
+    """Two motions on one plane composed: t1 (+) t2 = (t1 + t2) / (1 + k t1 t2), k the square of the plane - a turn
+    (k < 0: tangents add), a boost (k > 0: Einstein's addition of velocities, in units of light), or the null flow
+    (k = 0: amounts simply add - the fold, and the white hole's slivers). One law, the metric's sign deciding."""
+    den = 1.0 + k * t1 * t2
+    if den == 0.0:
+        return float("inf")                              # the pole: a half turn, or light itself
+    return (t1 + t2) / den
