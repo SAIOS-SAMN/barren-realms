@@ -6,8 +6,9 @@ it, and its speed changes nothing it films. So it runs as fast as it can without
 in the middle of - the rule an integrator follows (a Courant condition): no clock year may hold more than a share
 (1 / FRAMES) of the shortest wait any living people has to its next turning - the next bridge of its history
 (annals.SPANS, in its own generations, at its own minds' pace) or its fall, whichever it expects sooner. A people
-whose world holds it from the sky has no next bridge, only its fall; a people among the stars is not waiting on a
-bridge, and does not hold the clock back. With no people in the middle of its history, deep time runs at the pace
+whose world holds it from the sky has no next bridge, only its fall; a people among the stars waits on its
+dominion's next e-fold of settlement - so once any people is among the stars, the galaxy runs at the pace of its
+expansion. With no people in the middle of its history, deep time runs at the pace
 chosen at genesis (cosmos.ceiling): the galaxy turns fast between minds and slows to watch each one rise.
 
 Changes of rate are kept as segments (cosmos.set_rate), so deep time is exactly accumulated; a change smaller than
@@ -24,13 +25,17 @@ def wait_years(kernel: Any, who: str, home: Any) -> Optional[float]:
     """The years a living people expects to wait for its next turning (None: it holds nothing back)."""
     from xylarium.kernel import annals, fertility
     stage = annals._stage(kernel, who, home)
-    if stage == "crossed":
-        return None
     gen = max(1.0, fertility.generation_of(kernel, home))
+    if stage == "crossed":
+        # among the stars its next turning is its dominion's next e-fold of settlement (annals)
+        return gen / annals.DOMINION_PER_GENERATION / annals._speed(kernel, home)
     nxt = annals.STAGES.index(stage) + 1
     fall = gen / annals.FALL_PER_GENERATION
     if annals.STAGES[nxt] == "yards" and not annals._can_reach_orbit(kernel, who, home):
         return fall
+    from xylarium.kernel import mastery
+    if annals.STAGES[nxt] == "crossed" and not mastery.genome_ready(kernel, who, [home]):
+        return min(fall, annals.GENETICS_SPAN / annals._speed(kernel, home) * gen)
     from xylarium.kernel import technology
     if annals.STAGES[nxt] == "works" and not technology.embodied(kernel, who, home):
         return min(fall, annals.EMBODIMENT_SPAN / annals._speed(kernel, home) * gen)

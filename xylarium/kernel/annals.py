@@ -31,6 +31,8 @@ SPANS = {                       # measured by tools/bridges.py on seed 7's first
     "crossed": 400.0,
 }
 STAGES = ("forage", "farm", "state", "works", "yards", "crossed")
+GENETICS_SPAN = 100.0           # generations a people with yards takes to master its own genome (declared: between
+                                # yards' 60 and the crossing's 400 - the knowledge of itself it needs to live elsewhere)
 EMBODIMENT_SPAN = 200.0         # generations a genome-less people takes to come into a vessel (declared: harder than any
                                 # one bridge - it learns the terrestrial dimensions from nothing)
 FALL_PER_GENERATION = 2.0e-4    # a one-world people's hazard of falling, per generation (declared: a mean of ~5,000
@@ -81,7 +83,7 @@ def _speed(kernel: Any, home: Any) -> float:
 
 
 CAPS_AT = (("radio", 3), ("computation", 3), ("medicine", 3), ("fission", 4), ("orbit", 4), ("networks", 4),
-           ("genetics", 4), ("robotics", 4), ("synthesis", 5))
+           ("robotics", 4), ("synthesis", 5))      # genetics is not handed over with yards: it is waited for
 
 
 def _grant(kernel: Any, who: str, home: Any, idx: int) -> None:
@@ -207,7 +209,19 @@ def season(kernel: Any) -> List[str]:
             if STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
                 nxt_blocked = True                            # its gravity holds it: it lives on, on its world
             elif STAGES[nxt] == "crossed" and not _mastery.genome_ready(kernel, who, worlds):
-                nxt_blocked = True                            # it cannot yet live under another sun
+                if _tech.genomeless(kernel, home):
+                    nxt_blocked = True                        # its vessel came with its works; nothing else stands
+                else:
+                    wait_gene = rng.expovariate(speed / GENETICS_SPAN)
+                    wait_fall = rng.expovariate(FALL_PER_GENERATION)
+                    if wait_fall <= wait_gene and t + wait_fall < gens:
+                        fell = t + wait_fall
+                        break
+                    if t + wait_gene >= gens:
+                        break
+                    t += wait_gene
+                    _tech.stats(kernel)["of"].setdefault(who, {})["genetics"] = kernel.cycle_count
+                    continue                                  # it can rewrite itself now; the crossing can come
             else:
                 nxt_blocked = False
             wait_up = float("inf") if nxt_blocked else rng.expovariate(speed / SPANS[STAGES[nxt]])
