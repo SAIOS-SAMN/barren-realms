@@ -80,6 +80,9 @@ def record(kernel: Any, planet: Any, kind: str, by: Optional[str], **effect: Any
     else:
         led.append({"kind": kind, "by": by, "c0": c, "c": c, **effect})
     _fold(planet, effect)
+    if hasattr(kernel, "sectors"):
+        from xylarium.kernel import lifeline
+        lifeline.disturb(kernel, planet, kind)                # its life re-resolved from the world as it now stands
     return led[-1]
 
 

@@ -64,6 +64,11 @@ whatever the machine), and kept on disk. Nothing about the universe is sampled a
 looks never changes it: an unwatched region is not rendered - no sectors, no agents, no map - yet its minds wake at
 their own epochs on their own worlds.
 
+Life is not part of that determined trajectory: it is living things on their own streams of chance. The schedule
+resolves each world's climb ahead along its undisturbed trajectory - a forecast that holds only while nothing
+interferes (lifeline.py). When a mind acts on a world (imprint.py), its life is re-resolved from that moment: ended if
+the world no longer holds a living medium (LIFE_ENDED), otherwise its climbed rungs kept and the rest drawn afresh.
+
 A lit world's window closes as its star leaves the main sequence: the giant branch (`cosmos.AGEING_SHARE`, the last
 tenth of its life) boils its seas, in creation as in play.
 

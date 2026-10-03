@@ -829,9 +829,14 @@ def genesis(kernel: Any) -> None:
 
 
 def _due(kernel: Any) -> List[str]:
+    from xylarium.kernel import lifeline
     st = stats(kernel)
     logs = []
     now = deep_gyr(kernel)
+    for rec in lifeline.due(kernel, now):                     # lives re-resolved after a mind acted on their world
+        line = arise(kernel, rec)
+        if line:
+            logs.append(line)
     while True:
         if st["next"] >= len(st["minds"]):
             if len(st["minds"]) < WINDOW:
@@ -844,6 +849,8 @@ def _due(kernel: Any) -> List[str]:
             break
         st["next"] += 1
         st["last"] = [rec["epoch"], rec["cell"], rec["k"], rec.get("w", 0)]
+        if lifeline.overridden(kernel, rec):
+            continue                                          # its world was disturbed: the forecast no longer holds
         line = arise(kernel, rec)
         if line:
             logs.append(line)
