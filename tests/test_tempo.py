@@ -14,9 +14,20 @@ class TestTempo(unittest.TestCase):
         self.k = GameKernel(seed=7, genesis="cosmic")
         self.k.activate()
 
-    def test_a_rising_people_slows_the_clock(self):
-        self.assertLess(tempo.desired(self.k), cosmos.ceiling(self.k))
-        self.assertGreaterEqual(tempo.desired(self.k), 1.0)
+    def test_a_rising_people_keeps_its_own_clock_and_the_galaxy_runs_on(self):
+        from xylarium.kernel import clocks, knowledge, relations
+        who = sorted(relations._peoples(self.k))[0]
+        self.assertTrue(clocks.own(self.k, who))
+        self.assertLess(clocks.rate(self.k, who), cosmos.ceiling(self.k))     # its history's pace
+        self.assertGreaterEqual(clocks.rate(self.k, who), 1.0)
+        self.assertEqual(tempo.desired(self.k), cosmos.ceiling(self.k))       # it does not hold the galaxy back
+        self.k.cycle_count = 1000
+        self.assertLess(clocks.now(self.k, who), cosmos.deep_gyr(self.k))      # its world lives at its own pace
+        home = max(relations._peoples(self.k)[who], key=lambda p: p.population)
+        self.assertEqual(cosmos.deep_gyr(self.k, sector_id=home.sector_id), clocks.now(self.k, who))
+        clocks.sync(self.k, who, "met another people")
+        self.assertFalse(clocks.own(self.k, who))
+        self.assertEqual(cosmos.deep_gyr(self.k, sector_id=home.sector_id), cosmos.deep_gyr(self.k))
 
     def test_deep_time_is_continuous_through_a_change_of_rate(self):
         rate0 = cosmos.ruler(self.k)                                     # set when the first mind woke

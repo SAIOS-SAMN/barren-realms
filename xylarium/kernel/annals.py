@@ -182,7 +182,9 @@ def season(kernel: Any) -> List[str]:
             continue
         rec = st["of"].setdefault(who, {"advanced": 0.0, "passed": [], "dominion": len(worlds), "reach": 0.0})
         lived = (kernel.cycle_count - int(arisen.get("cycle", kernel.cycle_count))) / 100.0
-        deficit = (now - float(arisen["epoch"])) * 1e9 - lived - rec["advanced"]
+        from xylarium.kernel import clocks
+        own_now = clocks.now(kernel, who)                     # its own now: the galaxy's once their clocks have met
+        deficit = (own_now - float(arisen["epoch"])) * 1e9 - lived - rec["advanced"]
         gen = max(1.0, fertility.generation_of(kernel, home))
         gens = deficit / gen
         if gens < MIN_GENERATIONS:
@@ -193,7 +195,7 @@ def season(kernel: Any) -> List[str]:
         fall_rate = FALL_PER_GENERATION / resilience(kernel, who)
         stage = _stage(kernel, who, home)
         t = 0.0                                               # generations lived in this stretch
-        epoch_of = lambda tt: now - (gens - tt) * gen / 1e9   # noqa: E731
+        epoch_of = lambda tt: own_now - (gens - tt) * gen / 1e9   # noqa: E731
         fell = None
         while t < gens:
             nxt = STAGES.index(stage) + 1

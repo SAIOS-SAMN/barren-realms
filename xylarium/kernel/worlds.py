@@ -705,7 +705,7 @@ def world_age(kernel: Any, planet: Any) -> float:
     g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {})
     if "born" not in g:
         return creation.SETTLED_GYR
-    age = cosmos.deep_gyr(kernel) - float(g["born"])
+    age = cosmos.deep_gyr(kernel, sector_id=planet.sector_id) - float(g["born"])   # its place's own now
     return max(creation.CRUST_GYR, round(age / AGE_STEP_GYR) * AGE_STEP_GYR)
 
 

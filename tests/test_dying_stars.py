@@ -23,6 +23,8 @@ class TestDyingStars(unittest.TestCase):
         self.sid = self.p.sector_id
 
     def _at(self, gyr):
+        from xylarium.kernel import clocks, knowledge as kn
+        clocks.sync(self.k, kn.holder_of_planet(self.p), "watched on the galaxy's clock")   # one star's story
         st = cosmos.stats(self.k)
         st["minds"] = []                                     # no new minds in this test: one star's story
         self.k.cycle_count = int((gyr - st["epoch0"]) * 1e9 / cosmos.ruler(self.k) * 100)

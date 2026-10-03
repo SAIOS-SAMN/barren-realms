@@ -95,9 +95,9 @@ def season(kernel: Any) -> List[str]:
     if not cosmos.is_cosmic(kernel) or (kernel.cycle_count // 25) % 4:
         return []
     st = stats(kernel)
-    t_years = cosmos.deep_gyr(kernel) * 1e9
     logs: List[str] = []
     for sec in kernel.sectors.values():
+        t_years = cosmos.deep_gyr(kernel, sector_id=sec.id) * 1e9     # its place's own now (clocks.py)
         for p in sec.planets:
             if p.population <= 0 or getattr(p, "natives", None):
                 continue

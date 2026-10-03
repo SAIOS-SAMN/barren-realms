@@ -46,10 +46,11 @@ def desired(kernel: Any) -> float:
     from xylarium.kernel import cosmos, syntropy
     top = cosmos.ceiling(kernel)
     waits = []
+    from xylarium.kernel import clocks
     for who, worlds in syntropy._peoples(kernel).items():
         home = max(worlds, key=lambda p: p.population)
-        if not (home.society.get("arisen") or {}):
-            continue
+        if not (home.society.get("arisen") or {}) or clocks.own(kernel, who):
+            continue                                          # a people keeping its own clock does not hold the galaxy's
         w = wait_years(kernel, who, home)
         if w is not None:
             waits.append(w)

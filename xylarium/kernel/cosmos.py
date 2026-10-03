@@ -210,10 +210,16 @@ def _segment(kernel: Any, c: float) -> List[float]:
     return segs[lo]
 
 
-def deep_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
+def deep_gyr(kernel: Any, cycle: Optional[int] = None, sector_id: Optional[int] = None) -> float:
     """The deep-time epoch (Gyr since the Big Bang) at a clock cycle: deep time accumulated through every change of
-    the clock's rate (tempo.py) - the camera's speed changes, never what it films."""
+    the clock's rate (tempo.py) - the camera's speed changes, never what it films. Asked for a place, the place's
+    own now: a people no one has yet observed keeps its own clock, and its world reads it (clocks.py)."""
     c = kernel.cycle_count if cycle is None else cycle
+    if sector_id is not None:
+        from xylarium.kernel import clocks
+        local = clocks.place_now(kernel, sector_id, c)
+        if local is not None:
+            return local
     c0, d0, rate = _segment(kernel, c)
     return float(d0) + (c - c0) / 100.0 * float(rate) / 1.0e9
 
@@ -557,7 +563,7 @@ def phase(kernel: Any, sector_id: int, at_gyr: Optional[float] = None) -> Tuple[
     born, ends = life
     if ends <= born:
         return "dead", 1.0
-    t = deep_gyr(kernel) if at_gyr is None else at_gyr
+    t = deep_gyr(kernel, sector_id=sector_id) if at_gyr is None else at_gyr
     if t >= ends:
         return "dead", 1.0
     span = AGEING_SHARE * (ends - born)
@@ -600,7 +606,9 @@ def years_left(kernel: Any, sector_id: int) -> Optional[float]:
     life = star_life(kernel, sector_id)
     if life is None:
         return None
-    return max(0.0, (life[1] - deep_gyr(kernel)) * 1.0e9 / ruler(kernel))
+    from xylarium.kernel import clocks
+    pace = clocks.place_rate(kernel, sector_id) or ruler(kernel)
+    return max(0.0, (life[1] - deep_gyr(kernel, sector_id=sector_id)) * 1.0e9 / pace)
 
 
 def forecasts(kernel: Any, sector_id: int, mastery: float) -> bool:
@@ -609,7 +617,7 @@ def forecasts(kernel: Any, sector_id: int, mastery: float) -> bool:
     life = star_life(kernel, sector_id)
     if life is None or life[1] <= life[0]:
         return False
-    ahead = (life[1] - deep_gyr(kernel)) / (life[1] - life[0])
+    ahead = (life[1] - deep_gyr(kernel, sector_id=sector_id)) / (life[1] - life[0])
     return ahead <= mastery or phase(kernel, sector_id)[0] == "giant"
 
 
@@ -989,8 +997,9 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
                   text=f"On {p.name}, {r:.1f} kpc from the galactic centre, under a star of {m:.2f} solar masses, "
                        f"in {traits['medium']}, a people became aware of itself: {traits['describe']} - "
                        f"the {name}.", data={"traits": traits})
-    from xylarium.kernel import kinship, tempo
-    tempo.wake(kernel)                                       # the clock slows at once to watch it rise
+    from xylarium.kernel import clocks, kinship, knowledge, tempo
+    clocks.begin(kernel, knowledge.holder_of_planet(p), p)   # it keeps its own clock until others can see it
+    tempo.wake(kernel)
     kinship.on_arise(kernel, p)                              # did anyone eat its world's life before it woke?
     return f"[COSMOS] A mind arises: the {name} of {p.name} ({metab}, {plan}), {r:.1f} kpc out."
 
