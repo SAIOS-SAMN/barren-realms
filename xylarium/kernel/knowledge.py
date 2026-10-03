@@ -29,6 +29,11 @@ from xylarium.kernel import laws
 
 DOMAINS = ("energy", "materials", "biology", "information")
 CURIOSITY = 0.25                 # the floor of undirected inquiry, as a share of one domain's pull
+LIVED_SHARE = 0.05              # the share of every member's waking thought that its living adds to what its people
+                                # knows - the forager's craft, lore and land-sense, carried and taught (declared; a
+                                # specialist's spare time adds the rest: effort)
+POOLED_KEEP = 0.5               # how much of a collective's forgetting its pooling spares: what one knows, the whole
+                                # holds (declared)
 
 
 def _quarter() -> int:
@@ -108,6 +113,8 @@ def pulls(kernel: Any, planet: Any) -> Dict[str, float]:
     ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
     fp = soc.get("fertility_parts") or {}
     bio = max(0.0, 1.0 - ss) + max(0.0, 1.0 - float(fp.get("unstressed", 1.0) or 1.0))
+    if soc.get("way") in ("farm", "state"):
+        bio += 1.0                                  # breeding is heredity practised: its fields ask what is inherited
     if fp.get("strategy") == "r":
         from xylarium.kernel import nursery
         bio += max(0.0, nursery.r0(kernel, planet) - 1.0)
@@ -120,6 +127,17 @@ def pulls(kernel: Any, planet: Any) -> Dict[str, float]:
     energy = (1.0 - float(soc.get("readiness", 1.0) or 1.0)) + (1.0 if soc.get("degraded") else 0.0)
     information = min(1.0, float(soc.get("lux_access", 0.0) or 0.0))         # a trading, provided-for people
     return {"energy": energy, "materials": materials, "biology": bio, "information": information}
+
+
+def lived(kernel: Any, planet: Any) -> float:
+    """Knowledge units a world's people adds a year by living - from the day it wakes, surplus or none: every member
+    thinks as it hunts, gathers, tends and raises its young (LIVED_SHARE), in the sciences its life touches
+    (mind.profile's affinity). A collective's members add as one."""
+    from xylarium.kernel import biosphere, lifespan, mind
+    depth = biosphere.cognition_of(kernel, planet)["depth"]
+    prof = mind.profile(kernel, planet)
+    return planet.population / 1000.0 * LIVED_SHARE * depth * lifespan.prime_factor(planet) * \
+        (1.0 + prof["collective"]) * impedance(kernel, planet)
 
 
 def effort(kernel: Any, planet: Any) -> float:
@@ -152,13 +170,15 @@ def forgetting(kernel: Any, holder: Optional[str]) -> float:
     """A people's yearly loss of what it knows: the measured R&D depreciation (laws), with the share its knowers'
     deaths make of it (1 / Earth's life expectancy) replaced by its own (lifespan.py) - a long-lived people holds
     what it learns longer, a short-lived one must keep relearning."""
-    from xylarium.kernel import lifespan
+    from xylarium.kernel import lifespan, mind
     life = lifespan.expectancy(kernel, holder)
+    prof = mind.of_holder(kernel, holder) if holder and holder.startswith("civ:") else None
+    pooled = 1.0 - POOLED_KEEP * (prof["collective"] if prof else 0.0)      # a collective holds what it knows
     if not life:
-        return laws.KNOWLEDGE_DEPRECIATION
+        return laws.KNOWLEDGE_DEPRECIATION * pooled
     # knowers die at 1/life a year: what they carried leaves exponentially; the rest of the measured rate stays
     keep = (1.0 - laws.KNOWLEDGE_DEPRECIATION) * math.exp(1.0 / HUMAN_LIFE_YEARS - 1.0 / max(1e-3, life))
-    return 1.0 - keep
+    return (1.0 - keep) * pooled
 
 
 def impedance(kernel: Any, planet: Any) -> float:
@@ -198,6 +218,13 @@ def quarter(kernel: Any) -> List[str]:
             holder = holder_of_planet(planet)
             if not holder:
                 continue
+            from xylarium.kernel import mind
+            lived_units = lived(kernel, planet) * years
+            if lived_units > 0:                     # what its life teaches it, in the sciences its life touches
+                aff = mind.profile(kernel, planet)["affinity"]
+                tot = sum(aff.values()) or 1.0
+                for d in DOMAINS:
+                    learn(kernel, holder, d, lived_units * aff[d] / tot, why="lived")
             units = effort(kernel, planet) * years
             if units <= 0:
                 continue

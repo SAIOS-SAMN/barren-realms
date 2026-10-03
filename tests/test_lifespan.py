@@ -115,7 +115,9 @@ class TestTurnover(unittest.TestCase):
         long_ = knowledge.forgetting(k, h)
         self.assertGreater(short, long_)
         lifespan.stats(k)["peoples"][h] = {"expectancy": knowledge.HUMAN_LIFE_YEARS, "died": 0}
-        self.assertAlmostEqual(knowledge.forgetting(k, h), 0.15, places=6)            # Earth's measured rate
+        from xylarium.kernel import mind
+        pooled = 1.0 - knowledge.POOLED_KEEP * mind.of_holder(k, h)["collective"]   # a collective holds what it knows
+        self.assertAlmostEqual(knowledge.forgetting(k, h), 0.15 * pooled, places=6)  # Earth's measured rate
 
     def test_the_fork_is_weighed_again_when_the_people_has_replaced_itself(self):
         from unittest import mock

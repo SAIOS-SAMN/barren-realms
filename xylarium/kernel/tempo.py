@@ -30,7 +30,7 @@ def wait_years(kernel: Any, who: str, home: Any) -> Optional[float]:
         # among the stars its next turning is its dominion's next e-fold of settlement (annals)
         return gen / annals.DOMINION_PER_GENERATION / annals._speed(kernel, home)
     nxt = annals.STAGES.index(stage) + 1
-    fall = gen / annals.FALL_PER_GENERATION
+    fall = gen / annals.FALL_PER_GENERATION * annals.resilience(kernel, who)
     if annals.STAGES[nxt] == "yards" and not annals._can_reach_orbit(kernel, who, home):
         return fall
     from xylarium.kernel import mastery

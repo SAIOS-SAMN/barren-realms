@@ -99,10 +99,24 @@ def orbit_ratio(planet: Any, exhaust_kms: float) -> float:
     return math.exp(CLIMB * v_esc / max(1e-6, exhaust_kms))
 
 
+BREEDING_MASTERY = 0.8          # how much of the wild-to-farmed gap a people must have closed for its breeders to read
+                                # heredity's laws (classical genetics; declared)
+PLASTIC_GENETICS = 0.5          # a mind this plastic rewrites itself within a life: its heredity is its own to study
+
+
 def feasible(kernel: Any, holder: str, cap: str, home: Any) -> bool:
     """Does this people's own world let the capability work?"""
     from xylarium.kernel import biosphere, worlds
     held = stats(kernel)["of"].get(holder, {})
+    if cap == "genetics":
+        # two roads to its own heredity: the laboratory (medicine and machines that think), or the breeder's and the
+        # self-rewriter's (medicine, and long breeding - or a mind that edits itself as it lives)
+        from xylarium.kernel import mind, ways
+        if "medicine" not in held:
+            return False
+        prof = mind.profile(kernel, home)
+        return "computation" in held or prof["plastic"] >= PLASTIC_GENETICS or \
+            ways.domestication(kernel, home) >= BREEDING_MASTERY
     if any(req not in held for req in AFTER.get(cap, ())):
         return False
     if cap == "radio":
@@ -157,12 +171,17 @@ def season(kernel: Any) -> List[str]:
         home = max(worlds, key=lambda p: p.population)
         held = st["of"].setdefault(who, {})
         stocks = knowledge.stocks(kernel, who)
-        thought = 1.0 - math.exp(-sum(knowledge.effort(kernel, p) for p in worlds) / 1000.0)
+        thought = 1.0 - math.exp(-sum(knowledge.effort(kernel, p) + knowledge.lived(kernel, p) for p in worlds) / 1000.0)
         rng = scheduler.rng(kernel, "technology", who, kernel.cycle_count)
         for cap in CAPS:
             if cap in held or not feasible(kernel, who, cap, home):
                 continue
             chance = laws.mastery(stocks.get(NEEDS[cap], 0.0), KNOWLEDGE_UNIT) * thought
+            from xylarium.kernel import mind
+            prof = mind.profile(kernel, home)
+            chance = min(1.0, chance * prof["affinity"].get(NEEDS[cap], 1.0))   # its kind of mind finds its own first
+            if cap == "genetics":                    # a legible, self-rewriting heredity is easier to read
+                chance = min(1.0, chance * (0.5 + prof["legible"]) * (1.0 + prof["plastic"]))
             if cap == "embodiment":                          # the terrestrial dimensions, learned from nothing
                 chance *= laws.mastery(stocks.get("energy", 0.0), KNOWLEDGE_UNIT)
             if rng.random() < chance:

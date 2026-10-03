@@ -72,6 +72,17 @@ def _can_reach_orbit(kernel: Any, who: str, home: Any) -> bool:
     return False
 
 
+def resilience(kernel: Any, who: str) -> float:
+    """How much harder a people is to bring down for what it knows of life: its medicine (its mastery of biology),
+    its own genome, and minds that can leave a failing body - each a way its people survives what would end it."""
+    from xylarium.config import KNOWLEDGE_UNIT
+    from xylarium.kernel import knowledge, laws, technology
+    r = 1.0 + 2.0 * laws.mastery(knowledge.experience(kernel, who, "biology"), KNOWLEDGE_UNIT)
+    r += 1.0 if technology.has(kernel, who, "genetics") else 0.0
+    r += 2.0 if technology.has(kernel, who, "transfer") else 0.0
+    return r
+
+
 def _speed(kernel: Any, home: Any) -> float:
     from xylarium.kernel import decide, knowledge, technology
     who = knowledge.holder_of_planet(home)
@@ -179,6 +190,7 @@ def season(kernel: Any) -> List[str]:
         rec["advanced"] += deficit
         rng = scheduler.rng(kernel, "annals", who, kernel.cycle_count)
         speed = _speed(kernel, home)
+        fall_rate = FALL_PER_GENERATION / resilience(kernel, who)
         stage = _stage(kernel, who, home)
         t = 0.0                                               # generations lived in this stretch
         epoch_of = lambda tt: now - (gens - tt) * gen / 1e9   # noqa: E731
@@ -190,14 +202,14 @@ def season(kernel: Any) -> List[str]:
                 # its dominion, which grows as it settles - H = f / (W0 g) (1 - e^-g T) over what is left of T
                 left = gens - t
                 g, w0 = DOMINION_PER_GENERATION, max(1, rec["dominion"])
-                hazard = FALL_PER_GENERATION / (w0 * g) * (1.0 - math.exp(-g * left))
+                hazard = fall_rate / (w0 * g) * (1.0 - math.exp(-g * left))
                 if rng.expovariate(1.0) < hazard:
                     fell = t + left * rng.random()
                 break
             from xylarium.kernel import mastery as _mastery, technology as _tech
             if STAGES[nxt] == "works" and not _tech.embodied(kernel, who, home):
                 wait_body = rng.expovariate(speed / EMBODIMENT_SPAN)
-                wait_fall = rng.expovariate(FALL_PER_GENERATION)
+                wait_fall = rng.expovariate(fall_rate)
                 if wait_fall <= wait_body and t + wait_fall < gens:
                     fell = t + wait_fall
                     break
@@ -213,7 +225,7 @@ def season(kernel: Any) -> List[str]:
                     nxt_blocked = True                        # its vessel came with its works; nothing else stands
                 else:
                     wait_gene = rng.expovariate(speed / GENETICS_SPAN)
-                    wait_fall = rng.expovariate(FALL_PER_GENERATION)
+                    wait_fall = rng.expovariate(fall_rate)
                     if wait_fall <= wait_gene and t + wait_fall < gens:
                         fell = t + wait_fall
                         break
@@ -225,7 +237,7 @@ def season(kernel: Any) -> List[str]:
             else:
                 nxt_blocked = False
             wait_up = float("inf") if nxt_blocked else rng.expovariate(speed / SPANS[STAGES[nxt]])
-            wait_fall = rng.expovariate(FALL_PER_GENERATION)
+            wait_fall = rng.expovariate(fall_rate)
             if nxt_blocked and t + wait_fall >= gens:
                 break
             if wait_fall <= wait_up and t + wait_fall < gens:
