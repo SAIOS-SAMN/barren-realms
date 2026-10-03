@@ -61,7 +61,10 @@ def rate(kernel: Any, holder: Optional[str]) -> float:
     """E-folds a quarter this people can process a world."""
     from xylarium.kernel import knowledge
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    from xylarium.kernel import technology
     m = knowledge.mastery(kernel, holder, "terraforming") if holder else 0.0
+    if technology.has(kernel, holder, "synthesis"):
+        m *= 1.0 + technology.SYNTHESIS_GAIN           # living chemistry designed for the world, not evolved on it
     return m * (FISCAL_QUARTER_CYCLES / 100.0) / MIXING_YEARS
 
 

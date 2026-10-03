@@ -26,6 +26,16 @@ works, or none:
                can be misled and its stores raided without a ship (strategy.py's model of a neighbour reads it).
   MEDICINE     biology turned on its own bodies: its people live longer (lifespan reads it).
 
+Past the metabolic bound - three ways a people stops waiting on its own generations (life.py: a mind's last rungs
+were written a bit a generation by slow-breeding bodies; science lets it write faster than its bodies breed):
+
+  GENETICS     biology turned on its own genome: it rewrites itself rather than waiting for selection - it lives
+               longer still (lifespan) and passes its history's bridges faster (annals: GENETIC_GAIN).
+  SYNTHESIS    chemistry built to order: living matter designed for a world rather than evolved on it - it reshapes
+               worlds toward its own life faster (terraform.rate: SYNTHESIS_GAIN).
+  ROBOTICS     bodies built, not bred: work and thought no longer bound to how fast its people grow - where its
+               system holds the metals to build them (knowledge.effort: ROBOTICS_GAIN; annals).
+
 Every capability found is an event in its people's ledger (CAPABILITY), dated: the shape of a civilization's history
 is the order its own world let it find these in.
 """
@@ -41,11 +51,17 @@ FISSION_GAIN = 2.0              # nuclear-thermal exhaust over chemistry's (hydr
 COMPUTE_GAIN = 1.0              # what thinking machines add to a people's thought (its effort x (1 + this))
 NETWORK_GAIN = 1.0              # what networks add to how fast familiarity grows
 MEDICINE_GAIN = 0.3             # the share medicine adds to a people's span of life
-CAPS = ("radio", "orbit", "fission", "computation", "networks", "cyber", "medicine")
+GENETIC_GAIN = 1.0              # how much faster a people that rewrites its genome passes its history's bridges
+SYNTHESIS_GAIN = 1.0            # what designed chemistry adds to how fast it reshapes a world
+ROBOTICS_GAIN = 1.0             # what built bodies add to a people's work and thought
+CAPS = ("radio", "orbit", "fission", "computation", "networks", "cyber", "medicine", "genetics", "synthesis",
+        "robotics")
 NEEDS = {"radio": "information", "orbit": "energy", "fission": "energy", "computation": "information",
-         "networks": "information", "cyber": "information", "medicine": "biology"}
+         "networks": "information", "cyber": "information", "medicine": "biology", "genetics": "biology",
+         "synthesis": "materials", "robotics": "materials"}
 AFTER = {"networks": ("radio", "computation"), "cyber": ("networks",), "orbit": (), "fission": (),
-         "radio": (), "computation": (), "medicine": ()}
+         "radio": (), "computation": (), "medicine": (), "genetics": ("medicine", "computation"),
+         "synthesis": ("genetics",), "robotics": ("computation",)}
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -100,6 +116,8 @@ def feasible(kernel: Any, holder: str, cap: str, home: Any) -> bool:
         return cold or any(p.element_deposits.get("Si", 0) > 0 for p in [home] + _system(kernel, home))
     if cap == "cyber":
         return True
+    if cap == "robotics":                                 # metal to build bodies from, in its own system
+        return any(p.element_deposits.get("Fe", 0) > 0 for p in [home] + _system(kernel, home))
     return True
 
 

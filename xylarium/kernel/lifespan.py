@@ -143,8 +143,12 @@ def thr(kernel: Any, planet: Any) -> float:
 
 def medicine(kernel: Any, planet: Any) -> float:
     from xylarium.config import KNOWLEDGE_UNIT
-    from xylarium.kernel import knowledge, laws
-    return laws.mastery(knowledge.experience(kernel, knowledge.holder_of_planet(planet), "biology"), KNOWLEDGE_UNIT)
+    from xylarium.kernel import knowledge, laws, technology
+    holder = knowledge.holder_of_planet(planet)
+    m = laws.mastery(knowledge.experience(kernel, holder, "biology"), KNOWLEDGE_UNIT)
+    if technology.has(kernel, holder, "genetics"):
+        m = m + (1.0 - m) * technology.GENETIC_GAIN / (1.0 + technology.GENETIC_GAIN)   # it rewrites its own ageing
+    return m
 
 
 def expectancy_years(kernel: Any, planet: Any, health: Optional[float] = None) -> float:

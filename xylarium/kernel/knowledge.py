@@ -140,6 +140,8 @@ def effort(kernel: Any, planet: Any) -> float:
     from xylarium.kernel import technology
     if technology.has(kernel, holder_of_planet(planet), "computation"):
         e *= 1.0 + technology.COMPUTE_GAIN            # machines that think beside it
+    if technology.has(kernel, holder_of_planet(planet), "robotics"):
+        e *= 1.0 + technology.ROBOTICS_GAIN           # bodies built, not bred, working beside it
     return e * impedance(kernel, planet)
 
 

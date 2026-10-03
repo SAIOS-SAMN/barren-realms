@@ -69,8 +69,13 @@ def _can_reach_orbit(kernel: Any, who: str, home: Any) -> bool:
 
 
 def _speed(kernel: Any, home: Any) -> float:
-    from xylarium.kernel import decide
-    return max(0.05, float(decide.mind_of_planet(kernel, home).get("speed", 1.0)))
+    from xylarium.kernel import decide, knowledge, technology
+    who = knowledge.holder_of_planet(home)
+    s = max(0.05, float(decide.mind_of_planet(kernel, home).get("speed", 1.0)))
+    for cap, gain in (("genetics", technology.GENETIC_GAIN), ("robotics", technology.ROBOTICS_GAIN)):
+        if technology.has(kernel, who, cap):
+            s *= 1.0 + gain                                  # past the metabolic bound: not waiting on its generations
+    return s
 
 
 def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
@@ -94,7 +99,7 @@ def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
     from xylarium.kernel import technology
     held = technology.stats(kernel)["of"].setdefault(who, {})
     for cap, at in (("radio", 3), ("computation", 3), ("medicine", 3), ("fission", 4), ("orbit", 4),
-                    ("networks", 4)):
+                    ("networks", 4), ("genetics", 4), ("robotics", 4), ("synthesis", 5)):
         if idx >= at and cap not in held and technology.feasible(kernel, who, cap, home):
             held[cap] = kernel.cycle_count                     # found in its long ages, as its world allowed
     if idx >= 4:
