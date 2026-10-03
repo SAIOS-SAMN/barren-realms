@@ -1,9 +1,19 @@
 """
-Xylarium galactic centre: an Einstein-Cartan black hole - not a sink but a recycler.
+Xylarium galactic centre: an Einstein-Cartan black hole - a sink on this side, a white hole on the other.
 
-In Einstein-Cartan gravity matter's spin couples to spacetime torsion. At extreme density (the Cartan density) the
-torsion term acts as a repulsion: collapse halts and bounces instead of ending in a singularity. The galaxy's central
-black hole is therefore modelled as an engine that takes matter in and gives it back:
+Our physics. Matter's spin couples to spacetime torsion (Einstein-Cartan). At the Cartan density the torsion term
+repels: collapse halts and bounces, and there is no singularity. What crosses a black hole's horizon does not end:
+it bounces into a spacetime of its own on the other side, and that bounce is a white hole - the Big Bang of a child
+universe. The conformal inversion that swaps near and far turns the sink into its source (the white hole's null
+generator: Mycelium's physics::source); torsion is never destroyed, only promoted, annihilated in a pair or
+deposited (A.8), so information is never lost - it is carried through. Our own universe began so: its Big Bang is
+the white hole of a black hole in a parent universe.
+
+The galaxy's central black hole therefore takes matter in by two roads:
+
+  HORIZON   a share of what falls crosses the horizon (HORIZON_SHARE; the rest is carried off by the hot disc's own
+            outflow before it gets there) - it bounces, and is the matter of the child universe beyond: its elements
+            and the RECORDS of what fell (the worlds, the stars, the peoples) are carried whole (child()).
 
   CAPTURE   within the bulge (cosmos.R_BULGE_KPC) a dying star's shed matter, and the worlds its death unbinds (a
             supernova's ejected planets, a giant's engulfed ones), fall to the centre instead of drifting into the void:
@@ -11,15 +21,15 @@ black hole is therefore modelled as an engine that takes matter in and gives it 
   LIGHT     what falls in shines on the way down: L = eps Mdot c^2 (eps 0.1, the radiative efficiency of accretion),
             so the centre flares when it feeds - extremely luminous - and idles at the measured accretion of a quiet
             nucleus (Sgr A*, ~1e-8 solar masses a year) otherwise.
-  RETURN    the bounce sends matter back out as jets and winds: each season the reservoir returns over an active
-            episode's e-folding time (AGN episodes last ~1e7-1e8 years: 100 Myr) to the witnessed worlds of the bulge
-            (a declared source) - recycled, enriched, never lost.
+  RETURN    the disc's outflow sends the rest back out as jets and winds: each season the reservoir returns over
+            an active episode's e-folding time (AGN episodes last ~1e7-1e8 years: 100 Myr) to the witnessed worlds of
+            the bulge (a declared source) - recycled, enriched, never lost.
 
 The centre's reservoir is a stock the matter ledger tracks through its declarations; the audit counts it.
 """
 
 import math
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 EFFICIENCY = 0.1                # radiative efficiency of accretion onto a black hole
 C2_ERG_PER_SUN = 1.787e54       # a solar mass of energy (M c^2), erg
@@ -28,17 +38,23 @@ QUIET_MDOT = 1.0e-8             # solar masses a year a quiet nucleus accretes (
 EPISODE_MYR = 100.0             # e-folding time of an active episode: the reservoir's return
 UNITS_PER_SUN = 150             # deposit units a solar mass stands for (cosmos.EJECTA_PER_SUN)
 MASS0 = 4.0e6                   # the central black hole's mass at the clock's start (Sgr A*), suns
+HORIZON_SHARE = 0.1             # the share of infalling matter that crosses the horizon: a hot accretion flow loses
+                                # most of what falls to its own outflow first (declared; radiatively inefficient
+                                # flows: a tenth or less reaches the hole)
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "blackhole")
 
 
-def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False) -> None:
+def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
+            records: Optional[List[str]] = None) -> None:
     """Matter falls to the centre. `made`: freshly made in a dying star (not yet in any world): a source and a sink
-    at once, booked so the ledger sees it pass through."""
+    at once, booked so the ledger sees it pass through. A share crosses the horizon into the child universe with
+    the records of what fell (`records`: the peoples whose worlds these were); the rest feeds the disc's outflow."""
     st = stats(kernel)
     total = 0
+    crossed = 0
     for el, q in units.items():
         q = int(q)
         if q <= 0:
@@ -46,12 +62,42 @@ def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False) -
         if made:
             matter.source("stellar_ejecta", el, q)
         matter.sink("central_engine", el, q)
-        st["reservoir"][el] = st["reservoir"].get(el, 0) + q
+        through = int(q * HORIZON_SHARE)
+        if through:
+            ch = child(kernel)
+            ch["elements"][el] = ch["elements"].get(el, 0) + through
+            crossed += through
+        st["reservoir"][el] = st["reservoir"].get(el, 0) + q - through
         total += q
     st["fed_season"] = st.get("fed_season", 0) + total
     st["captured"] += total
+    st["crossed"] = st.get("crossed", 0) + crossed
     if total:
         st["last_meal"] = what
+        _carry(kernel, what, records or [], crossed)
+
+
+def child(kernel: Any) -> Dict[str, Any]:
+    """The universe beyond the centre's horizon: begun at its first bounce, holding what crossed - its matter and
+    the records of it, whole (no information is destroyed)."""
+    st = stats(kernel)
+    return st.setdefault("child", {"born": None, "elements": {}, "records": [], "seed": None})
+
+
+def _carry(kernel: Any, what: str, records: List[str], crossed: int) -> None:
+    from xylarium.kernel import cosmos, history
+    if crossed <= 0:
+        return
+    ch = child(kernel)
+    if ch["born"] is None:
+        ch["born"] = round(cosmos.deep_gyr(kernel), 6)
+        ch["seed"] = f"{cosmos.cosmos_seed(kernel)}:child"
+        history.event(kernel, "CHILD_UNIVERSE", "Beyond the centre's horizon, a universe begins",
+                      cause=f"{what} crossed the horizon and bounced at the Cartan density: the white hole on the "
+                            f"other side is a new universe's Big Bang",
+                      data={"seed": ch["seed"], "epoch": ch["born"]})
+    ch["records"].append({"what": what, "peoples": list(records), "units": crossed,
+                          "epoch": round(cosmos.deep_gyr(kernel), 6)})
 
 
 def luminosity(kernel: Any) -> float:
@@ -72,7 +118,7 @@ def quarter(kernel: Any) -> List[str]:
     logs: List[str] = []
     fed = st.pop("fed_season", 0)
     st["fed_last"] = fed
-    st["mass"] = st.get("mass", MASS0) + fed / UNITS_PER_SUN * (1 - EFFICIENCY)
+    st["mass"] = st.get("mass", MASS0) + fed / UNITS_PER_SUN * HORIZON_SHARE * (1 - EFFICIENCY)
     L = luminosity(kernel)
     if fed and L > st.get("brightest", 0.0):
         st["brightest"] = L
@@ -103,8 +149,10 @@ def quarter(kernel: Any) -> List[str]:
 
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
+    ch = st.get("child") or {}
     return {"mass_suns": round(st.get("mass", MASS0), 1), "luminosity_lsun": float(f"{luminosity(kernel):.3g}"),
-            "reservoir": sum(st["reservoir"].values()), "captured": st["captured"], "returned": st["returned"]}
+            "reservoir": sum(st["reservoir"].values()), "captured": st["captured"], "returned": st["returned"],
+            "crossed": st.get("crossed", 0), "child_born": ch.get("born"), "child_records": len(ch.get("records", []))}
 
 
 from xylarium.kernel import matter, state  # noqa: E402
