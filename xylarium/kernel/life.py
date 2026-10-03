@@ -16,14 +16,22 @@ what the rung below could hold: a check of each copy, at the price of another di
 fidelity by eps0 again (Hopfield's kinetic proofreading) - the ceiling of rung s is b / eps0^(s+1). A mind is the
 rung whose ceiling holds a mind's blueprint, I_MIND: the number of rungs is the chemistry's, not a universe's draw.
 Water near its freezing point needs three (life, its proofreading, its proofreading's proofreading); a methane sea
-five; a melt of silicates eight; plasma never starts.
+five; hot water more as it warms, until what it stores breaks faster than it can be checked (~800 K); a melt of
+silicates never holds enough; plasma never starts.
 
-THE CLIMB. Selection writes at most a bit a generation (MacKay 1999), and a generation is the time to copy what the
-lineage holds: I / b monomers at the chemistry's own rate (Eyring: kT / h x exp(-barrier / kT), the barrier at the
-solvent's own scale - worlds.SOLVENT_BARRIER), slower as fewer of the elements it needs are at hand (its richness).
-Filling rung s from rung s-1 takes the integral of a generation over the bits written, (I_s^2 - I_(s-1)^2) /
-(2 b k_copy) - each step an exponential wait of that mean (the luck of the innovations that open the rung). A
-lineage with too few members to make the mutations writes slower (N eps L per generation, if under one).
+THE CLIMB. Selection writes what its cost allows: a substitution from one mutant in n costs ln n generations of
+selective deaths, paid from the share of each generation the lineage can lose (Haldane 1957; a dividing lineage can
+lose half) - b x 1/2 / ln n bits a generation, never more than MacKay's one. A generation is a cell's while the
+genome fits one copier's span (copied at kT/h x e^-barrier by corresponding states: life's catalysts are evolved
+to their medium, so a cold sea is only as much slower as it is colder) and a body's beyond it, growing as its mass
+to the quarter power (metabolic theory) up to a mind-bearing body (M_MIND_KG). Filling a rung is the integral of
+generations over the bits it writes - each step an exponential wait of that mean (the luck of the innovations that
+open the rung). A lineage with too few members to make the mutations writes slower (N eps L per generation).
+
+DECAY. What a lineage has stored breaks as it waits to be copied: by microscopic reversibility the barrier that
+joins a backbone bond also breaks it, uphill by what the bond holds beyond the solvent's cohesion. Hot media copy
+fast and forget fast; cold ones copy slowly and keep what they copy. The decay of a generation adds to its error,
+so a hot lineage building large, slow bodies can forget faster than it can check - parity between hot and cold.
 
 ERASURE. An impact large enough to end a world's complex life sends a lineage back to the start of its current
 rung (life itself, once begun, is never undone); impacts come as the world's neighbourhood shakes comets loose -
@@ -49,6 +57,13 @@ DISCRIMINATION = 0.5            # a right partner is told from a wrong one by on
 I_MIND = 1.0e9                  # bits: a mind's blueprint - a body and a nervous system that models its world (the one
                                 # number for "what a mind is"; declared, the progenitors' to change)
 BODY_PER_MONOMER = 1.0e3        # bonds a cell builds for each monomer of its genome (its body around it; declared)
+M_MIND_KG = 10.0                # a body that carries a mind (declared anchor: Earth's minded animals span ~0.5-70 kg;
+                                # generations scale as its quarter power, so a factor of ten moves them by 1.8)
+BOND_MASS_AMU = 12.0            # what a bond builds into a body: a carbon's mass (declared)
+AMU_KG = 1.66054e-27
+BITS_PER_GENERATION = 1.0       # selection writes at most a bit a generation (MacKay 1999, the asexual bound)
+REPRODUCTIVE_EXCESS = 0.5       # the share of each generation selection can remove without the lineage shrinking: a
+                                # lineage that divides in two can lose half (binary fission; Haldane's excess)
 EJECTA_ORBITS = 1.0e6           # ejecta cross a system in about a million orbits (Gladman et al. 1996)
 EXTINCTIONS_PER_GYR = 2.0       # life-ending impacts per Gyr at unit stellar density in the plane (declared: comet
                                 # showers from the Oort cloud, shaken by passing stars and the tide)
@@ -71,16 +86,73 @@ def fidelity(solvent: str, t: float, laws: Any = None) -> float:
 
 
 def copy_rate(solvent: str, t: float, richness: float, laws: Any = None) -> float:
-    """Monomers a copying machine adds per second (Eyring at the solvent's own barrier), scaled by how much of what it
-    builds with is at hand."""
+    """Monomers a copying machine adds per second, scaled by how much of what it builds with is at hand - by
+    corresponding states: life's catalysts are evolved to the medium they live in, so its barrier is the same share
+    of its own kT everywhere (worlds.SOLVENT_BARRIER), and a copier runs at kT/h x e^-barrier: a cold sea only as much
+    slower as it is colder, a hot one only as much faster. What heat costs is paid in fidelity and in decay
+    (decay_rate), not in an Arrhenius advantage - parity between cold worlds and hot."""
     from xylarium.kernel import worlds
-    mid = worlds._mid(solvent, laws)
-    return KB_J * t / H_J * math.exp(-worlds.SOLVENT_BARRIER * mid / max(1.0, t)) * max(0.0, richness)
+    return KB_J * max(1.0, t) / H_J * math.exp(-worlds.SOLVENT_BARRIER) * max(0.0, richness)
+
+
+def decay_rate(solvent: str, t: float, k_copy: float, laws: Any = None) -> float:
+    """Per-monomer breakage of what a lineage has stored, per second, by the two ways a bond breaks: back along the
+    path that made it (microscopic reversibility - the catalysed barrier that joins a backbone bond also breaks it,
+    uphill by what the bond holds beyond the solvent's own cohesion), and on its own, uncatalysed - thermal
+    homolysis, (kT/h) e^(-bond/kT), which no evolved catalyst can stop. Hot media copy fast and forget fast; cold
+    ones copy slowly and keep what they copy."""
+    from xylarium.kernel import worlds
+    L = _laws(laws)
+    t = max(1.0, t)
+    kt = worlds.KB_EV * t
+    strong = (worlds.BOND_EV["silicate"] if solvent == "melt" else worlds.BOND_EV["covalent"]) * L.chem
+    held = max(0.0, strong - worlds.weak_bond_ev(solvent, L))
+    return k_copy * math.exp(-held / kt) + KB_J * t / H_J * math.exp(-strong / kt)
+
+
+def body_kg(bits: float, bits_cell: float, kg_cell: float) -> float:
+    """The body a lineage holding this much information builds: from a cell at the first rung to a mind-bearing body
+    at I_MIND, growing as a power of what it holds (log-linear between the two anchors)."""
+    if bits <= bits_cell or I_MIND <= bits_cell:
+        return kg_cell
+    g = math.log(max(1.0, M_MIND_KG / kg_cell)) / math.log(I_MIND / bits_cell)
+    return kg_cell * (bits / bits_cell) ** g
+
+
+def bits_per_generation(n: float, b: float = BITS_PER_MONOMER) -> float:
+    """What selection writes a generation in a population of n: a substitution from a single mutant costs ln n
+    generations' worth of selective deaths (Haldane 1957), paid from the reproductive excess - b bits for each
+    monomer substituted - and never more than MacKay's bit a generation."""
+    return min(BITS_PER_GENERATION, b * REPRODUCTIVE_EXCESS / math.log(max(math.e, n)))
+
+
+def _fill_s(lo: float, hi: float, bits_cell: float, t_cell: float, kg_cell: float, b: float, k: float,
+            rate: float = BITS_PER_GENERATION) -> float:
+    """Generations x their length, integrated over the bits written from lo to hi at `rate` bits a generation: a genome
+    up to one copier's span is copied serially (its generation I / (b k)); beyond it, a generation is a body's
+    (metabolic theory: t_cell x (M / M_cell)^(1/4))."""
+    out = 0.0
+    if lo < bits_cell:
+        top = min(hi, bits_cell)
+        out += (top * top - lo * lo) / (2.0 * b * k)
+        lo = top
+    if hi > lo:
+        g = math.log(max(1.0, M_MIND_KG / kg_cell)) / math.log(I_MIND / bits_cell) if I_MIND > bits_cell else 0.0
+        p = g / 4.0
+        out += t_cell * bits_cell / (p + 1.0) * ((hi / bits_cell) ** (p + 1.0) - (lo / bits_cell) ** (p + 1.0))
+    return out / rate
 
 
 def ladder(m: Dict[str, Any], area_m2: float, laws: Any = None) -> Optional[Dict[str, Any]]:
     """The rungs a medium's chemistry must climb to a mind: each step's information target and mean time (Gyr).
-    None where nothing can be copied faithfully enough to begin."""
+    None where nothing can be copied faithfully enough to begin.
+
+    A lineage's error each generation is its copying's (eps0) and what decayed while it waited to be copied (the
+    breakage rate x the generation: decay_rate). Each rung of error correction multiplies the fidelity by that
+    error again; the rung holds b / err^(s+1) bits. Its generation is a cell's while its genome fits one copier's
+    span (b / eps0 bits: the first rung) and a body's beyond it - growing as the body's mass to the quarter power
+    (metabolic theory), from a cell to a mind-bearing body (M_MIND_KG) - so a mind's last rungs are written by
+    large, slow-breeding bodies, a bit a generation at most."""
     from xylarium.kernel import worlds
     L = _laws(laws)
     eps0 = fidelity(m["solvent"], m["t"], L)
@@ -93,23 +165,40 @@ def ladder(m: Dict[str, Any], area_m2: float, laws: Any = None) -> Optional[Dict
     kt = KB_J * max(1.0, m["t"])
     strong = worlds.BOND_EV["covalent"] * L.chem * EV_J
     power = max(0.0, m.get("energy", 0.0)) * FLUX_W * area_m2
+    r_decay = decay_rate(m["solvent"], m["t"], k, L)
+    bits_cell = b / eps0
+    t_cell = bits_cell / (b * k)                         # a cell's generation: one copier's span, copied
+    kg_cell = bits_cell / b * BODY_PER_MONOMER * BOND_MASS_AMU * AMU_KG * L.proton
     steps, prev = [], 0.0
     for s in range(MAX_RUNGS):
-        cap = b / eps0 ** (s + 1)
+        err = eps0
+        for _ in range(3):                               # the decay a generation suffers depends on the body it builds
+            cap = b / err ** (s + 1)
+            target = min(cap, I_MIND)
+            gen_s = target / (b * k) if target <= bits_cell else \
+                t_cell * (body_kg(target, bits_cell, kg_cell) / kg_cell) ** 0.25
+            err = eps0 + r_decay * gen_s
+        if err >= 0.5:                                   # it forgets faster than it can check: no further rung
+            return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k, "decay": r_decay}
+        cap = b / err ** (s + 1)
+        if cap <= prev:
+            return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k, "decay": r_decay}
         target = min(cap, I_MIND)
         monomers = target / b
-        gen_s = monomers / k
-        # how many it can feed: the power reaching it over the energy to build one in a generation
-        n = power * gen_s / max(1e-300, monomers * BODY_PER_MONOMER * strong)
-        gain = min(1.0, n * eps0 ** (s + 1) * monomers)  # mutations a generation offers, if fewer than one
+        body = body_kg(target, bits_cell, kg_cell)
+        # how many it can feed: the power reaching it over the energy to build one body in a generation
+        n = power * gen_s / max(1e-300, body / (BOND_MASS_AMU * AMU_KG * L.proton) * strong)
+        gain = min(1.0, n * err ** (s + 1) * monomers)  # mutations a generation offers, if fewer than one
         if gain <= 0:
-            return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k}
-        mean = (target * target - prev * prev) / (2.0 * b * k) / gain / GYR_S
-        steps.append({"bits": target, "mean_gyr": mean, "eps": eps0 ** (s + 1), "population": n})
+            return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k, "decay": r_decay}
+        mean = _fill_s(prev, target, bits_cell, t_cell, kg_cell, b, k, bits_per_generation(n, b)) / gain / GYR_S
+        steps.append({"bits": target, "mean_gyr": mean, "eps": err ** (s + 1), "population": n,
+                      "generation_s": gen_s, "body_kg": body})
         prev = target
         if cap >= I_MIND:
-            return {"eps0": eps0, "steps": steps, "complete": True, "k_copy": k, "landauer_kt": kt}
-    return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k}
+            return {"eps0": eps0, "steps": steps, "complete": True, "k_copy": k, "landauer_kt": kt,
+                    "decay": r_decay}
+    return {"eps0": eps0, "steps": steps, "complete": False, "k_copy": k, "decay": r_decay}
 
 
 ERASURE = "rung"                # how an impact erases: "rung" - a lineage loses its current rung's progress; "clades"
