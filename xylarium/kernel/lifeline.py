@@ -145,9 +145,54 @@ def disturb(kernel: Any, planet: Any, cause: str) -> Optional[str]:
     return "redrawn"
 
 
+STAGES = ("first copiers", "proofread life", "complex life", "near-minds")
+
+
+def life_of(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
+    """What lives on a charted world now, from its own lineage: how many rungs of its ladder it has climbed, of how
+    many a mind needs, in which chemistry - None where nothing lives (or a people does)."""
+    from xylarium.kernel import cosmos, creation
+    if kernel is None or not cosmos.is_cosmic(kernel) or planet.population > 0:
+        return None
+    loc = locate(kernel, planet)
+    if loc is None:
+        return None
+    (i, j), ks, w = loc
+    k = key((i, j), ks, w)
+    if k in stats(kernel)["ended"] and not stats(kernel)["ended"][k].get("lives_on"):
+        return None
+    seed = cosmos.cosmos_seed(kernel)
+    slot = creation.cell(seed, i, j)[ks]
+    lins = creation.system_life(seed, i, j, ks, slot) if "worlds" in slot else []
+    lin = lins[w] if w < len(lins) else None
+    now = cosmos.deep_gyr(kernel)
+    rec = current(kernel, k)
+    steps = (rec or {}).get("steps") or (lin or {}).get("steps") or []
+    climbed = sum(1 for t in steps if t <= now)
+    if not lin or climbed <= 0:
+        return None
+    n = int(lin["n"])
+    if not lin.get("complete"):
+        stage = "a dead end"                             # its chemistry cannot hold a mind's blueprint
+    elif climbed <= 1:
+        stage = STAGES[0]
+    elif climbed >= n - 1:
+        stage = STAGES[3]                                # one rung, or none, from a mind
+    else:
+        stage = STAGES[1] if climbed / n < 0.5 else STAGES[2]
+    return {"rung": climbed, "of": n, "region": lin["region"], "stage": stage}
+
+
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    return {"redrawn": len(st["redrawn"]), "ended": len(st["ended"]), "disturbances": st["count"]}
+    stages: Dict[str, int] = {}
+    for s in kernel.sectors.values():
+        for p in s.planets:
+            got = life_of(kernel, p)
+            if got:
+                stages[got["stage"]] = stages.get(got["stage"], 0) + 1
+    return {"redrawn": len(st["redrawn"]), "ended": len(st["ended"]), "disturbances": st["count"],
+            "charted_life": stages}
 
 
 from xylarium.kernel import state  # noqa: E402

@@ -2551,7 +2551,7 @@ class GameKernel:
                 "security": sector.security.value,
                 "warps": warps_info,
                 "port": port_info,
-                "planets": [p.to_dict() for p in sector.planets],
+                "planets": [dict(p.to_dict(), life=lifeline_mod.life_of(self, p)) for p in sector.planets],
                 "captains": other_captains,
                 "planetary_time": planetary_time,
                 "anomalies": sector_anomalies,

@@ -616,6 +616,10 @@ class TerminalRenderer:
                 )
                 out.append(f"    World: {c_white(p.get('planet_type', 'TERRESTRIAL').replace('_', ' ').title())} │ "
                            f"Currency: {c_cyan(p.get('currency', 'SOL'))}")
+                life = p.get("life")
+                if life:
+                    out.append(f"    {c_green('❦ LIFE:')} {life['stage']} ({life['region']}) │ rung {life['rung']} of "
+                               f"the {life['of']} its chemistry climbs to a mind")
                 if natives:
                     out.append(f"    {c_magenta('☼ LOCALS:')} {natives['species']} │ sapience {natives['sapience']:.1f} │ "
                                f"~{natives['population']:,} people │ {natives['temperament']} │ type NATIVES to deal with them")

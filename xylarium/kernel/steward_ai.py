@@ -60,8 +60,12 @@ def season(kernel: Any) -> List[str]:
         opts = [decide.option(a, 0.0, worths[a]) for a in steward.AIMS]
         pick = decide.choose(kernel, opts, far, "steward_ai", holder)
         g = steward.of(kernel, holder)
-        if pick is not None and g is not None and g["aim"] != pick["name"]:
-            steward.guide(kernel, holder, g["steward"], aim=pick["name"])
+        from xylarium.kernel import fertility
+        gen = max(1.0, fertility.generation_of(kernel, home))
+        steady = g is not None and g["aim"] and (kernel.cycle_count - int(g.get("aim_since", 0))) / 100.0 < gen
+        if pick is not None and g is not None and g["aim"] != pick["name"] and not steady:
+            steward.guide(kernel, holder, g["steward"], aim=pick["name"])   # it keeps a course a generation, as a
+            g["aim_since"] = kernel.cycle_count                              # council does
             st["urged"] += 1
         years = cosmos.years_left(kernel, home.sector_id) if cosmos.is_cosmic(kernel) else None
         if years is not None and g is not None and years * 4.0 < decide.horizon(far):

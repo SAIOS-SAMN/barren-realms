@@ -50,3 +50,20 @@ class TestLifeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLifeOnCharted(unittest.TestCase):
+    def test_a_charted_world_shows_the_life_it_holds(self):
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        from xylarium.kernel import cosmos as C
+        C.entered(k, 1)                                                  # chart the home cell and those around it
+        seen = [lifeline.life_of(k, p) for s in k.sectors.values() for p in s.planets]
+        alive = [x for x in seen if x]
+        self.assertTrue(alive)
+        for x in alive:
+            self.assertGreaterEqual(x["rung"], 1)
+            self.assertLessEqual(x["rung"], x["of"])
+            self.assertIn(x["stage"], lifeline.STAGES + ("a dead end",))
+        peopled = next(p for s in k.sectors.values() for p in s.planets if p.population > 0)
+        self.assertIsNone(lifeline.life_of(k, peopled))                   # a people's world is its own story
