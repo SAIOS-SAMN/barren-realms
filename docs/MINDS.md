@@ -97,6 +97,23 @@ voice by how the people fared. In a council attending to n options, an urged opt
 among the options in mind. The people still chooses on its own stream of chance and may refuse every word.
 Progenitors set laws; stewards counsel; peoples choose.
 
+## When food becomes kin (kinship.py)
+
+Every people eats its world's life. When it meets a mind of its own chemistry built like something it eats
+(resemblance), or a mind wakes on a world whose life it once harvested (descent), its council weighs what it owes:
+to abstain (the food sworn off: its land feeds fewer, less so if it can make food to order), to deny ("they are
+not what we ate": its creed hardens), to continue (its alignment drifts toward the Dark, and the other people
+remembers it - KIN_EATEN, which its model of the eater reads as harm), or to guard them. A council divided between
+its best two choices records a schism. Eating something before it was a mind costs nothing; what a people does once
+it knows is what it is.
+
+## Coming into a body (technology.py: embodiment)
+
+Life without a genome - minds held in fields - has no hands. Before works, yards or crossing it must come into a
+vessel (a body designed from outside, matter built to order, or a machine), learning the terrestrial dimensions
+from nothing. It skips genetics; this is its own, harder hurdle. Every genomed people is born in a body, and must
+instead master its genome before it can live under another sun (mastery.genome_ready).
+
 ## Life and death (lifespan.py)
 
 A people is born, grows, ages and dies by its species' physics. Every span is a multiple of its generation (body

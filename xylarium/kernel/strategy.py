@@ -48,7 +48,7 @@ def hostility(kernel: Any, other: str) -> float:
     the ledger - per year it has lived."""
     from xylarium.kernel import history
     hurt = sum(1 for e in history.of_people(kernel, other)
-               if e.get("kind") in ("GALACTIC_WAR", "WAR", "RAID", "WORLD_STRIPPED", "CONQUEST", "STRIFE"))
+               if e.get("kind") in ("GALACTIC_WAR", "WAR", "RAID", "WORLD_STRIPPED", "CONQUEST", "STRIFE", "KIN_EATEN"))
     return hurt
 
 
