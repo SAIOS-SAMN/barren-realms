@@ -82,6 +82,8 @@ def _seed(kernel: Any, elder: str, port: Any) -> Optional[str]:
     from xylarium.config import HABITABILITY
     from xylarium.kernel import alignment, biosphere, decide, demography, designer, exodus, sustenance
     from xylarium.kernel import topology
+    if _light(port) <= 0:
+        return None                                       # it values strangers' lives at nothing: seeding is worth nothing
     m = decide.mind_of_planet(kernel, port)
     own = biosphere.metabolism_of(kernel, port)
     best = None

@@ -91,19 +91,35 @@ class AstronomyManager:
         phase at this cycle (physics.orbital_phase: no accumulated drift); others step by 360 / period.
         """
         self.cycle_count += 1
+        self._sectors = sectors
         from xylarium.kernel import physics
         for p in planets:
             sec = sectors.get(p.sector_id) if sectors else None
             if sec is not None and getattr(p, "body", None):
-                p.orbital_angle = physics.orbital_angle(sec, p, self.cycle_count)
+                # a world with exact physics is a closed-form function of time: computed where someone is there to
+                # see it, and on demand anywhere else (compute_position) - the sky is not redrawn every cycle
+                if self._watched(sec):
+                    p.orbital_angle = physics.orbital_angle(sec, p, self.cycle_count)
                 continue
             period = max(1, p.orbital_period)
             p.orbital_angle = (p.orbital_angle + 360.0 / period) % 360.0
 
+    def _watched(self, sec: Any) -> bool:
+        return getattr(sec, "port", None) is not None or any(
+            q.population > 0 or getattr(q, "owner_id", None) for q in getattr(sec, "planets", []))
+
+    def angle_now(self, planet: Planet) -> float:
+        """A world's orbital angle at this cycle - exact from its orbit where it has one."""
+        from xylarium.kernel import physics
+        sec = (getattr(self, "_sectors", None) or {}).get(planet.sector_id)
+        if sec is not None and getattr(planet, "body", None):
+            planet.orbital_angle = physics.orbital_angle(sec, planet, self.cycle_count)
+        return planet.orbital_angle
+
     def compute_position(self, planet: Planet) -> OrbitalPosition:
         """Computes Cartesian coordinates and phase label for a planet."""
         r = planet.orbital_radius
-        deg = planet.orbital_angle
+        deg = self.angle_now(planet)
         rad = math.radians(deg)
         x = r * math.cos(rad)
         y = r * math.sin(rad)

@@ -85,7 +85,8 @@ class TestTheClock(unittest.TestCase):
         for sec in systems(self.kernel):
             for p in sec.planets:
                 expect = float(physics.orbital_phase(sec, p, self.kernel.astronomy_manager.cycle_count)) * 360.0
-                self.assertAlmostEqual(p.orbital_angle, expect, places=6)
+                # exact wherever it is read: computed when seen, not redrawn each cycle for unwatched skies
+                self.assertAlmostEqual(self.kernel.astronomy_manager.angle_now(p), expect, places=6)
 
 
 class TestPersistence(unittest.TestCase):

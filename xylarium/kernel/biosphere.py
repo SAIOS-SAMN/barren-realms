@@ -165,6 +165,14 @@ def land(kernel: Any, planet: Any, metabolism: Optional[str] = None) -> Dict[str
 MICRO = 1_000_000          # growth and food rates are carried as integer millionths (exact, bounded)
 
 
+def worlds_age(kernel: Any, planet: Any) -> float:
+    from xylarium.kernel import worlds
+    try:
+        return worlds.world_age(kernel, planet)
+    except Exception:
+        return 0.0
+
+
 def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: Optional[int] = None,
              metabolism: Optional[str] = None) -> Dict[str, int]:
     """K and the world's growth rate (per cycle, in millionths), cached until the world or its people change."""
@@ -182,11 +190,17 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
            round(genome.value(planet, "light"), 3), round(genome.value(planet, "tolerance"), 3),
            round(genome.value(planet, "chemistry"), 3), str((getattr(planet, "society", None) or {}).get("terraform")),
            round(genome.value(planet, "birth"), 3), round(genome.value(planet, "temperature"), 3),
-           getattr(civ, "clade", None))
-    if citadel is None and habitats is None and metabolism is None and kernel is not None \
-            and hasattr(kernel, "caches"):
+           getattr(civ, "clade", None),
+           worlds_age(kernel, planet))                    # the world as it has become (its media read at its age)
+    if kernel is not None and hasattr(kernel, "caches"):
         from xylarium.kernel import cache
-        return cache.stamped(kernel, "k_profile", planet.id, key, lambda: _reckon(kernel, planet, None, tier, habs))
+        if citadel is None and habitats is None and metabolism is None:
+            return cache.stamped(kernel, "k_profile", planet.id, key, lambda: _reckon(kernel, planet, None, tier, habs))
+        # a question about this world as it might be (another tier, more habitats, another body): the same state,
+        # asked again, has the same answer
+        return cache.stamped(kernel, "k_profile_if", f"{planet.id}|{tier}|{habs}|{metabolism}",
+                             key + (str(getattr(planet, "natives", None) is not None), planet.population > 0),
+                             lambda: _reckon(kernel, planet, metabolism, tier, habs))
     return _reckon(kernel, planet, metabolism, tier, habs)
 
 

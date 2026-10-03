@@ -2349,7 +2349,8 @@ class GameKernel:
         # 3. Colony yields & civilization intelligence loop
         for sec in self.sectors.values():
             for p in sec.planets:
-                ColonyManager.tick_colony(p, event_bus=self.event_bus, kernel=self)
+                if p.population > 0 or p.owner_id or getattr(p, "civilization", None) is not None:   # empty: no yields
+                    ColonyManager.tick_colony(p, event_bus=self.event_bus, kernel=self)
 
         # 4. Stock Market, population enterprises, and freight contracts
         self.market_manager.tick_market(self)
@@ -2390,9 +2391,18 @@ class GameKernel:
                 self.alchemy_manager.tick_cooldown(cap)
 
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
-        """Finds planet across all sectors by ID or name."""
+        """Finds planet across all sectors by ID or name (by ID through an index rebuilt whenever it misses)."""
         if not planet_id_or_name:
             return None
+        idx = self.caches.setdefault("planet_index", {})
+        got = idx.get(planet_id_or_name)
+        if got is not None and got in getattr(self.sectors.get(got.sector_id), "planets", ()):
+            return got
+        idx.clear()
+        idx.update({p.id: p for sec in self.sectors.values() for p in sec.planets})
+        got = idx.get(planet_id_or_name)
+        if got is not None:
+            return got
         for sec in self.sectors.values():
             for p in sec.planets:
                 if p.id == planet_id_or_name or p.name.lower() == str(planet_id_or_name).lower():
