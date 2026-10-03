@@ -208,6 +208,13 @@ def phase(species: str, t: float, p_bar: float, laws: Any = None) -> str:
     return "liquid" if t <= boiling(species, p_bar, laws) else "gas"
 
 
+def isolation_mass(star_mass: float, a_au: float, z: float, enrich: float = 1.0) -> float:
+    """Earth masses an embryo gathers from its feeding zone before it stops (Kokubo & Ida 2002): the disc's solids
+    (MMSN_ROCK at 1 AU, falling as a^-3/2), metals and the ices beyond their lines."""
+    sigma1 = MMSN_ROCK * max(0.0, z) * star_mass * enrich
+    return 0.16 * (sigma1 / 10.0) ** 1.5 * a_au ** 0.75 * max(0.08, star_mass) ** -0.5
+
+
 def form(star: Dict[str, Any], a_au: float, z: float, env: float, rng: Any, laws: Any = None) -> Dict[str, Any]:
     """A planet as its orbit built it: the solids its stretch of disc offered (rock and metal everywhere; each ice
     beyond its own line), gathered to the isolation mass (Kokubo & Ida 2002), grown by giant impacts, and - if its core
@@ -225,8 +232,8 @@ def form(star: Dict[str, Any], a_au: float, z: float, env: float, rng: Any, laws
         enrich = 1.0
     else:
         enrich = 1.0 + sum(ices.values())               # ices thicken the disc's solids beyond their lines
+    m_iso = isolation_mass(s["mass"], a_au, zz, enrich)
     sigma1 = MMSN_ROCK * zz * s["mass"] * enrich         # the disc's solids normalised at 1 AU (falling as a^-3/2)
-    m_iso = 0.16 * (sigma1 / 10.0) ** 1.5 * a_au ** 0.75 * max(0.08, s["mass"]) ** -0.5
     core = m_iso * GIANT_IMPACT_GROWTH * math.exp(rng.gauss(0.0, 0.5))    # the luck of collisions
     envelope = 0.0
     # a core captures gas only if it reached the critical mass before the disc dispersed: growth slows steeply
@@ -362,6 +369,7 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
     return {"flux": flux, "t_form": round(t_form, 1), "t_surf": round(t_surf, 1), "p_bar": p_bar, "air": air,
             "seas": seas, "ices": ices, "heat": heat, "q": inside["q"], "q_tide": inside["q_tide"],
             "t_int": inside["t_int"], "field": round(field, 3), "giant": giant, "mass": mass, "radius": radius,
+            "melted": melted, "processed": inside["processed"], "degassed": out, "wind": wind, "t_exo": t_exo,
             "env": env, "star_t": s["t_eff"], "albedo": round(albedo, 3), "e": round(e_now, 4), "g": g,
             "light": flux * (1.0 - albedo) * math.exp(-0.1 * p_bar ** 0.5), "laws": L}   # what reaches the surface
 
