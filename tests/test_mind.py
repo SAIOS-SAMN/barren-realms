@@ -80,3 +80,19 @@ class TestTransfer(unittest.TestCase):
         q.civilization.dogma = 0.0                                       # a creed that holds a mind to its pattern
         technology._weigh_transfer(other, self.who, [q], q)
         self.assertIn("transfer", held)
+
+
+class TestReconsider(unittest.TestCase):
+    def test_a_fallen_creed_takes_its_prohibitions_with_it(self):
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        p = max((p for s in k.sectors.values() for p in s.planets), key=lambda p: p.population)
+        who = knowledge.holder_of_planet(p)
+        held = technology.stats(k)["of"].setdefault(who, {})
+        held["transfer"] = 1
+        p.civilization.dogma = 1.0
+        technology._weigh_transfer(k, who, [p], p)
+        self.assertNotIn("transfer", held)
+        technology.reconsider(k, who, p, creed=0.0)                     # the old creed fell; the new holds lightly
+        self.assertIn("transfer", held)
+        self.assertNotIn(who, technology.stats(k)["forbidden"]["transfer"])

@@ -213,13 +213,32 @@ def season(kernel: Any) -> List[str]:
     return logs
 
 
-def _weigh_transfer(kernel: Any, who: str, worlds: List[Any], home: Any) -> Optional[str]:
+def reconsider(kernel: Any, who: str, home: Any, creed: float) -> List[str]:
+    """Its creed has fallen: what that creed forbade is weighed again, under the hold the new creed has."""
+    from xylarium.kernel import relations
+    forbidden = stats(kernel).get("forbidden", {})
+    out = []
+    for cap, peoples in list(forbidden.items()):
+        if who not in peoples:
+            continue
+        peoples.pop(who)
+        stats(kernel)["of"].setdefault(who, {})[cap] = kernel.cycle_count
+        if cap == "transfer":
+            line = _weigh_transfer(kernel, who, relations._peoples(kernel).get(who) or [home], home, creed)
+            out.append(line or f"[TECHNOLOGY] The {who.split(':', 1)[-1]} take up what their old creed forbade.")
+    return out
+
+
+def _weigh_transfer(kernel: Any, who: str, worlds: List[Any], home: Any,
+                    creed: Optional[float] = None) -> Optional[str]:
     """A people that can carry a mind into another body must decide whether the one carried is still the one who
     was: its council weighs wearing new bodies (what it would survive, and the worlds it could live on) against
     forbidding it (what its creed holds a mind to be)."""
     from xylarium.kernel import alignment, decide, history
     civ = getattr(home, "civilization", None)
     dogma = float(getattr(civ, "dogma", 0.0) or 0.0) if civ is not None else 0.0
+    if creed is not None:
+        dogma = creed                                     # weighed under the creed that now holds
     sc = alignment.scales(kernel)
     lives = sum(p.population for p in worlds) * sc["sol"] / max(1.0, sc["lives"])
     opts = [decide.option("embrace_transfer", 0.0, lives * (1.0 - dogma), aim="reach"),

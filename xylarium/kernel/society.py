@@ -270,6 +270,9 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
                   planet=planet, magnitude=dead, cause=f"{s['rising']:.0%} would rise, {g['levy']:.0%} under arms "
                   f"(hunger {s['immiseration']:.0%}, unheld order {s['illegitimacy']:.0%})")
     _myth(kernel, planet, "strife")
+    from xylarium.kernel import technology
+    for line in technology.reconsider(kernel, knowledge.holder_of_planet(planet), planet, g["temple"]):
+        kernel.action_logs.append(line)                     # what the fallen creed forbade is weighed again
     primordial.first(kernel, "first_civil_strife", people)
     return (f"[SOCIETY] The {people} of {planet.name} turn on themselves: {dead:,} dead, the vaults plundered, "
             f"the creed overturned.")
