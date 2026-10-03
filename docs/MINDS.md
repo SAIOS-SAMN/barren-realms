@@ -97,6 +97,20 @@ voice by how the people fared. In a council attending to n options, an urged opt
 among the options in mind. The people still chooses on its own stream of chance and may refuse every word.
 Progenitors set laws; stewards counsel; peoples choose.
 
+## Steward intelligences and the progenitors' seat (steward_ai.py, client/progenitor.py)
+
+A steward need not be a player. A steward intelligence is held to everything a steward is - it sees only what its
+people sees, speaks only through its people's weighing, and is heeded only as far as heeding it has served them -
+and brings patience: it weighs the same five aims its people's council weighs over PATIENCE times its people's
+horizon with a steadier judgement, urges what that longer view chooses, and brings the exodus before the council
+when the counsel shows its sun dying within that horizon. `python3 tools/live.py --ai-stewards` sets one beside
+every people as it arises.
+
+The progenitors' seat (`python3 main.py --progenitor`) writes a universe's laws (alpha, beta, alpha_G, the nuclear
+yield, whether space folds), its kind of Big Bang and its pace, begins it, and watches: the galaxy's peoples, their
+stages, postures, stewards and how far each is heeded, and the turnings of their history as the years run. It may
+set steward intelligences beside peoples or withdraw them; it never acts on a people.
+
 ## When food becomes kin (kinship.py)
 
 Every people eats its world's life. When it meets a mind of its own chemistry built like something it eats

@@ -76,7 +76,7 @@ def observe(kernel: Any, wall: float, rate: float) -> Dict[str, Any]:
     }
     for name in ("sustenance", "fertility", "nursery", "knowledge", "chemistry", "intellect", "genome", "introspect", "liquidity", "regimes", "enterprise", "liquidation", "waystations", "observation", "realms", "relations", "prices", "energy", "harvest", "mirror", "contact", "cohabit", "clock", "scheduler", "ways", "society", "cosmos", "history", "tempo", "lifeline", "learning",
                  "steward", "technology", "mastery", "annals", "strategy", "kinship", "climate", "signals",
-                 "federation", "imprint"):
+                 "federation", "steward_ai"):
         if name in sums:
             obs[name] = sums[name]
     g = kernel.state.get("genesis") or {}
@@ -145,6 +145,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--dir", default=os.path.join(ROOT, "runs"))
     ap.add_argument("--every", type=int, default=500, help="cycles between snapshots and observations")
+    ap.add_argument("--ai-stewards", action="store_true", help="a steward intelligence for every people as it arises")
     ap.add_argument("--cycles", type=int, default=0, help="stop after this many cycles (0: run forever)")
     ap.add_argument("--fresh", action="store_true")
     ap.add_argument("--show", type=int, default=0)
@@ -175,6 +176,9 @@ def main() -> None:
         kernel = GameKernel(seed=args.seed, genesis=args.genesis)
         print(f"genesis ({args.genesis}) of seed {args.seed}", flush=True)
     kernel.activate()
+    if args.ai_stewards:
+        from xylarium.kernel import steward_ai
+        steward_ai.enlist_all(kernel)
     # the bots are captains of this universe: a resumed universe already holds them
     real_register = kernel.register_player
     kernel.register_player = lambda pid, *a, **kw: kernel.captains.get(pid) or real_register(pid, *a, **kw)

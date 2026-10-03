@@ -61,3 +61,19 @@ class TestSteward(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStewardIntelligence(unittest.TestCase):
+    def test_an_intelligence_steward_urges_what_a_longer_view_would_choose(self):
+        from xylarium.kernel import relations, steward_ai
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        steward_ai.enlist_all(k)
+        k.cycle_count = 100
+        steward_ai.season(k)
+        for holder in relations._peoples(k):
+            g = steward.of(k, holder)
+            self.assertIsNotNone(g)
+            self.assertTrue(g["steward"].startswith("ai:"))
+            self.assertIn(g["aim"], steward.AIMS)
+        self.assertGreaterEqual(steward_ai.summary(k)["stewarded"], 1)

@@ -52,11 +52,12 @@ def hostility(kernel: Any, other: str) -> float:
     return hurt
 
 
-def _worths(kernel: Any, who: str, worlds: List[Any], by: Dict[str, List[Any]]) -> Dict[str, float]:
+def _worths(kernel: Any, who: str, worlds: List[Any], by: Dict[str, List[Any]],
+            m: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
     from xylarium.kernel import (alignment, biosphere, cosmos, crystal as C, decide, intellect, mastery,
                                  relations, syntropy)
     home = max(worlds, key=lambda p: p.population)
-    m = decide.mind_of_planet(kernel, home)
+    m = m or decide.mind_of_planet(kernel, home)
     horizon_q = decide.horizon(m)
     sc = alignment.scales(kernel)
     life = sc["sol"] / max(1.0, sc["lives"])

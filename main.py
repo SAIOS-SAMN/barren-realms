@@ -29,10 +29,15 @@ def main():
     parser.add_argument("--new", action="store_true", help="Start a new game even if save file exists")
     parser.add_argument("--demo", action="store_true", help="Run a quick automated kernel simulation pass")
     parser.add_argument("--bridge", action="store_true", help="Launch Mycelium Bridge Daemon (WebSocket + Telnet)")
+    parser.add_argument("--progenitor", action="store_true", help="Take the progenitors' seat: write laws, begin, watch")
     parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket port (default: 8765)")
     parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet port (default: 2002)")
 
     args = parser.parse_args()
+    if args.progenitor:
+        from xylarium.client import progenitor
+        progenitor.run(args.seed, save=lambda k: StatePersistence.save_to_file(k, args.load))
+        return
 
     kernel = None
     save_file = args.load
