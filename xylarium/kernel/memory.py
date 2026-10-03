@@ -336,8 +336,8 @@ def blow(kernel: Any, planet: Any, kind: str, explained: float) -> None:
     if not who or not str(who).startswith("civ:"):
         return
     mem = _of(kernel, who)
-    if any(r["k"] == kind for r in mem["records"]):
-        return
+    if any(_key(r) == _key({"k": kind}) for r in mem["records"]):
+        return                                                       # it already tells of this
     ev = {"id": None, "kind": kind, "title": kind, "year": round(kernel.cycle_count / 100.0, 2), "actors": [who]}
     _write(kernel, who, planet, ev, f0=max(LOST_LINE, min(1.0, explained)))
 
@@ -363,8 +363,17 @@ def _forget(kernel: Any, who: str) -> None:
 
 
 # ---------------------------------------------------------------------- myth
+SAME_TALE = {"blight": "EPIDEMIC", "FTL_CROSSED": "ASCENT"}     # one happening, told one way
+
+
 def _key(rec: Dict[str, Any]) -> str:
-    return f"{rec['k']}:{rec.get('stage') or ''}"
+    return f"{SAME_TALE.get(rec['k'], rec['k'])}:{rec.get('stage') or ''}"
+
+
+def truth(rec: Dict[str, Any]) -> float:
+    """How much of what happened a record still says: a myth's truth was fixed when it became one, and it keeps
+    only as much of it as the story itself survives."""
+    return rec["f"] * rec["truth"] if rec.get("myth") else rec["f"]
 
 
 def tell(kernel: Any, planet: Any, rec: Dict[str, Any]) -> str:
@@ -373,7 +382,7 @@ def tell(kernel: Any, planet: Any, rec: Dict[str, Any]) -> str:
     from xylarium.kernel import fertility, mind, society
     sky = society._sky(kernel, planet)
     core = TALES.get(rec["k"], "something happened that no one could explain")
-    them = rec.get("them") if rec["f"] >= 0.3 else None              # names are the first thing a story loses
+    them = rec.get("them") if truth(rec) >= 0.3 else None              # names are the first thing a story loses
     core = core.format(colour=sky["colour"], them=them or "strangers", did=DID.get(rec.get("stage"), "changed"),
                        what=rec.get("cap") or "a gift")
     core = core.replace("the strangers's", "the strangers'")
@@ -386,7 +395,7 @@ def tell(kernel: Any, planet: Any, rec: Dict[str, Any]) -> str:
             "and the swarm bore them through" if strat == "r" else "and one of them stood against it")
     where = ("in the deep" if prof["aquatic"] else "in the long cold" if getattr(planet.civilization, "metabolism", "")
              == "cryogenic" else "")
-    when = "in the first days" if rec["f"] < 0.15 else "long ago"
+    when = "in the first days" if truth(rec) < 0.15 else "long ago"
     moons = sky["moons"]
     witness = ("the moon looked on and said nothing" if moons == 1 else
                f"its {moons} moons looked on and said nothing" if moons > 1 else "and there was no moon to see it")
@@ -408,8 +417,10 @@ def _mythify(kernel: Any, who: str, home: Any, rec: Dict[str, Any]) -> None:
         mem["records"].remove(rec)
         stats(kernel)["merged"] += 1
         return
-    rec["myth"] = True
     rec["told"] = tell(kernel, home, rec)
+    rec["myth"] = True
+    rec["truth"] = rec["f"]                                           # what it still says of what happened;
+    rec["f"] = 1.0                                                    # from now on the story's own survival
     mem["myths"] += 1
     stats(kernel)["myths"] += 1
     people = getattr(home.civilization, "name", home.name)
@@ -417,7 +428,7 @@ def _mythify(kernel: Any, who: str, home: Any, rec: Dict[str, Any]) -> None:
     out = history.event(kernel, "MYTH", f"The {people} tell how {rec['told'].split(',')[1].strip()}",
                         actors=[who], planet=home, refs=[x for x in (rec.get("id"),) if x],
                         text=f"The {people} say that {rec['told']}.",
-                        data={"myth": rec["k"], "remembers": rec.get("id"), "fidelity": round(rec["f"], 3),
+                        data={"myth": rec["k"], "remembers": rec.get("id"), "fidelity": round(rec["truth"], 3),
                               "medium": substrate(home, rec["m"]), "worlds": worlds,
                               "variant_of": rec.get("of")})
     rec["myth_id"] = out.get("id")
@@ -434,7 +445,7 @@ def myths(kernel: Any, who: Optional[str]) -> List[Dict[str, Any]]:
     if not who or not _on(kernel) or "memory" not in kernel.state:
         return []
     return [{"id": r.get("myth_id"), "kind": r["k"], "year": r.get("year"), "text": r.get("told", ""),
-             "fidelity": round(r["f"], 3), "merged": int(r.get("merged", 0)), "remembers": r.get("id")}
+             "fidelity": round(truth(r), 3), "merged": int(r.get("merged", 0)), "remembers": r.get("id")}
             for r in _of(kernel, who)["records"] if r.get("myth")]
 
 
@@ -473,7 +484,8 @@ def _leave(kernel: Any, who: str, mem: Dict[str, Any]) -> None:
         site = st["left"].setdefault(str(mem["home"]), [])
         for r in left:
             site.append({"people": who.split(":", 1)[-1], "k": r["k"], "title": r.get("title", ""),
-                         "year": r.get("year"), "f": r["f"], "substrate": mem.get("substrate", "marks"),
+                         "year": r.get("year"), "f": r["f"], "truth": r.get("truth", 1.0),
+                         "substrate": mem.get("substrate", "marks"),
                          "myth": bool(r.get("myth")), "told": r.get("told")})
         del site[:-40]
     st["peoples_gone"] += 1
@@ -506,7 +518,8 @@ def _read_ruins(kernel: Any, who: str, worlds: List[Any]) -> List[str]:
         mem = _of(kernel, who)
         for r in others:                                             # lore: kept at what translation leaves of it
             mem["records"].append({"id": None, "k": r["k"], "title": r["title"], "year": r.get("year"),
-                                   "mag": 0, "f": r["f"] * info, "them": r["people"], "m": _best(mem["media"]),
+                                   "mag": 0, "f": r["f"] * info, "truth": r.get("truth", 1.0),
+                                   "them": r["people"], "m": _best(mem["media"]),
                                    "lore": r["people"], "myth": r.get("myth"), "told": r.get("told")})
         _forget(kernel, who)
         st["rediscovered"] += len(others)
@@ -543,7 +556,8 @@ def season(kernel: Any) -> List[str]:
             name = getattr(home.civilization, "name", home.name)
             for r in mem["records"]:                                  # the past it still holds is copied in
                 r["m"] = best
-            history.event(kernel, "RECORDKEEPING", f"The {name} begin to keep their past in {substrate(home, best)}",
+            history.event(kernel, "RECORDKEEPING", f"The {name} begin to keep their past in "
+                          f"{' and '.join(substrate(home, m) for m in new)}",
                           actors=[who], planet=home, data={"media": have, "new": new,
                                                           "records": len(mem["records"])})
         if years > 0 and mem["records"]:

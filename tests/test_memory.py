@@ -68,6 +68,16 @@ class TestMemory(unittest.TestCase):
         self.assertNotIn(str(self.p.id), memory.stats(self.k)["left"])
         self.assertTrue(any(r.get("lore") == "Elders" for r in memory.records(self.k, self.who)))
 
+    def test_an_unexplained_blow_is_told_once_and_kept(self):
+        from xylarium.kernel import memory as M
+        for _ in range(3):
+            M.blow(self.k, self.p, "blight", 0.0)
+            self.k.cycle_count += 100
+            M.season(self.k)
+        told = [m for m in M.myths(self.k, self.who) if m["kind"] == "blight"]
+        self.assertEqual(len(told), 1)                           # the story survives its lack of truth
+        self.assertLessEqual(told[0]["fidelity"], M.LOST_LINE)
+
 
 if __name__ == "__main__":
     unittest.main()
