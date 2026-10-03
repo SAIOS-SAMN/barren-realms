@@ -79,3 +79,24 @@ class TestFounding(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRehome(unittest.TestCase):
+    def test_a_world_moving_money_reforms_what_it_holds_never_relabels(self):
+        from simulate_playtest import ledger_net
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        p = next(p for s in k.sectors.values() for p in s.planets if p.population > 0)
+        p.society["way"] = "state"
+        institutions.found_currency(k, p)
+        old = p.currency
+        p.household_purse = 320
+        ledger.mint("test", 320, old)
+
+        def residual():
+            ms, ln = ledger.money_supply(k), ledger_net(k)
+            return {c: ms.get(c, {}).get("total", 0) - ln.get(c, 0) for c in set(ms) | set(ln)}
+        before = residual()
+        institutions.rehome(k, p, "SOL", "test")
+        self.assertEqual(p.currency, "SOL")
+        self.assertEqual({c: v for c, v in residual().items() if v}, {c: v for c, v in before.items() if v})

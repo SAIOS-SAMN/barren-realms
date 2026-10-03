@@ -98,8 +98,8 @@ def _carry(kernel: Any, src: Any, dst: Any, n: int, new: bool) -> int:
             if key in src.society:
                 dst.society[key] = src.society[key]
         genome.inherit(src, dst)
-        if institutions.founding(kernel) and dst.treasury == 0:
-            dst.currency = src.currency
+        if institutions.founding(kernel):
+            institutions.rehome(kernel, dst, src.currency, "settlers_money")   # what the world held is reformed
     else:
         dst.population += n
     return n

@@ -525,8 +525,8 @@ def send_settlers(kernel: Any, planet: Any) -> Optional[str]:
     daughter.habitability = hab
     daughter.owner_id = planet.owner_id
     from xylarium.kernel import institutions
-    if institutions.founding(kernel) and daughter.treasury == 0 and daughter.household_purse == 0:
-        daughter.currency = planet.currency                    # a people's money goes with its settlers
+    if institutions.founding(kernel):
+        institutions.rehome(kernel, daughter, planet.currency, "settlers_money")   # its money goes with its settlers
     nursery.stock_kit(kernel, planet, daughter, metab, emigrants)  # the clade's seeding kit sails with them
     daughter.morale = max(daughter.morale, 80)
     daughter.growth_policy = None
