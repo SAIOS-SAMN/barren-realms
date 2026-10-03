@@ -14,8 +14,22 @@ def _sectors(graph: Any) -> Dict[int, Any]:
     return graph.sectors if hasattr(graph, "sectors") else graph
 
 
+def _cached(kernel: Any, bucket: str, key: Any, compute: Callable[[], Any]) -> Any:
+    """A search over the warp graph, kept until the graph changes (a kernel's graph version; a bare sector map is
+    searched afresh)."""
+    if not hasattr(kernel, "caches") or not hasattr(kernel, "sectors"):
+        return compute()
+    from xylarium.kernel import cache
+    return cache.memo(kernel, bucket, key, compute, epoch=(version(kernel), len(kernel.sectors)))
+
+
 def tree(kernel: Any, start: int, limit: int = 99) -> Tuple[Dict[int, int], Dict[int, Optional[int]]]:
     """Jump distances from ``start`` (up to ``limit``) and each sector's parent on a shortest route back."""
+    dist, parent = _cached(kernel, "topo_tree", (start, limit), lambda: _tree(kernel, start, limit))
+    return dict(dist), dict(parent)
+
+
+def _tree(kernel: Any, start: int, limit: int) -> Tuple[Dict[int, int], Dict[int, Optional[int]]]:
     dist: Dict[int, int] = {start: 0}
     parent: Dict[int, Optional[int]] = {start: None}
     frontier = [start]
@@ -47,11 +61,22 @@ def reach(kernel: Any, start: int, radius: int) -> List[int]:
 
 def distances_to(kernel: Any, goal: int) -> Dict[int, int]:
     """Jump distance to ``goal`` from every sector that can reach it (breadth-first over reversed warps)."""
+    return dict(_cached(kernel, "topo_to", goal, lambda: _distances_to(kernel, goal)))
+
+
+def _reverse(kernel: Any) -> Dict[int, List[int]]:
+    def compute() -> Dict[int, List[int]]:
+        reverse: Dict[int, List[int]] = {}
+        for s in _sectors(kernel).values():
+            for w in s.warps:
+                reverse.setdefault(w, []).append(s.id)
+        return reverse
+    return _cached(kernel, "topo_reverse", 0, compute)
+
+
+def _distances_to(kernel: Any, goal: int) -> Dict[int, int]:
     sectors = _sectors(kernel)
-    reverse: Dict[int, List[int]] = {}
-    for s in sectors.values():
-        for w in s.warps:
-            reverse.setdefault(w, []).append(s.id)
+    reverse = _reverse(kernel)
     dist = {goal: 0}
     frontier = [goal]
     while frontier:

@@ -184,15 +184,12 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
     civ = getattr(planet, "civilization", None)
     tailings = (getattr(planet, "element_deposits", {}) or {}).get("TAILINGS", 0)
     from xylarium.kernel import genome
-    from xylarium.kernel import cosmos
     key = (tier, habs, metab, planet.planet_type, str(getattr(planet, "body", None)), planet.owner_id,
-           cosmos.lum(planet.sector_id),
            getattr(civ, "light_optimum", None), tailings // 500,
+           str((getattr(planet, "society", None) or {}).get("terraform")), getattr(civ, "clade", None),
            round(genome.value(planet, "light"), 3), round(genome.value(planet, "tolerance"), 3),
-           round(genome.value(planet, "chemistry"), 3), str((getattr(planet, "society", None) or {}).get("terraform")),
-           round(genome.value(planet, "birth"), 3), round(genome.value(planet, "temperature"), 3),
-           getattr(civ, "clade", None),
-           worlds_age(kernel, planet))                    # the world as it has become (its media read at its age)
+           round(genome.value(planet, "chemistry"), 3), round(genome.value(planet, "birth"), 3),
+           round(genome.value(planet, "temperature"), 3)) + _slow_key(kernel, planet)
     if kernel is not None and hasattr(kernel, "caches"):
         from xylarium.kernel import cache
         if citadel is None and habitats is None and metabolism is None:
@@ -203,6 +200,19 @@ def _profile(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: 
                              key + (str(getattr(planet, "natives", None) is not None), planet.population > 0),
                              lambda: _reckon(kernel, planet, metabolism, tier, habs))
     return _reckon(kernel, planet, metabolism, tier, habs)
+
+
+def _slow_key(kernel: Any, planet: Any) -> tuple:
+    """What changes only on deep time - its star's swelling, the world's age - read once a cycle."""
+    from xylarium.kernel import cosmos
+
+    def compute() -> tuple:
+        return (cosmos.lum(planet.sector_id),
+                worlds_age(kernel, planet))               # the world as it has become (its media read at its age)
+    if kernel is None or not hasattr(kernel, "caches"):
+        return compute()
+    from xylarium.kernel import cache
+    return cache.memo(kernel, "k_profile_slow", planet.id, compute, epoch=kernel.cycle_count)
 
 
 def _reckon(kernel: Any, planet: Any, metabolism: Optional[str], tier: int, habs: int) -> Dict[str, int]:

@@ -139,21 +139,37 @@ def quarter(kernel: Any) -> None:
         _decay(cap.ship.cargo.elements, "U", decay_share, carry, f"c:{cap.id}", st)
 
 
+def _world(kernel: Any, sec: Any, p: Any) -> Dict[str, Any]:
+    """A world's fixed physics for its season: changed only by its body, its kind, its star's swelling or the
+    arrays that shade it."""
+    from xylarium.kernel import cache, cosmos, harvest
+
+    def compute() -> Dict[str, Any]:
+        return {"cap": crust_capacity(p), "heat": heat(p), "flux": float(physics.planet_flux(sec, p)),
+                "area": float(physics.surface_area(p)), "airless": airless(p), "rocky": rocky(p),
+                "esc": float(physics.escape_energy(p)) if rocky(p) else 0.0}
+    if not hasattr(kernel, "caches"):
+        return compute()
+    stamp = (p.planet_type, str(getattr(p, "body", None)), cosmos.lum(sec.id), harvest.shade(sec.id))
+    return cache.stamped(kernel, "geology_world", p.id, stamp, compute)
+
+
 def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any]) -> None:
     deposits = p.element_deposits
     season = 1.0 / _SEASONS_PER_YEAR
+    w = _world(kernel, sec, p)
     # Tectonic renewal toward crust capacity
-    cap = crust_capacity(p)
+    cap = w["cap"]
     if cap and "ORE" in deposits and deposits["ORE"] < cap:
-        grow = int((cap - deposits["ORE"]) * TECTONIC_RENEWAL_PER_YEAR * heat(p) * season)
+        grow = int((cap - deposits["ORE"]) * TECTONIC_RENEWAL_PER_YEAR * w["heat"] * season)
         if grow > 0:
             deposits["ORE"] += grow
             matter.source("tectonic_renewal", "ORE", grow)
             st["renewed"] += grow
-    flux = float(physics.planet_flux(sec, p))
-    area = float(physics.surface_area(p))
+    flux = w["flux"]
+    area = w["area"]
     # Solar-wind He-3 into airless regolith
-    if airless(p):
+    if w["airless"]:
         cap3 = HE3_REGOLITH_PER_AREA * area
         have = deposits.get("He-3", 0)
         if have < cap3:
@@ -163,10 +179,10 @@ def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any]) -> None:
                 matter.source("solar_wind", "He-3", add)
                 st["implanted"] += add
     # Volatiles: Jeans escape vs outgassing
-    if rocky(p):
-        esc = float(physics.escape_energy(p)) or 1e-6
+    if w["rocky"]:
+        esc = w["esc"] or 1e-6
         loss_share = min(1.0, VOLATILE_ESCAPE_PER_YEAR * flux / esc * season)
-        outgas = int(OUTGAS_PER_YEAR * heat(p) * season) if (p.planet_type == "VOLCANIC" or heat(p) >= 1.0) else 0
+        outgas = int(OUTGAS_PER_YEAR * w["heat"] * season) if (p.planet_type == "VOLCANIC" or w["heat"] >= 1.0) else 0
         for v in VOLATILES:
             have = deposits.get(v, 0)
             lost = int(have * loss_share)
@@ -175,7 +191,7 @@ def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any]) -> None:
                 matter.sink("atmospheric_escape", v, lost)
                 st["escaped"] += lost
             if outgas > 0 and v in ("H2O", "C"):
-                reservoir = VOLATILE_RESERVOIR_PER_EARTH_MASS * heat(p)
+                reservoir = VOLATILE_RESERVOIR_PER_EARTH_MASS * w["heat"]
                 outgas_v = int(outgas * max(0.0, 1.0 - deposits.get(v, 0) / reservoir))
                 if outgas_v <= 0:
                     continue
