@@ -246,6 +246,9 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
     keep = CITADEL_UPKEEP.get(planet.citadel_level, CITADEL_UPKEEP[0])["credits"] * level * _quarter_len()
     options = []
     nxt = planet.citadel_level + 1
+    from xylarium.kernel import knowledge as _kn, technology as _tech
+    if not _tech.embodied(kernel, _kn.holder_of_planet(planet), planet):
+        nxt = -1                                      # a people without hands raises no works
     if self_governed(planet, kernel) and nxt in CITADEL_CONFIG:
         cfg = CITADEL_CONFIG[nxt]
         cost = cfg["upgrade_cost"] * level

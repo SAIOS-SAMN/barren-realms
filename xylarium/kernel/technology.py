@@ -36,6 +36,12 @@ were written a bit a generation by slow-breeding bodies; science lets it write f
   ROBOTICS     bodies built, not bred: work and thought no longer bound to how fast its people grow - where its
                system holds the metals to build them (knowledge.effort: ROBOTICS_GAIN; annals).
 
+  EMBODIMENT   life without a genome - minds held in fields, not in copied molecules (plasmic) - has no hands. Before
+               it can build anything it must come into a vessel: a living body designed from outside, matter built
+               to order, or a machine. It learns the terrestrial dimensions from nothing, through instruments it
+               cannot yet build, so finding it rests on two kinds of knowledge at once (materials and energy) - and
+               until it has, it raises no works (demography), no yards and never crosses (mastery.genome_ready).
+
 Every capability found is an event in its people's ledger (CAPABILITY), dated: the shape of a civilization's history
 is the order its own world let it find these in.
 """
@@ -55,13 +61,14 @@ GENETIC_GAIN = 1.0              # how much faster a people that rewrites its gen
 SYNTHESIS_GAIN = 1.0            # what designed chemistry adds to how fast it reshapes a world
 ROBOTICS_GAIN = 1.0             # what built bodies add to a people's work and thought
 CAPS = ("radio", "orbit", "fission", "computation", "networks", "cyber", "medicine", "genetics", "synthesis",
-        "robotics")
+        "robotics", "embodiment")
 NEEDS = {"radio": "information", "orbit": "energy", "fission": "energy", "computation": "information",
          "networks": "information", "cyber": "information", "medicine": "biology", "genetics": "biology",
-         "synthesis": "materials", "robotics": "materials"}
+         "synthesis": "materials", "robotics": "materials", "embodiment": "materials"}
 AFTER = {"networks": ("radio", "computation"), "cyber": ("networks",), "orbit": (), "fission": (),
          "radio": (), "computation": (), "medicine": (), "genetics": ("medicine", "computation"),
-         "synthesis": ("genetics",), "robotics": ("computation",)}
+         "synthesis": ("genetics",), "robotics": ("computation",), "embodiment": ()}
+GENOMELESS = ("plasmic",)       # chemistries whose minds are held in fields, not in a copied genome
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -116,9 +123,21 @@ def feasible(kernel: Any, holder: str, cap: str, home: Any) -> bool:
         return cold or any(p.element_deposits.get("Si", 0) > 0 for p in [home] + _system(kernel, home))
     if cap == "cyber":
         return True
+    if cap == "embodiment":
+        return genomeless(kernel, home)
     if cap == "robotics":                                 # metal to build bodies from, in its own system
         return any(p.element_deposits.get("Fe", 0) > 0 for p in [home] + _system(kernel, home))
     return True
+
+
+def genomeless(kernel: Any, home: Any) -> bool:
+    from xylarium.kernel import biosphere
+    return biosphere.metabolism_of(kernel, home) in GENOMELESS
+
+
+def embodied(kernel: Any, holder: Optional[str], home: Any) -> bool:
+    """Has this people hands to build with? Every genomed people is born in a body; a genome-less one must make one."""
+    return not genomeless(kernel, home) or has(kernel, holder, "embodiment")
 
 
 def _system(kernel: Any, home: Any) -> List[Any]:
@@ -144,6 +163,8 @@ def season(kernel: Any) -> List[str]:
             if cap in held or not feasible(kernel, who, cap, home):
                 continue
             chance = laws.mastery(stocks.get(NEEDS[cap], 0.0), KNOWLEDGE_UNIT) * thought
+            if cap == "embodiment":                          # the terrestrial dimensions, learned from nothing
+                chance *= laws.mastery(stocks.get("energy", 0.0), KNOWLEDGE_UNIT)
             if rng.random() < chance:
                 held[cap] = kernel.cycle_count
                 st["found"] += 1

@@ -31,6 +31,9 @@ def wait_years(kernel: Any, who: str, home: Any) -> Optional[float]:
     fall = gen / annals.FALL_PER_GENERATION
     if annals.STAGES[nxt] == "yards" and not annals._can_reach_orbit(kernel, who, home):
         return fall
+    from xylarium.kernel import technology
+    if annals.STAGES[nxt] == "works" and not technology.embodied(kernel, who, home):
+        return min(fall, annals.EMBODIMENT_SPAN / annals._speed(kernel, home) * gen)
     return min(fall, annals.SPANS[annals.STAGES[nxt]] / annals._speed(kernel, home) * gen)
 
 

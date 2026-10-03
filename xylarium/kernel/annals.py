@@ -31,6 +31,8 @@ SPANS = {                       # measured by tools/bridges.py on seed 7's first
     "crossed": 400.0,
 }
 STAGES = ("forage", "farm", "state", "works", "yards", "crossed")
+EMBODIMENT_SPAN = 200.0         # generations a genome-less people takes to come into a vessel (declared: harder than any
+                                # one bridge - it learns the terrestrial dimensions from nothing)
 FALL_PER_GENERATION = 2.0e-4    # a one-world people's hazard of falling, per generation (declared: a mean of ~5,000
                                 # generations); among the stars it is shared out over the worlds it holds
 DOMINION_PER_GENERATION = 0.01  # worlds a crossed people settles per generation, per world it holds (declared)
@@ -190,7 +192,18 @@ def season(kernel: Any) -> List[str]:
                 if rng.expovariate(1.0) < hazard:
                     fell = t + left * rng.random()
                 break
-            from xylarium.kernel import mastery as _mastery
+            from xylarium.kernel import mastery as _mastery, technology as _tech
+            if STAGES[nxt] == "works" and not _tech.embodied(kernel, who, home):
+                wait_body = rng.expovariate(speed / EMBODIMENT_SPAN)
+                wait_fall = rng.expovariate(FALL_PER_GENERATION)
+                if wait_fall <= wait_body and t + wait_fall < gens:
+                    fell = t + wait_fall
+                    break
+                if t + wait_body >= gens:
+                    break
+                t += wait_body
+                _tech.stats(kernel)["of"].setdefault(who, {})["embodiment"] = kernel.cycle_count
+                continue                                      # it has hands now; its works can begin
             if STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
                 nxt_blocked = True                            # its gravity holds it: it lives on, on its world
             elif STAGES[nxt] == "crossed" and not _mastery.genome_ready(kernel, who, worlds):

@@ -107,10 +107,12 @@ def genome_ready(kernel: Any, holder: str, worlds: List[Any]) -> bool:
     gravity, heat, radiation and chemistry (biosphere.adapt) - and only a people that can rewrite its own genome
     (technology: genetics) can retune them for another sun. Life without a genome - information held in fields, not
     copied molecules (plasmic) - has nothing to rewrite, and is not held back by it."""
-    from xylarium.kernel import biosphere, technology
-    if technology.has(kernel, holder, "genetics"):
-        return True
-    return bool(worlds) and biosphere.metabolism_of(kernel, home(worlds)) == "plasmic"
+    from xylarium.kernel import technology
+    if not worlds:
+        return False
+    if technology.genomeless(kernel, home(worlds)):
+        return technology.has(kernel, holder, "embodiment")   # its own hurdle: a vessel to move in
+    return technology.has(kernel, holder, "genetics")
 
 
 def ftl_law(kernel: Any) -> bool:
