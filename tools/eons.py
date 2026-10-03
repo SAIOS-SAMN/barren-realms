@@ -34,7 +34,8 @@ HISTORY = ("EMERGENCE", "DEEP_HISTORY", "ERA", "STATEHOOD", "ASCENT", "FTL_CROSS
            "POSTURE", "STRIFE", "FALL", "EPIDEMIC", "HURDLE", "KINSHIP", "KIN_EATEN", "SCHISM", "TRANSFER_FORBIDDEN",
            "TRANSFER_EMBRACED", "DOMINION", "GALACTIC_WAR", "WORLDLINES_MEET", "CONTACT", "SEEDING", "SETTLEMENT",
            "FEDERATION", "EXODUS", "LIFE_ENDED", "WORLD_STRIPPED", "WORLD_SHATTERED", "CHILD_UNIVERSE")
-CULTURE = ("PHILOSOPHY", "MYTH", "IMAGINATION", "ART", "EMINENT", "EPITAPH", "COVENANT", "GENESIS_MANIFESTO")
+CULTURE = ("PHILOSOPHY", "MYTH", "IMAGINATION", "ART", "EMINENT", "EPITAPH", "COVENANT", "GENESIS_MANIFESTO",
+           "RECORDKEEPING", "REDISCOVERY")
 STAGES = ("farm", "state", "works", "yards", "crossed")
 EON_GYR = 0.001                  # an eon of cosmic time, as printed (a million years)
 AGE_YEARS = 25.0                 # an age of a people's own years, as printed
@@ -113,7 +114,9 @@ def chronicle(who: str, rec: Dict[str, Any], events: List[Dict[str, Any]], show_
             for (kind, title), n in sorted(told.items(), key=lambda kv: float(first[kv[0]].get("year", 0))):
                 e = first[(kind, title)]
                 body = (e.get("text") or "")[:140]
-                lines.append(f"     y{e.get('year')} {kind.lower()}: {title}" + (f" (told on {n} worlds)" if n > 1 else "")
+                worlds = (e.get("data") or {}).get("worlds", n) if kind == "MYTH" else n
+                lines.append(f"     y{e.get('year')} {kind.lower()}: {title}" +
+                             (f" (told on {worlds} worlds)" if worlds > 1 else "")
                              + (f" - {body}" if body and kind != "MYTH" else ""))
     gaps = []
     stages_recorded = {e.get("data", {}).get("stage") for e in hist if e.get("kind") in ("ERA", "ASCENT")}
@@ -137,6 +140,8 @@ def chronicle(who: str, rec: Dict[str, Any], events: List[Dict[str, Any]], show_
         gaps.append("no art")
     if not any(e.get("kind") == "EMINENT" for e in cult):
         gaps.append("no remembered figure")
+    if not any(e.get("kind") == "RECORDKEEPING" for e in cult):
+        gaps.append("keeps its past only by telling it")
     if gaps:
         lines.append(f"   GAPS{' for ' + name if show_gaps_only else ''}")
         for g in gaps:

@@ -249,6 +249,8 @@ def speciate(kernel: Any, planet: Any, parent_holder: str) -> Optional[str]:
         new_holder = knowledge.holder_of_planet(planet)
         knowledge.stocks(kernel, new_holder).update(dict(knowledge.stocks(kernel, parent_holder)))  # it remembers
         intellect.stats(kernel)["vocab"][new_holder] = list(intellect.vocabulary(kernel, parent_holder))
+        from xylarium.kernel import memory
+        memory.inherit(kernel, parent_holder, new_holder)                # and it takes its parent's past with it
         who = new.name
     else:
         # a strain under its captain's rule: the same people, but a deme of its own from now on - it is measured

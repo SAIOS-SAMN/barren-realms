@@ -35,7 +35,8 @@ class TestSociety(unittest.TestCase):
         self.p.society["famine_cycle"] = self.k.cycle_count
         society.quarter(self.k)
         self.assertGreater(self.p.civilization.dogma, 0.0)
-        myths = self.p.society.get("myths", [])
+        from xylarium.kernel import memory
+        myths = memory.myths(self.k, knowledge.holder_of_planet(self.p))
         self.assertEqual([m["kind"] for m in myths][:1], ["famine"])
         self.assertIn("sun", myths[0]["text"])
 

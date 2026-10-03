@@ -156,7 +156,7 @@ def homeworld(kernel: Any, player_id: str) -> Optional[Any]:
 
 
 def status(kernel: Any, player_id: str) -> Dict[str, Any]:
-    from xylarium.kernel import biosphere, knowledge, society, sustenance, ways
+    from xylarium.kernel import biosphere, knowledge, memory, society, sustenance, ways
     p = homeworld(kernel, player_id)
     if p is None:
         return {}
@@ -171,7 +171,7 @@ def status(kernel: Any, player_id: str) -> Dict[str, Any]:
             "policy": getattr(p, "growth_policy", None) or "expand",
             "gauges": dict(society.gauges(p)), "dogma": round(float(getattr(p.civilization, "dogma", 0.0) or 0.0), 3),
             "stress": dict(p.society.get("stress") or society.stress(kernel, p)),
-            "trades": society.trades(kernel, p), "myths": list(p.society.get("myths", [])),
+            "trades": society.trades(kernel, p), "myths": memory.myths(kernel, h),
             "forecast": p.society.get("forecast"),
             "life": _life(kernel, p, h),
             "firsts": dict((kernel.state.get("genesis") or {}).get("firsts", {}))}

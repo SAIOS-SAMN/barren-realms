@@ -110,6 +110,8 @@ def event(kernel: Any, kind: str, title: str, actors: Optional[List[str]] = None
     if path:
         with open(path, "a") as f:
             f.write(json.dumps(rec, default=str) + "\n")
+    from xylarium.kernel import memory
+    memory.witness(kernel, rec)                        # what its peoples lived through, they may keep (their own record)
     return rec
 
 

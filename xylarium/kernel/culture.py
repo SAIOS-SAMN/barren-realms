@@ -25,7 +25,8 @@ IMAGINATION what it tells itself about worlds it has not seen, once it has the l
             the shape of its tales follows its body (swarm-epics for r-strategists, single heroes for K), its
             biology (green worlds, deep stone, the long cold, fire and storm, the dark), its sky (voyages to its
             moon; travellers between suns under a crowded sky) and its fears (arks, for a people whose sun is dying).
-ART         once it has artisans (its trades, society.py) or leisure: its medium follows its senses (colour for
+ART         from its first day, in the media it can make (memory.py): rites (dance and display, scent laid in
+            rites, resonance, patterned fields) before it makes lasting marks; then its medium follows its senses (colour for
             carbon life under a sun, carved and struck stone for lithic minds, slow-grown ice for the Stillcold,
             patterned light for plasmic minds, sound for those who live in the dark), its palette its sun's colour,
             its symmetries the mathematics its crystals can express (intellect.py: turning patterns for a cyclic
@@ -177,6 +178,12 @@ def art(planet: Any, kernel: Any, holder: str) -> Dict[str, str]:
     sense = (getattr(planet.civilization, "traits", None) or {}).get("sense")
     medium = {"light": medium, "heat": "heat-shaped stone", "heat and pressure": "pressure and resonance",
               "chemistry": "scent and taste laid in patterns", "fields": "patterned fields"}.get(sense, medium)
+    from xylarium.kernel import memory
+    media = memory.media(kernel, holder, planet)
+    if "inscribed" not in media:                       # a people that makes no lasting marks makes its art in rites
+        medium = memory.substrate(planet, "oral")
+    elif "machine" in media:
+        medium = f"{medium} and forms its machines generate"
     colour = sky(kernel, planet)["colour"]
     palette = {"red": "reds and umbers", "orange": "ambers and ochres", "yellow": "the full spectrum",
                "white": "cold whites and blues", "pale": "pale and washed tones"}.get(colour, "its sun's tones")
@@ -245,10 +252,8 @@ def quarter(kernel: Any) -> List[str]:
                 h["passed"] = kernel.cycle_count
                 history.event(kernel, "HURDLE", f"The {name} pass {HURDLES[key]}", actors=[holder], planet=cap,
                               data={"hurdle": key, "status": "passed", "years": round(gen, 1)})
-        if not _capable(kernel, cap):
-            continue
-        tales = imagined(cap, kernel, cos)
-        if due and tales != rec.get("tales"):
+        tales = imagined(cap, kernel, cos) if _capable(kernel, cap) else None    # imagination needs leisure;
+        if due and tales and tales != rec.get("tales"):                          # art only a medium
             rec["tales"] = tales
             history.event(kernel, "IMAGINATION", f"The {name} tell of {tales[1]}", actors=[holder], planet=cap,
                           text=f"The {name} tell " + "; ".join(tales) + ".", data={"tales": tales})

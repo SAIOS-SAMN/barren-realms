@@ -5,6 +5,7 @@ only where minds and their reach witness it - and a history ledger that keeps al
 """
 
 import json
+import math
 import os
 import tempfile
 import unittest
@@ -204,25 +205,44 @@ class TestHistoryLedger(unittest.TestCase):
         with open(path) as f:
             self.assertEqual(json.loads(f.readlines()[-1])["title"], "a test war")
 
-    def test_myths_compound_and_remember(self):
-        from xylarium.kernel import knowledge, society
+    def test_records_drift_into_myth_and_remember(self):
+        from xylarium.kernel import knowledge, memory, society
         k = GameKernel(seed=7, genesis="cosmic")
         k.activate()
-        p = next(p for s in k.sectors.values() for p in s.planets if p.population > 0)
+        p = next(p for s in k.sectors.values() for p in s.planets if p.population > 0
+                 and str(knowledge.holder_of_planet(p)).startswith("civ:"))
         holder = knowledge.holder_of_planet(p)
+        k.cycle_count -= k.cycle_count % 100
+        memory.season(k)                                         # the people's years begin to be counted
         war = history.event(k, "WAR", "the old war", actors=[holder, "civ:Other"], planet=p, magnitude=10 ** 7,
                             cause="hunger: ORGANICS")
-        p.society["famine_cycle"] = k.cycle_count
-        society.quarter(k)                                       # a first famine: a myth
-        k.cycle_count += 100 * 200                               # generations later
-        society._legends(k, p, 25.0)                             # the war becomes a legend, built on the myth
-        myths = p.society["myths"]
-        legend = myths[-1]
-        self.assertTrue(legend["kind"].startswith("legend:war"))
-        self.assertEqual(legend["remembers"], war["id"])
-        self.assertEqual(legend["builds_on"], myths[-2]["id"])
-        self.assertIn("as it was when", legend["text"])
+        kept = [r for r in memory.records(k, holder) if r["id"] == war["id"]]
+        self.assertEqual(len(kept), 1)                           # the people keeps its own record of the war
+        self.assertEqual(kept[0]["f"], 1.0)
+        tellings = math.log(0.3) / math.log(1.0 - memory.oral_err(k, p))
+        k.cycle_count += 100 * int(tellings * memory._gen(k, p))   # told for as many generations as take it
+        memory.season(k)                                         # well below the line
+        told = [m for m in memory.myths(k, holder) if m["remembers"] == war["id"]]
+        self.assertEqual(len(told), 1)                           # it is told as myth, in the terms of its own sky
+        self.assertIn(society._sky(k, p)["colour"], told[0]["text"] + " " + society._sky(k, p)["colour"])
+        self.assertLess(told[0]["fidelity"], memory.MYTH_LINE)
 
+    def test_one_tale_however_often_it_happens(self):
+        from xylarium.kernel import knowledge, memory
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        p = next(p for s in k.sectors.values() for p in s.planets if p.population > 0
+                 and str(knowledge.holder_of_planet(p)).startswith("civ:"))
+        holder = knowledge.holder_of_planet(p)
+        k.cycle_count -= k.cycle_count % 100
+        memory.season(k)
+        for _ in range(5):
+            history.event(k, "STRIFE", "they turn on themselves", actors=[holder], planet=p, magnitude=1000)
+        tellings = math.log(0.3) / math.log(1.0 - memory.oral_err(k, p))
+        k.cycle_count += 100 * int(tellings * memory._gen(k, p))
+        memory.season(k)
+        strife = [m for m in memory.myths(k, holder) if m["kind"] == "STRIFE"]
+        self.assertEqual(len(strife), 1)                     # one story of brother against brother
 
 if __name__ == "__main__":
     unittest.main()

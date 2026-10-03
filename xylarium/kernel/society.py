@@ -15,14 +15,16 @@ blows it cannot explain - famine, blight, bombardment, a sky that fails - as a g
 (a season's blow counts a season against a generation), in proportion to how little it knows of information
 (laws.mastery: what it can explain); it is worn down as its knowledge grows (each newly explained thing
 takes its share of belief) and by the strangers' ideas its openness lets in (its familiarity with its contacts).
-Dogma impedes inquiry (knowledge.impedance) and, past a priesthood's line, brands it heresy. Each first blow of a
-kind becomes a MYTH: what the people tells of it, in the terms of its own sky (its star's colour, its moons).
+Dogma impedes inquiry (knowledge.impedance) and, past a priesthood's line, brands it heresy. A blow it cannot explain
+is told as myth from its first telling (memory.blow): it keeps of it only what it understands. Every other myth is a
+record the people has kept and let drift (memory.py).
 
 STRESS. Turchin's structural-demographic reading of a state: mass mobilisation potential (immiseration: the share
 of its need its harvests do not meet, times how crowded it is against its land), times what fails to legitimise
 its order (neither belief nor prosperity holds it), times its fiscal distress (its morale, which falls with
-arrears and hunger). The share of a people that would rise is that product. When it exceeds the share under arms,
-the people turns on itself: CIVIL STRIFE - those who fight die in proportion to the clash, the treasury is
+arrears and hunger). The share of a people that would rise is that product. When it exceeds the share under arms
+and the share that carries a whole order with it (MOBILISED), and those rising are a people's worth (VIABLE), the
+people turns on itself: CIVIL STRIFE - those who fight die in proportion to the clash, the treasury is
 plundered, the creed is overturned (the temple gauge flips) - and a generation passes before the exhausted can rise
 again. On a shared world, two peoples in competition for one niche fight when the host is pressed against its
 land: the host's armed share drives the community out of its share of the room.
@@ -39,6 +41,8 @@ from typing import Any, Dict, List, Optional
 from xylarium.kernel import laws
 
 GAUGES = ("temple", "levy", "openness", "commerce")
+MOBILISED = 0.035              # the share that, once risen, carries a whole order with it (Chenoweth: no rising of
+                               # 3.5% of a people has failed) - below it unrest is unrest, not strife
 SOLDIERS_PER_TROOP = 100        # a garrison troop counts a hundred under arms (the colony's garrison_troops)
 
 
@@ -123,83 +127,6 @@ def _sky(kernel: Any, planet: Any) -> Dict[str, Any]:
     return {"colour": colour, "moons": moons}
 
 
-_MYTH = {
-    "famine": "the {colour} sun turned its face away, and the fields gave nothing; {moons_say}",
-    "blight": "a sickness walked out of the crowded places, and the {colour} sun did not stop it; {moons_say}",
-    "bombarded": "fire fell from the dark between the stars, and {moons_say}",
-    "sky": "the sky itself thinned, and the {colour} sun's breath reached the ground; {moons_say}",
-    "strife": "brother rose against brother under the {colour} sun; {moons_say}",
-    "sun": "the {colour} sun grew great and hungry, and burned the fields it had fed; {moons_say}",
-}
-
-
-def _myth(kernel: Any, planet: Any, kind: str, told: Optional[str] = None, source: Optional[Dict[str, Any]] = None
-          ) -> Optional[Dict[str, Any]]:
-    """A people's myth: told in the terms of its own sky, and built on the myth before it (each retelling carries
-    the last); written to the ledger with what it remembers (`source`) and what it builds on."""
-    soc = planet.society
-    myths = soc.setdefault("myths", [])
-    if source is None and any(m["kind"] == kind for m in myths):
-        return None
-    sky = _sky(kernel, planet)
-    moons_say = ("the moon looked on and said nothing" if sky["moons"] == 1 else
-                 f"its {sky['moons']} moons looked on and said nothing" if sky["moons"] > 1 else
-                 "and there was no moon to witness it")
-    text = told or _MYTH.get(kind, "something happened that no one could explain; {moons_say}")
-    text = text.format(colour=sky["colour"], moons_say=moons_say)
-    prev = myths[-1] if myths else None
-    if prev is not None:
-        text += f" - as it was when {prev['text'].split(';')[0].split(' - ')[0]}"
-    people = getattr(planet.civilization, "name", planet.name)
-    from xylarium.kernel import history, knowledge, primordial
-    refs = [x for x in ((source or {}).get("id"), (prev or {}).get("id")) if x]
-    rec = history.event(kernel, "MYTH", f"The {people} tell how {text.split(',')[0]}",
-                        actors=[knowledge.holder_of_planet(planet)], planet=planet, refs=refs,
-                        text=f"The {people} of {planet.name} say that {text}.", data={"myth": kind})
-    myth = {"id": rec.get("id"), "kind": kind, "year": kernel.cycle_count // 100, "text": text,
-            "builds_on": (prev or {}).get("id"), "remembers": (source or {}).get("id")}
-    myths.append(myth)
-    del myths[:-40]
-    chron = getattr(kernel, "chronicle", None)
-    if chron is not None:
-        chron.record(kernel, "MYTH", planet.id, people, f"The {people} tell how {text.split(',')[0]}",
-                     f"The {people} of {planet.name} say that {text}.", sector_id=planet.sector_id,
-                     tags=["myth", kind])
-    primordial.first(kernel, "first_myth", f"{people}: {kind}")
-    return myth
-
-
-LEGENDARY = {"WAR": "the {them} came for their {what} under the {colour} sun, and they fought",
-             "STRIFE": "brother rose against brother under the {colour} sun, and the old creed fell",
-             "CONQUEST": "strangers from the sky took their world, and the {colour} sun did not stop them",
-             "REVOLT": "they threw the strangers back into the sky",
-             "CONTACT": "the {them} first came out of the dark, speaking in a tongue no one knew",
-             "SUBJUGATION": "the {them} held them by force, and they paid",
-             "REBELLION": "they broke the {them}'s hold",
-             "FARMING": "the first seed was put into the ground",
-             "STATEHOOD": "the first granary was raised and the first tax was taken",
-             "EMERGENCE": "they first looked up, and the {colour} sun looked back"}
-
-
-def _legends(kernel: Any, planet: Any, gen_years: float) -> None:
-    """The gravest thing a generation ago that no one has yet made a legend of, becomes one."""
-    from xylarium.kernel import history, knowledge
-    holder = knowledge.holder_of_planet(planet)
-    soc = planet.society
-    done = set(soc.setdefault("legended", []))
-    horizon = kernel.cycle_count - gen_years * 100
-    old = [e for e in history.of_people(kernel, holder)
-           if e["kind"] in LEGENDARY and e["cycle"] <= horizon and e["id"] not in done]
-    if not old:
-        return
-    e = max(old, key=lambda x: (float(x.get("magnitude") or 0), -x["cycle"]))
-    them = next((a for a in e["actors"] if a != holder), "strangers").split(":", 1)[-1]
-    what = (e.get("cause") or "").split(":")[-1].strip().split(" ")[0] or "harvests"
-    told = LEGENDARY[e["kind"]].replace("{them}", them).replace("{what}", what) + "; {moons_say}"
-    _myth(kernel, planet, f"legend:{e['kind'].lower()}", told=told, source=e)
-    soc["legended"] = (list(done) + [e["id"]])[-200:]
-
-
 def _believe(kernel: Any, planet: Any, gen_years: float) -> None:
     from xylarium.kernel import contact, knowledge
     civ = planet.civilization
@@ -211,8 +138,9 @@ def _believe(kernel: Any, planet: Any, gen_years: float) -> None:
     explained = max(0.0, info - float(soc.get("info_seen", info)))            # what it newly understands
     soc["info_seen"] = round(info, 6)
     shocks = _shocks(kernel, planet)
+    from xylarium.kernel import memory
     for kind in shocks:
-        _myth(kernel, planet, kind)
+        memory.blow(kernel, planet, kind, info)                             # what it cannot explain, it tells as myth
     unexplained = min(1.0, sum(shocks.values())) * (1.0 - info)
     fam = contact.stats(kernel)["familiarity"]
     holder = knowledge.holder_of_planet(planet)
@@ -246,8 +174,11 @@ def stress(kernel: Any, planet: Any) -> Dict[str, float]:
 def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> Optional[str]:
     soc = planet.society
     g = gauges(planet)
-    if s["rising"] <= g["levy"]:
-        return None
+    if s["rising"] <= max(g["levy"], MOBILISED):
+        return None                                         # too few would rise to carry the rest with them
+    from xylarium.kernel import creation
+    if s["rising"] * planet.population < creation.VIABLE:
+        return None                                         # a handful riots; it does not turn a people on itself
     if kernel.cycle_count - int(soc.get("strife_cycle", -10 ** 9)) < gen_years * 100:
         return None                                         # the exhausted generation does not rise again
     from xylarium.kernel import alignment, primordial, sustenance
@@ -269,7 +200,6 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
     history.event(kernel, "STRIFE", f"The {people} turn on themselves", actors=[knowledge.holder_of_planet(planet)],
                   planet=planet, magnitude=dead, cause=f"{s['rising']:.0%} would rise, {g['levy']:.0%} under arms "
                   f"(hunger {s['immiseration']:.0%}, unheld order {s['illegitimacy']:.0%})")
-    _myth(kernel, planet, "strife")
     from xylarium.kernel import technology
     for line in technology.reconsider(kernel, knowledge.holder_of_planet(planet), planet, g["temple"]):
         kernel.action_logs.append(line)                     # what the fallen creed forbade is weighed again
@@ -349,7 +279,6 @@ def quarter(kernel: Any) -> List[str]:
         gen = fertility.generation_years(fertility.strategy(kernel, p))
         _council(kernel, p)                                   # moves only what no steward has set
         _believe(kernel, p, gen)
-        _legends(kernel, p, gen)
         _guilds(kernel, p)
         s = stress(kernel, p)
         p.society["stress"] = s
@@ -371,7 +300,7 @@ def summary(kernel: Any) -> Dict[str, Any]:
     dog = [float(getattr(p.civilization, "dogma", 0.0) or 0.0) for p in ps]
     return {"peoples": len(ps), "strife": st["strife"], "driven_out": st["driven_out"],
             "mean_dogma": round(sum(dog) / len(dog), 3) if dog else 0.0,
-            "myths": sum(len(p.society.get("myths", [])) for p in ps),
+            "myths": (state.of(kernel, "memory")["myths"] if "memory" in kernel.state else 0),
             "mean_trades": round(sum(int(p.society.get("trades", 0)) for p in ps) / len(ps), 2) if ps else 0.0}
 
 

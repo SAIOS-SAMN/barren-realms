@@ -96,6 +96,19 @@ def stow_fragment(captain: Any, fragment: Dict[str, Any]) -> None:
         del held[: len(held) - MAX_HELD_FRAGMENTS]
 
 
+def _splice_ok(kernel: Any, new_id: Optional[int], anchors: Tuple[int, ...]) -> bool:
+    """The old chart's secret coordinates exist only on the old chart: a ghost sector is spliced in only where its
+    anchors are charted and its number is free (in a physics universe the numbers name real stars, never these)."""
+    if not kernel:
+        return False
+    from xylarium.kernel import cosmos
+    if cosmos.is_cosmic(kernel):
+        return False
+    if new_id is not None and new_id in kernel.sectors:
+        return False
+    return all(a in kernel.sectors for a in anchors)
+
+
 class CartographyPuzzle:
     """Represents an interactive 3x3 cartographic decryption matrix."""
 
@@ -571,9 +584,9 @@ class CartographyManager:
             sec_105.port.currency = "VOID"
             sec_105.port.remoteness = 12
             sec_105.port.treasury = 200_000
-            from xylarium.kernel import ledger
-            ledger.mint("ghost_sector_genesis", sec_105.port.treasury, "VOID")
-            if kernel:
+            if _splice_ok(kernel, 105, (78, 65)):
+                from xylarium.kernel import ledger
+                ledger.mint("ghost_sector_genesis", sec_105.port.treasury, "VOID")
                 kernel.sectors[105] = sec_105
                 if 105 not in kernel.sectors[78].warps:
                     kernel.sectors[78].warps.append(105)
@@ -634,9 +647,9 @@ class CartographyManager:
             )
             vault_planet.currency = "VOID"
             vault_planet.planet_type = "BARREN"
-            from xylarium.kernel import ledger
-            ledger.mint("ghost_sector_genesis", vault_planet.treasury, "VOID")
-            if kernel:
+            if _splice_ok(kernel, 106, (88, 92)):
+                from xylarium.kernel import ledger
+                ledger.mint("ghost_sector_genesis", vault_planet.treasury, "VOID")
                 kernel.sectors[106] = sec_106
                 if 106 not in kernel.sectors[88].warps:
                     kernel.sectors[88].warps.append(106)
@@ -655,7 +668,7 @@ class CartographyManager:
 
         elif unlock_id == "SMUGGLER_SHORTCUT":
             # Connect Sector 10 and Sector 70 directly
-            if kernel:
+            if _splice_ok(kernel, None, (10, 70)):
                 if 70 not in kernel.sectors[10].warps:
                     kernel.sectors[10].warps.append(70)
                     kernel.sectors[10].warps.sort()
