@@ -84,9 +84,16 @@ class TestDyingStars(unittest.TestCase):
     def test_the_centre_recycles_what_dies_in_the_bulge(self):
         k = self.k
         t0, n0 = matter.totals(k), k.matter.net()
-        blackhole.capture(k, {"Fe": 300}, "a test star", made=True)
+        quiet = blackhole.luminosity(k)
+        m0 = blackhole.stats(k).get("mass", blackhole.MASS0)
+        blackhole.capture(k, {"Fe": 300}, "a test star", made=True, suns=2.0)
         blackhole.quarter(k)
-        self.assertGreater(blackhole.luminosity(k), 1e5)                              # it shines as it feeds
+        self.assertGreater(blackhole.luminosity(k), quiet)                            # it shines as it feeds
+        grown = blackhole.stats(k)["mass"] - m0
+        self.assertAlmostEqual(grown, 2.0 * blackhole.HORIZON_SHARE * (1 - blackhole.EFFICIENCY), places=6)
+        blackhole.capture(k, {"Fe": 10 ** 6}, "a world's deposits", made=True)        # units are not mass
+        blackhole.quarter(k)
+        self.assertAlmostEqual(blackhole.stats(k)["mass"] - m0, grown, places=6)
         self.assertEqual(_undeclared(k, t0, n0), {})
 
 

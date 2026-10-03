@@ -36,7 +36,7 @@ C2_ERG_PER_SUN = 1.787e54       # a solar mass of energy (M c^2), erg
 LSUN_ERG_PER_YEAR = 3.828e33 * 3.156e7
 QUIET_MDOT = 1.0e-8             # solar masses a year a quiet nucleus accretes (Sgr A*)
 EPISODE_MYR = 100.0             # e-folding time of an active episode: the reservoir's return
-UNITS_PER_SUN = 150             # deposit units a solar mass stands for (cosmos.EJECTA_PER_SUN)
+EARTH_SUNS = 3.003e-6           # an Earth mass in suns (a world's body mass is in Earth masses)
 MASS0 = 4.0e6                   # the central black hole's mass at the clock's start (Sgr A*), suns
 HORIZON_SHARE = 0.1             # the share of infalling matter that crosses the horizon: a hot accretion flow loses
                                 # most of what falls to its own outflow first (declared; radiatively inefficient
@@ -48,11 +48,16 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
-            records: Optional[List[str]] = None) -> None:
+            records: Optional[List[str]] = None, suns: float = 0.0) -> None:
     """Matter falls to the centre. `made`: freshly made in a dying star (not yet in any world): a source and a sink
     at once, booked so the ledger sees it pass through. A share crosses the horizon into the child universe with
-    the records of what fell (`records`: the peoples whose worlds these were); the rest feeds the disc's outflow."""
+    the records of what fell (`records`: the peoples whose worlds these were); the rest feeds the disc's outflow.
+    `suns`: the mass that fell - what the hole grows by and shines with. Element units are a world's workable
+    deposits, not its mass: a world's deposits are never weighed as suns (they are enriched by the jets' own return,
+    and weighing them again each time they fall would feed the hole on its own outflow)."""
     st = stats(kernel)
+    st["fed_suns_season"] = st.get("fed_suns_season", 0.0) + max(0.0, float(suns))
+    st["fed_suns"] = st.get("fed_suns", 0.0) + max(0.0, float(suns))
     total = 0
     crossed = 0
     for el, q in units.items():
@@ -106,7 +111,7 @@ def luminosity(kernel: Any) -> float:
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
     st = stats(kernel)
     deep_years = FISCAL_QUARTER_CYCLES / 100.0 * cosmos.ruler(kernel)
-    mdot = max(QUIET_MDOT, st.get("fed_last", 0) / UNITS_PER_SUN / max(1.0, deep_years))
+    mdot = max(QUIET_MDOT, st.get("fed_suns_last", 0.0) / max(1.0, deep_years))
     return EFFICIENCY * mdot * C2_ERG_PER_SUN / LSUN_ERG_PER_YEAR
 
 
@@ -118,7 +123,9 @@ def quarter(kernel: Any) -> List[str]:
     logs: List[str] = []
     fed = st.pop("fed_season", 0)
     st["fed_last"] = fed
-    st["mass"] = st.get("mass", MASS0) + fed / UNITS_PER_SUN * HORIZON_SHARE * (1 - EFFICIENCY)
+    suns = st.pop("fed_suns_season", 0.0)
+    st["fed_suns_last"] = suns
+    st["mass"] = st.get("mass", MASS0) + suns * HORIZON_SHARE * (1 - EFFICIENCY)
     L = luminosity(kernel)
     if fed and L > st.get("brightest", 0.0):
         st["brightest"] = L
@@ -152,7 +159,7 @@ def summary(kernel: Any) -> Dict[str, Any]:
     ch = st.get("child") or {}
     return {"mass_suns": round(st.get("mass", MASS0), 1), "luminosity_lsun": float(f"{luminosity(kernel):.3g}"),
             "reservoir": sum(st["reservoir"].values()), "captured": st["captured"], "returned": st["returned"],
-            "crossed": st.get("crossed", 0), "child_born": ch.get("born"), "child_records": len(ch.get("records", []))}
+            "fed_suns": round(st.get("fed_suns", 0.0), 3), "crossed": st.get("crossed", 0), "child_born": ch.get("born"), "child_records": len(ch.get("records", []))}
 
 
 from xylarium.kernel import matter, state  # noqa: E402

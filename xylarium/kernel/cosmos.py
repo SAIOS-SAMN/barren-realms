@@ -681,7 +681,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
         unbound = kind in ("supernova", "core_collapse") or a < GIANT_REACH_AU
         if unbound:
             if to_centre:
-                blackhole.capture(kernel, dict(p.element_deposits), f"the worlds of {sec.name}", records=who)
+                blackhole.capture(kernel, dict(p.element_deposits), f"the worlds of {sec.name}", records=who,
+                                  suns=float(physics.body(p).get("mass", 1) or 1) * blackhole.EARTH_SUNS)
             elif a < GIANT_REACH_AU and kind == "white_dwarf":
                 for el, q in p.element_deposits.items():
                     matter.sink("stellar_engulfment", el, q)        # swallowed by its own star
@@ -702,7 +703,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
               {"H2O": 0.45, "Si": 0.2, "C": 0.15, "Fe": 0.12, "Ni": 0.03, "U": 0.05})   # what each death makes
     units = {el: int(max(0.0, shed) * EJECTA_PER_SUN * w) for el, w in yields.items()}
     if to_centre:
-        blackhole.capture(kernel, units, f"the remains of the star of {sec.name}", made=True, records=who)
+        blackhole.capture(kernel, units, f"the remains of the star of {sec.name}", made=True, records=who,
+                          suns=shed)
     else:
         worlds = [p for s2 in kernel.sectors.values() if s2.id in _region_sectors(kernel, sid) for p in s2.planets]
         for i, (el, q) in enumerate(sorted(units.items())):
