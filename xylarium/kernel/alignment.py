@@ -153,6 +153,7 @@ def omitted(planet: Any, lives: float, foreseen_share: float, avoidable_share: f
     as both reach. Returns the lives counted."""
     counted = max(0.0, lives) * max(0.0, min(1.0, foreseen_share)) * max(0.0, min(1.0, avoidable_share))
     if counted > 0 and getattr(planet, "civilization", None) is not None and getattr(planet, "society", None) is not None:
+        # (sustenance.flow_civ writes it into the people's history - a ruled world's too)
         from xylarium.kernel import sustenance
         sustenance.flow_civ(planet, dark=counted, why=why)
     elif counted > 0 and getattr(planet, "civilization", None) is not None and getattr(planet, "owner_id", None) is None:

@@ -29,6 +29,33 @@ def _op(kind: str, title: str, detail: str, command: str, value: float = 0.0, ur
 
 
 # ---------------------------------------------------------------------- where you stand
+def spendable(kernel: Any, captain: Any, cur: str) -> float:
+    """What a captain can spend at a port of `cur`, in SOL: its SOL (which the desk converts on the spot) and what
+    it already holds in the port's own money."""
+    from xylarium.kernel import fx
+    local = captain.fx_wallet.get(cur, 0) if cur != "SOL" else 0
+    m = fx.ACTIVE_FX or getattr(kernel, "fx_market", None)
+    return float(captain.credits) + (m.to_sol_value(cur, local) if (m is not None and local) else 0.0)
+
+
+def idle_money(kernel: Any, captain: Any, sector: Any) -> List[Dict[str, Any]]:
+    """Money sitting in a region's currency the captain is not working in: worth converting (or holding, if that
+    money pays better than SOL - the desk shows both)."""
+    from xylarium.kernel import fx
+    m = fx.ACTIVE_FX or getattr(kernel, "fx_market", None)
+    here = sector.port.currency if sector.port is not None else None
+    out = []
+    for cur, amt in (captain.fx_wallet or {}).items():
+        if cur == here or amt <= 0 or m is None:
+            continue
+        sol = m.to_sol_value(cur, amt)
+        if sol >= 100:
+            out.append(_op("money", f"{amt:,} {cur} idle (~{sol:,.0f} SOL)",
+                           f"convert at the ISSE desk to spend it here, or hold it if {cur} pays better",
+                           "FX", sol * 0.01))
+    return out
+
+
 def trades(kernel: Any, captain: Any, sector: Any) -> List[Dict[str, Any]]:
     """The best buy-here, sell-within-reach runs, by margin x what the hold and the warehouse allow."""
     port = sector.port
@@ -61,7 +88,7 @@ def trades(kernel: Any, captain: Any, sector: Any) -> List[Dict[str, Any]]:
                 best = (margin, d, other)
         if best is None:
             continue
-        units = min(space, stock, int(max(0, captain.credits - 500) // max(1.0, cost)))
+        units = min(space, stock, int(max(0, spendable(kernel, captain, port.currency) - 500) // max(1.0, cost)))
         if units <= 0:
             continue
         margin, d, other = best
@@ -241,7 +268,8 @@ def advise(kernel: Any, captain_id: str) -> Dict[str, Any]:
     sector = kernel.sectors[captain.sector_id]
     sections = {
         "alerts": [o for o in drive(kernel, captain, sector) + worlds(kernel, captain) if o["urgent"]],
-        "here": trades(kernel, captain, sector) + contracts(kernel, captain, sector) + charters(kernel, captain, sector),
+        "here": trades(kernel, captain, sector) + contracts(kernel, captain, sector) + charters(kernel, captain, sector)
+        + idle_money(kernel, captain, sector),
         "ship": [o for o in drive(kernel, captain, sector) if not o["urgent"]],
         "worlds": [o for o in worlds(kernel, captain) if not o["urgent"]],
         "polity": politics(kernel, captain, sector),

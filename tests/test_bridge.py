@@ -97,7 +97,9 @@ class TestMyceliumBridge(unittest.IsolatedAsyncioTestCase):
         await send_ws_json({"action": "VIEW", "player_id": "agent_smith"})
         view_resp = await read_ws_json()
         self.assertEqual(view_resp.get("status"), "ok")
-        self.assertEqual(view_resp.get("view", {}).get("sector", {}).get("id"), 1)
+        from xylarium.kernel import roles
+        self.assertEqual(view_resp.get("view", {}).get("sector", {}).get("id"),
+                         roles.tradewards(self.kernel)["sector"])        # a new captain berths at Tradewards
 
         # 4. Test DISPATCH action (MOVE to connected sector)
         warps = view_resp.get("view", {}).get("sector", {}).get("warps", [])

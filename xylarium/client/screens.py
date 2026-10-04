@@ -358,8 +358,15 @@ def prompt_peoples(cli: Any) -> None:
     _ask("Enter to return > ")
 
 
+def prompt_progress(cli: Any) -> None:
+    from xylarium.kernel import roles
+    print(roles.render_progress(roles.progress(cli.kernel, cli.player_id)))
+    _ask("Enter to return > ")
+
+
 SCREENS: Dict[str, Callable[[Any], None]] = {
     "ADVISOR": prompt_advisor,
+    "PROGRESS": prompt_progress,
     "REALMS": prompt_realms,
     "WORKBENCH": prompt_workbench,
     "DRIVE": prompt_drives,

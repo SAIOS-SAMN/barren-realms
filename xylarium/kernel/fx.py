@@ -391,6 +391,23 @@ def debit(captain: Any, cur: str, amount: int) -> None:
             captain.fx_wallet.pop(cur, None)
 
 
+def net_worth(captain: Any, market: Optional["FXMarket"] = None) -> Dict[str, float]:
+    """What a captain holds, in the reserve currency (SOL): its SOL, every regional balance at the ISSE's mid rate,
+    and the cargo in its holds at what it paid (cost basis, kept in SOL)."""
+    m = market or ACTIVE_FX
+    wallets = {cur: (m.to_sol_value(cur, amt) if m is not None else 0.0)
+               for cur, amt in (captain.fx_wallet or {}).items() if amt}
+    cargo = getattr(getattr(captain, "ship", None), "cargo", None)
+    goods = 0.0
+    if cargo is not None:
+        for key, basis in (getattr(cargo, "cost_basis", None) or {}).items():
+            if basis and not str(key).endswith("_sol"):
+                goods += float(basis) * float(cargo.held(key.upper()) if hasattr(cargo, "held") else 0)
+    total = float(captain.credits) + sum(wallets.values()) + goods
+    return {"sol": float(captain.credits), "wallets": {c: round(v, 1) for c, v in wallets.items()},
+            "cargo": round(goods, 1), "total": round(total, 1)}
+
+
 @contextmanager
 def settle_in(captain: Any, cur: str):
     """

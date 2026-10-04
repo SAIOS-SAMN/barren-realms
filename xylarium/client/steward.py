@@ -59,14 +59,14 @@ def _screen(kernel: Any, pid: str) -> None:
         print(c_gray("  Galaxy: " + "; ".join(f"{k.replace('_', ' ')} y{v['year']:.0f}" for k, v in recent)))
 
 
-def _menu(kernel: Any, pid: str) -> None:
+def _menu(kernel: Any, pid: str, seat: Optional[str] = None) -> None:
     s = ages.status(kernel, pid)
     opts = [("Z", "Wake me when something happens"), ("A", "Advance one season"),
             ("R", "Counsel their inquiry"), ("P", "Counsel their growth (expand / steady)"),
             ("G", "Counsel a gauge (temple / levy / openness / commerce)"), ("M", "Their myths"),
             ("K", "Counsel (what your people's minds can see, and how they heed you)"),
             ("U", "Urge an aim (grow / deepen / secure / hold / reach)"), ("X", "Caution against a choice"),
-            ("N", "Fall silent")]
+            ("N", "Fall silent"), ("L", "Your progress")]
     if s.get("forecast"):
         opts.append(("E", f"Counsel the exodus (their sun: {s['forecast']['years_left']:,.0f} years left at the reckoning)"))
     if s["way"] == "forage":
@@ -75,6 +75,9 @@ def _menu(kernel: Any, pid: str) -> None:
         opts.append(("S", "Speak for a state"))
     if s["way"] == "state":
         opts.append(("W", "Speak for great works"))
+    if seat == "progenitor":
+        opts += [("Y", "Counsel seeding young worlds"), ("V", "Counsel uplifting younger minds"),
+                 ("H", "Write into your chronicle")]
     if kernel.get_player(pid) is not None:
         opts.append(("C", "Return to your ship"))
     elif s["yards"]:
@@ -83,12 +86,13 @@ def _menu(kernel: Any, pid: str) -> None:
     print("  " + "   ".join(f"{c_gold('[' + k + ']')} {t}" for k, t in opts))
 
 
-def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bool = False) -> Optional[Any]:
+def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bool = False,
+        seat: Optional[str] = None) -> Optional[Any]:
     """The steward's loop. Returns the captain if the steward takes (or returns to) ship, else None (quit).
     Taking ship does not end the stewardship: the people stays the player's, and HOMEWORLD returns here."""
     while True:
         _screen(kernel, pid)
-        _menu(kernel, pid)
+        _menu(kernel, pid, seat)
         try:
             cmd = input(c_gold("Steward > ")).strip().upper()
         except (KeyboardInterrupt, EOFError):
@@ -100,6 +104,23 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
                 save()
             print(c_green("Your people will be here when you return."))
             return None
+        if cmd == "L":
+            from xylarium.kernel import roles
+            print(roles.render_progress(roles.progress(kernel, pid)))
+            continue
+        if seat == "progenitor" and cmd in ("Y", "V", "H"):
+            if cmd == "Y":
+                print("  " + ages.act(kernel, pid, "seed"))
+            elif cmd == "V":
+                print("  " + ages.act(kernel, pid, "uplift"))
+            else:
+                from xylarium.kernel import progenitor as chronicle
+                title = input(c_gold("Title > ")).strip()
+                text = input(c_gold("Entry > ")).strip()
+                if title:
+                    e = chronicle.write(kernel, name, title, text, planet=ages.homeworld(kernel, pid))
+                    print(c_green(f"  Written: entry {e['n']}, year {e['year']:,}."))
+            continue
         if cmd == "Z":
             for line in ages.wake_when(kernel, pid):
                 print("  " + line)

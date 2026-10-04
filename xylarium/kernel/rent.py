@@ -130,6 +130,8 @@ def season(kernel: Any, planet: Any, gens: float, gen_years: float) -> None:
     soc = planet.society
     if ways.stateless(planet):
         soc["rent"] = 0.0
+    elif soc.get("rent_set"):
+        pass                                                 # its ruler has set it (roles.py: the steward's seat)
     elif kernel.cycle_count - int(soc.get("rent_cycle", -10 ** 12)) >= gen_years * 100:
         choose(kernel, planet)
     rho = of(planet)
@@ -169,6 +171,7 @@ def overturned(kernel: Any, planet: Any) -> None:
     """The many have risen: the few who took are gone, and their take with them."""
     planet.society["rent"] = 0.0
     planet.society["rent_cycle"] = kernel.cycle_count
+    planet.society.pop("rent_set", None)                   # a ruler's set take falls with its order
     stats(kernel)["risings"] += 1
 
 

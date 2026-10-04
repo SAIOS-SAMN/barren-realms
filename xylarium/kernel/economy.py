@@ -255,6 +255,7 @@ class EconomyManager:
         if res.success:
             paid = before - fx.balance(captain, cur)
             port.treasury += paid
+            res.message = cls._in_currency(res.message, cur)
             # Cost basis is kept in SOL so profit is comparable across regional currencies
             bought = cargo.held(commodity) - units_before
             if bought > 0:
@@ -282,11 +283,28 @@ class EconomyManager:
                 )
             amount = int(affordable)
         before = fx.balance(captain, cur)
+        basis_sol = float(captain.ship.cargo.cost_basis.get(commodity.lower(), 0.0) or 0.0)
+        held_before = captain.ship.cargo.held(commodity)
         with fx.settle_in(captain, cur):
             res = cls._sell_core(captain, port, commodity, amount)
         if res.success:
-            port.treasury -= fx.balance(captain, cur) - before
+            got = fx.balance(captain, cur) - before
+            port.treasury -= got
+            sold = held_before - captain.ship.cargo.held(commodity)
+            res.message = cls._in_currency(res.message, cur)
+            if basis_sol > 0 and sold > 0:               # profit in the reserve currency, cost and proceeds alike
+                got_sol = fx.ACTIVE_FX.to_sol_value(cur, got) if (fx.ACTIVE_FX and cur != "SOL") else got
+                profit = got_sol - basis_sol * sold
+                import re
+                res.message = re.sub(r" \[Net Profit: [^\]]*\]",
+                                     f" [Net Profit: {profit:+,.0f} SOL ({profit / sold:+,.1f} SOL/ea)]", res.message)
         return res
+
+    @staticmethod
+    def _in_currency(msg: str, cur: str) -> str:
+        """A trade's message in the money it was paid in (the port's), not a generic credit."""
+        import re
+        return msg if cur == "SOL" else re.sub(r"(\d) Cr\b", rf"\1 {cur}", msg)
 
     @staticmethod
     def counterparty_factor(captain: Captain, port: Port, direction: str) -> float:

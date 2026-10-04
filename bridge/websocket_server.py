@@ -128,12 +128,12 @@ class WebSocketGateway:
 
     async def stop(self) -> None:
         """Closes all client connections and shuts down listener."""
+        for client in list(self.clients):              # close the clients first: a listener waits for its connections
+            client.close()
+        self.clients.clear()
         if self.server:
             self.server.close()
             await self.server.wait_closed()
-        for client in list(self.clients):
-            client.close()
-        self.clients.clear()
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Handles HTTP upgrade handshake and initiates message loop."""
@@ -215,8 +215,34 @@ class WebSocketGateway:
             p_id = payload.get("player_id", f"remote_{sanitized_id}")
             client.player_id = p_id
             captain = self.kernel.get_player(p_id)
+            role = str(payload.get("role", "captain")).lower()
+            seat = None
             if not captain:
-                captain = self.kernel.register_player(p_id, name)
+                from xylarium.kernel import cosmos, roles
+                if role == "progenitor":
+                    await client.send_json({"status": "error", "action": "REGISTER",
+                                            "message": "The Progenitor's seat needs a Big Bang universe of its own: "
+                                                       "start one with main.py (single player)."})
+                    return
+                if role == "steward":
+                    if cosmos.is_cosmic(self.kernel):
+                        await client.send_json({"status": "error", "action": "REGISTER",
+                                                "message": "No settled polities in this universe to rule."})
+                        return
+                    ps = roles.polities(self.kernel)
+                    want = payload.get("polity")
+                    pick = next((p for p in ps if want and p["name"].lower() == str(want).lower()), None) or \
+                        (ps[int(want)] if str(want).isdigit() and int(want) < len(ps) else (ps[0] if ps else None))
+                    if pick is None:
+                        await client.send_json({"status": "error", "action": "REGISTER",
+                                                "message": "No independent polity is left to rule."})
+                        return
+                    seat = roles.seat_ruler(self.kernel, p_id, name, pick["holder"], payload.get("rule", "council"),
+                                            payload.get("gauges"), payload.get("natal"))
+                    captain = self.kernel.get_player(p_id)
+                else:
+                    captain = self.kernel.register_player(p_id, name)
+                    seat = roles.seat_captain(self.kernel, p_id)
             pers = payload.get("personality")
             if pers:
                 try:
@@ -229,8 +255,20 @@ class WebSocketGateway:
                 "status": "ok",
                 "action": "REGISTER",
                 "player_id": p_id,
+                "seat": seat,
                 "view": view
             })
+
+        elif action == "ROLES":
+            from xylarium.kernel import cosmos, roles
+            await client.send_json({"status": "ok", "action": "ROLES", "roles": roles.describe(),
+                                    "rules": roles.RULE_FORMS,
+                                    "polities": [] if cosmos.is_cosmic(self.kernel) else roles.polities(self.kernel)})
+
+        elif action == "PROGRESS":
+            from xylarium.kernel import roles
+            p_id = payload.get("player_id", client.player_id)
+            await client.send_json({"status": "ok", "action": "PROGRESS", "progress": roles.progress(self.kernel, p_id)})
 
         elif action == "VIEW":
             p_id = payload.get("player_id", client.player_id)
@@ -380,5 +418,5 @@ class WebSocketGateway:
         else:
             await client.send_json({
                 "status": "error",
-                "message": f"Unsupported action: '{action}'. Use REGISTER, VIEW, MARKET, TRADE_ROUTES, or DISPATCH."
+                "message": f"Unsupported action: '{action}'. Use ROLES, REGISTER (with a role), VIEW, MARKET, TRADE_ROUTES, PROGRESS, or DISPATCH."
             })

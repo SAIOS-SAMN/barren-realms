@@ -240,6 +240,14 @@ def act(kernel: Any, player_id: str, what: str, arg: Optional[str] = None) -> st
             return "Without a state there is no treasury to build with."
         steward.counsel_more(kernel, h, player_id, ["raise_citadel", "dig_habitat", "build_nursery"])
         return "You speak for great works. The council will weigh them against their price each season."
+    if what == "seed":
+        steward.counsel_more(kernel, h, player_id, ["seed"])
+        return ("You counsel your people to carry life to the young worlds in their reach. Their council will weigh "
+                "the lives those worlds would hold against the hulls it takes.")
+    if what == "uplift":
+        steward.counsel_more(kernel, h, player_id, ["uplift"])
+        return ("You counsel your people to teach the younger minds they meet. Their council will weigh the lives "
+                "the lesson reaches against the fare.")
     if what == "urge":
         try:
             steward.guide(kernel, h, player_id, aim=(arg or "").strip().lower())
@@ -334,7 +342,8 @@ def shape(kernel: Any, player_id: str, asked: Dict[str, float]) -> Optional[Dict
     six axes, as designer.py builds them, in full). Its trade-offs are physics; the world selects from then on."""
     from xylarium.kernel import designer
     p = homeworld(kernel, player_id)
-    if p is None or kernel.cycle_count > 0:
+    dawn = int(((p.society.get("arisen") or {}).get("cycle", 0)) if p is not None else 0)
+    if p is None or kernel.cycle_count > max(0, dawn):           # only at its own dawn, before its first season
         return None
     got = designer.build(kernel, None, asked, full=True)
     p.society["genome"] = dict(got)

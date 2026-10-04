@@ -96,10 +96,20 @@ def _council(kernel: Any, planet: Any) -> bool:
 def flow_civ(planet: Any, light: float = 0.0, dark: float = 0.0, why: str = "deeds") -> None:
     """Lives a council-led people made or spared (light) or destroyed (dark), into its history (alignment.flow)."""
     civ = getattr(planet, "civilization", None)
-    if civ is not None and planet.owner_id is None:
+    if civ is not None and (planet.owner_id is None or _ruled(planet)):
         from xylarium.kernel import alignment
         alignment.flow(civ, light=light, dark=dark, why=why)
     impacts(planet, light, dark, why)
+
+
+def _ruled(planet: Any) -> bool:
+    """A world its people's ruler holds (the Steward's seat): its deeds are still its people's history."""
+    from xylarium.kernel import ledger, roles
+    k = ledger.active_kernel()
+    if k is None or "roles" not in getattr(k, "state", {}):
+        return False
+    realm = roles.stats(k).get("realms", {}).get(planet.owner_id)
+    return bool(realm) and planet.id in realm["worlds"]
 
 
 def impacts(planet: Any, light: float, dark: float, why: str) -> None:

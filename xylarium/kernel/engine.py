@@ -130,7 +130,7 @@ from xylarium.kernel import waystations as waystations_mod, liquidation as liqui
 from xylarium.kernel import observation as observation_mod, primordial as primordial_mod, relations as relations_mod, prices as prices_mod  # noqa: F401
 from xylarium.kernel import harvest as harvest_mod, energy as energy_mod, mirror as mirror_mod, contact as contact_mod, cohabit as cohabit_mod  # noqa: F401
 from xylarium.kernel import clock as clock_mod, scheduler as scheduler_mod, ways as ways_mod, designer as designer_mod, terraform as terraform_mod, skies as skies_mod, ruin as ruin_mod, mastery as mastery_mod, signals as signals_mod, federation as federation_mod, annals as annals_mod, strategy as strategy_mod, technology as technology_mod, climate as climate_mod, learning as learning_mod, steward as steward_mod, lifeline as lifeline_mod, tempo as tempo_mod, clocks as clocks_mod, kinship as kinship_mod, steward_ai as steward_ai_mod, occupation as occupation_mod, ages as ages_mod, society as society_mod  # noqa: F401
-from xylarium.kernel import cosmos as cosmos_mod, history as history_mod, institutions as institutions_mod, cluster as cluster_mod, sphere as sphere_mod, guidance as guidance_mod, syntropy as syntropy_mod, lifespan as lifespan_mod, rent as rent_mod, reputation as reputation_mod, progenitor as progenitor_mod, waste as waste_mod, energy_path as energy_path_mod  # noqa: F401
+from xylarium.kernel import cosmos as cosmos_mod, history as history_mod, institutions as institutions_mod, cluster as cluster_mod, sphere as sphere_mod, guidance as guidance_mod, syntropy as syntropy_mod, lifespan as lifespan_mod, rent as rent_mod, reputation as reputation_mod, progenitor as progenitor_mod, waste as waste_mod, energy_path as energy_path_mod, roles as roles_mod  # noqa: F401
 from xylarium.kernel import blackhole as blackhole_mod, exodus as exodus_mod, culture as culture_mod, memory as memory_mod, relics as relics_mod  # noqa: F401
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
@@ -789,7 +789,8 @@ class GameKernel:
                 message="No target planet found in this sector.",
             )
         points = int(kwargs.get("points", 0))
-        return ColonyManager.build_shields(captain, planet, points)
+        with roles_mod.realm_purse(self, captain, planet):         # a ruler pays from its world's treasury
+            return ColonyManager.build_shields(captain, planet, points)
 
     def _handle_planet_fighters(self, captain: Captain, sector: Sector, kwargs: Dict[str, Any]) -> ActionResult:
         planet = self._find_planet(sector, kwargs.get("planet_id"))
@@ -800,7 +801,8 @@ class GameKernel:
                 message="No target planet found in this sector.",
             )
         count = int(kwargs.get("count", 0))
-        return ColonyManager.recruit_fighters(captain, planet, count)
+        with roles_mod.realm_purse(self, captain, planet):
+            return ColonyManager.recruit_fighters(captain, planet, count)
 
     def _handle_planet_citadel(self, captain: Captain, sector: Sector, planet_id: Optional[str]) -> ActionResult:
         planet = self._find_planet(sector, planet_id)
@@ -810,7 +812,8 @@ class GameKernel:
                 action=ActionType.PLANET_UPGRADE_CITADEL,
                 message="No target planet found in this sector.",
             )
-        res = ColonyManager.upgrade_citadel(captain, planet)
+        with roles_mod.realm_purse(self, captain, planet):
+            res = ColonyManager.upgrade_citadel(captain, planet)
         if res.success:
             self.event_bus.emit_event("CITADEL_UPGRADED", {
                 "player_id": captain.id,
@@ -2672,6 +2675,7 @@ class GameKernel:
             },
             "fx": {
                 "wallet": dict(captain.fx_wallet),
+                "net_worth": fx_mod.net_worth(captain, self.fx_market),
                 "rates": {cur: round(self.fx_market.rate(cur), 4) for cur in self.fx_market.pools},
                 "drift": {cur: round(self.fx_market.price_level_drift(cur), 3) for cur in self.fx_market.pools},
                 "local_currency": self._local_currency(self.sectors[captain.sector_id]),

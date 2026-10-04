@@ -375,6 +375,10 @@ class TerminalRenderer:
         fx_view = view.get("fx", {})
         wallet = fx_view.get("wallet", {})
         wallet_str = "".join(f" │ {c_gold(f'{amt:,} {cur}')}" for cur, amt in wallet.items() if amt)
+        nw = fx_view.get("net_worth") or {}
+        if nw:                                   # what the captain holds, all monies and cargo, in the reserve currency
+            total = nw.get("total", credits)
+            wallet_str = f" │ Net worth: {bold(c_gold(f'{total:,.0f} SOL'))}" + wallet_str
         used_holds = round(cargo.get("holds_used", used_holds), 1)
 
         line_sep = c_blue("═" * 78)
@@ -388,7 +392,7 @@ class TerminalRenderer:
             ),
             f"╠{line_sep}╣",
             (
-                f"║ Credits: {c_gold(f'{credits:,} Cr')}{wallet_str}{debt_str}{bounty_str}{embargo_str} │ Ship: {c_white(ship_type)} "
+                f"║ Credits: {c_gold(f'{credits:,} SOL')}{wallet_str}{debt_str}{bounty_str}{embargo_str} │ Ship: {c_white(ship_type)} "
                 f"│ Shields: {shield_str} │ Fighters: {fighter_str}{ops_str} ║"
             ),
             (
@@ -420,14 +424,15 @@ class TerminalRenderer:
         out = []
 
         # Sector Title
-        out.append(f"\n{c_cyan('SECTOR')} {c_gold(f'#{s_id:03d}')} [{c_magenta(cluster_name)}]: {bold(c_white(name))}")
+        out.append(f"\n{c_cyan('SECTOR')} {c_gold(f'#{s_id:03d}')} [cluster: {c_magenta(cluster_name)}]: {bold(c_white(name))}")
         space = view.get("space", {})
         fx_view = view.get("fx", {})
         local_cur = fx_view.get("local_currency", "SOL")
         if space.get("kind") == "NULL":
             out.append(f"  {c_gray('░ NULL SPACE')} - deep space between star systems. {c_red('Open fire zone: no Federal protection.')}")
         elif space:
-            protected = c_green("Protected space (opening fire is a hostile act)") if space.get("protected") else c_gold("Unclaimed system")
+            protected = c_green("Inhabited system (opening fire here is a hostile act)") if space.get("protected") \
+                else c_gold("Uninhabited system")
             out.append(f"  {c_gold('☀ STAR SYSTEM')} - {c_white(space.get('star_type') or 'star')} │ {protected} │ Currency: {c_cyan(local_cur)}")
 
         # Warp Lanes
@@ -597,6 +602,8 @@ class TerminalRenderer:
                     status = c_gold("[IMPERIAL WORLD - Aurelian Imperium]")
                 elif p.get("faction_id") == "ZEALOT":
                     status = c_red("[PYRE WORLD - Choir of the Pyre]")
+                elif not owner and (p.get("civilization") or {}).get("name") and p.get("population", 0) > 0:
+                    status = c_cyan(f"[SOVEREIGN WORLD - the {p['civilization']['name']}]")
                 elif not owner:
                     status = c_green("[UNCLAIMED - Available for Colonization]")
                 elif owner == view["player"]["id"]:

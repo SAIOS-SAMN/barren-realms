@@ -54,17 +54,36 @@ def main():
     if not kernel:
         print(f"Generating new deterministic universe (Seed: {args.seed})...")
         if single_player:
-            # The first question of a new universe: which age to begin in (ages.py)
+            # The first question of a new universe: which seat to take (kernel/roles.py)
+            from xylarium.client import roles as roles_ui
             from xylarium.client import steward as steward_ui
-            key = steward_ui.choose_age(args.seed)
-            if key == "classic":
-                # Lineage Genesis: this save is bound to one lineage for its whole life
+            seat = roles_ui.choose_role()
+            if seat == "captain":
+                # Lineage Genesis: this save is bound to one lineage for its whole life; it berths at Tradewards
                 from xylarium.client.cli import lineage_genesis
+                from xylarium.kernel import roles
                 kernel, player_id = lineage_genesis(args.seed, args.name)
-            else:
-                kernel = _begin_steward(args, key, player_id, save_file)
+                roles.seat_captain(kernel, player_id)
+                roles_ui.announce_tradewards(kernel, player_id)
+            elif seat == "steward":
+                from xylarium.client import ruler as ruler_ui
+                kernel, player_id = ruler_ui.begin(args.seed, args.name, player_id)
                 if kernel is None:
                     return
+            elif seat == "progenitor":
+                from xylarium.client import ancient as ancient_ui
+                ancient_ui.begin(args.seed, args.name, player_id,
+                                 save=lambda k: StatePersistence.save_to_file(k, save_file))
+                return
+            else:
+                key = steward_ui.choose_age(args.seed)
+                if key == "classic":
+                    from xylarium.client.cli import lineage_genesis
+                    kernel, player_id = lineage_genesis(args.seed, args.name)
+                else:
+                    kernel = _begin_steward(args, key, player_id, save_file)
+                    if kernel is None:
+                        return
         else:
             kernel = GameKernel(seed=args.seed)
             kernel.register_player(player_id=player_id, player_name=args.name)
