@@ -221,14 +221,19 @@ def _steer(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
 
 
 def _teach(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
-    """Carried minds teach the people they live among what it can understand, as far as they know each other."""
+    """Carried minds teach the people they live among what it can understand, as far as they know each other: their
+    mathematics (as far as it is grounded) and the sciences they practise (`arts`)."""
     from xylarium.kernel import contact, intellect, knowledge, scheduler
     host = knowledge.holder_of_planet(planet)
-    if not host or not c.get("vocab") or c.get("silent"):
+    if not host or not (c.get("vocab") or c.get("arts")) or c.get("silent"):
         return
     fam = float(contact.stats(kernel)["familiarity"].get(contact._key(c["people"], host), 0.0))
     if fam <= 0.0:
         return
+    years = _quarter() / 100.0
+    for domain in c.get("arts") or []:                 # the sciences they practise, taught as far as they are known
+        knowledge.learn(kernel, host, domain, int(c["pop"]) / 1000.0 * knowledge.LIVED_SHARE * fam * years,
+                        "taught by carried minds")
     v = intellect.stats(kernel)["vocab"].setdefault(host, list(intellect.BASE))
     held = {intellect.norm(x) for x in v}
     rng = scheduler.rng(kernel, "teach", c["people"], host, kernel.cycle_count)

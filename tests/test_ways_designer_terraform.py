@@ -114,6 +114,26 @@ class TestDesigner(unittest.TestCase):
             k.tick_simulation()
         self.assertGreater(p.population, 0)
 
+    def test_a_seeded_world_keeps_its_old_vault_in_the_ground(self):
+        from simulate_playtest import ledger_net
+        from xylarium.kernel import ledger
+        k = GameKernel(seed=5)
+        k.activate()
+        pl, p = _captain_at_empty_world(k)
+        cur = p.currency
+
+        def residual():
+            ms, ln = ledger.money_supply(k), ledger_net(k)
+            return {c: v for c in set(ms) | set(ln) if (v := ms.get(c, {}).get("total", 0) - ln.get(c, 0))}
+        ledger.mint("test", 5000, cur)
+        p.treasury += 5000
+        before = residual()
+        r = k.dispatch(pl.id, ActionType.SPECIES_SEED, planet_id=p.id, metabolism="biotic", body_plan="mycotiform",
+                       name="Sporefolk")
+        self.assertTrue(r.success, r.message)
+        self.assertEqual(p.treasury, 0)
+        self.assertEqual(before, residual())                                  # kept, not vanished
+
     def test_no_niche_no_seeding(self):
         k = GameKernel(seed=5)
         k.activate()

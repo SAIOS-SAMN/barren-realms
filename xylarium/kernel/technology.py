@@ -70,6 +70,7 @@ SYNTHESIS_GAIN = 1.0            # what designed chemistry adds to how fast it re
 ROBOTICS_GAIN = 1.0             # what built bodies add to a people's work and thought
 CAPS = ("radio", "orbit", "fission", "computation", "networks", "cyber", "medicine", "genetics", "synthesis",
         "robotics", "embodiment", "transfer")
+RELIC_ONLY = ("foresight",)     # capabilities no people finds by itself: held only from what others left (relics.py)
 NEEDS = {"radio": "information", "orbit": "energy", "fission": "energy", "computation": "information",
          "networks": "information", "cyber": "information", "medicine": "biology", "genetics": "biology",
          "synthesis": "materials", "robotics": "materials", "embodiment": "materials",

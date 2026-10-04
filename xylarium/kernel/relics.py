@@ -14,7 +14,9 @@ weighs the stars beyond (strategy: reach) against the risk of what it does not u
 axis as far as it understands energy and information; it tears as far as it does not (NULL_FLOW_HARM of the world
 it is made on, scaled by its ignorance); and it rings in the fold: no proper time passes along a null flow, so every
 people that watches the fold - every people that has crossed - hears it at once, and its worldline meets the
-prober's (clocks.link). Radio takes millennia to reach the galaxy's heart; the fold takes nothing.
+prober's (clocks.link). Radio takes millennia to reach the galaxy's heart; the fold takes nothing. A people that
+projects its futures through a relic's foresight weighs the risk by what its projection shows (the information it
+holds), not by the physics it has not proven: it probes more boldly than it understands, and tears as it understands.
 
 RELIC MINDS. A relic may hold a mind - its makers' machine, asleep. A people that digs it up with machines that
 think (computation) wakes it in them: it lives among its finders as a community, carried in their hardware, with
@@ -118,9 +120,13 @@ def _probe(kernel: Any, who: str, worlds: List[Any], by: Dict[str, List[Any]]) -
         return None
     home = max(worlds, key=lambda p: p.population)
     understanding = _info(kernel, who, "energy") * _info(kernel, who)
+    # a people that projects its futures through a relic (foresight) judges the risk by what the projection shows -
+    # information it holds - not by the physics it has not proven (the fold, the white hole): confidence without
+    # understanding. The tearing still follows what it truly understands.
+    seen = max(understanding, _info(kernel, who)) if technology.has(kernel, who, "foresight") else understanding
     reach = strategy._worths(kernel, who, worlds, by).get("reach", 0.0)
     m = decide.mind_of_planet(kernel, home)
-    if decide.choose(kernel, [decide.option("probe", reach * (1.0 - understanding), reach, aim="reach")], m,
+    if decide.choose(kernel, [decide.option("probe", reach * (1.0 - seen), reach, aim="reach")], m,
                      who, "probe") is None:
         return None
     rng = scheduler.rng(kernel, "probe", who, kernel.cycle_count)

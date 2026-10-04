@@ -18,7 +18,8 @@ kinetics, not on orbits; a people reckons its own age in its homeworld's years -
                 diseases spare. Mortality before old age is -ln(THR) over the span to it; fertility is scaled by
                 THR (TFR x THR).
   LONGEVITY     an elder's remaining span reaches from the median life (2.5 generations) toward the longest lives
-                (4.3) as the people masters biology (knowledge.py: medicine), and shrinks with THR.
+                (4.3) as the people masters biology (knowledge.py: medicine), and shrinks with THR. The deaths its
+                healing spares are its deeds, as the deaths its strife causes are (alignment: lives saved).
   DISEASE       crowd diseases are species too, living on the people: one persists only in a community above its
                 critical size (Bartlett 1957: ~250,000 for measles in a people of Earth's generation; a faster-
                 breeding people renews its susceptibles sooner, so its critical size scales with its generation).
@@ -219,6 +220,9 @@ def _season_world(kernel: Any, planet: Any, years: float, rec: Dict[str, Any]) -
     excess = deaths - f["ref"]                       # what ill health (or medicine) adds to the balance's own dying
     born = max(0.0, planet.population - n0 + f["ref"])
     # ill health kills beyond what the people's own balance carries; medicine spares some of those it would
+    if excess < 0 and medicine(kernel, planet) > 0:            # lives its own healing spares are its deeds too
+        from xylarium.kernel import alignment, sustenance
+        sustenance._shift_civ(planet, alignment.measure(kernel, lives_saved=-excess))
     owed = excess + float(life.get("excess_carry", 0.0))
     take = max(-10 ** 12, min(int(owed), planet.population))
     life["excess_carry"] = round(owed - int(owed), 6)

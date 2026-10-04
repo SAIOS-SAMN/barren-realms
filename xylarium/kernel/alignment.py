@@ -137,10 +137,12 @@ def people_shift(civ: Any, delta: float) -> None:
     civ.alignment = round(math.tanh(civ.deeds), 4)
 
 
-def fade(civ: Any, generations: float) -> None:
-    """What a people did fades from its character as its telling of it fades."""
+def fade(civ: Any, generations: float, keep: Optional[float] = None) -> None:
+    """What a people did fades from its character as its record of it fades: `keep` is what its best medium holds of
+    a record over a generation (memory.character_keep; a telling people's by default)."""
     from xylarium.kernel import memory
-    civ.deeds = deeds_of(civ) * (1.0 - memory.TELL_ERR) ** max(0.0, generations)
+    keep = (1.0 - memory.TELL_ERR) if keep is None else keep
+    civ.deeds = deeds_of(civ) * keep ** max(0.0, generations)
     civ.alignment = round(math.tanh(civ.deeds), 4)
 
 

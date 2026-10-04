@@ -87,6 +87,15 @@ class TestRelicMindLeaning(unittest.TestCase):
         relics._minds(self.k)
         self.assertEqual(mind["choice"], "silence")
 
+    def test_a_people_that_keeps_records_keeps_its_character(self):
+        mem = memory._of(self.k, self.who)
+        mem["media"] = ["oral"]
+        oral = memory.character_keep(self.k, self.who, self.p)
+        mem["media"] = ["oral", "inscribed", "portable", "machine"]
+        machine = memory.character_keep(self.k, self.who, self.p)
+        self.assertLess(oral, 0.95)
+        self.assertGreater(machine, 0.999)
+
 
 if __name__ == "__main__":
     unittest.main()

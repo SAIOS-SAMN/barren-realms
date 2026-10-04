@@ -137,6 +137,24 @@ class TestEarthLaws(unittest.TestCase):
         mastery.stats(self.k)["crossed"][self.who] = 1                  # a people that has crossed finds it
         self.assertIn("civ:Deep", contact._contacts(self.k, by).get(self.who, {}))
 
+    def test_foresight_probes_more_boldly_than_it_understands(self):
+        from xylarium.kernel import strategy
+        intellect.stats(self.k)["vocab"][self.who] = list(intellect.BASE) + list(C.STACK_OPS) + ["hyper_flip"]
+        for cap in ("fission", "computation"):
+            technology.stats(self.k)["of"].setdefault(self.who, {})[cap] = 1
+        knowledge.learn(self.k, self.who, "information", 10 ** 7)          # it knows information, not energy
+        real = strategy._worths
+        strategy._worths = lambda *a, **kw: {"reach": 1000.0}
+        self.addCleanup(lambda: setattr(strategy, "_worths", real))
+        seen = []
+        real_choose = decide.choose
+        decide.choose = lambda kernel, options, m, *salt: seen.append(options[0]["cost"]) or None
+        self.addCleanup(lambda: setattr(decide, "choose", real_choose))
+        relics._probe(self.k, self.who, [self.p], {self.who: [self.p]})
+        technology.stats(self.k)["of"][self.who]["foresight"] = 1
+        relics._probe(self.k, self.who, [self.p], {self.who: [self.p]})
+        self.assertLess(seen[1], seen[0])                                  # the projection hides the risk
+
 
 if __name__ == "__main__":
     unittest.main()

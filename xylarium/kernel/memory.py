@@ -305,7 +305,7 @@ def _write(kernel: Any, who: str, home: Any, ev: Dict[str, Any], f0: float = 1.0
     rec = {"id": ev.get("id"), "k": ev.get("kind"), "title": ev.get("title", ""), "year": ev.get("year"),
            "mag": ev.get("magnitude") or 0, "f": f0, "them": them.split(":", 1)[-1] if them else None,
            "stage": data.get("stage"), "cap": data.get("capability") or data.get("cap"), "m": _best(mem["media"]),
-           "planet": ev.get("planet")}
+           "planet": ev.get("planet"), "tale": data.get("tale")}
     if ev.get("kind") in BURNS:
         _burn(kernel, who, home)
     epoch = data.get("epoch")
@@ -385,7 +385,7 @@ def tell(kernel: Any, planet: Any, rec: Dict[str, Any]) -> str:
     people's imagination."""
     from xylarium.kernel import fertility, mind, society
     sky = society._sky(kernel, planet)
-    core = TALES.get(rec["k"], "something happened that no one could explain")
+    core = rec.get("tale") or TALES.get(rec["k"], "something happened that no one could explain")
     them = rec.get("them") if truth(rec) >= 0.3 else None              # names are the first thing a story loses
     core = core.format(colour=sky["colour"], them=them or "strangers", did=DID.get(rec.get("stage"), "changed"),
                        what=rec.get("cap") or "a gift")
@@ -580,6 +580,19 @@ def season(kernel: Any) -> List[str]:
                 _mythify(kernel, who, home, r)
         logs += _read_ruins(kernel, who, worlds)
     return logs
+
+
+def character_keep(kernel: Any, who: Optional[str], planet: Any) -> float:
+    """How much of what a people did it still holds after a generation: what its best medium keeps of a record over a
+    generation of copying and telling (a people that tells its past forgets its deeds in a few generations; one that
+    keeps it in machines hardly forgets them at all)."""
+    if planet is None or getattr(planet, "civilization", None) is None:
+        return 1.0 - TELL_ERR
+    mem = stats(kernel)["of"].get(who) if who and "memory" in kernel.state else None
+    best = _best(mem["media"]) if mem else "oral"
+    gen = _gen(kernel, planet)
+    lam = _rate({"m": best}, planet, gen, oral_err(kernel, planet))
+    return math.exp(-lam * gen)
 
 
 def summary(kernel: Any) -> Dict[str, Any]:

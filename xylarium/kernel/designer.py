@@ -160,6 +160,24 @@ def why_not(kernel: Any, planet: Any, metab: str, fed: int) -> Optional[str]:
     return None
 
 
+def _leave_vault(planet: Any) -> None:
+    """Whatever money the world's last people left in its vaults stays in the ground as a hoard (or, where no ruins
+    keep it, is declared lost) - a new people does not inherit it, and it does not vanish."""
+    from xylarium.kernel import ledger
+    cur = getattr(planet, "currency", "SOL") or "SOL"
+    for attr in ("treasury", "household_purse"):
+        held = int(getattr(planet, attr, 0) or 0)
+        if not held:
+            continue
+        ruins = getattr(planet, "ruins", None)
+        if ruins is not None and (ruins.get("hoard_currency") or cur) == cur:
+            ruins["hoard"] = int(ruins.get("hoard", 0) or 0) + held
+            ruins["hoard_currency"] = cur
+        else:
+            ledger.burn("vault_lost_with_its_people", held, cur)
+        setattr(planet, attr, 0)
+
+
 def seed(kernel: Any, holder: Optional[str], design: Dict[str, Any], planet: Any, by: str) -> Dict[str, Any]:
     """Set a designed people down on `planet`. Returns the preview with `seeded` (and the cost to be paid by the
     caller), or with `why_not`."""
@@ -185,7 +203,7 @@ def seed(kernel: Any, holder: Optional[str], design: Dict[str, Any], planet: Any
     planet.faction_id = None
     planet.citadel_level = 0
     planet.habitats = 0
-    planet.treasury = 0
+    _leave_vault(planet)
     planet.population = FOUNDERS
     planet.society["genome"] = dict(pv["genome"])
     planet.society["way"] = "forage"

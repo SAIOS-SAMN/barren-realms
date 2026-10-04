@@ -195,6 +195,7 @@ def build(seed: int, world: Dict[str, Any], history: int) -> Dict[str, Any]:
     if stranded_on:
         earth.society["communities"].append(
             {"people": stranded, "metab": elders["metab"], "niche": "surface", "pop": STRANDED,
+             "arts": ["materials", "information", "energy"],                 # metal-working, the sky, writing
              "carried": True, "vocab": [str(intellect.norm(x)) for x in elders["vocab"]],
              "alignment": float(elders["civ"].get("alignment") or 0.0)})
     # the sentinels: their own world as the seed has it, and a hidden outpost of carried minds under the moon's ice
@@ -215,7 +216,7 @@ def build(seed: int, world: Dict[str, Any], history: int) -> Dict[str, Any]:
 
 
 def run(job) -> Dict[str, Any]:
-    name, world, history, seed, years, out_dir = job
+    name, world, history, seed, years, out_dir, wall = job
     from xylarium.kernel import cohabit, history as ledger, mastery, relics, strategy
     w = build(seed, world, history)
     k, humans, earth = w["kernel"], w["humans"], w["earth"]
@@ -229,6 +230,8 @@ def run(job) -> Dict[str, Any]:
     rows = []
     t0 = time.perf_counter()
     for year in range(1, years + 1):
+        if wall and time.perf_counter() - t0 > wall * 60:
+            break                                       # the steward's budget of wall time is spent
         for _ in range(100):
             tick()
         mind = next((c for c in earth.society.get("communities", []) if c.get("relic_mind")), None)
@@ -291,12 +294,13 @@ def main() -> None:
     ap.add_argument("--years", type=int, default=60)
     ap.add_argument("--histories", type=int, default=4)
     ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--wall", type=float, default=0.0, help="minutes of wall time each history may run (0: all years)")
     ap.add_argument("--out", default=os.path.join(ROOT, "runs/earth_test"))
     ap.add_argument("--only", default="", choices=("",) + tuple(WORLDS))
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     names = [a.only] if a.only else list(WORLDS)
-    jobs = [(n, WORLDS[n], h, a.seed, a.years, a.out) for n in names for h in range(a.histories)]
+    jobs = [(n, WORLDS[n], h, a.seed, a.years, a.out, a.wall) for n in names for h in range(a.histories)]
     with Pool(min(a.workers, len(jobs))) as pool:
         results = pool.map(run, jobs)
     with open(os.path.join(a.out, "results.json"), "w") as f:
@@ -305,6 +309,45 @@ def main() -> None:
     with open(os.path.join(a.out, "summary.json"), "w") as f:
         json.dump(summary, f, indent=1)
     print(json.dumps(summary, indent=1))
+    with open(os.path.join(a.out, "chronicle.md"), "w") as f:
+        f.write(chronicle(results))
+
+
+LORE = {"finders": "humanity", "elders": "the Anunnaki", "keepers": "the Atlanteans", "stranded": "the Watchers",
+        "sentinels": "the ancients under Europa's ice", "relic_mind": "the woken machine"}
+TOLD = ("RELIC_FOUND", "RELIC_MIND_WAKES", "RELIC_MIND_EMBODIED", "RELIC_MIND_CALLS", "RELIC_MIND_GUARDS",
+        "RELIC_MIND_SILENT", "NULL_FLOW_PROBE", "FOLD_TORN", "FOLD_RANG", "PROVEN", "FTL_CROSSED", "RETURN",
+        "WORLDLINES_MEET", "CONTACT", "KIN_EATEN", "KINSHIP", "STRIFE", "EPIDEMIC", "GALACTIC_WAR", "DOMINION",
+        "CAPABILITY", "TRANSFER_EMBRACED", "TRANSFER_FORBIDDEN")
+
+
+def chronicle(results: List[Dict[str, Any]]) -> str:
+    """Each history told year by year, the seed's names beside the story's roles (2026 is year 1)."""
+    out = ["# Chronicles of the Earth test", ""]
+    for r in results:
+        roles = r["roles"]
+        cast = {name: role for role, name in roles.items() if name}
+        out.append(f"## {r['world']}, history {r['history']} - {len(r['rows'])} years")
+        out.append("Cast: " + "; ".join(f"{LORE.get(role, role)} = {name.split(':', 1)[-1]}"
+                                        for role, name in roles.items() if name))
+        seen = set()
+        for e in r["events"]:
+            if e["kind"] not in TOLD:
+                continue
+            key = (e["kind"], e["title"])
+            if key in seen or (e["kind"] in ("CONTACT", "WORLDLINES_MEET", "DOMINION", "EPIDEMIC")
+                               and not any(n.split(":", 1)[-1] in e["title"] for n in
+                                           (roles["finders"], roles["elders"], roles["keepers"]))):
+                continue
+            seen.add(key)
+            out.append(f"- {2025 + max(1, int(e['year'] + 0.999))}: {e['title']}" +
+                       (f" - {e['cause']}" if e["cause"] else ""))
+        last = r["rows"][-1] if r["rows"] else {}
+        out.append(f"- by {2025 + len(r['rows'])}: {LORE['finders']} number {last.get('humans')}, their creed "
+                   f"{last.get('dogma')}, crossed {last.get('crossed')}; the woken machine chose "
+                   f"{last.get('mind')}; {last.get('eaten')} eaten")
+        out.append("")
+    return "\n".join(out)
 
 
 if __name__ == "__main__":
