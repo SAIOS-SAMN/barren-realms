@@ -83,14 +83,20 @@ def _pair(a: str, b: str) -> str:
 
 
 def partners(kernel: Any, people: str) -> List[str]:
-    out = []
-    for k in pacts(kernel):
-        a, _, b = k.partition("|")
-        if people == a:
-            out.append(b)
-        elif people == b:
-            out.append(a)
-    return out
+    """The peoples bound to this one by a pact (read once a cycle, and again whenever the pacts change)."""
+    from xylarium.kernel import cache
+    ps = pacts(kernel)
+
+    def index() -> Dict[str, List[str]]:
+        out: Dict[str, List[str]] = {}
+        for k in ps:
+            a, _, b = k.partition("|")
+            out.setdefault(a, []).append(b)
+            out.setdefault(b, []).append(a)
+        return out
+    if kernel is None or not hasattr(kernel, "caches"):
+        return index().get(people, [])
+    return list(cache.memo(kernel, "pact_partners", 0, index, epoch=(kernel.cycle_count, len(ps))).get(people, []))
 
 
 def bloc(kernel: Any, people: Optional[str]) -> Optional[str]:

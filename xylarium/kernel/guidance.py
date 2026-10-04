@@ -87,6 +87,10 @@ def _seed(kernel: Any, elder: str, port: Any) -> Optional[str]:
     m = decide.mind_of_planet(kernel, port)
     own = biosphere.metabolism_of(kernel, port)
     best = None
+    # a council weighs only as many worlds as its mind can hold at once (learning.attention): the likeliest first -
+    # the worlds of its reach whose kind most suits a kind of life, its own kind first
+    from xylarium.kernel import learning
+    candidates = []
     for sid in topology.reach(kernel, port.sector_id, max(1, demography.settler_reach(kernel, port))):
         sec = kernel.sectors.get(sid)
         if sec is None:
@@ -95,13 +99,15 @@ def _seed(kernel: Any, elder: str, port: Any) -> Optional[str]:
             if w.population > 0 or getattr(w, "civilization", None) is not None or w.owner_id:
                 continue
             for metab in sorted(HABITABILITY, key=lambda x: (x != own, x)):
-                if HABITABILITY[metab].get(w.planet_type, 0.0) <= 0:
-                    continue
-                pv = designer.preview(kernel, elder, {"metabolism": metab}, w)
-                if pv["why_not"]:
-                    continue
-                if best is None or pv["foragers_fed"] > best[0]["foragers_fed"]:
-                    best = (pv, w, metab)
+                fit = HABITABILITY[metab].get(w.planet_type, 0.0)
+                if fit > 0:
+                    candidates.append((-fit, metab != own, w.id, metab, w))
+    for _, _, _, metab, w in sorted(candidates, key=lambda c: c[:4])[:learning.attention(m)]:
+        pv = designer.preview(kernel, elder, {"metabolism": metab}, w)
+        if pv["why_not"]:
+            continue
+        if best is None or pv["foragers_fed"] > best[0]["foragers_fed"]:
+            best = (pv, w, metab)
     if best is None:
         return None
     pv, w, metab = best
