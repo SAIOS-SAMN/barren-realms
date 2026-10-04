@@ -105,25 +105,55 @@ def contacts(kernel: Any, by: Dict[str, List[Any]]) -> Dict[str, Dict[str, int]]
     return cache.memo(kernel, "contact_map", kernel.cycle_count, lambda: _contacts(kernel, by), max_age=1)
 
 
+HIDDEN_NICHES = ("sea", "ice")  # a community living in these is out of sight from the surface and the sky
+
+
+def hidden(kernel: Any, people: str, worlds: Optional[List[Any]] = None, niche: Optional[str] = None) -> bool:
+    """Is this people out of sight - beneath a world's ice or seas? Only a people that has crossed to the stars (that
+    watches the fold and the deep alike) can find it; it sees everyone its ships reach."""
+    if niche is not None:
+        return niche in HIDDEN_NICHES
+    for w in worlds or []:
+        medium = str((getattr(getattr(w, "civilization", None), "traits", None) or {}).get("medium", ""))
+        if "under ice" not in medium:
+            return False
+    return bool(worlds)
+
+
 def _contacts(kernel: Any, by: Dict[str, List[Any]]) -> Dict[str, Dict[str, int]]:
-    from xylarium.kernel import relations
+    from xylarium.kernel import cohabit, mastery, relations
     where: Dict[int, List[str]] = {}
     for people, worlds in by.items():
         for w in worlds:
             where.setdefault(w.sector_id, []).append(people)
+    unseen = {p for p, ws in by.items() if hidden(kernel, p, ws)}
+    for people, worlds in cohabit.residents(kernel).items():         # communities live in their world's system
+        for w in worlds:
+            where.setdefault(w.sector_id, []).append(people)
+            c = next((c for c in w.society.get("communities") or [] if c["people"] == people), {})
+            if hidden(kernel, people, niche=c.get("niche")):
+                unseen.add(people)
+    watching = stats(kernel).setdefault("watching", {})
     out: Dict[str, Dict[str, int]] = {}
+
+    def meet(a: str, b: str) -> None:
+        sees_b = b not in unseen or mastery.crossed(kernel, a)
+        sees_a = a not in unseen or mastery.crossed(kernel, b)
+        if sees_a and sees_b:
+            out.setdefault(a, {})[b] = out.setdefault(a, {}).get(b, 0) + 1
+            out.setdefault(b, {})[a] = out.setdefault(b, {}).get(a, 0) + 1
+        elif sees_b:
+            watching.setdefault(a, {})[b] = kernel.cycle_count          # a watches b, unseen
+        elif sees_a:
+            watching.setdefault(b, {})[a] = kernel.cycle_count
     for people, worlds in by.items():
         for w in worlds:
             for sid in relations._reach_map(kernel, w):
                 for other in where.get(sid, []):
-                    if other == people:
-                        continue
-                    out.setdefault(people, {})[other] = out.setdefault(people, {}).get(other, 0) + 1
-                    out.setdefault(other, {})[people] = out.setdefault(other, {}).get(people, 0) + 1
-    from xylarium.kernel import cohabit
+                    if other != people:
+                        meet(people, other)
     for a, b, _ in cohabit.pairs(kernel):                 # peoples sharing a world live in each other's sight
-        out.setdefault(a, {})[b] = out.setdefault(a, {}).get(b, 0) + 1
-        out.setdefault(b, {})[a] = out.setdefault(b, {}).get(a, 0) + 1
+        meet(a, b)
     return out
 
 

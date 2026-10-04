@@ -33,7 +33,10 @@ def stats(kernel: Any) -> Dict[str, Any]:
 # ---------------------------------------------------------------------- locked-in chance
 def stream(kernel: Any, *parts: Any) -> int:
     """A 64-bit seed fixed by the universe's seed and what is drawing (independent of PYTHONHASHSEED)."""
-    key = "|".join(str(p) for p in (getattr(kernel, "seed", 0),) + parts).encode()
+    salt = ((getattr(kernel, "state", None) or {}).get("genesis") or {}).get("history")
+    lead = (getattr(kernel, "seed", 0),) if salt is None else (getattr(kernel, "seed", 0), f"history:{salt}")
+    key = "|".join(str(p) for p in lead + parts).encode()       # another history of one universe: its minds'
+                                                                # chance redrawn, its initial conditions untouched
     return int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "big")
 
 

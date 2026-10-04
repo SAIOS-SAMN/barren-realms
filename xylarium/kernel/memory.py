@@ -304,7 +304,8 @@ def _write(kernel: Any, who: str, home: Any, ev: Dict[str, Any], f0: float = 1.0
     them = next((a for a in ev.get("actors") or [] if a != who), None)
     rec = {"id": ev.get("id"), "k": ev.get("kind"), "title": ev.get("title", ""), "year": ev.get("year"),
            "mag": ev.get("magnitude") or 0, "f": f0, "them": them.split(":", 1)[-1] if them else None,
-           "stage": data.get("stage"), "cap": data.get("capability") or data.get("cap"), "m": _best(mem["media"])}
+           "stage": data.get("stage"), "cap": data.get("capability") or data.get("cap"), "m": _best(mem["media"]),
+           "planet": ev.get("planet")}
     if ev.get("kind") in BURNS:
         _burn(kernel, who, home)
     epoch = data.get("epoch")

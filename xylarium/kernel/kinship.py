@@ -34,6 +34,8 @@ from typing import Any, Dict, List, Optional, Tuple
 PREY_PLANS = 3                  # body plans a people's homeworld feeds it on (declared: a food web's handful of staples)
 FORMS = ("walking", "swimming", "low and many-limbed", "tall and slender", "drifting")
 HANDS = ("grasping limbs", "tendrils", "mouths and tongues", "jointed palps")
+MIND_EATEN = 2.0                # a mind eaten is a life ended and a mind consumed: weighed as two lives lost (the
+                                # darkest act a people can do - declared)
 SCHISM_SHARE = 0.8              # a second choice this close to the first divides the council (declared)
 
 

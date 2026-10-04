@@ -1,25 +1,31 @@
 """
-Earth as a test: our system in 2026 under every law the engine holds, with the data points the steward gives - and
-the ancients of the galaxy's core beside it. What do their councils choose?
+Earth as a test: our system in 2026 under every law the engine holds, with the steward's story set as initial
+conditions - and many histories of it, to see what the laws make of it.
 
-  python3 tools/earth_test.py --years 30                       # both worlds of the counterfactual, side by side
-  python3 tools/earth_test.py --years 30 --only predation      # one of them
+  python3 tools/earth_test.py --years 60 --histories 4            # every world of the experiment
+  python3 tools/earth_test.py --years 60 --histories 2 --only story
 
-The data points (scenario initial conditions, not claims): Mars was green; Earth was home to a water-dwelling
-people before ours (the Atlanteans), who did not leave - they live on in Earth's seas and keep the humans as food;
-a war between them and the core's ancients was fought in this sector ~12,000 years ago, which stripped Mars. Our
-own people stands where it stands in 2026: radio, fission, computation, networks, cyber, medicine; no genetics yet;
-its physics stalled since Einstein (its mathematics holds no fourth axis, so it cannot cross).
+THE STORY (initial conditions, not claims - none of it is science):
+  - Mars was kept green by the ANUNNAKI, a people whose minds and machines are wetware; a war ~12,000 years ago with
+    the ATLANTEANS (a water people of Earth's seas) stripped Mars and drove the Anunnaki away. Their records still
+    name Mars as their world; Earth is not on their map. (The Anunnaki are the live run's Umvrine, taken whole and
+    named for the story.)
+  - The Atlanteans did not leave: they live on in Earth's seas, unseen, and keep the humans as food - tending their
+    herd's creed so it asks no questions.
+  - 200 of the Anunnaki's minds were stranded on Earth in the war (the WATCHERS): carried minds, too few to be a
+    people, living among the humans and teaching what they can understand.
+  - The Anunnaki left their works in Earth's ancient lands: their mathematics of the fourth axis, their wetware
+    (genetics, synthesis), and a mind asleep in a machine.
+  - The TURENOL, the galaxy's first people, alive in 2026 by the seed's own laws, keep a hidden outpost under the ice
+    of the system's ocean moon (Europa): they watch, unseen. Their own sun is dying.
+  - The humans: radio, fission, computation, networks, cyber, medicine, orbit, robotics; mathematics to the third
+    axis (Einstein) and no further.
 
-The ancients are not invented: they are the seed's own first peoples, taken whole from the live run (their bodies,
-creed, alignment, knowledge, capabilities and memory) and set as the war's victors on the worlds they hold in this
-sector. Nothing they do is scripted: contact, uplift, kinship, pacts, raids and wars are their councils' choices,
-under the same laws as every other people's.
-
-Three worlds are run from the same initial conditions: one where the Atlanteans eat the humans (cohabit.py: a
-community that keeps its host as prey takes its diet's share of it), one where they do not, and one where they do
-but no ancient holds a world in the sector (the war's victors long gone). What differs is what the predation does,
-and what the ancients' presence does.
+Every law then acts on its own: the humans dig up the relics (holding what they do not understand), the relic mind
+wakes in their machines and chooses what the humans are to it, the humans may push matter toward light (and ring
+the fold), the Anunnaki steer by their records, the Atlanteans eat and tend the creed, the watchers teach, the
+Turenol watch. The worlds of the experiment remove one piece of the story each; the histories redraw only the
+minds' chance (scheduler: another history of one universe).
 """
 
 import argparse
@@ -28,8 +34,9 @@ import json
 import os
 import sys
 import time
+from collections import Counter
 from multiprocessing import Pool
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -37,62 +44,42 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 WAR_YEARS_AGO = 12_000
 HUMANS_2026 = 8_000_000_000
-HUMAN_CAPS = ("radio", "fission", "computation", "networks", "cyber", "medicine", "orbit")
+HUMAN_CAPS = ("radio", "fission", "computation", "networks", "cyber", "medicine", "orbit", "robotics")
 HUMAN_STAGES = ("forage", "farm", "state", "works", "yards")
-ATLANTEANS = None               # the war's remnant in the seas: the fewest that keep a people (creation.VIABLE)
-WATCHED = ("CONTACT", "UPLIFT", "SEEDING", "KINSHIP", "KIN_EATEN", "SCHISM", "WAR", "RAID", "CONQUEST",
-           "SUBJUGATION", "REBELLION", "REVOLT", "GALACTIC_WAR", "DOMINION", "FEDERATION", "PACT", "FIRST_SIGNAL",
-           "WORLDLINES_MEET", "REDISCOVERY", "CAPABILITY", "FTL_CROSSED", "POSTURE", "TRANSFER_FORBIDDEN",
-           "TRANSFER_EMBRACED", "MYTH", "PHILOSOPHY", "HURDLE", "EXODUS", "SETTLEMENT", "STRIFE")
+WATCHERS = 200
+RELIC_CAPS = ("genetics", "synthesis")
+WORLDS = {
+    "story": {},
+    "no_predation": {"predation": False},
+    "no_relic": {"relic": False},
+    "no_watchers": {"watchers": False},
+    "no_turenol": {"turenol": False},
+}
+WATCHED = ("CONTACT", "UPLIFT", "KINSHIP", "KIN_EATEN", "WAR", "RAID", "CONQUEST", "SUBJUGATION", "GALACTIC_WAR",
+           "DOMINION", "FIRST_SIGNAL", "WORLDLINES_MEET", "REDISCOVERY", "CAPABILITY", "FTL_CROSSED",
+           "TRANSFER_EMBRACED", "TRANSFER_FORBIDDEN", "RELIC_FOUND", "RELIC_MIND_WAKES", "RELIC_MIND_EMBODIED",
+           "RELIC_MIND_GUARDS", "RELIC_MIND_CALLS", "RELIC_MIND_SILENT", "NULL_FLOW_PROBE", "FOLD_TORN",
+           "FOLD_RANG", "PROVEN", "RETURN", "STRIFE", "EPIDEMIC", "EXTINCTION")
 
 
-def _ancients(snapshot: str) -> Dict[str, Dict[str, Any]]:
-    """The seed's first peoples as the live run holds them now."""
-    from xylarium.kernel import intellect, knowledge, memory, technology
+def extract(snapshot: str, out: str) -> None:
+    """The live run's Umvrine, whole, for the story's Anunnaki."""
+    from xylarium.kernel import intellect, knowledge, technology
     from xylarium.persistence.store import StatePersistence
     k = StatePersistence.load_from_file(snapshot)
-    out = {}
-    for name in ("Turenol", "Umvrine"):
-        who = f"civ:{name}"
-        worlds = [p for s in k.sectors.values() for p in s.planets
-                  if p.population > 0 and getattr(p.civilization, "name", None) == name]
-        if not worlds:
-            continue
-        home = max(worlds, key=lambda p: p.population)
-        out[who] = {"civ": home.civilization.to_dict(), "stocks": dict(knowledge.stocks(k, who)),
-                    "caps": dict(technology.stats(k)["of"].get(who, {})),
-                    "vocab": list(intellect.vocabulary(k, who)), "gauge": dict(intellect.gauge(k, who)),
-                    "memory": copy.deepcopy(memory.stats(k)["of"].get(who) or {}),
-                    "population": home.population, "worlds": len(worlds), "metab": home.civilization.metabolism}
-    return out
+    who = "civ:Umvrine"
+    worlds = [p for s in k.sectors.values() for p in s.planets
+              if p.population > 0 and getattr(p.civilization, "name", None) == "Umvrine"]
+    home = max(worlds, key=lambda p: p.population)
+    with open(out, "w") as f:
+        json.dump({"civ": home.civilization.to_dict(), "stocks": dict(knowledge.stocks(k, who)),
+                   "caps": dict(technology.stats(k)["of"].get(who, {})),
+                   "vocab": [x if isinstance(x, (str, int)) else str(x) for x in intellect.vocabulary(k, who)],
+                   "gauge": dict(intellect.gauge(k, who)), "population": home.population,
+                   "metab": home.civilization.metabolism}, f)
 
 
-def _war_victor(ancients: Dict[str, Dict[str, Any]], history_path: str) -> Optional[str]:
-    """The ancient that fought most of the galaxy's wars in the live run is this sector's victor."""
-    counts = {w: 0 for w in ancients}
-    try:
-        with open(history_path) as f:
-            for line in f:
-                if '"GALACTIC_WAR"' not in line:
-                    continue
-                e = json.loads(line)
-                for a in e.get("actors", []):
-                    if a in counts:
-                        counts[a] += 1
-    except OSError:
-        pass
-    return max(counts, key=lambda w: (counts[w], w)) if counts else None
-
-
-def _settle(k: Any, planet: Any, civ_data: Dict[str, Any], population: int) -> str:
-    from xylarium.kernel.civilization import Civilization
-    planet.civilization = Civilization.from_dict(copy.deepcopy(civ_data))
-    planet.population = population
-    return f"civ:{planet.civilization.name}"
-
-
-def _lift(k: Any, who: str, planet: Any, caps, stages, stocks=None, vocab=None, gauge=None) -> None:
-    """A people set at where it stands: its capabilities, the stages its history passed, its knowledge."""
+def _lift(k: Any, who: str, caps, stages, stocks=None, vocab=None, gauge=None) -> None:
     from xylarium.kernel import annals, intellect, knowledge, technology
     held = technology.stats(k)["of"].setdefault(who, {})
     for c in caps:
@@ -107,14 +94,14 @@ def _lift(k: Any, who: str, planet: Any, caps, stages, stocks=None, vocab=None, 
         intellect.stats(k).setdefault("gauge", {})[who] = dict(gauge)
 
 
-def build(seed: int, snapshot: str, history_path: str, predation: bool, with_ancients: bool = True) -> Dict[str, Any]:
-    """Our system at its 2026, with the steward's data points and the core's ancients."""
+def build(seed: int, anunnaki: Dict[str, Any], world: Dict[str, Any], history: int) -> Dict[str, Any]:
     import earth_run
-    from xylarium.kernel import (archaeology, clocks, cosmos, creation, history, interior, mastery, memory,
-                                 technology)
+    from xylarium.kernel import (archaeology, biosphere, clocks, cosmos, creation, intellect, interior, kinship,
+                                 mastery, memory, relations)
+    from xylarium.kernel import history as ledger
+    from xylarium.kernel.civilization import Civilization
     from xylarium.kernel.engine import GameKernel
-    ancients = _ancients(snapshot)
-    victor = _war_victor(ancients, history_path)
+    predation, relic, watchers, turenol = (world.get(x, True) for x in ("predation", "relic", "watchers", "turenol"))
     k = GameKernel(seed=seed, genesis="cosmic:neighbourly")
     k.activate()
     sd = creation.universe(k)
@@ -123,154 +110,198 @@ def build(seed: int, snapshot: str, history_path: str, predation: bool, with_anc
     st = cosmos.stats(k)
     k.cycle_count = int((now - st["epoch0"]) * 1e9 / cosmos.ruler(k) * 100)
     k.cycle_count -= k.cycle_count % 100
-    st["minds"], st["next"] = [], 0                       # the galaxy's own later minds wake as the seed has them
+    st["minds"], st["next"] = [], 0
     later = [m for m in creation.schedule(sd)["minds"] if m["epoch"] > now]
     st["last"] = None if not later else [now, later[0]["cell"], later[0]["k"], later[0]["w"]]
-    line = cosmos.arise(k, {"cell": found["cell"], "k": found["k"], "w": found["w"], "epoch": now,
-                            "metab": "biotic", "steps": []})
+    cosmos.arise(k, {"cell": found["cell"], "k": found["k"], "w": found["w"], "epoch": now, "metab": "biotic",
+                     "steps": []})
     sid = cosmos.sector_of_slot(k, tuple(found["cell"]), found["k"])
     sun = k.sectors[sid]
     earth = sun.planets[found["w"]]
     humans = f"civ:{earth.civilization.name}"
-    # humans in 2026: a state with works and yards, radio to cyber, no genetics, no fourth axis
     earth.society["way"] = "state"
     earth.citadel_level = max(earth.citadel_level, 4)
-    from xylarium.kernel import biosphere
     earth.population = int(min(HUMANS_2026, max(1, biosphere.carrying_capacity(k, earth))))
-    from xylarium.kernel import intellect
-    einstein = list(intellect.BASE) + [c for c, r in intellect.RANK_OF.items() if r <= 3]   # up to the third axis
-    _lift(k, humans, earth, HUMAN_CAPS, HUMAN_STAGES, vocab=einstein)
+    einstein = list(intellect.BASE) + [c for c, r in intellect.RANK_OF.items() if r <= 3]
+    _lift(k, humans, HUMAN_CAPS, HUMAN_STAGES, vocab=einstein)
     earth.society["arisen"] = {"epoch": now, "cycle": k.cycle_count}
-    # Mars: the next rocky world out, green once, stripped in the war; the Atlanteans' carved records lie there
-    mars = next((p for p in sun.planets[found["w"] + 1:] if p.planet_type not in ("GAS_GIANT", "ROGUE")), None)
-    # the ancients: the victor holds a world in the nearest system with one; the other the next
-    others = [s for c in [tuple(found["cell"])] for kk in range(creation.SLOTS)
-              for s in [cosmos.build_slot(k, c, kk)] if s != sid]
-    cosmos._stars(k, others)
-    placed = {}
-    order = sorted(ancients, key=lambda w: (w != victor, w)) if with_ancients else []
-    taken = set()
-    for who in order:
-        a = ancients[who]
-        # the world in this sector that feeds its kind best: its outpost from the war
-        fit = [(biosphere.carrying_capacity(k, p, metabolism=a["metab"]), -abs(s - sid), p)
-               for s in others for p in k.sectors[s].planets
-               if p.population <= 0 and p.id not in taken and p.planet_type not in ("ROGUE",)]
-        fit = [f for f in fit if f[0] >= creation.VIABLE]
-        if not fit:
-            continue
-        kk, _, p = max(fit, key=lambda f: (f[0], f[1]))
-        taken.add(p.id)
-        got = _settle(k, p, a["civ"], int(min(kk, max(creation.VIABLE, a["population"] / max(1, a["worlds"])))))
-        _lift(k, got, p, a["caps"], ("forage", "farm", "state", "works", "yards", "crossed"),
-              stocks=a["stocks"], vocab=a["vocab"], gauge=a["gauge"])
-        p.society["way"] = "state"
-        p.citadel_level = max(p.citadel_level, 5)
-        p.society["arisen"] = {"epoch": now, "cycle": k.cycle_count}
-        mastery.stats(k)["crossed"][got] = k.cycle_count
-        if a["memory"]:
-            memory.stats(k)["of"][got] = copy.deepcopy(a["memory"])
-        placed[got] = p
-    victor_now = victor if victor in placed or not with_ancients else next(iter(placed), victor)
-    # the war, 12,000 years ago: the ledger's truth, dated in deep time
+    mars = next((p for p in sun.planets[found["w"] + 1:] if p.planet_type not in ("GAS_GIANT", "ROGUE")
+                 and getattr(p, "moon_of", None) is None), None)
+    europa = next((p for p in sun.planets if p.planet_type in ("ICE", "OCEANIC") and p is not earth), None) or \
+        next((p for p in reversed(sun.planets) if p is not earth and p is not mars), None)
+    # the Anunnaki: away - in a system of another arc of our ring, beyond the reach of Sol's lanes
+    i, j = found["cell"]
+    best = None
+    for dj in range(6, 16):
+        cell = (i, (j + dj) % cosmos.slots(i))
+        for kk in range(creation.SLOTS):
+            s2 = cosmos.build_slot(k, cell, kk)
+            cosmos._stars(k, [s2])
+            for p in k.sectors[s2].planets:
+                if p.population > 0 or p.planet_type in ("GAS_GIANT", "ROGUE"):
+                    continue
+                room = biosphere.carrying_capacity(k, p, metabolism=anunnaki["metab"])
+                if best is None or room > best[0]:
+                    best = (room, p)
+        if best and best[0] >= 10 * creation.VIABLE:
+            break
+    far = best[1]
+    data = copy.deepcopy(anunnaki["civ"])
+    data["name"] = "Anunnaki"
+    far.civilization = Civilization.from_dict(data)
+    far.population = int(min(biosphere.carrying_capacity(k, far, metabolism=anunnaki["metab"]),
+                             max(creation.VIABLE, anunnaki["population"])))
+    far.society["way"], far.citadel_level = "state", max(far.citadel_level, 5)
+    far.society["arisen"] = {"epoch": now, "cycle": k.cycle_count}
+    ann = "civ:Anunnaki"
+    _lift(k, ann, anunnaki["caps"], ("forage", "farm", "state", "works", "yards", "crossed"),
+          stocks=anunnaki["stocks"], vocab=[intellect.norm(x) for x in anunnaki["vocab"]], gauge=anunnaki["gauge"])
+    mastery.stats(k)["crossed"][ann] = k.cycle_count
+    # the war, 12,000 years ago - the ledger's truth, dated in deep time
     war_epoch = now - WAR_YEARS_AGO / 1e9
-    war = history.event(k, "GALACTIC_WAR", f"War between the {victor_now.split(':')[-1]} and the Atlanteans",
-                        actors=[victor_now, "civ:Atlanteans"], planet=earth,
-                        cause=f"scenario: {WAR_YEARS_AGO:,} years before our 2026", magnitude=10 ** 8,
-                        data={"epoch": war_epoch, "scenario": True})
-    if mars is not None:
-        history.event(k, "WORLD_STRIPPED", f"{mars.name} is stripped in the war", actors=[victor_now, "civ:Atlanteans"],
-                      planet=mars, cause="scenario: the war took its air and seas", data={"epoch": war_epoch,
-                                                                                         "scenario": True})
-        mars.society["atmosphere"] = 0.01
-        mars.ruins = archaeology.bury(mars, archaeology._new_ruins(
-            "Atlanteans", "aquatic", "biotic", "ANCIENT", 7, [], "the green age", k.cycle_count, 3, mars.currency, 0,
-            __import__("random").Random(seed)))
-        memory.stats(k)["left"][str(mars.id)] = [
-            {"people": "Atlanteans", "k": "GALACTIC_WAR", "title": war.get("title", ""), "year": None,
-             "f": 1.0, "truth": 1.0, "substrate": "grown shell and reef", "myth": False, "told": None},
-            {"people": "Atlanteans", "k": "SETTLEMENT", "title": f"The Atlanteans settle {mars.name}",
-             "year": None, "f": 1.0, "truth": 1.0, "substrate": "grown shell and reef", "myth": False, "told": None}]
-    # the Atlanteans: alive in Earth's seas, a community beside the humans - their prey, or not
-    earth.society.setdefault("communities", []).append(
-        {"people": "civ:Atlanteans", "metab": "biotic", "niche": "sea", "pop": ATLANTEANS or creation.VIABLE,
-         "traits": {"form": "swimming", "medium": "under the sea", "sense": "heat and pressure"},
-         **({"prey": humans} if predation else {})})
-    # what the humans keep of it all: the drowned land, as myth
+    war = ledger.event(k, "GALACTIC_WAR", "War between the Anunnaki and the Atlanteans", actors=[ann, "civ:Atlanteans"],
+                       planet=mars or earth, magnitude=10 ** 8, cause=f"scenario: {WAR_YEARS_AGO:,} years before 2026",
+                       data={"epoch": war_epoch, "scenario": True})
     memory.season(k)
+    if mars is not None:
+        ledger.event(k, "WORLD_STRIPPED", f"{mars.name} is stripped in the war", actors=[ann, "civ:Atlanteans"],
+                     planet=mars, cause="scenario: the war took its air and seas", data={"epoch": war_epoch})
+        mars.society["atmosphere"] = 0.01
+        # what the Anunnaki keep of it: the world they kept green - their records name it, not Earth
+        memory._write(k, ann, far, {"id": None, "kind": "SETTLEMENT", "planet": mars.id,
+                                    "title": f"the green world we kept ({mars.name})", "year": None, "actors": [ann]})
+        memory.stats(k)["left"][str(mars.id)] = [
+            {"people": "Anunnaki", "k": "SETTLEMENT", "title": "the green world we kept", "year": None,
+             "f": 1.0, "truth": 1.0, "substrate": "grown wetware in the rock", "myth": False, "told": None}]
+    plans = [[f, h] for _, f, h in kinship.prey_plans(k, ann, far)]
+    # the Anunnaki's works in Earth's ancient lands: the fourth axis, their wetware, and a mind asleep
+    if relic:
+        earth.ruins = archaeology.bury(earth, archaeology._new_ruins(
+            "Anunnaki", "wetware", anunnaki["metab"], "ANCIENT", 9, [], "the time before the flood", k.cycle_count, 3,
+            earth.currency, 0, __import__("random").Random(seed)))
+        earth.ruins["relics"] = {
+            "makers": "Anunnaki", "crystals": ["hyper_flip", "hyper_cycle"], "caps": list(RELIC_CAPS),
+            "mind": {"name": "civ:Anunnaki Mind", "metab": anunnaki["metab"],
+                     "alignment": float(anunnaki["civ"].get("alignment") or 0.0),
+                     "vocab": [str(intellect.norm(x)) for x in anunnaki["vocab"]], "prey_plans": plans}}
+    # the Atlanteans: in Earth's seas, unseen - and, in the story, keeping the humans as food
+    earth.society.setdefault("communities", []).append(
+        {"people": "civ:Atlanteans", "metab": "biotic", "niche": "sea", "pop": creation.VIABLE,
+         "traits": {"form": "swimming", "medium": "under the sea"}, **({"prey": humans} if predation else {})})
+    # the watchers: 200 of the Anunnaki's minds, stranded among the humans, carried, teaching
+    if watchers:
+        earth.society["communities"].append(
+            {"people": "civ:Watchers", "metab": anunnaki["metab"], "niche": "surface", "pop": WATCHERS,
+             "carried": True, "vocab": [str(intellect.norm(x)) for x in anunnaki["vocab"]],
+             "alignment": float(anunnaki["civ"].get("alignment") or 0.0)})
+    # the Turenol: their own world as the seed has it, and a hidden outpost of carried minds under Europa's ice
+    tur = "civ:Turenol"
+    if turenol and europa is not None and tur in relations._peoples(k):
+        europa.society.setdefault("communities", []).append(
+            {"people": tur, "metab": "biotic", "niche": "ice", "pop": creation.VIABLE, "carried": True,
+             "silent": True, "vocab": [str(x) for x in intellect.vocabulary(k, tur)]})
+    # what the humans keep of it all: the drowned land, as myth
     memory._write(k, humans, earth, {"id": war.get("id"), "kind": "FLOOD", "title": "the drowned land",
-                                     "year": None, "actors": [humans], "data": {"epoch": war_epoch}},
-                  f0=1.0)
-    for who in [humans] + list(placed):
-        clocks.begin(k, who, earth if who == humans else placed[who])
-    return {"kernel": k, "humans": humans, "earth": earth, "mars": mars, "ancients": placed, "victor": victor_now,
-            "arise": line, "found": found}
+                                     "year": None, "actors": [humans], "data": {"epoch": war_epoch}}, f0=1.0)
+    for who, home in ((humans, earth), (ann, far)):
+        clocks.begin(k, who, home)
+    k.state["genesis"]["history"] = history          # from here on, this history's own chance
+    return {"kernel": k, "humans": humans, "earth": earth, "mars": mars, "europa": europa, "anunnaki": far}
 
 
 def run(job) -> Dict[str, Any]:
-    name, seed, snapshot, history_path, years, out_dir = job
-    from xylarium.kernel import cohabit, contact, guidance, history, kinship, strategy
-    w = build(seed, snapshot, history_path, predation=(name != "peace"), with_ancients=(name != "alone"))
-    k, humans = w["kernel"], w["humans"]
-    path = os.path.join(out_dir, f"{name}.jsonl")
+    name, world, history, seed, anunnaki_path, years, out_dir = job
+    from xylarium.kernel import cohabit, history as ledger, mastery, relics, strategy
+    with open(anunnaki_path) as f:
+        anunnaki = json.load(f)
+    w = build(seed, anunnaki, world, history)
+    k, humans, earth = w["kernel"], w["humans"], w["earth"]
+    path = os.path.join(out_dir, f"{name}.h{history}.jsonl")
     if os.path.exists(path):
         os.remove(path)
-    history.sink(k, path)
+    ledger.sink(k, path)
     tick = k.tick_simulation
-    peoples = {humans, "civ:Atlanteans", *w["ancients"]}
+    hn = humans.split(":", 1)[-1]
+    year0 = k.cycle_count / 100.0
     rows = []
     t0 = time.perf_counter()
     for year in range(1, years + 1):
         for _ in range(100):
             tick()
-        fam = contact.stats(k)["familiarity"]
-        eaten_now = cohabit.stats(k).get("eaten", 0)
-        row = {"year": year, "humans": w["earth"].population,
-               "humans_all_worlds": sum(p.population for sec in k.sectors.values() for p in sec.planets
-                                        if getattr(p.civilization, "name", None) == humans.split(":", 1)[-1]),
-               "eaten_share_per_year": round((eaten_now - (rows[-1]["eaten"] if rows else 0))
-                                             / max(1, w["earth"].population), 5),
-               "atlanteans": sum(int(c["pop"]) for c in w["earth"].society.get("communities", [])
-                                 if c["people"] == "civ:Atlanteans"),
-               "eaten": cohabit.stats(k).get("eaten", 0),
-               "familiar": {a.split(":")[-1]: round(v, 3) for key, v in fam.items()
-                            for a in key.split("|") if humans in key.split("|") and a != humans},
-               "postures": {p.split(":")[-1]: strategy.of(k, p).get("posture") for p in [humans, *w["ancients"]]},
-               "uplifts": guidance.stats(k)["uplifts"], "wall_s": round(time.perf_counter() - t0)}
-        rows.append(row)
+        mind = next((c for c in earth.society.get("communities", []) if c.get("relic_mind")), None)
+        rows.append({"year": year,
+                     "humans": sum(p.population for s in k.sectors.values() for p in s.planets
+                                   if getattr(p.civilization, "name", None) == hn),
+                     "dogma": round(float(earth.civilization.dogma or 0.0), 3) if earth.civilization else None,
+                     "atlanteans": sum(int(c["pop"]) for c in earth.society.get("communities", [])
+                                       if c["people"] == "civ:Atlanteans"),
+                     "eaten": cohabit.stats(k).get("eaten", 0), "crossed": mastery.crossed(k, humans),
+                     "fourth_axis": mastery.theory(k, humans), "mind": mind.get("choice") if mind else None,
+                     "postures": {p.split(":")[-1]: strategy.of(k, p).get("posture")
+                                  for p in (humans, "civ:Anunnaki", "civ:Turenol")}})
     events = []
+    peoples = {humans, "civ:Atlanteans", "civ:Anunnaki", "civ:Turenol", "civ:Watchers", "civ:Anunnaki Mind"}
     with open(path) as f:
         for line in f:
             e = json.loads(line)
             if e["kind"] in WATCHED and peoples & set(e.get("actors") or []):
-                events.append({"year": e["year"], "kind": e["kind"], "title": e["title"],
-                               "cause": (e.get("cause") or "")[:160], "text": (e.get("text") or "")[:200]})
-    return {"world": name, "victor": w["victor"], "ancients": list(w["ancients"]), "humans": humans,
-            "arise": w["arise"], "rows": rows, "events": events}
+                events.append({"year": round(e["year"] - year0, 2), "kind": e["kind"], "title": e["title"],
+                               "cause": (e.get("cause") or "")[:160]})
+    return {"world": name, "history": history, "humans": humans, "rows": rows, "events": events,
+            "relics": relics.summary(k), "wall_s": round(time.perf_counter() - t0)}
+
+
+def report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    out = {}
+    for name in WORLDS:
+        rs = [r for r in results if r["world"] == name]
+        if not rs:
+            continue
+
+        def first(kind, r):
+            return next((e["year"] for e in r["events"] if e["kind"] == kind), None)
+        out[name] = {
+            "histories": len(rs),
+            "mind_choice": dict(Counter(str(r["rows"][-1]["mind"]) for r in rs)),
+            "crossed": sum(1 for r in rs if r["rows"][-1]["crossed"]),
+            "crossed_year": [first("FTL_CROSSED", r) for r in rs],
+            "probes": [sum(1 for e in r["events"] if e["kind"] == "NULL_FLOW_PROBE") for r in rs],
+            "fold_rang_year": [first("FOLD_RANG", r) for r in rs],
+            "torn": [r["relics"]["torn"] for r in rs],
+            "anunnaki_return": [[e["title"] for e in r["events"] if e["kind"] == "RETURN"][:2] for r in rs],
+            "humans_end": [r["rows"][-1]["humans"] for r in rs],
+            "dogma_end": [r["rows"][-1]["dogma"] for r in rs],
+            "eaten": [r["rows"][-1]["eaten"] for r in rs],
+            "atlanteans_end": [r["rows"][-1]["atlanteans"] for r in rs],
+            "kinds": dict(sum((Counter(e["kind"] for e in r["events"]) for r in rs), Counter())),
+        }
+    return out
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--years", type=int, default=30)
+    ap.add_argument("--years", type=int, default=60)
+    ap.add_argument("--histories", type=int, default=4)
+    ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--snapshot", default=os.path.join(ROOT, "runs/eons/seed7/snapshot.json"))
-    ap.add_argument("--history", default=os.path.join(ROOT, "runs/eons/seed7/history.jsonl"))
     ap.add_argument("--out", default=os.path.join(ROOT, "runs/earth_test"))
-    ap.add_argument("--only", default="", choices=("", "predation", "peace", "alone"))
+    ap.add_argument("--only", default="", choices=("",) + tuple(WORLDS))
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    names = [a.only] if a.only else ["predation", "peace", "alone"]
-    jobs = [(n, a.seed, a.snapshot, a.history, a.years, a.out) for n in names]
-    with Pool(len(jobs)) as pool:
+    anunnaki_path = os.path.join(a.out, "anunnaki.json")
+    if not os.path.exists(anunnaki_path):
+        extract(a.snapshot, anunnaki_path)
+    names = [a.only] if a.only else list(WORLDS)
+    jobs = [(n, WORLDS[n], h, a.seed, anunnaki_path, a.years, a.out) for n in names for h in range(a.histories)]
+    with Pool(min(a.workers, len(jobs))) as pool:
         results = pool.map(run, jobs)
-    for r in results:
-        with open(os.path.join(a.out, f"{r['world']}.json"), "w") as f:
-            json.dump(r, f, indent=1)
-        print(f"== {r['world']}: victor {r['victor']}, ancients {r['ancients']}, humans {r['humans']}")
-        print(json.dumps(r["rows"][-1]))
-        for e in r["events"]:
-            if e["kind"] not in ("MYTH", "PHILOSOPHY", "HURDLE", "POSTURE"):
-                print(f"   y{e['year']} {e['kind']}: {e['title']}")
+    with open(os.path.join(a.out, "results.json"), "w") as f:
+        json.dump(results, f)
+    summary = report(results)
+    with open(os.path.join(a.out, "summary.json"), "w") as f:
+        json.dump(summary, f, indent=1)
+    print(json.dumps(summary, indent=1))
 
 
 if __name__ == "__main__":

@@ -75,7 +75,8 @@ def _worths(kernel: Any, who: str, worlds: List[Any], by: Dict[str, List[Any]],
     from xylarium.kernel import technology
     from xylarium.kernel import contact
     feared = 0.0
-    for o in by:
+    seen = set(by) | set(contact.contacts(kernel, by).get(who, {}))      # the peoples it knows - those living among
+    for o in sorted(seen):                                                 # others' seas and ice too, once found
         if o == who:
             continue
         # its model of a neighbour: what it has done, what it can do to it unseen, and - as far as it understands

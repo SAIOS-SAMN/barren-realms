@@ -130,6 +130,10 @@ def quarter(kernel: Any) -> List[str]:
             host_k = max(1, int(biosphere.carrying_capacity(kernel, p)))
             keep = []
             for c in cs:
+                if c.get("carried"):                    # minds carried in vessels, not fed by the land
+                    _teach(kernel, p, c)
+                    keep.append(c)
+                    continue
                 m, pop = c["metab"], int(c["pop"])
                 k = capacity(kernel, p, m)
                 if c["niche"] == host_n:
@@ -138,6 +142,7 @@ def quarter(kernel: Any) -> List[str]:
                 need = _need_q(pop)
                 if c.get("prey") and c["prey"] == knowledge.holder_of_planet(p) and p.population > 1:
                     need = _hunt(kernel, p, c, pop, need)          # what it takes of its host, it need not grow
+                    _steer(kernel, p, c)                            # and a herd that asks no questions
                 grown = staples.add(p, staple, min(need, _need_q(k)), "harvest") if staple != "ORE" else \
                     _graze(p, min(need, _need_q(k)))
                 eaten = staples.take(p, staple, need, "eaten")
@@ -177,7 +182,12 @@ def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> i
     taken = min(planet.population - 1, int(pop * share * days / BODY_FEEDS_DAYS))
     if taken <= 0:
         return need
+    if c.get("guarded_by"):
+        return need                                      # a guardian stands between it and its prey
     planet.population -= taken
+    from xylarium.kernel import alignment
+    c["alignment"] = round(max(-1.0, min(1.0, float(c.get("alignment", 0.0))
+                                         + alignment.measure(kernel, lives_lost=taken * kinship.MIND_EATEN))), 4)
     c["eaten_year"] = int(c.get("eaten_year", 0)) + taken
     stats(kernel)["eaten"] = stats(kernel).get("eaten", 0) + taken
     if (kernel.cycle_count // _quarter()) % 4 == 3:
@@ -187,6 +197,58 @@ def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> i
                       cause="they keep the people they share a world with as food")
         c["eaten_year"] = 0
     return int(need * (1.0 - share))
+
+
+def _steer(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
+    """A people that keeps another as food tends its herd's creed: a herd that asks no questions does not find its
+    keepers. Its hold on the creed grows over the herd's generation as far as the keepers are understood (their
+    familiarity) - and against it the herd's own knowledge wears belief down (society._believe)."""
+    from xylarium.kernel import contact, fertility
+    civ = getattr(planet, "civilization", None)
+    if civ is None:
+        return
+    fam = float(contact.stats(kernel)["familiarity"].get(contact._key(c["people"], c["prey"]), 0.0))
+    if fam <= 0.0:
+        return
+    gen = fertility.generation_years(fertility.strategy(kernel, planet))
+    season = min(1.0, (_quarter() / 100.0) / max(1e-6, gen))
+    d = float(getattr(civ, "dogma", 0.0) or 0.0)
+    civ.dogma = round(min(1.0, d + (1.0 - d) * fam * season), 4)
+    stats(kernel)["steered"] = stats(kernel).get("steered", 0) + 1
+
+
+def _teach(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
+    """Carried minds teach the people they live among what it can understand, as far as they know each other."""
+    from xylarium.kernel import contact, intellect, knowledge, scheduler
+    host = knowledge.holder_of_planet(planet)
+    if not host or not c.get("vocab") or c.get("silent"):
+        return
+    fam = float(contact.stats(kernel)["familiarity"].get(contact._key(c["people"], host), 0.0))
+    if fam <= 0.0:
+        return
+    v = intellect.stats(kernel)["vocab"].setdefault(host, list(intellect.BASE))
+    held = {intellect.norm(x) for x in v}
+    rng = scheduler.rng(kernel, "teach", c["people"], host, kernel.cycle_count)
+    for crystal in c["vocab"]:
+        cr = intellect.norm(crystal)
+        if cr in held or not intellect.grounded(cr, held):
+            continue
+        if rng.random() < fam * (_quarter() / 100.0):
+            v.append(cr)
+            held.add(cr)
+            intellect.stats(kernel)["stats"]["taught"] += 1
+
+
+def residents(kernel: Any, sector_ids: Optional[set] = None) -> Dict[str, List[Any]]:
+    """The peoples living as communities, by the worlds they live on (in the given systems, or anywhere)."""
+    out: Dict[str, List[Any]] = {}
+    for sec in kernel.sectors.values():
+        if sector_ids is not None and sec.id not in sector_ids:
+            continue
+        for p in sec.planets:
+            for c in p.society.get("communities") or []:
+                out.setdefault(c["people"], []).append(p)
+    return out
 
 
 def _graze(planet: Any, n: int) -> int:
