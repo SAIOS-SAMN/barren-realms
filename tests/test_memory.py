@@ -59,7 +59,8 @@ class TestMemory(unittest.TestCase):
         mem = memory._of(self.k, "civ:Elders")
         mem["home"] = self.p.id
         mem["substrate"] = "marks cut into rock"
-        mem["records"] = [{"id": "H-1", "k": "WAR", "title": "an old war", "year": 1, "f": 0.8, "m": "inscribed"}]
+        mem["media"] = ["oral", "inscribed", "portable", "machine"]
+        mem["records"] = [{"id": "H-1", "k": "WAR", "title": "an old war", "year": 1, "f": 0.8, "m": "machine"}]
         memory.season(self.k)                                    # the Elders are gone: their marks stay
         self.assertIn(str(self.p.id), memory.stats(self.k)["left"])
         knowledge.learn(self.k, self.who, "information", 10 ** 7)
@@ -77,6 +78,15 @@ class TestMemory(unittest.TestCase):
         told = [m for m in M.myths(self.k, self.who) if m["kind"] == "blight"]
         self.assertEqual(len(told), 1)                           # the story survives its lack of truth
         self.assertLessEqual(told[0]["fidelity"], M.LOST_LINE)
+
+    def test_strife_burns_machines_back_to_what_was_carved(self):
+        from xylarium.kernel import memory as M
+        mem = M._of(self.k, self.who)
+        mem["media"] = ["oral", "inscribed", "portable", "machine"]
+        mem["records"] = [{"id": f"H-{i}", "k": "WAR", "title": "w", "year": 1, "f": 0.9, "m": "machine"}
+                          for i in range(4)]
+        history.event(self.k, "STRIFE", "they turn on themselves", actors=[self.who], planet=self.p, magnitude=1)
+        self.assertEqual(sum(1 for r in mem["records"] if r["m"] == "inscribed"), 2)
 
 
 if __name__ == "__main__":

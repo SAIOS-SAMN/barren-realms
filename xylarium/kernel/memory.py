@@ -343,12 +343,14 @@ def blow(kernel: Any, planet: Any, kind: str, explained: float) -> None:
 
 
 def _burn(kernel: Any, who: str, home: Any) -> None:
-    """Strife and conquest burn the written archive: what burns survives only as far as it is still told."""
+    """Strife and conquest burn the archive - sheets and machines alike: what burns survives only where it was also
+    carved into the world, or as far as it is still told."""
     mem = _of(kernel, who)
-    written = [r for r in mem["records"] if r["m"] == "portable"]
+    fallback = "inscribed" if "inscribed" in mem["media"] else "oral"
+    written = [r for r in mem["records"] if r["m"] in ("portable", "machine")]
     written.sort(key=_weight)
     for r in written[:int(len(written) * ARCHIVE_BURN)]:
-        r["m"] = "oral"
+        r["m"] = fallback
         stats(kernel)["burned"] += 1
 
 
@@ -477,9 +479,12 @@ def inherit(kernel: Any, parent: Optional[str], child: Optional[str]) -> None:
 
 
 def _leave(kernel: Any, who: str, mem: Dict[str, Any]) -> None:
-    """A people gone leaves what it inscribed on the world it last lived on."""
+    """A people gone leaves what it carved into the world it last lived on: once a people makes lasting marks, its
+    gravest records stand in them whatever else it kept them in (machines and sheets are lost with it)."""
     st = stats(kernel)
-    left = [r for r in mem["records"] if r["m"] == "inscribed"]
+    left = []
+    if "inscribed" in mem.get("media", []):
+        left = sorted(mem["records"], key=lambda r: -_weight(r))[:MEDIA["inscribed"]["cap"]]
     if left and mem.get("home") is not None:
         site = st["left"].setdefault(str(mem["home"]), [])
         for r in left:
