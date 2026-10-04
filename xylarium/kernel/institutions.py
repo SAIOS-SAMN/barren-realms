@@ -174,6 +174,20 @@ def rehome(kernel: Any, p: Any, cur: str, why: str = "currency_reform") -> None:
     p.currency = cur
 
 
+def exchange(amount: int, cur: str, p: Any) -> int:
+    """Money paid to a world in another currency is exchanged into its own at par (the old retired, the new issued,
+    both declared) - never relabelled. Returns what the world receives in its own money."""
+    own = getattr(p, "currency", "SOL") or "SOL"
+    if amount <= 0 or own == cur:
+        return amount
+    from xylarium.config import PRICE_LEVEL
+    from xylarium.kernel import ledger
+    got = int(amount * PRICE_LEVEL.get(own, 1.0) / PRICE_LEVEL.get(cur, 1.0))
+    ledger.burn("currency_exchange", amount, cur)
+    ledger.mint("currency_exchange", got, own)
+    return got
+
+
 def _rebase(kernel: Any, holder: str, cur: str) -> None:
     """Every world of a people takes its own money. Whatever it held in another (a stranger's coin that reached it)
     is a currency reform: the old money retired, the same value issued in the new at par (both declared)."""

@@ -145,6 +145,7 @@ from xylarium.kernel import subsystem
 from xylarium.kernel.subsystem import Subsystem
 
 
+
 class GameKernel:
     """
     Independent game state kernel.
@@ -736,12 +737,10 @@ class GameKernel:
             sector.port.treasury += tax          # port dues where no government governs
             return tax
         pop = sum(p.population for p in worlds) or 1
-        paid = 0
-        for p in worlds:
-            share = int(tax * p.population / pop)
-            p.treasury += share
-            paid += share
-        worlds[0].treasury += tax - paid
+        shares = [int(tax * p.population / pop) for p in worlds]
+        shares[0] += tax - sum(shares)
+        for p, share in zip(worlds, shares):
+            p.treasury += institutions_mod.exchange(share, cur, p)
         return tax
 
     def _handle_planet_claim(self, captain: Captain, sector: Sector, planet_id: Optional[str]) -> ActionResult:

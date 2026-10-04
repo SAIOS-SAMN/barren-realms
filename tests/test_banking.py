@@ -190,6 +190,33 @@ class TestCommerceTaxHousesAndArbitrage(unittest.TestCase):
         self.assertGreater(sum(p.treasury for p in worlds), vaults)
         self.assertEqual(before, totals(self.kernel))          # a transfer: nothing created or destroyed
 
+    def test_sales_tax_to_a_world_in_another_money_is_exchanged_not_relabelled(self):
+        from simulate_playtest import ledger_net
+        from xylarium.kernel import ledger
+        from xylarium.kernel.models import ActionType
+        k = self.kernel
+        cap = k.register_player("merchant", "Merchant")
+        sec = next(s for s in k.sectors.values() if s.port and s.port.sells.get("ORGANICS") and k._tax_recipients(s))
+        k.sectors[cap.sector_id].captains.remove(cap.id)
+        cap.sector_id = sec.id
+        sec.captains.append(cap.id)
+        cap.credits = 20000
+        k.tick_simulation = lambda: None
+        other = next(c for c in PRICE_LEVEL if c != sec.port.currency)
+        for w in k._tax_recipients(sec):
+            w.currency = other                          # its worlds keep another money than their port
+            ledger.mint("test", w.treasury, other)
+            ledger.burn("test", w.treasury, sec.port.currency)
+
+        def residual():
+            ms, ln = ledger.money_supply(k), ledger_net(k)
+            return {c: v for c in set(ms) | set(ln) if (v := ms.get(c, {}).get("total", 0) - ln.get(c, 0))}
+        before = residual()
+        res = k.dispatch("merchant", ActionType.TRADE, type="BUY", commodity="ORGANICS", amount=10)
+        self.assertTrue(res.success, res.message)
+        self.assertGreater(res.data.get("sales_tax", 0), 0)
+        self.assertEqual(before, residual())
+
     def test_an_endangered_house_lies_low(self):
         from xylarium.kernel import lineage
         from xylarium.kernel.ai import AIManager
