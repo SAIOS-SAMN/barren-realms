@@ -43,7 +43,9 @@ RETURN_FOUNDERS = 500           # who goes back first: a viable people (creation
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
-    return state.of(kernel, "relics")
+    st = state.of(kernel, "relics")
+    st.setdefault("broke_away", {})
+    return st
 
 
 def _info(kernel: Any, who: str, domain: str = "information") -> float:
@@ -160,6 +162,73 @@ def _probe(kernel: Any, who: str, worlds: List[Any], by: Dict[str, List[Any]]) -
                       planet=home, cause="a null flow passes no proper time: it is heard everywhere at once",
                       data={"heard_by": watchers})
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------- the breakaway
+BREAKAWAY_SHARE = 0.01          # the few who hold what the relic gave (declared: those let into the secret)
+
+
+def _breakaway(kernel: Any, who: str, worlds: List[Any]) -> Optional[str]:
+    """The few who hold a relic's foresight and have proven the fourth axis may leave their people behind: their
+    council weighs the stars (strategy: reach) against the kin they leave (as far as they lean to the Light). If they
+    go they are a people of their own among the stars - every capability, crossed - on the best world their fold
+    reaches; those left behind keep nothing of what the relic gave."""
+    from xylarium.kernel import (alignment, biosphere, cosmos, decide, history, mastery, strategy, technology)
+    from xylarium.kernel.civilization import Civilization
+    st = stats(kernel)
+    if who in st["broke_away"] or not technology.has(kernel, who, "foresight") or not mastery.theory(kernel, who) \
+            or mastery.crossed(kernel, who):
+        return None
+    home = max(worlds, key=lambda p: p.population)
+    by = {who: worlds}
+    reach = strategy._worths(kernel, who, worlds, by).get("reach", 0.0) or 1.0
+    light = max(0.0, float(getattr(home.civilization, "alignment", 0.0) or 0.0))
+    m = decide.mind_of_planet(kernel, home)
+    if decide.choose(kernel, [decide.option("break_away", reach * light, reach, aim="reach")], m, who,
+                     "breakaway") is None:
+        return None
+    metab = biosphere.metabolism_of(kernel, home)
+    best = None
+    for s in kernel.sectors.values():
+        for p in s.planets:
+            if p.population > 0 or p.civilization is not None or p.owner_id or p.planet_type in ("GAS_GIANT", "ROGUE"):
+                continue
+            room = biosphere.carrying_capacity(kernel, p, metabolism=metab)
+            if best is None or room > best[0]:
+                best = (room, p)
+    if best is None or best[0] <= 0:
+        return None
+    _, w = best
+    data = home.civilization.to_dict()
+    import zlib
+    data["name"] = cosmos._name(kernel, {"cell": [0, 0], "k": 0, "w": zlib.crc32(who.encode()) % 10 ** 6})
+    w.civilization = Civilization.from_dict(data)
+    n = max(1, int(home.population * BREAKAWAY_SHARE))
+    home.population -= n
+    w.population = n
+    w.society["way"], w.citadel_level = "state", home.citadel_level
+    w.society["arisen"] = dict(home.society.get("arisen") or {})
+    new = f"civ:{w.civilization.name}"
+    technology.stats(kernel)["of"][new] = dict(technology.stats(kernel)["of"].get(who, {}))
+    from xylarium.kernel import annals, intellect, knowledge
+    knowledge.stocks(kernel, new).update(dict(knowledge.stocks(kernel, who)))
+    intellect.stats(kernel)["vocab"][new] = list(intellect.vocabulary(kernel, who))
+    intellect.stats(kernel).setdefault("gauge", {})[new] = dict(intellect.gauge(kernel, who))
+    rec = annals.stats(kernel)["of"].get(who)
+    if rec:
+        annals.stats(kernel)["of"][new] = dict(rec, passed=list(rec["passed"]) + ["crossed"])
+    mastery.stats(kernel)["crossed"][new] = kernel.cycle_count
+    held = technology.stats(kernel)["of"].get(who, {})
+    for cap in list(st["unproven"].get(who, {})) + ["foresight"]:
+        held.pop(cap, None)                               # what the relic gave leaves with those who held it
+    st["unproven"].pop(who, None)
+    st["broke_away"][who] = new
+    name, nn = who.split(":", 1)[-1], new.split(":", 1)[-1]
+    history.event(kernel, "BREAKAWAY", f"The {nn} break away from the {name} and cross to the stars",
+                  actors=[new, who], planet=w, magnitude=n,
+                  cause="the few who held the relic's foresight fold space for themselves and leave the rest behind",
+                  data={"left_behind": home.population, "went": n})
+    return f"[RELICS] The {nn} break away from the {name}."
 
 
 # ---------------------------------------------------------------------- relic minds
@@ -350,6 +419,9 @@ def season(kernel: Any) -> List[str]:
         line = _probe(kernel, who, worlds, by)
         if line:
             logs.append(line)
+        line = _breakaway(kernel, who, worlds)
+        if line:
+            logs.append(line)
         line = _return(kernel, who, worlds)
         if line:
             logs.append(line)
@@ -368,7 +440,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="relics",
-    state=lambda: {"unproven": {}, "probes": 0, "torn": 0, "minds": 0, "looked": {}},
+    state=lambda: {"unproven": {}, "probes": 0, "torn": 0, "minds": 0, "looked": {}, "broke_away": {}},
     season=season,
     summary=summary,
 ))

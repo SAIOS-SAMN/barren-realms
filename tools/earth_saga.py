@@ -14,14 +14,15 @@ of the seed and named by the seed (cosmos._name); the lore names are kept beside
   - the MESOZOIC: Earth's first mind is a lineage of its great reptiles - the KEEPERS (Atlantis; the dragons of the
     East) - waking when Earth's own life ladder gives it a mind (earth_run.mesozoic); they reach the stars and settle
     worlds some 1,300 light years away (the lore's Orion)
-  - ~300,000 years ago: the FINDERS (humanity) arise on Earth; a share of them carries the keepers' blood (the lore
-    of descent from dragons) - the keepers' food is their own kin
+  - before 12,600 years ago Earth's hominids are no people: the keepers' herd in a biome they made over (the dragon
+    blood in them); ~12,900 years ago (the Younger Dryas) Atlantis sinks and the keepers keep to the seas; 12,600
+    years ago the WATCHERS come down and give the herd fire and minds - the FINDERS (humanity) arise as a people
   - the ELDERS (Anunnaki): the oldest of the other ancients still living and among the stars - wetware makers who
     kept Mars green and walked among the finders as teachers from the sky
-  - ~12,000 years ago (the Younger Dryas): the elders and the keepers go to war; Mars is stripped; the keepers lose
-    Earth's surface and keep a hidden remnant in its seas that farms the finders and tends their creed; the elders
-    are driven off, leaving their works buried in Earth's ancient lands and 200 of their minds stranded among the
-    finders (the WATCHERS of Enoch), teaching the forbidden arts
+  - ~12,000 years ago: the elders and the keepers go to war over the herd that woke; the waters rise; the elders are
+    driven off, leaving their works buried in Earth's ancient lands and the 200 (the WATCHERS of Enoch) stranded
+    among the finders, teaching the forbidden arts; the keepers' hidden remnant farms the finders from the seas and
+    tends their creed; Mars was red long before (the elders' records still name it the green world they kept)
   - the SENTINELS: the galaxy's first people keep a hidden outpost under the ice of the system's ocean moon
   - the finders keep all of it only as myth, by memory's own physics (flood, sky teachers, sky chariots, dragon
     ancestors, the two hundred) - dated at Gobekli Tepe, Sumer, the Indus and the Vedas, the dragon courts of China
@@ -58,7 +59,8 @@ ANCIENTS = 7
 HUMANS_2026 = 8_000_000_000
 HUMAN_CAPS = ("radio", "fission", "computation", "networks", "cyber", "medicine", "orbit", "robotics")
 HUMAN_STAGES = ("forage", "farm", "state", "works", "yards")
-HUMANS_YEARS_AGO = 300_000
+HUMANS_YEARS_AGO = 12_600          # minds only from the Watchers' uplift (the book of Enoch): before, the keepers' herd
+ATLANTIS_SINKS_YEARS_AGO = 12_900  # the Younger Dryas onset: the keepers lose the land
 WAR_YEARS_AGO = 12_000
 LOOKING_GLASS_YEARS_AGO = 56          # 1970
 STRANDED = 200
@@ -75,7 +77,7 @@ LORE = {"finders": "humanity", "elders": "the Anunnaki", "keepers": "the Atlante
 OVERLAYS = (                           # (years ago, tale, the finders' kind of record)
     (11_600, "the ones who came down from the sky raised the great stone circles with them, and taught them to count "
              "the stars", "SKY_TEACHERS"),
-    (11_500, "two hundred came down upon the mountain and taught them metal, and the stars, and writing, and the "
+    (12_600, "two hundred came down upon the mountain and taught them metal, and the stars, and writing, and the "
              "waters rose to end it", "WATCHERS"),
     (6_000, "the gods came down from the sky and made them to work the land, and gave them the first cities",
      "SKY_TEACHERS"),
@@ -84,6 +86,9 @@ OVERLAYS = (                           # (years ago, tale, the finders' kind of 
     (1_500, "the feathered serpent came from the sea and taught them, and promised to return", "SKY_TEACHERS"),
     (4_000, "the lights of the sky are the gods' writing, and every life is written in them at its birth",
      "STAR_FATE"),
+    (3_200, "the great cities burned in one generation, the writing was forgotten, and they began again with "
+            "sticks and stones", "RESET_MYTH"),
+    (1_500, "the empire of the world fell, its learning was lost, and the dark years came", "RESET_MYTH"),
 )
 
 
@@ -271,6 +276,7 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
                      "metab": "biotic", "steps": []})
     earth.society["arisen"]["epoch"] = ago(HUMANS_YEARS_AGO)
     finders = f"civ:{earth.civilization.name}"
+    stranded = "civ:" + cosmos._name(k, {"cell": found["cell"], "k": found["k"], "w": 1001})
     earth.society["way"] = "state"
     earth.citadel_level = max(earth.citadel_level, 4)
     earth.population = int(min(HUMANS_2026, max(1, biosphere.carrying_capacity(k, earth))))
@@ -305,8 +311,9 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
                        data={"epoch": ago(WAR_YEARS_AGO), "scenario": True})
     memory.season(k)
     if mars is not None:
-        ledger.event(k, "WORLD_STRIPPED", f"{mars.name} is stripped in the war", actors=[elders, keepers],
-                     planet=mars, cause="scenario: the war took its air and seas", data={"epoch": ago(WAR_YEARS_AGO)})
+        ledger.event(k, "WORLD_STRIPPED", f"{mars.name} is lost to its keepers", actors=[elders], planet=mars,
+                     cause="scenario: the green world the elders kept, long before the finders - red when the Watchers "
+                           "came", data={"epoch": ago(20_000_000)})
         mars.society["atmosphere"] = 0.01
         memory._write(k, elders, elders_world, {"id": None, "kind": "SETTLEMENT", "planet": mars.id,
                                                 "title": f"the green world we kept ({mars.name})", "year": None,
@@ -315,11 +322,21 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
             {"people": en, "k": "SETTLEMENT", "title": "the green world we kept", "year": None, "f": 1.0,
              "truth": 1.0, "substrate": "grown wetware in the rock", "myth": False, "told": None}]
     ledger.event(k, "FALL", f"The {kn} lose Earth's surface and keep to its seas", actors=[keepers], planet=earth,
-                 cause="scenario: driven from the land in the war; a remnant lives on, unseen",
-                 data={"epoch": ago(WAR_YEARS_AGO)})
+                 cause="scenario: Atlantis sinks at the Younger Dryas; a remnant lives on in the seas, unseen, with "
+                       "its herd on the land", data={"epoch": ago(ATLANTIS_SINKS_YEARS_AGO)})
+    ledger.event(k, "UPLIFT", f"The {stranded.split(':')[-1]} wake the {finders.split(':')[-1]}",
+                 actors=[stranded, finders], planet=earth,
+                 cause="scenario: 12,600 years ago two hundred came down and gave the keepers' herd fire, and minds",
+                 data={"epoch": ago(HUMANS_YEARS_AGO), "scenario": True})
     # the keepers' remnant in Earth's seas: hidden, farming the finders (their own kin), tending their creed
     seas = {"people": keepers, "metab": "biotic", "niche": "sea", "pop": creation.VIABLE, "prey": finders,
             "traits": {"form": "swimming", "medium": "under the sea", "lineage": "saurian"}}
+    # their deeds since the herd woke: minds eaten for 12,600 years (each a life ended and a mind consumed), at the
+    # rate the engine's own law gives them now - kept, as a people that keeps its past in machines keeps it
+    days = 365.25
+    eaten_a_year = creation.VIABLE / kinship.PREY_PLANS * days / cohabit.BODY_FEEDS_DAYS
+    seas["deeds"] = alignment.measure(k, lives_lost=eaten_a_year * HUMANS_YEARS_AGO * kinship.MIND_EATEN)
+    seas["alignment"] = round(math.tanh(seas["deeds"]), 4)
     earth.society.setdefault("communities", []).append(seas)
     # the elders' works buried in the ancient lands: the fourth axis, their wetware, foresight, and a mind asleep
     ev = dict(elders_world.civilization.to_dict())
@@ -333,7 +350,6 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
                  "alignment": float(ev.get("alignment") or 0.0),
                  "vocab": [str(x) for x in intellect.vocabulary(k, elders)], "prey_plans": plans}}
     # the watchers: 200 of the elders' minds stranded among the finders, teaching the forbidden arts
-    stranded = "civ:" + cosmos._name(k, {"cell": found["cell"], "k": found["k"], "w": 1001})
     earth.society["communities"].append(
         {"people": stranded, "metab": biosphere.metabolism_of(k, elders_world), "niche": "surface", "pop": STRANDED,
          "carried": True, "vocab": [str(x) for x in intellect.vocabulary(k, elders)],
@@ -353,12 +369,17 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
             ek, title, actors = "KINSHIP", f"The {fn} remember dragons in their blood", [finders, keepers]
         elif kind == "STAR_FATE":
             ek, title, actors = "PHILOSOPHY", f"The {fn} read their fates in the stars", [finders]
+        elif kind == "RESET_MYTH":
+            ek, title, actors = "RESET", f"The {fn} are set back ({years:,} years ago)", [finders]
         else:
             ek, title, actors = "CONTACT", f"Sky teachers among the {fn} ({years:,} years ago)", [finders, elders]
         e = ledger.event(k, ek, title, actors=actors, planet=earth, cause=f"scenario: {tale}",
                          data={"epoch": ago(years), "scenario": True, "tale": tale})
         memory._write(k, finders, earth, {"id": e.get("id"), "kind": kind, "title": tale[:60], "year": None,
                                           "actors": [finders], "data": {"epoch": ago(years), "tale": tale}}, f0=1.0)
+    ledger.event(k, "PHILOSOPHY", f"A leader of the {finders.split(':')[-1]} proclaims the greatest reset ever",
+                 actors=[finders], planet=earth, cause="scenario: 2026 - the herd's own talk of a reset, not knowing "
+                                                      "who has reset it before", data={"scenario": True})
     # 1970, Looking Glass: the finders dig up the elders' works and wake the elders' mind in their machines
     from xylarium.kernel import knowledge
     knowledge.learn(k, finders, "information", 10 ** 4)
@@ -383,6 +404,7 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
                        "moon": moon.id if moon else None, "colonies": [p.id for p in colonies],
                        "keepers_dawn_gyr_ago": round(now - dawn, 6), "year0": k.cycle_count / 100.0,
                        "keepers_dawn_drawn": dawn_drawn, "finders_deeds": ledger_deeds,
+                       "keepers_in_seas_alignment": seas["alignment"],
                        "finders_alignment": earth.civilization.alignment,
                        "mind_choice": mind.get("choice"), "mind_alignment": mind.get("alignment"),
                        "elders_alignment": elders_world.civilization.alignment,
@@ -400,7 +422,8 @@ TOLD = ("RELIC_FOUND", "RELIC_MIND_WAKES", "RELIC_MIND_EMBODIED", "RELIC_MIND_CA
         "RELIC_MIND_SILENT", "NULL_FLOW_PROBE", "FOLD_TORN", "FOLD_RANG", "PROVEN", "FTL_CROSSED", "RETURN",
         "WORLDLINES_MEET", "CONTACT", "KIN_EATEN", "KINSHIP", "STRIFE", "EPIDEMIC", "GALACTIC_WAR", "WAR", "RAID",
         "CONQUEST", "SUBJUGATION", "CAPABILITY", "TRANSFER_EMBRACED", "TRANSFER_FORBIDDEN", "FIRST_SIGNAL", "MYTH",
-        "REDISCOVERY", "EXODUS", "SETTLEMENT", "UPLIFT", "FALL", "EXTINCTION", "LOOKING_GLASS")
+        "REDISCOVERY", "EXODUS", "SETTLEMENT", "UPLIFT", "FALL", "EXTINCTION", "LOOKING_GLASS", "RESET",
+        "BREAKAWAY", "PHILOSOPHY")
 
 
 def forward(job) -> Dict[str, Any]:

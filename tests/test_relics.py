@@ -155,6 +155,49 @@ class TestEarthLaws(unittest.TestCase):
         relics._probe(self.k, self.who, [self.p], {self.who: [self.p]})
         self.assertLess(seen[1], seen[0])                                  # the projection hides the risk
 
+    def test_a_dark_keeper_sets_back_a_herd_that_learns_too_much(self):
+        self._always()
+        knowledge.learn(self.k, self.who, "information", 10 ** 7)
+        technology.stats(self.k)["of"].setdefault(self.who, {}).update({"fission": 1, "computation": 1})
+        self.p.civilization.dogma = 0.0
+        c = {"people": "civ:Keepers", "metab": "biotic", "pop": 500, "niche": "sea", "prey": self.who,
+             "alignment": -0.5, "deeds": -0.55}
+        cohabit.communities(self.p).append(c)
+        before = self.p.population
+        cohabit._reset(self.k, self.p, c)
+        self.assertLess(self.p.population, before)
+        self.assertFalse(technology.stats(self.k)["of"][self.who])            # back to sticks and stones
+        self.assertGreater(self.p.civilization.dogma, 0.0)
+        kinds = [e["kind"] for e in history.stats(self.k)["recent"]]
+        self.assertIn("RESET", kinds)
+
+    def test_a_light_keeper_never_sets_its_herd_back(self):
+        self._always()
+        knowledge.learn(self.k, self.who, "information", 10 ** 7)
+        c = {"people": "civ:Keepers", "metab": "biotic", "pop": 500, "niche": "sea", "prey": self.who,
+             "alignment": 0.5}
+        cohabit.communities(self.p).append(c)
+        before = self.p.population
+        cohabit._reset(self.k, self.p, c)
+        self.assertEqual(self.p.population, before)
+
+    def test_the_few_who_hold_foresight_break_away(self):
+        from xylarium.kernel import strategy
+        self._always()
+        intellect.stats(self.k)["vocab"][self.who] = list(intellect.BASE) + list(C.STACK_OPS) + list(C.HYPER_OPS)
+        intellect.stats(self.k).setdefault("gauge", {})[self.who] = {"4": 1}
+        technology.stats(self.k)["of"].setdefault(self.who, {})["foresight"] = 1
+        real = strategy._worths
+        strategy._worths = lambda *a, **kw: {"reach": 1000.0}
+        self.addCleanup(lambda: setattr(strategy, "_worths", real))
+        before = self.p.population
+        line = relics._breakaway(self.k, self.who, [self.p])
+        self.assertIsNotNone(line)
+        new = relics.stats(self.k)["broke_away"][self.who]
+        self.assertTrue(mastery.crossed(self.k, new))
+        self.assertFalse(technology.has(self.k, self.who, "foresight"))        # left behind without it
+        self.assertLess(self.p.population, before)
+
 
 if __name__ == "__main__":
     unittest.main()

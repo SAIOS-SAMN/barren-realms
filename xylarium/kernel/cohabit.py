@@ -27,6 +27,7 @@ against what they would take; the newcomers weigh the room. Communities make the
 other's closest contacts (contact.py).
 """
 
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import FOOD_PER_THOUSAND, METABOLIC_WASTE, STAPLES
@@ -143,6 +144,7 @@ def quarter(kernel: Any) -> List[str]:
                 if c.get("prey") and c["prey"] == knowledge.holder_of_planet(p) and p.population > 1:
                     need = _hunt(kernel, p, c, pop, need)          # what it takes of its host, it need not grow
                     _steer(kernel, p, c)                            # and a herd that asks no questions
+                    _reset(kernel, p, c)                            # and a herd that learns too much is set back
                 grown = staples.add(p, staple, min(need, _need_q(k)), "harvest") if staple != "ORE" else \
                     _graze(p, min(need, _need_q(k)))
                 eaten = staples.take(p, staple, need, "eaten")
@@ -218,6 +220,61 @@ def _steer(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
     d = float(getattr(civ, "dogma", 0.0) or 0.0)
     civ.dogma = round(min(1.0, d + (1.0 - d) * fam * season), 4)
     stats(kernel)["steered"] = stats(kernel).get("steered", 0) + 1
+
+
+RESET_TOLL = 0.1                # the share of a herd a keeper's setting-back costs it (cities fall, the many die;
+                                # the bronze age's end - declared)
+RESET_EVERY_GENERATIONS = 10.0  # a keeper cannot set its herd back again before it has grown again (declared)
+
+
+def _reset(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
+    """A keeper whose herd learns enough to find it sets the herd back: its works fall, its machines and writing are
+    lost, its knowledge and its mathematics beyond the second axis go, and its creed is raised in what it lost -
+    weighed by the keeper's council (its threat: what the herd knows and does not believe, against what the
+    keeper loses of its food; only as far as the keeper leans Dark). The herd regrows; a keeper waits a span of the
+    herd's generations before it can do it again."""
+    from xylarium.config import KNOWLEDGE_UNIT
+    from xylarium.kernel import (alignment, decide, fertility, history, intellect, knowledge, laws, memory,
+                                 technology)
+    civ = getattr(planet, "civilization", None)
+    herd = c.get("prey")
+    if civ is None or not herd:
+        return
+    gen = fertility.generation_years(fertility.strategy(kernel, planet))
+    if kernel.cycle_count - int(c.get("reset_cycle", -10 ** 12)) < RESET_EVERY_GENERATIONS * gen * 100:
+        return
+    dark = max(0.0, -float(c.get("alignment", 0.0)))
+    info = laws.mastery(knowledge.experience(kernel, herd, "information"), KNOWLEDGE_UNIT)
+    threat = info * (1.0 - float(getattr(civ, "dogma", 0.0) or 0.0))
+    if dark <= 0.0 or threat <= 0.0:
+        return
+    sc = alignment.scales(kernel)
+    lives = planet.population * sc["sol"] / max(1.0, sc["lives"])
+    m = dict(decide.mind(kernel, c.get("metab")), holder=c["people"])
+    if decide.choose(kernel, [decide.option("reset", lives * RESET_TOLL, lives * threat * dark)], m,
+                     c["people"], "reset") is None:
+        return
+    c["reset_cycle"] = kernel.cycle_count
+    lost = int(planet.population * RESET_TOLL)
+    planet.population -= lost
+    held = technology.stats(kernel)["of"].get(herd, {})
+    gone = sorted(held)
+    held.clear()                                          # back to sticks and stones
+    planet.citadel_level = max(0, planet.citadel_level - 2)
+    for d, v in list(knowledge.stocks(kernel, herd).items()):
+        knowledge.stocks(kernel, herd)[d] = v * (1.0 - threat)
+    v = intellect.stats(kernel)["vocab"].get(herd)
+    if v is not None:
+        intellect.stats(kernel)["vocab"][herd] = [x for x in v if intellect.RANK_OF.get(intellect.norm(x), 2) <= 2]
+    memory._burn(kernel, herd, planet)
+    civ.dogma = round(min(1.0, float(civ.dogma or 0.0) + threat * (1.0 - float(civ.dogma or 0.0))), 4)
+    c["deeds"] = float(c.get("deeds", 0.0) or 0.0) + alignment.measure(kernel, lives_lost=lost)
+    c["alignment"] = round(math.tanh(c["deeds"]), 4)
+    stats(kernel)["resets"] = stats(kernel).get("resets", 0) + 1
+    history.event(kernel, "RESET", f"The {herd.split(':', 1)[-1]} are set back to sticks and stones",
+                  actors=[herd], planet=planet, magnitude=lost,
+                  cause="their cities fall, their writing and their machines are lost; no one among them knows why",
+                  data={"lost": gone, "threat": round(threat, 3)})
 
 
 def _teach(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
