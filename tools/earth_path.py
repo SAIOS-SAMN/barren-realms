@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 SNAP = os.environ.get("EARTH_SNAPSHOT", "runs/saga/2026.json")
 BURN_GTC_NOW = 10.0             # the finders' burning now, a year (Global Carbon Project, ~2015-2024)
-SENSITIVE = 300.0               # a food chain's warmth sensitivity over its people's own (the "sensitive" method)
+SENSITIVE = float(os.environ.get("SENSITIVE", "300"))               # a food chain's warmth sensitivity over its people's own (the "sensitive" method)
 
 
 def _load():
