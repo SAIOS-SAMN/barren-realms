@@ -1157,7 +1157,7 @@ SOL_CORE_WORLDS = [
               "locked": False, "phase0": "0/1"}},
     # Luna orbits Terra, not the Sun: it shares Terra's year; tidally locked to its planet
     {"name": "Luna Yards", "type": "BARREN", "population": 20000, "citadel": 2, "moon_of": "planet_1", "habitats": 3,
-     "body": {"q": "1/1", "radius": "3/11", "mass": "27/1331", "giant": False, "day": "273/10", "tilt": 7,
+     "body": {"q": "1/1", "radius": "3/11", "mass": "123/10000", "giant": False, "day": "273/10", "tilt": 7,
               "locked": True, "phase0": "0/1", "parent": "planet_1"}},
 ]
 
