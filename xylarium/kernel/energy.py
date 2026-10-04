@@ -205,7 +205,8 @@ def supply(kernel: Any, planet: Any) -> Dict[str, int]:
     out = {k: int(v * MILLI) for k, v in harvest.generation(kernel, planet).items() if v > 0}
     need = need_eu(planet, kernel)
     short = need - sum(out.values()) / MILLI
-    if short > 0 and tier(planet) >= 1 and burns(kernel, planet):
+    if short > 0 and tier(planet) >= 1 and burns(kernel, planet) and planet.society.get("burn", 1):   # its council's
+                                                                                                         # choice (energy_path)
         burn = min(int(math.ceil(short / CARBON_EU)), int(planet.element_reserves.get("C", 0)))
         if burn > 0:
             from xylarium.kernel import matter
@@ -227,6 +228,8 @@ def season(kernel: Any) -> List[str]:
         gen = supply(kernel, p)
         for kind, meu in gen.items():
             source(kernel, kind, meu)
+        from xylarium.kernel import energy_path
+        energy_path.record_mix(p, gen)
         grid = int(p.society.get("grid_meu", 0)) + sum(gen.values())
         need = int(need_eu(p, kernel) * MILLI)
         book[p.id] = {"planet": p, "grid": grid, "need": need, "used": 0}

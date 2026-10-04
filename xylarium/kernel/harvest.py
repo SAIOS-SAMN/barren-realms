@@ -381,6 +381,8 @@ def season(kernel: Any) -> List[str]:
                 continue
             if not demography.self_governed(p, kernel) or not demography.governed(p):
                 continue
+            from xylarium.kernel import energy_path
+            energy_path.weigh(kernel, p)                     # burn its stock this year, or go without
             opts = _options(kernel, p)
             pick = decide.choose(kernel, opts, decide.mind_of_planet(kernel, p), p.id, "harvest") if opts else None
             if pick is not None:
