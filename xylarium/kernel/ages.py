@@ -303,6 +303,52 @@ def wake_when(kernel: Any, player_id: str, max_years: int = 50) -> List[str]:
     return events or [f"{max_years} quiet years pass."]
 
 
+SLEEP_YEARS = 20               # clock years a look-away may take before the watcher looks back regardless (a guard)
+
+
+def sleep(kernel: Any, player_id: str, deep_years: float) -> List[str]:
+    """The progenitor looks away from its people for `deep_years` of its own time (clocks.look_away): the annals
+    carry it across at the level of history. Returns what the chronicle recorded of it - and of the galaxy - meanwhile."""
+    from xylarium.kernel import clocks, history, knowledge
+    p = homeworld(kernel, player_id)
+    if p is None or p.civilization is None:
+        return ["Your people is gone; there is no one to look away from."]
+    who = knowledge.holder_of_planet(p)
+    until = clocks.look_away(kernel, who, deep_years)
+    if until is None:
+        return ["Your people keeps no clock of its own yet."]
+    hs = history.stats(kernel)
+    first_id, start, was = hs["next"], kernel.cycle_count, clocks.now(kernel, who)
+    while kernel.cycle_count - start < SLEEP_YEARS * 100:
+        kernel.tick_simulation()
+        if clocks.away(kernel, who) is None and kernel.cycle_count % 100 == 1:
+            break                                             # looked back, and the annals have carried it the year
+        if p.civilization is None:
+            break
+    seen = [e for e in hs["recent"] if int(e["id"][2:]) > first_id]
+    mine = [e for e in seen if who in e.get("actors", [])]
+    galaxy = [e for e in seen if who not in e.get("actors", []) and e["kind"] in GALAXY_KINDS]
+    lived = (clocks.now(kernel, who) - was) * 1e9
+    from xylarium.kernel import annals, cosmos
+    held = (annals.stats(kernel)["of"].get(who) or {}).get("dominion")
+    out = [f"{lived:,.0f} years of your people's own time pass; the galaxy is {cosmos.deep_gyr(kernel):.4f} Gyr old."
+           + (f" Your people holds {held:,} worlds." if held and held > 1 else "")]
+    told: Dict[str, int] = {}
+    for e in mine:
+        told[e["title"]] = told.get(e["title"], 0) + 1
+    out += [f"  {t}" + (f" (x{n})" if n > 1 else "") for t, n in list(told.items())[-12:]]
+    if galaxy:
+        out.append(f"  Meanwhile in the galaxy ({len(galaxy)} events): " +
+                   "; ".join(e["title"] for e in galaxy[-6:]))
+    if p.civilization is None or p.population <= 0:
+        out.append("Your people has fallen.")
+    return out
+
+
+GALAXY_KINDS = ("ASCENT", "EMERGENCE", "GALACTIC_WAR", "FALL", "DOMINION", "FEDERATION_FOUNDED", "CONTACT",
+                "FIRST_SIGNAL", "EXTINCTION", "UPLIFT", "PACT")
+
+
 def _since(logs: Any, last: Any) -> List[str]:
     """The lines appended to a (bounded) log after `last` (found by identity, from the end)."""
     lines = list(logs)

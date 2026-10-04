@@ -168,6 +168,45 @@ def fold(kernel: Any, who: str, from_sector: int, to_sector: int) -> None:
     stats(kernel)["folds"] += 1
 
 
+def look_away(kernel: Any, who: str, deep_years: float) -> Optional[float]:
+    """A watcher (a progenitor) looks away for a span of deep years of its people's own time: the whole galaxy is
+    filmed at the coarsest frame that holds the span in a clock year - every place and the galaxy's own clock - and
+    the annals carry every people across it at the level of history, by the same bridges and the same hazards as
+    ever. The camera's speed changes nothing it films: only how much of it is seen year by year. Returns the
+    people's own now (Gyr) when the span ends, or None."""
+    from xylarium.kernel import cosmos
+    rec = _people(kernel, who)
+    if rec is None or deep_years <= 0:
+        return None
+    until = now(kernel, who) + deep_years / 1e9
+    stats(kernel).setdefault("away", {})[who] = until
+    for sid in list(stats(kernel)["places"]):
+        _set_place_rate(kernel, int(sid), max(float(stats(kernel)["places"][sid]["segs"][-1][2]), float(deep_years)))
+    cosmos.set_rate(kernel, max(cosmos.ruler(kernel), float(deep_years)))
+    return until
+
+
+def away(kernel: Any, who: Optional[str]) -> Optional[float]:
+    """When a people's watcher looks back (its own now, Gyr), or None if it is watched year by year."""
+    return (stats(kernel).get("away") or {}).get(who) if _on(kernel) and who else None
+
+
+def away_pace(kernel: Any) -> Optional[float]:
+    """While a watcher has looked away: the deep years a clock year must hold to finish its span in the coming
+    year (the largest over watchers). A watcher whose span is done looks back. None when all are watching."""
+    if not _on(kernel):
+        return None
+    st = stats(kernel).get("away") or {}
+    left = []
+    for who, until in list(st.items()):
+        rest = (until - now(kernel, who)) * 1e9 if _people(kernel, who) is not None else 0.0
+        if rest <= 0:
+            st.pop(who, None)                                 # its watcher looks back
+        else:
+            left.append(rest)
+    return max(left) if left else None
+
+
 def _pace(kernel: Any, wait: Optional[float]) -> float:
     from xylarium.kernel import cosmos, tempo
     if wait is None:
@@ -210,8 +249,10 @@ def season(kernel: Any) -> List[str]:
         for b in got:
             if b != a and b not in (st["peoples"].get(a) or {}).get("links", {}):
                 link(kernel, a, b, "the light of one reached the other")
+    coarse = away_pace(kernel)                                # a watcher looking away films every place coarsely
     for sid in list(st["places"]):
-        _set_place_rate(kernel, int(sid), paces.get(sid, cosmos.ceiling(kernel)))
+        pace = paces.get(sid, cosmos.ceiling(kernel))
+        _set_place_rate(kernel, int(sid), max(pace, coarse) if coarse else pace)
     return []
 
 

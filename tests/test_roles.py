@@ -177,3 +177,19 @@ class TestRealmDashboard(unittest.TestCase):
         self.assertIn("Commonwealth", roles.set_take(k, "player_1", "commonwealth"))
         self.assertTrue(all(w["rent"] == 0.0 for w in roles.realm(k, "player_1")["worlds"]))
         self.assertIsNone(roles.realm(k, "nobody"))
+
+
+class TestDeepTime(unittest.TestCase):
+    def test_a_progenitor_looks_away_and_the_galaxy_lives_an_age_in_a_few_clock_years(self):
+        from xylarium.kernel import clocks, cosmos, knowledge
+        random.seed(3)
+        k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        who = knowledge.holder_of_planet(ages.homeworld(k, "player_1"))
+        mine0, galaxy0, cyc0 = clocks.now(k, who), cosmos.deep_gyr(k), k.cycle_count
+        lines = ages.sleep(k, "player_1", 1e6)
+        self.assertIn("years of your people's own time pass", lines[0])
+        self.assertGreaterEqual((clocks.now(k, who) - mine0) * 1e9, 1e6 * 0.99)      # its own time: the whole span
+        self.assertGreater((cosmos.deep_gyr(k) - galaxy0) * 1e9, 5e5)                 # the galaxy moved with it
+        self.assertLessEqual(k.cycle_count - cyc0, ages.SLEEP_YEARS * 100)
+        self.assertIsNone(clocks.away(k, who))                                      # it has looked back
+        self.assertIsNone(clocks.away_pace(k))

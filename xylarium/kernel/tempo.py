@@ -62,7 +62,9 @@ def desired(kernel: Any) -> float:
 def wake(kernel: Any) -> None:
     """A mind has arisen: the clock is set to the living at once - not a year later, when a year at the galaxy's
     pace would already have carried the new people through its whole history."""
-    from xylarium.kernel import cosmos
+    from xylarium.kernel import clocks, cosmos
+    if clocks.away_pace(kernel):
+        return                                                # its watcher has looked away; the annals carry it
     want = desired(kernel)
     if want < cosmos.ruler(kernel):
         cosmos.set_rate(kernel, want)
@@ -75,6 +77,10 @@ def season(kernel: Any) -> List[str]:
     if not cosmos.is_cosmic(kernel) or (kernel.cycle_count // 25) % 4:
         return []
     want = desired(kernel)
+    from xylarium.kernel import clocks
+    coarse = clocks.away_pace(kernel)
+    if coarse:
+        want = max(want, coarse)                              # a watcher has looked away: the galaxy is filmed coarsely
     now = cosmos.ruler(kernel)
     if not cosmos.stats(kernel).get("tempo") or max(want / now, now / want) >= 2.0:
         cosmos.set_rate(kernel, want)

@@ -52,6 +52,6 @@ def begin(seed: int, name: str, player_id: str = "player_1", save: Optional[Call
         return
     print(c_green(f"Your people wakes in year {kernel.cycle_count // 100} of the clock."))
     steward_ui.progenitor(kernel, player_id)               # shape its genome at its dawn
-    print(c_gray("Its councils choose; they heed you. [Y] urges seeding young worlds, [V] uplifting younger minds, "
-                 "[H] writes your chronicle."))
+    print(c_gray("Its councils choose; they heed you. [T] looks away while an age passes (a thousand to a billion "
+                 "years), [Y] urges seeding young worlds, [V] uplifting younger minds, [H] writes your chronicle."))
     steward_ui.run(kernel, player_id, title, save=(lambda: save(kernel)) if save else None, seat="progenitor")

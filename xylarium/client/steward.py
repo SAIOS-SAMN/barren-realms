@@ -76,7 +76,8 @@ def _menu(kernel: Any, pid: str, seat: Optional[str] = None) -> None:
     if s["way"] == "state":
         opts.append(("W", "Speak for great works"))
     if seat == "progenitor":
-        opts += [("Y", "Counsel seeding young worlds"), ("V", "Counsel uplifting younger minds"),
+        opts += [("T", "Look away: let an age pass (a thousand to a billion years)"),
+                 ("Y", "Counsel seeding young worlds"), ("V", "Counsel uplifting younger minds"),
                  ("H", "Write into your chronicle")]
     if kernel.get_player(pid) is not None:
         opts.append(("C", "Return to your ship"))
@@ -84,6 +85,10 @@ def _menu(kernel: Any, pid: str, seat: Optional[str] = None) -> None:
         opts.append(("C", "Take ship as your people's captain (the lanes open; HOMEWORLD brings you back)"))
     opts.append(("Q", "Save and quit"))
     print("  " + "   ".join(f"{c_gold('[' + k + ']')} {t}" for k, t in opts))
+
+
+AGES = (("a thousand years", 1e3), ("ten thousand", 1e4), ("a hundred thousand", 1e5), ("a million", 1e6),
+        ("ten million", 1e7), ("a hundred million", 1e8), ("a billion", 1e9))
 
 
 def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bool = False,
@@ -94,7 +99,7 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
         _screen(kernel, pid)
         _menu(kernel, pid, seat)
         try:
-            cmd = input(c_gold("Steward > ")).strip().upper()
+            cmd = input(c_gold(("Progenitor" if seat == "progenitor" else "Steward") + " > ")).strip().upper()
         except (KeyboardInterrupt, EOFError):
             cmd = "Q"
         if cmd == "Q":
@@ -108,8 +113,15 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             from xylarium.kernel import roles
             print(roles.render_progress(roles.progress(kernel, pid)))
             continue
-        if seat == "progenitor" and cmd in ("Y", "V", "H"):
-            if cmd == "Y":
+        if seat == "progenitor" and cmd in ("T", "Y", "V", "H"):
+            if cmd == "T":
+                print("  " + "   ".join(f"{c_gold(f'[{i}]')} {n}" for i, (n, _y) in enumerate(AGES, 1)))
+                raw = input(c_gold("How long [3] > ")).strip() or "3"
+                if raw.isdigit() and 1 <= int(raw) <= len(AGES):
+                    print(c_gray("  You look away..."))
+                    for line in ages.sleep(kernel, pid, AGES[int(raw) - 1][1]):
+                        print("  " + line)
+            elif cmd == "Y":
                 print("  " + ages.act(kernel, pid, "seed"))
             elif cmd == "V":
                 print("  " + ages.act(kernel, pid, "uplift"))

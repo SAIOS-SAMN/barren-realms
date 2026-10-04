@@ -414,7 +414,10 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
         worlds = relations._peoples(kernel).get(holder, [home])
         s = (syntropy.stats(kernel)["peoples"].get(holder) or {})
         from xylarium.kernel import guidance
+        from xylarium.kernel import annals
+        held = (annals.stats(kernel)["of"].get(holder) or {}).get("dominion") or 0
         out.update(people=home.civilization.name, worlds=len(worlds), population=sum(w.population for w in worlds),
+                   dominion=held if held > len(worlds) else None,
                    crossed=mastery.crossed(kernel, holder), syntropy_slope=s.get("slope"),
                    ledger=_ledger(home.civilization), seen_by_others=_seen_by_others(kernel, holder),
                    galaxy_seeded=guidance.stats(kernel).get("seeded", 0),
@@ -428,7 +431,7 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
 def render_progress(p: Dict[str, Any]) -> str:
     """The progress screen, as text."""
     lines = [f"=== PROGRESS: {p['role'].upper()} - year {p['year']:,} ==="]
-    for key, label in (("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"),
+    for key, label in (("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"), ("dominion", "Worlds held (at history's scale)"),
                        ("population", "Population"), ("treasury", "Treasury"), ("credits", "Credits"),
                        ("score", "Score"), ("rank", "Rank"), ("bounty", "Bounty on you"), ("citadels", "Citadels"),
                        ("shields", "Shields"), ("fighters", "Fighters"), ("strife", "Worlds that have risen"),
