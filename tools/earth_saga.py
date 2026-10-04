@@ -73,6 +73,13 @@ HUMAN_DEEDS = ((1800, 40, 0), (1900, 5, 0), (1910, 21, 0), (1920, 10, 0), (1930,
                (2010, 1.5, 80), (2020, 0.6, 50))
 # how many the finders were, years before 2026 (round figures from the standard reconstructions: McEvedy & Jones,
 # HYDE): their history is the work of every life lived in it
+# the finders' industry, measured (Global Carbon Project; IEA; BGR/BP reserve tables), round figures: fossil carbon
+# burnt by decade (GtC), the carbon still in the ground they can reach (GtC), and the power they draw now (W)
+HUMAN_CARBON_GTC = ((1750, 0.5), (1850, 0.3), (1860, 0.6), (1870, 1.0), (1880, 1.5), (1890, 2.3), (1900, 4.0),
+                    (1910, 5.2), (1920, 6.0), (1930, 6.4), (1940, 8.0), (1950, 13.0), (1960, 22.0), (1970, 40.0),
+                    (1980, 52.0), (1990, 63.0), (2000, 76.0), (2010, 96.0), (2020, 60.0))
+HUMAN_RESERVE_GTC = 1000.0
+HUMAN_POWER_W = 1.9e13
 HUMANS_THEN = ((12_600, 4e6), (10_000, 5e6), (5_000, 1.4e7), (2_026, 2.0e8), (1_026, 3.0e8), (526, 4.5e8),
                (226, 1.0e9), (126, 1.6e9), (76, 2.5e9), (26, 6.1e9), (0, 8.0e9))
 STATES_YEARS_AGO = 5_000           # the first states: since then the finders have had a few to take from their many
@@ -316,6 +323,16 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     for decade, ended, saved in HUMAN_DEEDS:
         alignment.flow(earth.civilization, light=saved * 1e6 * scale, dark=ended * 1e6 * scale, why="recorded decades")
         ledger_deeds.append((decade, round(earth.civilization.alignment, 4), round(alignment.doctrine(earth.civilization), 4)))
+    # their industry, as measured, into their world: what it left in their sky is the world's own physics (waste.py)
+    from xylarium.kernel import energy, waste, worlds
+    for _, gtc in HUMAN_CARBON_GTC:
+        waste.burn(k, earth, gtc * 1e12)
+    earth.element_reserves["C"] = int(HUMAN_RESERVE_GTC * 1e12 * waste.FUELS["C"]["heat_j_per_kg"]
+                                      / (energy.CARBON_EU * waste.eu_joules()))
+    earth.society["waste"]["heat_w_m2"] = HUMAN_POWER_W / waste._area(worlds.state_of_planet(k, earth)["world"])
+    w_now = waste.assess(k, earth)
+    earth.society["waste_k"] = w_now["room"]
+    k.state.setdefault("saga_industry", {})["now"] = w_now
     # the war, 12,000 years ago (the Younger Dryas)
     mars = next((p for p in sun.planets[found["w"] + 1:] if p.planet_type not in ("GAS_GIANT", "ROGUE")
                  and getattr(p, "moon_of", None) is None), None)

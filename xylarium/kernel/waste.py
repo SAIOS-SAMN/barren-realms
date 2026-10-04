@@ -116,6 +116,30 @@ def room(kernel: Any, planet: Any, t_ratio: float) -> float:
     return math.exp(lf(x * t_ratio ** 4) - lf(x))
 
 
+def burn(kernel: Any, planet: Any, fuel_kg: float, fuel: str = "C") -> float:
+    """Fuel burnt on a world: its product kept in the world's air (bar added). For a history written at once."""
+    from xylarium.kernel import worlds
+    w = worlds.state_of_planet(kernel, planet)["world"]
+    spec = FUELS[fuel]
+    g = max(1e-6, float(w.get("g", 1.0))) * worlds.UNIT_G
+    added = fuel_kg * spec["per_kg"] * kept_share(w, spec["product"]) * g / _area(w) / worlds.BAR
+    rec = planet.society.setdefault("waste", {"air": {}, "heat_w_m2": 0.0})
+    rec["air"][spec["product"]] = rec["air"].get(spec["product"], 0.0) + added
+    return added
+
+
+def assess(kernel: Any, planet: Any, heat_w: Optional[float] = None) -> Dict[str, float]:
+    """What a world's waste does now: its temperature shift and what its people can still carry of themselves."""
+    from xylarium.kernel import worlds
+    w = worlds.state_of_planet(kernel, planet)["world"]
+    rec = planet.society.get("waste") or {"air": {}, "heat_w_m2": 0.0}
+    heat = rec.get("heat_w_m2", 0.0) if heat_w is None else heat_w / _area(w)
+    ratio = warming(w, rec.get("air", {}), heat)
+    return {"t_surf": round(float(w["t_surf"]), 2), "warming_k": round(float(w["t_surf"]) * (ratio - 1.0), 3),
+            "heat_w_m2": round(heat, 5), "room": round(room(kernel, planet, ratio), 6),
+            "kept_share": round(kept_share(w, "CO2"), 4), "added_bar": dict(rec.get("air", {}))}
+
+
 def season(kernel: Any) -> List[str]:
     """A season of the worlds' waste: what each people emitted, what its world kept, and what it cost the living."""
     from xylarium.kernel import biosphere, fertility, sustenance, worlds
