@@ -211,6 +211,88 @@ def _inherit(kernel: Any, people: str, ruler: str) -> None:
         ist.setdefault("gauge", {})[ruler] = dict(ist["gauge"][people])
 
 
+def realm(kernel: Any, player_id: str) -> Optional[Dict[str, Any]]:
+    """The ruler's dashboard, read from the laws: for each world it governs, its people, its treasury (in its own
+    money and in the reserve's), its defences, the share its few take against the most they can bear before the many
+    rise (rent.bearable), how many would rise now (society.stress), and its people's next threshold of history."""
+    from xylarium.kernel import annals, biosphere, fx, knowledge, mastery, rent, society
+    rec = stats(kernel).get("realms", {}).get(player_id)
+    if not rec:
+        return None
+    rows = []
+    for wid in rec["worlds"]:
+        w = kernel.get_planet(wid)
+        if w is None or w.owner_id != player_id:
+            continue
+        cur = getattr(w, "currency", "SOL") or "SOL"
+        t = int(w.treasury)
+        t_sol = t if cur == "SOL" or fx.ACTIVE_FX is None else int(fx.ACTIVE_FX.to_sol_value(cur, t))
+        s = society.stress(kernel, w) if w.civilization is not None else {}
+        rows.append({"id": w.id, "name": w.name, "sector": w.sector_id, "population": w.population,
+                     "room": int(biosphere.carrying_capacity(kernel, w)),
+                     "treasury": t, "currency": cur, "treasury_sol": t_sol, "shields": w.shields,
+                     "fighters": w.fighters, "citadel": w.citadel_level, "morale": int(w.morale),
+                     "rent": round(rent.of(w), 3), "bearable": round(rent.bearable(kernel, w), 3),
+                     "rising": s.get("rising"), "hunger": s.get("immiseration"),
+                     "levy": round(society.gauges(w)["levy"], 3),
+                     "line": max(society.gauges(w)["levy"], society.MOBILISED)})
+    cap = kernel.get_planet(rec["capital"])
+    holder = knowledge.holder_of_planet(cap) if cap is not None and cap.civilization is not None else rec["holder"]
+    stage = annals._stage(kernel, holder, cap) if cap is not None else None
+    nxt = None
+    if stage and stage != "crossed":
+        nxt = annals.STAGES[annals.STAGES.index(stage) + 1]
+    blocked = None
+    if nxt == "yards" and not annals._can_reach_orbit(kernel, holder, cap):
+        blocked = "its world holds it from the sky: neither its chemistry nor its atom reaches orbit"
+    elif nxt == "crossed" and not mastery.genome_ready(kernel, holder, [cap]):
+        blocked = "it does not yet know its own genome well enough to live between the stars"
+    return {"polity": rec["holder"].split(":", 1)[-1], "rule": rec["rule"], "capital": rec["capital"],
+            "stage": stage, "next": nxt, "blocked": blocked, "worlds": rows,
+            "treasury_sol": sum(r["treasury_sol"] for r in rows),
+            "population": sum(r["population"] for r in rows),
+            "at_risk": [r["name"] for r in rows if r["rising"] is not None and r["rising"] > r["line"]],
+            "crowded": [r["name"] for r in rows if r["population"] > r["room"]]}
+
+
+def render_realm(r: Dict[str, Any]) -> str:
+    """The realm dashboard, as text."""
+    lines = [f"=== REALM OF THE {r['polity'].upper()} ({r['rule']}) ===",
+             f"  {r['population']:,} people on {len(r['worlds'])} world(s); treasuries worth {r['treasury_sol']:,} SOL",
+             f"  History: {r['stage']}" + (f"  ->  next: {r['next']}" if r["next"] else "  (among the stars)")]
+    if r["blocked"]:
+        lines.append(f"  Held back: {r['blocked']}")
+    lines.append(f"  {'World':<18}{'Sector':>7}{'People':>12}{'Room':>12}{'Treasury':>16}{'Shld':>7}{'Ftr':>6}{'Cit':>4}"
+                 f"{'Take':>6}{'Max':>6}{'Rise':>6}{'Levy':>6}")
+    for w in r["worlds"]:
+        rise = f"{w['rising']:.2f}" if w["rising"] is not None else "-"
+        lines.append(f"  {w['name'][:17]:<18}{w['sector']:>7}{w['population']:>12,}{w['room']:>12,}"
+                     f"{w['treasury']:>11,} {w['currency']:<4}{w['shields']:>7,}{w['fighters']:>6,}{w['citadel']:>4}"
+                     f"{w['rent']:>6.2f}{w['bearable']:>6.2f}{rise:>6}{w['levy']:>6.2f}")
+    if r["at_risk"]:
+        lines.append("  More would rise than could be held down on: " + ", ".join(r["at_risk"]))
+    if r["crowded"]:
+        lines.append("  More people than their land can feed (they will starve back to its room unless fed from "
+                     "elsewhere): " + ", ".join(r["crowded"]))
+    lines.append("  Room = the people its land feeds. Take = the share your few take; Max = the most the many bear before they rise.")
+    return "\n".join(lines)
+
+
+def set_take(kernel: Any, player_id: str, rule: str) -> Optional[str]:
+    """The ruler changes how its realm is governed: the share its few take, on every world it holds."""
+    rec = stats(kernel).get("realms", {}).get(player_id)
+    form = next((f for f in RULE_FORMS if f["key"] == rule), None)
+    if not rec or form is None:
+        return None
+    for wid in rec["worlds"]:
+        w = kernel.get_planet(wid)
+        if w is not None and w.owner_id == player_id:
+            w.society["rent"] = form["rent"]
+            w.society["rent_set"] = True
+    rec["rule"] = form["key"]
+    return f"Your realm is now governed as {form['name']}: the few take {form['rent']:.0%}."
+
+
 def start_steward(seed: int, name: str, pick: int = 0, rule: str = "council",
                   gauges: Optional[Dict[str, float]] = None, natal: Optional[str] = None,
                   player_id: str = "player_1") -> Any:

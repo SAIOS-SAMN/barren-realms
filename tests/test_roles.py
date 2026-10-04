@@ -161,3 +161,19 @@ class TestPlaytestFixes(unittest.TestCase):
         before = cap.civilization.light
         sustenance.flow_civ(cap, light=10, why="work")
         self.assertGreater(cap.civilization.light, before)                         # a ruled world's deeds are its people's
+
+
+class TestRealmDashboard(unittest.TestCase):
+    def test_a_ruler_sees_its_realm_and_can_change_how_it_is_governed(self):
+        random.seed(5)
+        k = roles.start_steward(42, "Queen", pick=0, rule="throne")
+        r = roles.realm(k, "player_1")
+        self.assertEqual(len(r["worlds"]), len(roles.stats(k)["realms"]["player_1"]["worlds"]))
+        for w in r["worlds"]:
+            self.assertGreaterEqual(w["bearable"], 0.0)
+            self.assertGreaterEqual(w["room"], 0)
+        self.assertIn(r["stage"], ("forage", "farm", "state", "works", "yards", "crossed"))
+        self.assertIn("REALM OF THE", roles.render_realm(r))
+        self.assertIn("Commonwealth", roles.set_take(k, "player_1", "commonwealth"))
+        self.assertTrue(all(w["rent"] == 0.0 for w in roles.realm(k, "player_1")["worlds"]))
+        self.assertIsNone(roles.realm(k, "nobody"))

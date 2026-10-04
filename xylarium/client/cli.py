@@ -212,13 +212,14 @@ class TerminalClient:
         **{w: "BANKS" for w in ["BANKS", "BANKING", "FEDERATIONS", "FEDS", "CLEARING", "CENTRAL"]},
         # screens for the newer systems (client/screens.py)
         **{w: "ADVISOR" for w in ["?", "ADVISOR", "ADVICE", "WHAT", "OPPORTUNITIES", "HINT"]},
-        **{w: "REALMS" for w in ["REALMS", "REALM", "POLITY", "GOVERNMENT", "BUDGET", "GRANT"]},
+        **{w: "REALMS" for w in ["REALMS", "POLITY", "GOVERNMENT", "BUDGET", "GRANT"]},
         **{w: "WORKBENCH" for w in ["WORKBENCH", "DESIGN", "DRAFT", "BLUEPRINT"]},
         **{w: "DRIVE" for w in ["DRIVE", "DRIVES", "REFIT", "FUEL"]},
         **{w: "STATION" for w in ["STATION", "STATIONS", "RESORT", "TOURISM"]},
         **{w: "CHARTER" for w in ["CHARTER", "CHARTERS", "VIP", "LINER"]},
         **{w: "PEOPLES" for w in ["PEOPLES", "SPECIES", "FOOD", "SUSTENANCE"]},
         **{w: "PROGRESS" for w in ["PROGRESS", "STANDING", "SCORECARD"]},
+        **{w: "REALM" for w in ["REALM", "THRONE", "COURT", "DASHBOARD"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -259,7 +260,7 @@ class TerminalClient:
         print(c_gray("  Archaeology: RUINS (survey) │ DIG │ SHORE (dig + shoring) │ ARTIFACTS │ PERMIT (at Sol)"))
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))
         print(c_gray("  Lineage: [E]mpire mode │ FLEET │ STOCK │ BANKS │ CLONE (Sol vats) │ RETIRE"))
-        print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
+        print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALM (if you rule) │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
         try:
             from xylarium.kernel import advisor
             tip = advisor.best(self.kernel, self.player_id)

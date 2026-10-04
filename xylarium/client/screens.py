@@ -364,8 +364,42 @@ def prompt_progress(cli: Any) -> None:
     _ask("Enter to return > ")
 
 
+def prompt_realm(cli: Any) -> None:
+    """The ruler's dashboard: every world it governs, how near each is to rising, and how it is governed."""
+    from xylarium.kernel import roles
+    kernel, pid = cli.kernel, cli.player_id
+    while True:
+        r = roles.realm(kernel, pid)
+        if r is None:
+            print(c_gray("You rule no realm. (The Steward's seat is taken at a new game.)"))
+            return
+        print(roles.render_realm(r))
+        print(c_gray("  [R]ule (change how much your few take) | [W]orld (set course to one) | Enter to exit"))
+        cmd = (_ask("Realm > ") or "").upper()
+        if not cmd:
+            return
+        if cmd == "R":
+            for i, f in enumerate(roles.RULE_FORMS, 1):
+                print(f"  [{i}] {f['name']} - {f['blurb']}")
+            raw = _ask("Rule > ") or ""
+            if raw.isdigit() and 1 <= int(raw) <= len(roles.RULE_FORMS):
+                print(roles.set_take(kernel, pid, roles.RULE_FORMS[int(raw) - 1]["key"]))
+        elif cmd == "W":
+            name = (_ask("World name > ") or "").lower()
+            w = next((w for w in r["worlds"] if w["name"].lower().startswith(name)), None) if name else None
+            if w is not None:
+                path = kernel.find_path(kernel.get_player(pid).sector_id, w["sector"]) or []
+                for step in path[1:]:                       # warp there, hop by hop, until a hop is refused
+                    res = kernel.dispatch(pid, ActionType.MOVE, destination=step)
+                    if not res.success:
+                        cli._print_result(res)
+                        break
+                print(c_gray(f"  You are in sector {kernel.get_player(pid).sector_id}."))
+
+
 SCREENS: Dict[str, Callable[[Any], None]] = {
     "ADVISOR": prompt_advisor,
+    "REALM": prompt_realm,
     "PROGRESS": prompt_progress,
     "REALMS": prompt_realms,
     "WORKBENCH": prompt_workbench,
