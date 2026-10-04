@@ -4,11 +4,14 @@ Xylarium energy path: whether a people burns a stock its world laid down, or liv
 Burning is a choice, weighed once a year by a people's council like every other (decide.choose), on what the energy
 is worth and what it costs - as that council sees it:
 
-  WORTH     the shortfall burning covers (energy.value_short: the output it would lose without it), over the
-            council's horizon - but not past the stock's end, as far as it understands energy (a people that does not
-            know its stock is finite counts on it forever) - and more to its few than to its many: a concentrated
-            stock can be enclosed and held, its yield taken whole; light falls on everyone's ground. The few who
-            decide count it x (1 + their rent's share) (rent.py: what they take of the many's product).
+  WORTH     what burning spares it: the works that would carry its shortfall on its own light and heat (harvest.py:
+            the best field or core bore it could build, and the water-hydrogen it stores the surplus in) - put off
+            for as long as the stock lasts, as far as it understands energy (a people that knows the stock ends
+            within its horizon must build them anyway, and burning only puts them off; one that does not, counts on
+            the stock forever). Where it can build nothing that would carry it (no ore, no material, no knowing
+            how), burning is worth the whole output its shortfall would cost (energy.value_short). And it is worth
+            more to the few than to the many: a concentrated stock can be enclosed and held, its yield taken whole;
+            light falls on everyone's ground - the few who decide count it x (1 + their rent's share) (rent.py).
   COST      what its waste takes from its world: the room for life one season's burning removes, as its world's
             own physics gives it (waste.py: kept in its sky, warming it, read through its people's tuning), lost
             every season after - priced at what a life yields, over the council's horizon - as far as it
@@ -24,7 +27,7 @@ The path's intelligence, as the progenitor reads it (path_index): of the energy 
 what its world renews - the light and heat it is given - over all it drew.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -32,8 +35,16 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 def _short_eu(kernel: Any, planet: Any) -> float:
-    from xylarium.kernel import energy, harvest
+    """EU a season its own works leave it short: its fields and bores, and what its people's orbital arrays in its
+    own system beam it (shared over its worlds there)."""
+    from xylarium.kernel import energy, harvest, sustenance
     gen = sum(v for v in harvest.generation(kernel, planet).values() if v > 0)
+    people = sustenance.people_of(planet)
+    beamed = harvest.array_output(kernel).get((people, planet.sector_id), 0) / energy.MILLI
+    if beamed:
+        mine = [p for p in kernel.sectors[planet.sector_id].planets
+                if p.population > 0 and sustenance.people_of(p) == people]
+        gen += beamed / max(1, len(mine))
     return max(0.0, energy.need_eu(planet, kernel) - gen)
 
 
@@ -52,12 +63,18 @@ def weigh(kernel: Any, planet: Any) -> Dict[str, Any]:
     seasons = decide.horizon(m)
     knows_energy = alignment.foreseen(kernel, holder, "energy")
     knows_life = alignment.foreseen(kernel, holder, "biology")
-    # worth: the shortfall covered, while the stock lasts as far as it knows the stock ends
+    # worth: the works burning spares, put off while the stock lasts - as far as it knows the stock ends
     burn_units = short / energy.CARBON_EU                      # carbon a season
     lasts = carbon / max(1e-9, burn_units)                     # seasons the stock would last at this rate
     seen = seasons - knows_energy * max(0.0, seasons - lasts)
-    flow = energy.value_short(planet) * short * (1.0 + rent.of(planet))
-    value = decide.worth(kernel, flow, dict(m, horizon_q=seen * m["noise"]), planet.currency)
+    alt = alternative(kernel, planet, short)
+    if alt is None:                                            # nothing it could build would carry it
+        flow = energy.value_short(planet) * short
+        value = decide.worth(kernel, flow, dict(m, horizon_q=seen * m["noise"]), planet.currency)
+    else:                                                      # the works put off for `seen` seasons
+        r = decide.rate(kernel, planet.currency)
+        value = alt * (1.0 - (1.0 + r) ** (-max(0.0, seen))) if r > 1e-12 else alt * (1.0 if seen > 0 else 0.0)
+    value *= 1.0 + rent.of(planet)
     # cost: the room a season's burning takes, every season after, as far as it knows its living world
     cost = 0.0
     try:
@@ -86,6 +103,31 @@ def weigh(kernel: Any, planet: Any) -> Dict[str, Any]:
            "knows_life": round(knows_life, 3), "rent": rent.of(planet), "burn": soc["burn"]}
     soc["energy_path"] = out
     return out
+
+
+def alternative(kernel: Any, planet: Any, short_eu: float) -> Optional[float]:
+    """What the works to carry `short_eu` a season on the light and heat it is given would cost (local money): the
+    cheapest per EU of all this people could build (harvest.py's own designs and costs: fields, core bores, and - with
+    yards - collectors at its star); None if nothing."""
+    from xylarium.config import HABITAT_COST, PRICE_LEVEL
+    from xylarium.kernel import geology, harvest, knowledge, sustenance
+    holder = knowledge.holder_of_planet(planet)
+    level = PRICE_LEVEL.get(planet.currency, 1.0)
+    sec = kernel.sectors.get(planet.sector_id)
+    best = None
+    for kind in harvest.KINDS:                                 # all it could build: fields, bores, orbital arrays
+        if kind == "tap" and not geology.rocky(planet):
+            continue
+        if kind == "array" and (not sustenance.yards(planet) or sec is None or getattr(sec, "kind", "SYSTEM") != "SYSTEM"):
+            continue
+        d = harvest.design(kernel, holder, kind, planet) or harvest.crude(kernel, kind, planet)
+        gain = (harvest.field_output(kernel, planet, d["eff"]) if kind == "field" else
+                harvest.tap_output(planet, d["eff"]) if kind == "tap" else harvest.module_output(kernel, sec, d["eff"]))
+        if gain <= 0:
+            continue
+        per_eu = HABITAT_COST * level * harvest.COST[kind] * d["cost_mult"] / gain
+        best = per_eu if best is None else min(best, per_eu)
+    return None if best is None else best * short_eu
 
 
 def path_index(planet: Any) -> float:

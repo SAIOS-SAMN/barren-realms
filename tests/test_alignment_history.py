@@ -276,3 +276,19 @@ class TestHealing(_World):
         self.assertGreater(cs["misguided medicine"]["dark"], 0.0)       # it knows little of life
         self.assertAlmostEqual(cs["gatekept medicine"]["dark"], 100.0)  # its few kept half of it from them
         self.assertIn("gatekept medicine", self.p.society["impacts"])    # and its world keeps the record
+
+
+class TestEnergyPath(unittest.TestCase):
+    def test_burning_is_weighed_against_what_could_be_built_and_the_waste_it_leaves(self):
+        from xylarium.kernel import energy_path
+        random.seed(5)
+        k = GameKernel(seed=7)
+        k.activate()
+        p = next(w for s in k.sectors.values() for w in s.planets if w.name.lower().startswith("terra"))
+        p.citadel_level = max(2, p.citadel_level)
+        p.element_reserves["C"] = 10 ** 6
+        p.ore_silo = 10 ** 6
+        alt = energy_path.alternative(k, p, 10.0)
+        self.assertIsNotNone(alt)                                   # it could build something to carry it
+        self.assertGreater(alt, 0.0)
+        self.assertEqual(energy_path.path_index(p), 1.0)           # nothing burnt yet: all it drew is renewed
