@@ -426,14 +426,6 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
     return out
 
 
-def _kept(x: float) -> Any:
-    """A world's measure as an exact fraction to a millionth - finer only where a millionth would round a real body
-    to nothing (a small moonlet's mass)."""
-    from fractions import Fraction as _F
-    f = _F(x).limit_denominator(10 ** 6)
-    return f if f > 0 or x <= 0 else _F(x).limit_denominator(10 ** 15)
-
-
 def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec: Any, r: float, z: float,
             born: float, rng: random.Random) -> List[Dict[str, Any]]:
     """A star's worlds as physics made them: each orbit's planet (worlds.form), every orbit's six elements and every
@@ -483,12 +475,14 @@ def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec
         return rec
 
     for n, ((q, body, _), mm, el) in enumerate(zip(laid, made, els)):
+        if not W.is_world(mm["mass"], mm["radius"], info[n]["icy"], L):
+            continue                                       # too small to pull itself round: rubble, not a world
         a_au = info[n]["a_au"]
         a_m = a_au * interior.AU_M
         now = orbits.at(star_kg, a_m, el, SETTLED_GYR)
         tilt = math.degrees(min(now["obliquity"], math.pi - now["obliquity"]))
-        body = dict(body, mass=physics._s(_kept(mm["mass"])), radius=physics._s(_kept(mm["radius"])),
-                    giant=mm["giant"],
+        body = dict(body, mass=physics._s(_F(mm["mass"]).limit_denominator(10 ** 6)),
+                    radius=physics._s(_F(mm["radius"]).limit_denominator(10 ** 6)), giant=mm["giant"],
                     locked=now["locked"], tilt=int(round(tilt)),
                     day=physics._s(_F(now["day_s"] / 86400.0).limit_denominator(10 ** 4)),
                     e=round(now["e"], 5), inc=round(now["inc"], 5), node=round(now["node"], 5),
@@ -502,6 +496,8 @@ def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec
         ice_share = sum(mm["ices"].values()) / (1.0 + sum(mm["ices"].values()))
         g_kg = mm["mass"] * interior.M_EARTH_KG
         for moon in orbits.moons(mm["mass"], mm["radius"], ice_share, mrng):
+            if not W.is_world(moon["mass"], moon["radius"], bool(moon["icy"]), L):
+                continue                                   # a moonlet: rubble in the giant's rings
             am = moon["a_radii"] * mm["radius"] * interior.R_EARTH_M
             mel = {"e0": moon["e_forced"], "e_forced": moon["e_forced"], "tau_e": 0.0, "obliquity": 0.0}
             period_days = 2 * math.pi * math.sqrt(am ** 3 / (interior.G_SI * g_kg)) / 86400.0

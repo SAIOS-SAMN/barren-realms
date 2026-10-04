@@ -254,6 +254,24 @@ def form(star: Dict[str, Any], a_au: float, z: float, env: float, rng: Any, laws
                        "ices": ice_share * core / total, "envelope": envelope / total}}
 
 
+YIELD_PA = {"rock": 1.0e8, "ice": 1.0e7}      # what rock and ice bear before they flow (Pa; the strength of cold
+                                              # rock and of ice: measured)
+
+
+def is_world(mass: float, radius: float, icy: bool, laws: Any = None) -> bool:
+    """A world is a body its own gravity has pulled round: the pressure at its centre, (2 pi / 3) G rho^2 R^2, beyond
+    what its rock (or ice) can bear. Smaller bodies keep the shapes they were broken into - rubble in the system's
+    belts, not worlds. (Round from ~300 km across for rock and ice alike.)"""
+    from xylarium.kernel import interior
+    m = float(mass) * interior.M_EARTH_KG
+    r = float(radius) * interior.R_EARTH_M
+    if m <= 0.0 or r <= 0.0:
+        return False
+    rho = m / (4.0 / 3.0 * math.pi * r ** 3)
+    strength = YIELD_PA["ice" if icy else "rock"] * _laws(laws).chem   # bonds scale with the universe's chemistry
+    return 2.0 * math.pi / 3.0 * interior.G_SI * rho * rho * r * r >= strength
+
+
 def label(w: Dict[str, Any]) -> str:
     """The display name of a world, from what it is."""
     if w["giant"]:
