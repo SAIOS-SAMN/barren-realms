@@ -45,6 +45,7 @@ def prestate(kernel: Any, captain: Any, sector: Any, action: ActionType, kwargs:
         hook(kernel, captain, sector, kwargs, pre)
     pre["hull"] = captain.ship.ship_type
     pre["sector_id"] = captain.sector_id
+    pre["credits"] = captain.credits
     return pre
 
 
@@ -74,6 +75,7 @@ def _before_attack(kernel, captain, sector, kwargs, pre):
         pre["target_hull"] = target.ship.ship_type
         pre["target_sector"] = target.sector_id
         pre["target_credits"] = target.credits
+        pre["target_bounty"] = target.bounty
 
 
 @before(ActionType.ATTACK_PLANET)
@@ -108,13 +110,13 @@ def _jumped(kernel, captain, sector, action, kwargs, result, pre):
 
 @after(ActionType.TRADE)
 def _traded(kernel, captain, sector, action, kwargs, result, pre):
-    deed(kernel, captain, "fair_trade")
+    alignment_mod.earned(kernel, captain, "fair_trade", pre.get("credits"))
 
 
 @after(ActionType.FREIGHT_DELIVER)
 def _delivered(kernel, captain, sector, action, kwargs, result, pre):
     kind = "extraction_delivered" if "EXTRACTION" in (result.message or "").upper() else "freight_delivered"
-    deed(kernel, captain, kind)
+    alignment_mod.earned(kernel, captain, kind, pre.get("credits"))
     chronicle_mod.note_freight(kernel, captain)
 
 
@@ -162,8 +164,9 @@ def _dug(kernel, captain, sector, action, kwargs, result, pre):
 
 @after(ActionType.SELL_ARTIFACT)
 def _sold(kernel, captain, sector, action, kwargs, result, pre):
-    if pre.get("provenance") == "unlicensed":
-        deed(kernel, captain, "black_market_sale")
+    if pre.get("provenance") == "unlicensed":            # a people's heritage, sold: what it fetched was taken
+        deed(kernel, captain, "black_market_sale",
+             dark=alignment_mod.lives_of_sol(kernel, max(0.0, captain.credits - pre.get("credits", captain.credits))))
 
 
 @after(ActionType.BANK_TRANSACTION)
@@ -176,14 +179,17 @@ def _banked(kernel, captain, sector, action, kwargs, result, pre):
 def _fought(kernel, captain, sector, action, kwargs, result, pre):
     if "target" not in pre:
         return
-    if pre.get("target_wanted"):
-        deed(kernel, captain, "justice")
-    elif captain.faction_id is None:
-        # Piracy is judged by what it did: what the victim lost, and the hull if it was destroyed
+    if pre.get("target_wanted"):                          # what the galaxy put on stopping them: harm it stops
+        deed(kernel, captain, "justice", light=alignment_mod.lives_of_sol(kernel, pre.get("target_bounty", 0)))
+    else:
+        # An attack on one who has done no wrong is judged by what it did - under any banner: what the victim lost,
+        # and the hull if it was destroyed
         victim = pre["target"]
-        harm = max(500, pre.get("target_credits", 0) - victim.credits)
+        harm = max(0, pre.get("target_credits", 0) - victim.credits)
         lost_hull = pre.get("target_hull_value", 0) if victim.ship.ship_type != pre.get("target_hull") else 0
-        alignment_mod.act(kernel, captain, "piracy", harmed_sol=harm + lost_hull)
+        alignment_mod.act(kernel, captain, "piracy" if captain.faction_id is None else "crusade",
+                          harmed_sol=harm + lost_hull)
+    if not pre.get("target_wanted") and captain.faction_id is None:
         if any("[HOSTILE ACT]" in line for line in (result.logs or [])):
             deed(kernel, captain, "hostile_act")              # breaking a protected system's peace: a judgement
         law_mod.file(kernel, "piracy", captain, sector, harm, {"kind": "captain", "id": victim.id})
@@ -232,4 +238,5 @@ def _ascended(kernel, captain, sector, action, kwargs, result, pre):
 
 @after(ActionType.COVERT_OP)
 def _intrigue(kernel, captain, sector, action, kwargs, result, pre):
-    deed(kernel, captain, "piracy", scale=0.5)
+    deed(kernel, captain, "covert_op",           # what it gained by it was someone's
+         dark=alignment_mod.lives_of_sol(kernel, max(0.0, captain.credits - pre.get("credits", captain.credits))))

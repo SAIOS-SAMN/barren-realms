@@ -49,16 +49,13 @@ class TestAlignment(unittest.TestCase):
         self.kernel = GameKernel(seed=42)
         self.cap = self.kernel.register_player("hero", "Hero")
 
-    def test_deeds_move_alignment_with_diminishing_returns_toward_the_poles(self):
-        a0 = self.cap.cosmic_alignment
-        alignment.deed(self.kernel, self.cap, "famine_aid")
-        first = self.cap.cosmic_alignment - a0
-        self.assertGreater(first, 0)
-        self.cap.cosmic_alignment = 0.8
-        alignment.deed(self.kernel, self.cap, "famine_aid")
-        self.assertLess(self.cap.cosmic_alignment - 0.8, first)
-        alignment.deed(self.kernel, self.cap, "piracy")
-        self.assertLess(self.cap.cosmic_alignment, 0.8)
+    def test_a_captain_is_what_its_whole_history_has_made_it(self):
+        alignment.act(self.kernel, self.cap, "famine_aid", lives_saved=300)
+        self.assertGreater(self.cap.cosmic_alignment, 0.99)
+        alignment.act(self.kernel, self.cap, "piracy", lives_lost=100)
+        self.assertAlmostEqual(self.cap.cosmic_alignment, 0.5)       # (300 - 100) / (300 + 100)
+        alignment.act(self.kernel, self.cap, "famine_aid", lives_saved=100)
+        self.assertAlmostEqual(self.cap.cosmic_alignment, 0.6)       # a turn weighs only what it does
 
     def test_paragon_vow_forbids_attacking_the_innocent_but_not_outlaws(self):
         victim = self.kernel.register_player("victim", "Victim")
@@ -87,32 +84,19 @@ class TestAlignment(unittest.TestCase):
         self.assertLess(light, 1.0)
 
     def test_falling_into_umbral_darkness_draws_a_warrant(self):
-        self.cap.cosmic_alignment = -0.45
-        alignment.deed(self.kernel, self.cap, "hostile_act")
+        alignment.deed(self.kernel, self.cap, "trade", light=10)
+        alignment.deed(self.kernel, self.cap, "piracy", dark=30)
         self.assertLessEqual(self.cap.cosmic_alignment, -0.5)
         self.assertGreaterEqual(self.cap.bounty, ALIGNMENT_WARRANT)
 
-    def test_clean_quarters_drift_toward_the_light_but_never_past_the_redemption_ceiling(self):
-        self.cap.cosmic_alignment = 0.0
-        self.cap.alignment_record["baseline"] = 0.0
-        for _ in range(400):
+    def test_a_judgement_weighs_nothing_and_nothing_drifts(self):
+        alignment.deed(self.kernel, self.cap, "trade", light=10)
+        before = self.cap.cosmic_alignment
+        alignment.deed(self.kernel, self.cap, "convicted")
+        for _ in range(40):
             alignment.quarterly(self.kernel)
-        self.assertGreater(self.cap.cosmic_alignment, 0.05)
-        self.assertLessEqual(self.cap.cosmic_alignment, alignment.REDEMPTION_CEILING)
-        self.cap.cosmic_alignment = -0.3
-        self.cap.alignment_record["baseline"] = -0.3
-        self.cap.alignment_record["dark_q"] = 2
-        alignment.quarterly(self.kernel)
-        self.assertLessEqual(self.cap.cosmic_alignment, -0.3)  # a dark quarter earns no redemption
-
-    def test_alignment_relaxes_toward_character_and_character_follows_conduct(self):
-        self.cap.cosmic_alignment = 0.0
-        self.cap.alignment_record["baseline"] = 0.0
-        self.cap.cosmic_alignment = 0.6   # a season of great deeds
-        self.cap.alignment_record["dark_q"] = 1  # (no redemption drift this quarter)
-        alignment.quarterly(self.kernel)
-        self.assertLess(self.cap.cosmic_alignment, 0.6)
-        self.assertGreater(self.cap.alignment_record["baseline"], 0.0)
+        self.assertEqual(self.cap.cosmic_alignment, before)
+        self.assertEqual(self.cap.alignment_record["deeds"]["convicted"], 1)
 
     def test_genesis_distribution_is_mostly_neutral(self):
         rng = random.Random(5)

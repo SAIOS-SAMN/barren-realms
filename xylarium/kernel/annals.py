@@ -306,16 +306,29 @@ def _meetings(kernel: Any, now: float) -> List[str]:
             if d is None or d > st["of"][a]["reach"] + st["of"][b]["reach"]:
                 continue
             st["met"][key] = kernel.cycle_count
-            ca = federation.preferred_card(float(getattr(ha.civilization, "alignment", 0.0) or 0.0))
-            cb = federation.preferred_card(float(getattr(hb.civilization, "alignment", 0.0) or 0.0))
+            from xylarium.kernel import alignment as _al, reputation
+            def _card(me, home, other, other_home):      # what it holds to, against what it reads in the other
+                own = _al.doctrine(home.civilization) if home.civilization is not None else 0.0
+                seen = reputation.read(kernel, me, other)
+                if seen is None:
+                    seen = _al.doctrine(other_home.civilization) if other_home.civilization is not None else 0.0
+                return federation.preferred_card(own), federation.preferred_card(seen)
+            ca, cb_seen = _card(a, ha, b, hb)
+            cb, ca_seen = _card(b, hb, a, ha)
             rng = scheduler.rng(kernel, "meeting", a, b)
-            opposed = abs(POLICY_ORDER.index(ca) - POLICY_ORDER.index(cb)) >= 2 or "DELTA" in (ca, cb)
+            opposed = any(abs(POLICY_ORDER.index(x) - POLICY_ORDER.index(y)) >= 2 or "DELTA" in (x, y)
+                          for x, y in ((ca, cb_seen), (cb, ca_seen)))        # either sees an enemy in the other
             na, nb = a.split(":", 1)[-1], b.split(":", 1)[-1]
             if opposed and rng.random() < WAR_PER_MEETING:
                 da, db = st["of"][a]["dominion"], st["of"][b]["dominion"]
                 win, lose = (a, b) if rng.random() < da / max(1, da + db) else (b, a)
-                st["of"][lose]["dominion"] = max(1, st["of"][lose]["dominion"] // 2)
-                st["of"][win]["dominion"] += st["of"][lose]["dominion"] // 2
+                taken = st["of"][lose]["dominion"] - max(1, st["of"][lose]["dominion"] // 2)
+                st["of"][lose]["dominion"] -= taken
+                st["of"][win]["dominion"] += taken // 2
+                hw, hl = (ha, hb) if win == a else (hb, ha)
+                if hw.civilization is not None:                # the worlds it took, their peoples' order with them
+                    _al.flow(hw.civilization, dark=taken * float(hl.population))
+                    reputation.witness(kernel, lose, win, dark=taken * float(hl.population))
                 st["wars"] += 1
                 history.event(kernel, "GALACTIC_WAR", f"War between the {na} and the {nb}", actors=[a, b],
                               cause=f"their dominions met {d * 3261.56:,.0f} light years apart; "

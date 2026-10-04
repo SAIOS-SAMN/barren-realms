@@ -96,8 +96,6 @@ from xylarium.config import (
     XP_TRADE_PROFIT_SCALE,
     XP_TRADE_MAX,
     XP_INDUSTRY_HULL_UPGRADE,
-    PERSONALITY_ALIGNMENT,
-    CLADE_START_ALIGNMENT,
     CHRONICLE_HUNGER_SURVIVAL,
     CHRONICLE_SIEGE_MIN_ASSAULTS,
     CHRONICLE_SIEGE_LIFT_CYCLES,
@@ -132,7 +130,7 @@ from xylarium.kernel import waystations as waystations_mod, liquidation as liqui
 from xylarium.kernel import observation as observation_mod, primordial as primordial_mod, relations as relations_mod, prices as prices_mod  # noqa: F401
 from xylarium.kernel import harvest as harvest_mod, energy as energy_mod, mirror as mirror_mod, contact as contact_mod, cohabit as cohabit_mod  # noqa: F401
 from xylarium.kernel import clock as clock_mod, scheduler as scheduler_mod, ways as ways_mod, designer as designer_mod, terraform as terraform_mod, skies as skies_mod, ruin as ruin_mod, mastery as mastery_mod, signals as signals_mod, federation as federation_mod, annals as annals_mod, strategy as strategy_mod, technology as technology_mod, climate as climate_mod, learning as learning_mod, steward as steward_mod, lifeline as lifeline_mod, tempo as tempo_mod, clocks as clocks_mod, kinship as kinship_mod, steward_ai as steward_ai_mod, occupation as occupation_mod, ages as ages_mod, society as society_mod  # noqa: F401
-from xylarium.kernel import cosmos as cosmos_mod, history as history_mod, institutions as institutions_mod, cluster as cluster_mod, sphere as sphere_mod, guidance as guidance_mod, syntropy as syntropy_mod, lifespan as lifespan_mod, rent as rent_mod  # noqa: F401
+from xylarium.kernel import cosmos as cosmos_mod, history as history_mod, institutions as institutions_mod, cluster as cluster_mod, sphere as sphere_mod, guidance as guidance_mod, syntropy as syntropy_mod, lifespan as lifespan_mod, rent as rent_mod, reputation as reputation_mod  # noqa: F401
 from xylarium.kernel import blackhole as blackhole_mod, exodus as exodus_mod, culture as culture_mod, memory as memory_mod, relics as relics_mod  # noqa: F401
 from xylarium.kernel import luxury as luxury_mod
 from xylarium.kernel import tourism as tourism_mod
@@ -269,18 +267,18 @@ class GameKernel:
         AIManager.bind_event_listeners(self)
 
     def _seed_alignments(self, seed: int) -> None:
-        """Genesis alignment: most civilizations are grey pragmatists, a few walk in the Light or the Dark."""
+        """Genesis alignment: no one is given a side. A captain begins with no history (its deeds will make it); a
+        people placed already grown brings the history of its ages (rent.prehistory)."""
         rng = random.Random(seed * 131 + 5)
-        for cap in self.captains.values():
-            if cap.is_ai and cap.faction_id is None:
-                bias = PERSONALITY_ALIGNMENT.get(getattr(cap.personality, "value", ""), 0.0)
-                cap.cosmic_alignment = round(max(-1.0, min(1.0, bias + rng.uniform(-0.08, 0.08))), 3)
-                cap.alignment_record["baseline"] = cap.cosmic_alignment
+        for cap in self.captains.values():               # draws once spent on given alignments, still taken: the seed
+            if cap.is_ai and cap.faction_id is None:      # makes the same universe it always made
+                rng.uniform(-0.08, 0.08)
         for sec in self.sectors.values():
             for p in sec.planets:
                 civ = p.civilization
                 if civ is not None and civ.faction_id is None:
-                    alignment_mod.set_people(civ, 0.35 if civ.name == "Terran Federation" else alignment_mod.genesis_value(rng))
+                    from xylarium.kernel import rent as _rent
+                    _rent.prehistory(self, p)              # its past, as it lived it - never drawn
                     if civ.alignment >= 0.3 and rng.random() < 0.5:
                         civ.native_policy = "ALPHA"  # a Light people guards its neighbours' childhood
 
@@ -350,9 +348,8 @@ class GameKernel:
             bounty=bounty,
             metabolism=lineage_metabolism,
         )
-        player.cosmic_alignment = CLADE_START_ALIGNMENT.get(chosen_clade.upper(), 0.0)
+        player.cosmic_alignment = 0.0                  # a player begins with no history: its deeds will make it
         player.alignment_record["band"] = alignment_mod.band(player.cosmic_alignment)
-        player.alignment_record["baseline"] = player.cosmic_alignment
         self.captains[player_id] = player
         if player.sector_id in self.sectors:
             self.sectors[player.sector_id].captains.append(player_id)

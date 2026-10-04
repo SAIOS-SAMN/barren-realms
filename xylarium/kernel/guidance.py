@@ -69,6 +69,8 @@ def _uplift(kernel: Any, elder: str, port: Any, young: str, worlds: List[Any]) -
     for d, u in lesson.items():
         knowledge.learn(kernel, young, d, u, why="taught")
     sustenance.flow_civ(port, light=lives)              # the lives its lesson reaches
+    from xylarium.kernel import reputation
+    reputation.witness(kernel, young, elder, light=lives)
     st = stats(kernel)
     st["uplifts"] += 1
     ename, yname = elder.split(":", 1)[-1], young.split(":", 1)[-1]

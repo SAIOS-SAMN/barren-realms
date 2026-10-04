@@ -119,6 +119,8 @@ def step(kernel: Any, planet: Any, ground: str, dt: float, actor: Any = None) ->
             alignment.act(kernel, actor, "core_harvest", lives_lost=lost)
         elif planet.population > 0:
             sustenance.flow_civ(planet, dark=lost)
+    if gained > 0 and actor is None and planet.population > 0:
+        sustenance.flow_civ(planet, light=gained)       # room for lives it made
     primordial.first(kernel, "first_terraforming", f"{planet.name} toward {ground.lower()}")
     return {"t": rec["t"], "gained": gained, "displaced": lost}
 

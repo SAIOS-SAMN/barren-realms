@@ -107,8 +107,20 @@ def landfill(kernel: Any) -> None:
         if world is None:
             continue
         q = port.stock.pop("TAILINGS")
+        from xylarium.kernel import biosphere, sustenance
+        k0 = biosphere.carrying_capacity(kernel, world) if world.population > 0 else 0
         world.element_deposits["TAILINGS"] = world.element_deposits.get("TAILINGS", 0) + q
+        if k0 > 0:                                 # the room for life its waste takes from its world
+            sustenance.flow_civ(world, dark=k0 * (1.0 - float(pollution_factor(world)) /
+                                                    max(1e-12, float(_pf_without(world, q)))))
         st["landfilled"] = st.get("landfilled", 0) + q
+
+
+def _pf_without(planet: Any, q: int) -> float:
+    """The pollution factor before `q` more tailings were landfilled."""
+    t = max(0, planet.element_deposits.get("TAILINGS", 0) - q)
+    area = float(physics.surface_area(planet)) or 1.0
+    return 1.0 / (1.0 + t / (area * TAILINGS_TOLERANCE_PER_AREA))
 
 
 def pollution_factor(planet: Any) -> float:

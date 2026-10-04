@@ -41,8 +41,13 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 def _alignment(kernel: Any, worlds: List[Any]) -> float:
-    from xylarium.kernel import sustenance
-    return float(sustenance._alignment(kernel, max(worlds, key=lambda p: p.population)) or 0.0)
+    """What a people holds itself to be - its doctrine (a captain's own alignment): what it votes for."""
+    from xylarium.kernel import alignment, sustenance
+    home = max(worlds, key=lambda p: p.population)
+    civ = getattr(home, "civilization", None)
+    if home.owner_id is None and civ is not None:
+        return alignment.doctrine(civ)
+    return float(sustenance._alignment(kernel, home) or 0.0)
 
 
 def preferred_card(alignment: float) -> str:

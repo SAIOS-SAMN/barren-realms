@@ -109,7 +109,7 @@ class NativeManager:
                     "awareness": 0.0,
                     "contamination": 0.0,
                     "stability": round(rng.uniform(0.7, 1.0), 2),
-                    "alignment": align.genesis_value(rng),
+                    "_": align.genesis_value(rng),      # a draw once spent on a given alignment, still taken
                     "temperament": rng.choice(["peaceful", "wary", "curious", "warlike", "devout"]),
                     "protector": None,
                     "contacted_by": [],
@@ -118,6 +118,7 @@ class NativeManager:
                     "observations": 0,
                     "history": [],
                 }
+                p.natives.pop("_")                  # (the seed makes the same universe it always made)
                 placed += 1
         return placed
 
@@ -346,8 +347,9 @@ class NativeManager:
         if reckless:
             # Antimatter on a Bronze-Age altar: the society shatters, or reality does
             if random.random() < 0.6:
+                shattered = natives.get("population", 0)
                 cls.collapse(kernel, planet, "a gift of fire from the sky they could not hold")
-                align.deed(kernel, captain, "native_exploit")
+                align.deed(kernel, captain, "reckless_gift", dark=shattered)   # a people's order, shattered
                 return ActionResult(True, ActionType.NATIVE_INTERACT,
                                     f"CATASTROPHE: the {natives['name']} could not hold what you gave them. "
                                     f"Their civilization has torn itself apart; {planet.name} is ruins.", turns_spent=2)
@@ -365,7 +367,9 @@ class NativeManager:
         natives["contamination"] = min(1.0, natives["contamination"] + 0.12 * leap)
         natives["stability"] = max(0.0, natives["stability"] - 0.08 * leap)
         ExperienceManager.award(captain, "science", XP_UPLIFT, kernel, key=f"uplift:{planet.id}")
-        align.deed(kernel, captain, "native_uplift", scale=1.0 if lawful else 0.5)
+        from xylarium.config import COMMODITY_CONFIG
+        align.deed(kernel, captain, "native_uplift",
+                   light=align.lives_of_sol(kernel, need * COMMODITY_CONFIG["EQUIPMENT"]["base_price"]))
         chronicle.native_event(kernel, planet, natives, f"The Gift of {captain.name}",
                                f"Teachers from the sky came with tools and patience. The {natives['name']} passed "
                                f"from the {old} into the {stage_name(natives)}.", ["uplift"])
@@ -444,11 +448,14 @@ class NativeManager:
                 budget -= n
         if not taken:
             return ActionResult(False, ActionType.NATIVE_INTERACT, "Nothing left to strip, or your holds are full.")
+        before = natives["population"]
         natives["population"] = int(natives["population"] * 0.85)
         natives["stability"] = max(0.0, natives["stability"] - 0.2)
         natives["contamination"] = min(1.0, natives["contamination"] + 0.05)
         natives["awareness"] = 1.0
-        align.deed(kernel, captain, "native_exploit")
+        from xylarium.config import COMMODITY_CONFIG
+        worth = sum(n * COMMODITY_CONFIG.get(e, {}).get("base_price", 20) for e, n in taken.items())
+        align.deed(kernel, captain, "native_exploit", dark=before - natives["population"] + align.lives_of_sol(kernel, worth))
         captain.adjust_reputation("Indigenous", -15.0)
         from xylarium.kernel import chronicle
         if random.random() < 0.5:
@@ -481,7 +488,6 @@ class NativeManager:
                                 turns_spent=2)
         # The faith absorbs a people rather than shattering it: its own rites give them cohesion
         natives["converted"] = True
-        natives["alignment"] = max(-1.0, natives["alignment"] - 0.3)
         natives["contamination"] = min(0.5, natives["contamination"])
         natives["stability"] = min(1.0, natives["stability"] + 0.2)
         planet.faction_id = "ZEALOT"
@@ -575,10 +581,10 @@ class NativeManager:
             disposition="empiricist", motto="we climbed the sky on our own ladder", station="unseated",
             era_index=0, tech_level=2,
         )
-        from xylarium.kernel import alignment as _al
-        _al.set_people(civ, natives["alignment"])
-        civ.native_policy = "ALPHA" if natives["alignment"] >= 0.3 else None  # they remember being watched
         planet.civilization = civ
+        from xylarium.kernel import rent as _rent
+        _rent.prehistory(kernel, planet)                       # the ladder they climbed, as they climbed it
+        civ.native_policy = "ALPHA" if civ.alignment >= 0.3 else None  # they remember being watched
         from xylarium.kernel import biosphere
         biosphere.adapt(kernel, civ, planet)                   # adapted to the world they evolved on
         planet.population = max(planet.population, min(20000, natives["population"] // 200))

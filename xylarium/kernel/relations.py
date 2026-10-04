@@ -272,7 +272,8 @@ def _terms(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], base: floa
     if bare <= 0:
         return None                                        # nothing threatens it: protection is worth nothing
     covered, _ = threat(kernel, sub, worlds, by, extra, base)
-    value = bare - covered
+    from xylarium.kernel import reputation
+    value = (bare - covered) * reputation.trust(kernel, sub, sup)      # as far as it expects the patron to stand
     own = sum(projected(kernel, worlds, w.sector_id) for w in worlds) or 1.0
     share = sum(extra.values()) / (sum(extra.values()) + own)
     troop = SURFACE_TROOP_RECRUIT_COST * PRICE_LEVEL.get(_capital(guard).currency, 1.0)
@@ -556,6 +557,11 @@ def quarter(kernel: Any) -> List[str]:
         due = tie.get("tribute_sol", 0.0) + tie.get("arrears", 0.0)
         paid = _pay(kernel, by[sub], _capital(by[sup]), due)
         tie["paid"] += paid
+        if tie.get("kind") == "subjugated" and paid > 0:         # held by force, it is taken, not traded
+            from xylarium.kernel import alignment, reputation, sustenance
+            lives = alignment.lives_of_sol(kernel, paid, _capital(by[sup]))
+            sustenance.flow_civ(_capital(by[sup]), dark=lives)
+            reputation.witness(kernel, sub, sup, dark=lives)
         stats(kernel)["tribute_sol"] += paid
         tie["arrears"] = max(0.0, due - paid)
         if tie["arrears"] > 4 * tie.get("tribute_sol", 0.0):          # a year behind: release it, or hold it
@@ -600,7 +606,8 @@ def _pact_terms(kernel: Any, a: str, b: str, by: Dict[str, List[Any]], base: flo
     share = own / (own + defend)
     troop = SURFACE_TROOP_RECRUIT_COST * PRICE_LEVEL.get(_capital(wa).currency, 1.0)
     cost = 0.1 * attacks_b * share * troop * (1.0 + _hops_between(kernel, _capital(wa), _capital(wb))) ** 2
-    return bare - covered, cost
+    from xylarium.kernel import reputation
+    return (bare - covered) * reputation.trust(kernel, a, b), cost     # as far as it expects b to keep its word
 
 
 def _pacts(kernel: Any, by: Dict[str, List[Any]], base: float) -> List[str]:

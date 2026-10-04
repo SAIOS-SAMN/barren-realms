@@ -387,8 +387,7 @@ def _void_breeds_corsairs(kernel: Any) -> Optional[str]:
                             max_shields=cfg["max_shields"], fighters=cfg["max_fighters"] // 2),
                   credits=0, sector_id=lair.id, turns_left=200, home_sector=lair.id,
                   species="human-outlaw", metabolism="biotic", clade="ANARCHY", rank_tier=2)
-    cap.cosmic_alignment = -0.45
-    cap.alignment_record["baseline"] = -0.45
+    # a corsair begins with no history, as every captain does: what it does will make it
     kernel.captains[cap.id] = cap
     matter.commission(cap)
     lair.captains.append(cap.id)

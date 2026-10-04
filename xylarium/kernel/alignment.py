@@ -1,20 +1,17 @@
 """
 Xylarium: Cosmic alignment - the Light (syntropy) and the Dark (entropy).
 
-Every captain carries a scalar alignment in [-1, +1]. Deeds move it: hauling freight,
-charting belts, studying relics, feeding the starving and protecting locals lean
-toward the Light; piracy, conquest, looting, exploiting natives and crusades lean
-toward the Dark. Moving toward a pole gets harder the closer you are to it, so
-Paragons and Avatars are rare and earned.
+Every people and every captain carries an alignment in [-1, +1], and it is one law for both: the truth of a whole
+history, in lives - what was made and kept, or given and spared (light), against what was taken (dark):
+(light - dark) / (light + dark), never faded (see "a people's history" below). A captain's honest earnings are
+order made for others (the goods are where they are wanted); what it takes - a cargo, a tribute, a native world's
+yield - is taken; the lives it ends and spares count one each. What a court finds, an oath kept, a thing observed are
+judgements and records, not consequences: they are kept in the record, and weigh nothing in the truth.
 
-The universe itself leans syntropic:
-  * a crew that commits no dark deed in a fiscal quarter drifts gently toward the
-    Light (redemption), up to the Luminous threshold;
-  * trusted (Luminous+) captains trade a little cheaper, while Shadowed captains pay
-    friction on every deal, neglect their hulls, and draw Federal warrants.
-
-At the poles, vows bind: a Paragon of Light cannot commit evil deeds, and an Avatar
-of the Dark will not stoop to charity.
+What alignment brings is its consequence, not a rule: trusted (Luminous+) captains trade a little cheaper, while
+Shadowed captains pay friction on every deal, neglect their hulls and draw Federal warrants; at the poles, vows bind
+- a Paragon of Light will not do evil, an Avatar of the Dark will not stoop to charity. Nothing anchors anyone to a
+side, and nothing drifts anyone toward one: a captain is what it has done.
 """
 
 import math
@@ -24,20 +21,15 @@ from typing import List, Any, Dict, Optional
 from xylarium.config import (
     ALIGNMENT_BANDS,
     ALIGNMENT_VOW,
-    ALIGNMENT_DEEDS,
-    ALIGNMENT_SYNTROPIC_DRIFT,
     ALIGNMENT_GOODWILL_MAX,
     ALIGNMENT_FRICTION_MAX,
     ALIGNMENT_HULL_WEAR,
     ALIGNMENT_WARRANT_THRESHOLD,
     ALIGNMENT_WARRANT,
     ALIGNMENT_GENESIS_SHARES,
-    ALIGNMENT_RELAXATION,
-    ALIGNMENT_CHARACTER_SHIFT,
 )
 
 NEUTRAL_EDGE = 0.15
-REDEMPTION_CEILING = 0.12  # Passive drift stops at the Light's doorstep: crossing it takes deeds
 
 
 def band(value: float) -> str:
@@ -67,40 +59,6 @@ def genesis_value(rng: Optional[random.Random] = None, bias: float = 0.0) -> flo
     else:
         value = rng.uniform(-0.12, 0.12)
     return max(-1.0, min(1.0, round(value + bias, 3)))
-
-
-def _shift(value: float, delta: float) -> float:
-    """Moving toward a pole slows as the pole nears; moving away is at full strength."""
-    toward = value * (1 if delta > 0 else -1)
-    factor = max(0.05, 1.0 - max(0.0, toward))
-    return max(-1.0, min(1.0, value + delta * factor))
-
-
-def anchor(kernel: Any, captain: Any) -> Optional[float]:
-    """
-    Ideological anchor: members of outlaw houses and the Choir of the Pyre's faithful never rise above
-    this alignment, whatever survival forces them to do - so the galaxy always keeps its Dark.
-    (Player lineages are never anchored: a player's soul is their own.)
-    """
-    from xylarium.config import IDEOLOGICAL_ANCHOR
-    if not getattr(captain, "is_ai", False):
-        return None
-    if getattr(captain, "faction_id", None) == "ZEALOT":
-        return IDEOLOGICAL_ANCHOR
-    houses = getattr(kernel, "npc_lineages", {}) if kernel is not None else {}
-    house = houses.get(getattr(captain, "house_id", None) or "")
-    if (house and house.get("creed") == "outlaw") or getattr(getattr(captain, "personality", None), "value", "") == "pirate":
-        return IDEOLOGICAL_ANCHOR
-    return None
-
-
-def _apply_anchor(kernel: Any, captain: Any) -> None:
-    ceiling = anchor(kernel, captain)
-    if ceiling is not None and captain.cosmic_alignment > ceiling:
-        captain.cosmic_alignment = ceiling
-        rec = captain.alignment_record
-        if rec.get("baseline", ceiling) > ceiling:
-            rec["baseline"] = ceiling
 
 
 # ---------------------------------------------------------------------- consequences
@@ -171,6 +129,15 @@ def flow(x: Any, light: float = 0.0, dark: float = 0.0) -> None:
     _put(x, "alignment", round(character(x), 4))
 
 
+def lives_of_sol(kernel: Any, sol: float, planet: Any = None) -> float:
+    """Wealth in lives: SOL over what one of its people makes in a generation (a head's earnings a cycle, colony.py,
+    over its generation). Taking a generation of a person's product is taking that person's life's work."""
+    from xylarium.config import COLONY_TAX_PER_CAPITA
+    from xylarium.kernel import fertility
+    gen = fertility.generation_of(kernel, planet) if planet is not None else fertility.generation_years()
+    return max(0.0, float(sol)) / max(1e-12, COLONY_TAX_PER_CAPITA * 100.0 * max(1.0, gen))
+
+
 def set_people(x: Any, value: float, weight: float = 0.0) -> None:
     """A people given an alignment (a genesis, a founding, a steward's scenario): a history of `weight` lives that
     reads as it - with no weight, what it does from now on is all that counts once it does anything."""
@@ -237,33 +204,38 @@ def measure(kernel: Any, harmed_sol: float = 0.0, helped_sol: float = 0.0, lives
 
 def act(kernel: Any, captain: Any, key: str, harmed_sol: float = 0.0, helped_sol: float = 0.0,
         lives_lost: float = 0.0, lives_saved: float = 0.0, note: Optional[str] = None) -> float:
-    """An act judged by what it did: harm and help in SOL and in lives (see measure)."""
+    """An act judged by what it did: the lives it ended and spared, and the wealth it took and gave - in lives
+    (lives_of_sol: a generation of a person's product is a life's work)."""
     if captain is None:
         return 0.0
-    return _apply(kernel, captain, key, measure(kernel, harmed_sol, helped_sol, lives_lost, lives_saved), note)
+    return _apply(kernel, captain, key, light=lives_saved + lives_of_sol(kernel, helped_sol),
+                  dark=lives_lost + lives_of_sol(kernel, harmed_sol), note=note)
 
 
-def deed(kernel: Any, captain: Any, key: str, scale: float = 1.0, note: Optional[str] = None) -> float:
-    """Applies a deed whose weight is a social judgement (ALIGNMENT_DEEDS: a conviction, an oath kept or broken,
-    knowledge shared). Acts with measurable consequences use act()."""
-    if captain is None or key not in ALIGNMENT_DEEDS:
-        return getattr(captain, "cosmic_alignment", 0.0)
-    return _apply(kernel, captain, key, ALIGNMENT_DEEDS[key] * scale, note)
+def deed(kernel: Any, captain: Any, key: str, scale: float = 1.0, note: Optional[str] = None,
+         light: float = 0.0, dark: float = 0.0) -> float:
+    """A deed on the record (`key`), with what it made (`light`) and took (`dark`) in lives. A deed with neither - a
+    conviction, an oath kept, a thing observed - is a judgement or a record: it is kept, and weighs nothing."""
+    if captain is None:
+        return 0.0
+    return _apply(kernel, captain, key, light=light * scale, dark=dark * scale, note=note)
 
 
-def _apply(kernel: Any, captain: Any, key: str, delta: float, note: Optional[str] = None) -> float:
-    if delta == 0:
-        return captain.cosmic_alignment
-    old = captain.cosmic_alignment
-    old_band = band(old)
-    captain.cosmic_alignment = round(_shift(old, delta), 5)
-    _apply_anchor(kernel, captain)
+def _apply(kernel: Any, captain: Any, key: str, light: float = 0.0, dark: float = 0.0,
+           note: Optional[str] = None) -> float:
     rec = captain.alignment_record
     deeds = rec.setdefault("deeds", {})
     deeds[key] = deeds.get(key, 0) + 1
-    if delta < 0:
+    if light <= 0 and dark <= 0:
+        return captain.cosmic_alignment
+    old = captain.cosmic_alignment
+    old_band = band(old)
+    rec.setdefault("alignment", old)
+    flow(rec, light=light, dark=dark)
+    captain.cosmic_alignment = round(float(rec["alignment"]), 5)
+    if dark > 0:
         rec["dark_q"] = rec.get("dark_q", 0) + 1
-    else:
+    if light > 0:
         rec["light_q"] = rec.get("light_q", 0) + 1
     new_band = band(captain.cosmic_alignment)
     if new_band != old_band:
@@ -274,6 +246,13 @@ def _apply(kernel: Any, captain: Any, key: str, delta: float, note: Optional[str
             chron_mod.log_turning(kernel, captain, old_band, new_band, note or key)
     _check_warrant(kernel, captain, old)
     return captain.cosmic_alignment
+
+
+def earned(kernel: Any, captain: Any, key: str, before_credits: Optional[float]) -> float:
+    """Honest work: what a captain earned by it (its credits since `before_credits`) is order made for others."""
+    if captain is None or before_credits is None:
+        return 0.0
+    return deed(kernel, captain, key, light=lives_of_sol(kernel, max(0.0, captain.credits - before_credits)))
 
 
 def _check_warrant(kernel: Any, captain: Any, old: float) -> None:
@@ -339,37 +318,16 @@ def price_factor(captain: Any, direction: str) -> float:
     return 1.0
 
 
-def baseline(captain: Any) -> float:
-    """A captain's character: where their alignment settles when nothing pulls it. Set at charter."""
-    rec = captain.alignment_record
-    if "baseline" not in rec:
-        rec["baseline"] = round(captain.cosmic_alignment, 4)
-    return rec["baseline"]
-
-
 def quarterly(kernel: Any) -> None:
-    """
-    Fiscal-quarter pass. Alignment relaxes toward the captain's character (deeds are remembered,
-    but a single season does not remake a soul), while character itself slowly follows sustained
-    conduct. A clean quarter adds a gentle syntropic drift. Dark crews neglect their hulls.
-    """
+    """Fiscal-quarter pass: a captain's own telling of its deeds fades as a telling does (its history does not); Dark
+    crews neglect their hulls."""
+    from xylarium.kernel import fertility
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    gens = (FISCAL_QUARTER_CYCLES / 100.0) / fertility.generation_years()
     for cap in kernel.captains.values():
         rec = cap.alignment_record
-        base = baseline(cap)
+        fade(rec, gens)
         value = cap.cosmic_alignment
-        if abs(value) < ALIGNMENT_VOW:  # oaths at the poles hold
-            value = value + ALIGNMENT_RELAXATION * (base - value)
-        rec["baseline"] = round(base + ALIGNMENT_CHARACTER_SHIFT * (value - base), 5)
-        cap.cosmic_alignment = round(max(-1.0, min(1.0, value)), 5)
-        _apply_anchor(kernel, cap)
-        value = cap.cosmic_alignment
-        if rec.get("dark_q", 0) == 0 and -ALIGNMENT_VOW < value < REDEMPTION_CEILING:
-            cap.cosmic_alignment = round(min(REDEMPTION_CEILING, value + ALIGNMENT_SYNTROPIC_DRIFT), 5)
-            new_band = band(cap.cosmic_alignment)
-            if new_band != band(value):
-                rec["band"] = new_band
-                from xylarium.kernel import chronicle as chron_mod
-                chron_mod.log_turning(kernel, cap, band(value), new_band, "redemption")
         if value <= -NEUTRAL_EDGE:
             wear = int(cap.ship.max_shields * ALIGNMENT_HULL_WEAR * (-value))
             cap.ship.shields = max(0, cap.ship.shields - wear)

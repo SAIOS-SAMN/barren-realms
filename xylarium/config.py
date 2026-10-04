@@ -1198,42 +1198,6 @@ ALIGNMENT_BANDS = [            # (lower bound, title) - first match wins, scanne
     (-9.0, "Avatar of the Dark"),
 ]
 ALIGNMENT_VOW = 0.9            # Beyond this, vows bind: the Light does no wrong, the Dark does no good
-ALIGNMENT_DEEDS = {            # Signed shift per deed, applied with diminishing returns toward the poles
-    "fair_trade": 0.0001,         # honest commerce is the grey middle: it neither saves nor damns
-    "freight_delivered": 0.001,   # (halved when households made freight plentiful: commerce stays grey)
-    "extraction_delivered": 0.0005,
-    "famine_aid": 0.05,
-    "knowledge": 0.008,        # relic study, anomaly decoded, cartography solved
-    "belt_charted": 0.001,
-    "licensed_dig": 0.001,
-    "looted_dig": -0.02,
-    "black_market_sale": -0.02,
-    "justice": 0.02,           # defeating a wanted outlaw
-    "piracy": -0.06,           # opening fire on a lawful captain
-    "hostile_act": -0.10,      # ...inside a protected system
-    "conquest": -0.08,         # seizing an inhabited world by force
-    "bombardment": -0.02,
-    "loan_repaid": 0.01,
-    "native_observed": 0.001,
-    "native_contact": 0.01,
-    "native_trade": 0.004,
-    "native_uplift": 0.04,
-    "native_protect": 0.03,
-    "native_exploit": -0.10,
-    "native_converted": -0.04,
-    "prime_violation": -0.12,
-    "crusade": -0.05,
-    "tribute_extorted": -0.04,
-    "heresy_purge": -0.03,
-    "chronicle_written": 0.002,
-    "stewardship": 0.01,       # a people that chooses to live within its world's means (per quarter held)
-    "convicted": -0.03,        # found guilty by a court
-    "restitution": 0.015,      # a judgment paid in full
-    "food_raid": -0.03,        # seizing another people's stores to feed one's own (necessity, but still force)
-}
-ALIGNMENT_SYNTROPIC_DRIFT = 0.0015     # Per fiscal quarter toward the Light for captains with no dark deed that quarter
-ALIGNMENT_RELAXATION = 0.08            # Per quarter, alignment relaxes this share of the way back to character...
-ALIGNMENT_CHARACTER_SHIFT = 0.025      # ...while character itself shifts this share toward sustained conduct
 ALIGNMENT_GOODWILL_MAX = 0.02          # Luminous traders buy up to 2% cheaper (trusted counterparties)
 ALIGNMENT_FRICTION_MAX = 0.06          # Shadowed captains pay up to 6% more and are paid up to 6% less
 ALIGNMENT_HULL_WEAR = 0.05             # Dark crews neglect their ships: up to 5% of max shields lost per maintenance
@@ -1241,9 +1205,6 @@ ALIGNMENT_WARRANT_THRESHOLD = -0.5     # Crossing into Umbral territory draws a 
 ALIGNMENT_WARRANT = 1500
 # Genesis distribution for AI captains and civilizations: most are neutral pragmatists
 ALIGNMENT_GENESIS_SHARES = {"neutral": 0.70, "light": 0.15, "dark": 0.15}
-PERSONALITY_ALIGNMENT = {"trader": 0.15, "industrialist": 0.0, "mercenary": -0.1, "pirate": -0.45,
-                         "imperial": -0.1, "crusader": -0.55}
-CLADE_START_ALIGNMENT = {"ANARCHY": -0.25, "IMPERIAL": -0.05}
 
 # --- Non-spacefaring locals (native societies) ---
 NATIVE_WORLD_SHARE = 0.35              # Share of uninhabited, habitable system worlds bearing native life at genesis
@@ -1454,7 +1415,6 @@ CREDIT_INCOME_QUARTERS = 4                 # A port may owe at most this many qu
 CREDIT_DARK_PRUDENCE = 1.5                 # Dark governors lend this multiple past prudence (and eat the write-offs)
 CENTRAL_BANK_RESERVE_CEILING = 0.30         # Reserves above this share of the currency's money supply are idle...
 CENTRAL_BANK_OMO_RATE = 0.25                # ...and this share of the idle excess funds regional public works each quarter
-IDEOLOGICAL_ANCHOR = -0.2                   # Outlaw houses and the Pyre's faithful never rise above this alignment
 
 # --- Commerce tax, house self-preservation, financier arbitrage ---
 TRADE_SALES_TAX = 0.02                      # Municipal sales tax on every port trade, paid to the region's worlds

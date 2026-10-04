@@ -153,17 +153,14 @@ class TestPublicWorksAndAnchor(unittest.TestCase):
         self.assertGreater(sum(p.treasury for p in worlds), vaults)
         self.assertEqual(before, totals(self.kernel))
 
-    def test_outlaw_houses_are_anchored_in_the_dark_but_players_are_free(self):
+    def test_no_one_is_anchored_to_a_side(self):
         from xylarium.kernel import alignment
         malakor = self.kernel.captains["ai_malakor"]
-        malakor.cosmic_alignment = -0.3
         for _ in range(50):
-            alignment.deed(self.kernel, malakor, "famine_aid")
-        self.assertLessEqual(malakor.cosmic_alignment, -0.2)
+            alignment.act(self.kernel, malakor, "famine_aid", lives_saved=10)
+        self.assertGreater(malakor.cosmic_alignment, 0.0)              # an outlaw house is what it does
         player = self.kernel.register_player("free", "Free Soul", clade="ANARCHY")
-        for _ in range(50):
-            alignment.deed(self.kernel, player, "famine_aid")
-        self.assertGreater(player.cosmic_alignment, 0.0)
+        self.assertEqual(player.cosmic_alignment, 0.0)                 # and no clade begins on a side
 
 
 class TestCommerceTaxHousesAndArbitrage(unittest.TestCase):

@@ -128,6 +128,26 @@ def season(kernel: Any, planet: Any, gens: float, gen_years: float) -> None:
     alignment.flow(planet.civilization, light=n * (1.0 - rho), dark=n * rho)
 
 
+def prehistory(kernel: Any, planet: Any) -> None:
+    """A people placed into the world already grown (a genesis, a founding, a scenario) brings its past with it: the
+    ages it has passed through, each for its measured span (annals.SPANS, in its own generations), its own work all
+    the while - and, since it has had a state, what its few take now (`choose`). Its history is written once, so
+    that it weighs what a people of its age weighs; it is never drawn."""
+    from xylarium.kernel import alignment, annals, knowledge
+    civ = getattr(planet, "civilization", None)
+    if civ is None or planet.population <= 0:
+        return
+    stage = annals._stage(kernel, knowledge.holder_of_planet(planet) or "", planet)
+    reached = annals.STAGES[1:annals.STAGES.index(stage) + 1]
+    lived = sum(annals.SPANS[s] for s in reached)
+    ruled = sum(annals.SPANS[s] for s in reached if annals.STAGES.index(s) > annals.STAGES.index("state"))
+    rho = choose(kernel, planet, ruled=True) if ruled > 0 else 0.0
+    n = float(planet.population)
+    for key in ("light", "dark", "told_light", "told_dark"):
+        setattr(civ, key, 0.0)
+    alignment.flow(civ, light=n * (lived - ruled * rho), dark=n * ruled * rho)
+
+
 def overturned(kernel: Any, planet: Any) -> None:
     """The many have risen: the few who took are gone, and their take with them."""
     planet.society["rent"] = 0.0

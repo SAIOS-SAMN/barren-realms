@@ -168,5 +168,58 @@ class TestRelicMindLeaning(_World):
         self.assertGreater(machine, 0.999)
 
 
+class TestReputation(_World):
+    def test_a_people_is_read_by_what_it_was_told_and_what_it_saw(self):
+        from xylarium.kernel import reputation
+        self.assertIsNone(reputation.read(self.k, "civ:A", "civ:B"))
+        self.assertEqual(reputation.trust(self.k, "civ:A", "civ:B"), 0.5)       # a stranger: half its word
+        reputation.witness(self.k, "civ:A", "civ:B", dark=30)
+        reputation.witness(self.k, "civ:A", "civ:B", light=10)
+        self.assertAlmostEqual(reputation.read(self.k, "civ:A", "civ:B"), -0.5)
+        self.assertAlmostEqual(reputation.trust(self.k, "civ:A", "civ:B"), 0.25)
+        self.assertIsNone(reputation.read(self.k, "civ:C", "civ:B"))              # another has seen nothing
+
+    def test_the_seasons_carry_a_peoples_deeds_to_those_who_know_it(self):
+        from xylarium.kernel import contact, reputation, syntropy
+        self.k = GameKernel(seed=7)                                           # a settled board: many peoples
+        self.k.activate()
+        by = syntropy._peoples(self.k)
+        a, b = sorted(by)[:2]
+        real = contact.contacts
+        contact.contacts = lambda kernel, by: {a: {b: 1}, b: {a: 1}}
+        self.addCleanup(lambda: setattr(contact, "contacts", real))
+        contact.stats(self.k)["familiarity"][contact._key(a, b)] = 1.0
+        reputation.season(self.k)                                             # they meet: each hears the other's story
+        civ_b = max(by[b], key=lambda p: p.population).civilization
+        alignment.flow(civ_b, dark=10 ** 9)                                     # then b takes, and a watches
+        reputation.season(self.k)
+        self.assertLess(reputation.read(self.k, a, b), alignment.doctrine(civ_b) + 1e-9)
+
+
+class TestPlacedPeoples(_World):
+    def test_a_people_placed_grown_brings_the_history_of_its_ages(self):
+        self.p.society["way"] = "state"
+        self.p.citadel_level = max(1, self.p.citadel_level)                     # it has raised works
+        rent.prehistory(self.k, self.p)
+        civ = self.p.civilization
+        self.assertGreater(civ.light + civ.dark, self.p.population * 20)       # its ages, not a draw
+        self.assertLessEqual(alignment.character(civ), 1.0)
+
+
+class TestCaptains(unittest.TestCase):
+    def test_honest_work_is_light_and_taking_is_dark(self):
+        random.seed(3)
+        self.k = GameKernel(seed=42)
+        cap = self.k.register_player("hero", "Hero")
+        before = cap.credits
+        cap.credits += 1000
+        alignment.earned(self.k, cap, "fair_trade", before)
+        self.assertGreater(cap.cosmic_alignment, 0.99)
+        alignment.deed(self.k, cap, "tribute_extorted", dark=alignment.lives_of_sol(self.k, 1000))
+        self.assertAlmostEqual(cap.cosmic_alignment, 0.0, places=4)
+        alignment.deed(self.k, cap, "convicted")                                # a judgement weighs nothing
+        self.assertAlmostEqual(cap.cosmic_alignment, 0.0, places=4)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -282,7 +282,7 @@ class AIManager:
                 tribute = int(target.credits * OUTLAW_SHAKEDOWN_SHARE)
                 target.credits -= tribute
                 captain.credits += tribute
-                alignment.deed(kernel, captain, "tribute_extorted")
+                alignment.deed(kernel, captain, "tribute_extorted", dark=alignment.lives_of_sol(kernel, tribute))
                 if getattr(kernel, "event_bus", None):
                     kernel.event_bus.broadcast_radio(sender=captain.name, channel="ALERT", sector_id=sector.id,
                                                      text=f"SHAKEDOWN: {target.name} pays {tribute:,} Cr to sail on.")
@@ -510,9 +510,8 @@ class AIManager:
             )
         )
 
-        # The offshoot inherits its parent's moral bearing, with a lineage's own drift
-        child_cap.cosmic_alignment = round(max(-1.0, min(1.0, captain.cosmic_alignment * 0.8 + random.uniform(-0.15, 0.15))), 3)
-        child_cap.alignment_record["baseline"] = child_cap.cosmic_alignment
+        # The offshoot starts from its parent's bearing, until its own deeds outweigh it (no history of its own yet)
+        child_cap.cosmic_alignment = captain.cosmic_alignment
         kernel.captains[child_id] = child_cap
         matter.commission(child_cap)
         if start_sec in kernel.sectors:

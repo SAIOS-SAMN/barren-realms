@@ -193,10 +193,19 @@ def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> i
     if taken <= 0:
         return need
     if c.get("guarded_by"):
-        return need                                      # a guardian stands between it and its prey
+        from xylarium.kernel import alignment
+        for g in communities(planet):                    # a guardian stands between it and its prey: lives spared
+            if g.get("people") == c["guarded_by"]:
+                alignment.flow(g, light=taken)
+                from xylarium.kernel import reputation
+                reputation.witness(kernel, c["prey"], g["people"], light=taken)
+        return need
     planet.population -= taken
     from xylarium.kernel import alignment
     alignment.flow(c, dark=taken * kinship.MIND_EATEN)  # a life ended and a mind consumed
+    from xylarium.kernel import contact, reputation    # the herd knows who eats it only if it can see them
+    if not contact.hidden(kernel, c["people"], niche=c.get("niche")):
+        reputation.witness(kernel, c["prey"], c["people"], dark=taken * kinship.MIND_EATEN)
     c["eaten_year"] = int(c.get("eaten_year", 0)) + taken
     stats(kernel)["eaten"] = stats(kernel).get("eaten", 0) + taken
     if (kernel.cycle_count // _quarter()) % 4 == 3:
@@ -291,9 +300,15 @@ def _teach(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
     if fam <= 0.0:
         return
     years = _quarter() / 100.0
+    from xylarium.kernel import alignment, fertility
+    gen = fertility.generation_years(fertility.strategy(kernel, planet))
     for domain in c.get("arts") or []:                 # the sciences they practise, taught as far as they are known
-        knowledge.learn(kernel, host, domain, int(c["pop"]) / 1000.0 * knowledge.LIVED_SHARE * fam * years,
-                        "taught by carried minds")
+        units = int(c["pop"]) / 1000.0 * knowledge.LIVED_SHARE * fam * years
+        knowledge.learn(kernel, host, domain, units, "taught by carried minds")
+        # a knowledge unit is a thousand minds' year of thought: given, it is that much of lives' work made for others
+        alignment.flow(c, light=units * 1000.0 / max(1.0, gen))
+        from xylarium.kernel import reputation
+        reputation.witness(kernel, host, c["people"], light=units * 1000.0 / max(1.0, gen))
     v = intellect.stats(kernel)["vocab"].setdefault(host, list(intellect.BASE))
     held = {intellect.norm(x) for x in v}
     rng = scheduler.rng(kernel, "teach", c["people"], host, kernel.cycle_count)

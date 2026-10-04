@@ -283,6 +283,8 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
         alignment.act(kernel, kernel.captains.get(planet.owner_id), "food_raid", harmed_sol=taken)
     else:
         flow_civ(planet, dark=take * alignment.LIVES_PER_FOOD_UNIT)  # the lives that food held (famine's arithmetic)
+        from xylarium.kernel import reputation
+        reputation.witness(kernel, them, me, dark=take * alignment.LIVES_PER_FOOD_UNIT)
     _war(kernel, planet, me, them, food, take, where.id)
     target = victim.name if victim is not None else f"the {port.name} docks"
     return f"[FOOD WAR] {people_name(kernel, me)} of {planet.name} seized {take:,} {food} from {target}."
@@ -363,6 +365,8 @@ def relieve(kernel: Any, planet: Any, gauge: Dict[str, Any]) -> Optional[str]:
         alignment.act(kernel, kernel.captains.get(donor.owner_id), "famine_aid", helped_sol=helped, lives_saved=saved)
     else:
         flow_civ(donor, light=saved)
+    from xylarium.kernel import reputation
+    reputation.witness(kernel, me, people_of(donor), light=saved)
     return (f"[RELIEF] {people_name(kernel, people_of(donor))} of {donor.name} sent {give:,} {food} to the hungry "
             f"of {planet.name} ({people_name(kernel, me)}).")
 

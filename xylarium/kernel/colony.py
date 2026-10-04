@@ -201,8 +201,9 @@ class ColonyManager:
             from xylarium.kernel.natives import NativeManager
             from xylarium.kernel import alignment
             displaced = planet.natives["name"]
+            driven = planet.natives.get("population", 0)
             NativeManager.collapse(kernel, planet, f"displaced by {captain.name}'s settlers")
-            alignment.deed(kernel, captain, "native_exploit", scale=1.5)
+            alignment.deed(kernel, captain, "native_displaced", dark=driven)   # their world, taken
 
         # Colony kit is consumed: credits to outfitters, equipment into habitat modules
         captain.credits -= COLONY_KIT_CREDITS

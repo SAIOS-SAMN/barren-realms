@@ -309,10 +309,11 @@ class FactionManager:
                 p.habitability = habitability("biotic", p.planet_type)
                 civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
                 civ.faction_id = key
-                alignment_set(civ, faction.alignment)
                 civ.dogma = faction.dogma
                 p.civilization = civ
                 p.faction_id = key
+                from xylarium.kernel import rent as _rent
+                _rent.prehistory(kernel, p)                 # its past as a people of its age, not its banner's
                 p.name = names[i % len(names)]
                 p.population = pop
                 p.citadel_level = citadel
@@ -345,7 +346,7 @@ class FactionManager:
                         if outpost:
                             w.habitats = 2
                         civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
-                        civ.faction_id, civ.alignment, civ.dogma = key, faction.alignment, faction.dogma
+                        civ.faction_id, civ.dogma = key, faction.dogma
                         civ.home_type, civ.light_optimum, civ.home_gravity = "TERRESTRIAL", "1/1", "1/1"   # Terran-born, wherever they live
                         w.civilization, w.faction_id = civ, key
                         w.name = f"{names[len(world_specs) % len(names)]} {'Outpost' if outpost else 'Colony'}"
@@ -359,6 +360,8 @@ class FactionManager:
                         from xylarium.kernel.natives import release_tribute
                         release_tribute(w, inherit=True)
                         w.natives, w.ruins = None, None
+                        from xylarium.kernel import rent as _rent
+                        _rent.prehistory(kernel, w)        # its past as a people of its age, not its banner's
                         w.currency = faction.currency
                         w.treasury = int(rng.randint(1500, 4000) * level)
                         faction.worlds.append(w.id)
@@ -490,6 +493,7 @@ class FactionManager:
         logs: List[str] = []
         cycle = kernel.cycle_count
         if cycle % FISCAL_QUARTER == 0:
+            self._read_alignments(kernel)
             if "IMPERIUM" in self.factions:
                 logs += self._imperium_quarter(kernel, self.factions["IMPERIUM"])
             if "ZEALOT" in self.factions:
@@ -723,6 +727,9 @@ class FactionManager:
                 continue                      # nothing left to purge: the Pyre takes from the living only
             loss = min(int(w.population * ZEALOT_PURGE_LOSS), w.population - 100)
             w.population -= loss
+            if w.civilization is not None:        # its own order burns its own
+                from xylarium.kernel import alignment
+                alignment.flow(w.civilization, dark=loss)
             lost += loss
             w.morale = max(10, w.morale - 20)
         f.dogma = max(0.2, f.dogma - 0.3)
@@ -740,8 +747,6 @@ class FactionManager:
             shrines.sort(key=lambda w: -dist.get(w.sector_id, 99))
             breakaway = shrines[:max(1, (len(shrines) + 2) // 3)]
             for far in breakaway:
-                if far.civilization is not None:
-                    alignment_set(far.civilization, 0.0)
                 if far.natives:
                     far.natives["converted"] = False
                 self._secede(kernel, f, far, "schism after the purge")
@@ -763,8 +768,7 @@ class FactionManager:
             metabolism="biotic", clade=clade, rank_tier=3,
         )
         cap.faction_id = f.id
-        cap.cosmic_alignment = f.alignment
-        cap.alignment_record["baseline"] = f.alignment
+        cap.cosmic_alignment = f.alignment              # its people's, until its own deeds outweigh it
         cap.faction_reputation[f.name.split()[-1]] = 90.0
         kernel.captains[cap.id] = cap
         matter.commission(cap)
@@ -773,6 +777,12 @@ class FactionManager:
         return cap
 
     # --- doctrine review
+    def _read_alignments(self, kernel: Any) -> None:
+        for f in self.factions.values():
+            a = _faction_alignment(kernel, f)
+            if a is not None:
+                f.alignment = round(a, 4)
+
     def _review_doctrines(self, kernel: Any) -> List[str]:
         logs = []
         caps = [c for c in kernel.captains.values() if c.faction_id is None]
@@ -939,8 +949,7 @@ class FactionManager:
         world.faction_id = "IMPERIUM"
         if world.civilization is not None:
             world.civilization.faction_id = "IMPERIUM"
-            world.civilization.name = "Aurelian Imperium"
-            alignment_set(world.civilization, f.alignment)
+            world.civilization.name = "Aurelian Imperium"   # a banner does not rewrite a people's history
         world.morale = 55
         f.unrest.pop(world.id, None)
         if world.id in f.lost_worlds:
@@ -994,7 +1003,7 @@ class FactionManager:
                     f.vault["SOL"] = f.vault.get("SOL", 0) + tribute
                     f.bump("tribute", tribute)
                     from xylarium.kernel import alignment
-                    alignment.deed(kernel, cap, "tribute_extorted")
+                    alignment.deed(kernel, cap, "tribute_extorted", dark=alignment.lives_of_sol(kernel, tribute))
                     if getattr(kernel, "event_bus", None):
                         kernel.event_bus.broadcast_radio(
                             sender=cap.name, text=f"TRIBUTE: {h.name} pays {tribute:,} Cr to the Pyre and is spared.",
@@ -1107,10 +1116,11 @@ class FactionManager:
         civ = CivilizationIntelligenceEngine.create_civilization(dict(ZEALOT_POLITY))
         civ.faction_id = "ZEALOT"
         civ.dogma = f.dogma
-        alignment_set(civ, f.alignment)
         planet.civilization = civ
         planet.faction_id = "ZEALOT"
         planet.owner_id = None
+        from xylarium.kernel import rent as _rent
+        _rent.prehistory(kernel, planet)
         planet.habitability = max(0.3, habitability("biotic", planet.planet_type))
         planet.population = max(planet.population, settlers)
         planet.morale = 70
@@ -1136,6 +1146,12 @@ class FactionManager:
         return mgr
 
 
-def alignment_set(civ, value) -> None:
+def _faction_alignment(kernel: Any, f: Any) -> Optional[float]:
+    """A great power is its peoples: its alignment is their histories together, weighed by their numbers."""
     from xylarium.kernel import alignment
-    alignment.set_people(civ, value)
+    ws = [w for s in kernel.sectors.values() for w in s.planets
+          if w.faction_id == f.id and w.population > 0 and w.civilization is not None]
+    total = sum(w.population for w in ws)
+    if total <= 0:
+        return None
+    return sum(alignment.character(w.civilization) * w.population for w in ws) / total
