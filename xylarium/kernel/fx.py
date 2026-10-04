@@ -183,10 +183,26 @@ class FXMarket:
             self.pools[cb]["local"] -= db
         return gaps
 
+    def can_convert(self, from_cur: str, to_cur: str) -> bool:
+        """Is there a market between these moneys? (A money issued before any exchange lists it has none.)"""
+        return from_cur == to_cur or all(c == SOL or c in self.pools for c in (from_cur, to_cur))
+
     def convert(self, from_cur: str, to_cur: str, amount: int) -> Tuple[int, str]:
-        """Best execution across the federation exchanges and the Galactic ISSE. Returns (out, venue)."""
+        """Best execution across the federation exchanges and the Galactic ISSE. Returns (out, venue).
+        A money no exchange lists is listed the first time a payment needs it (institutions: its issuers' deposit);
+        if it cannot be, the house holds the payment unsettled - nothing is made or lost - and nothing arrives."""
         if from_cur == to_cur:
             return amount, "none"
+        from xylarium.kernel import ledger
+        kernel = getattr(ledger, "ACTIVE_KERNEL", None)
+        for c in (from_cur, to_cur):
+            if c != SOL and c not in self.pools and kernel is not None and kernel.fx_market is self:
+                from xylarium.kernel import institutions
+                institutions._open_pool(kernel, c)
+        if not self.can_convert(from_cur, to_cur):
+            self.unsettled = getattr(self, "unsettled", {})
+            self.unsettled[from_cur] = self.unsettled.get(from_cur, 0) + amount
+            return 0, "unsettled"
         if SOL not in (from_cur, to_cur):
             direct = self.quote_cross(from_cur, to_cur, amount)
             if direct is not None and direct > self.quote_via_sol(from_cur, to_cur, amount):

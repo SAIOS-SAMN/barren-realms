@@ -314,9 +314,11 @@ def _trade(kernel: Any, sb: Dict[str, Any], bb: Dict[str, Any], meu: int, loss: 
     arrive = int(send * (1.0 - loss))
     if arrive <= 0:
         return 0
+    fxm = kernel.fx_market
+    if not fxm.can_convert(b.currency, s.currency):
+        return 0                                                   # no market between their moneys: no settlement
     v_buy = value_short(b)                                         # buyer's money per EU
     v_sell = value_surplus(s)                                      # seller's money per EU
-    fxm = kernel.fx_market
     v_sell_in_buyer = (fxm.to_sol_value(s.currency, v_sell) if s.currency != "SOL" else v_sell) * \
         (fxm.rate(b.currency) if b.currency != "SOL" else 1.0)
     from xylarium.kernel import contact

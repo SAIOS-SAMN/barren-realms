@@ -143,7 +143,9 @@ def peoples(kernel: Any) -> List[Any]:
 
 def bind(kernel: Any, player_id: str, name: str, planet: Any) -> None:
     from xylarium.kernel import knowledge, steward
-    stats(kernel)["stewards"][player_id] = {"planet": planet.id, "name": name, "since": kernel.cycle_count}
+    from xylarium.kernel import knowledge as _knowledge
+    stats(kernel)["stewards"][player_id] = {"planet": planet.id, "name": name, "since": kernel.cycle_count,
+                                            "people": _knowledge.holder_of_planet(planet)}
     planet.society["steward"] = player_id
     holder = knowledge.holder_of_planet(planet)
     if holder:
@@ -152,7 +154,22 @@ def bind(kernel: Any, player_id: str, name: str, planet: Any) -> None:
 
 def homeworld(kernel: Any, player_id: str) -> Optional[Any]:
     rec = stats(kernel)["stewards"].get(player_id)
-    return kernel.get_planet(rec["planet"]) if rec else None
+    if not rec:
+        return None
+    p = kernel.get_planet(rec["planet"])
+    if p is not None and p.population > 0 and getattr(p, "civilization", None) is not None:
+        return p
+    # its world is lost; the people lives on wherever it holds a world: the steward follows it to its largest
+    from xylarium.kernel import sustenance
+    who = rec.get("people") or ""
+    worlds = [w for sec in kernel.sectors.values() for w in sec.planets
+              if w.population > 0 and getattr(w, "civilization", None) is not None and sustenance.people_of(w) == who]
+    if not worlds:
+        return p
+    home = max(worlds, key=lambda w: (w.population, w.id))
+    rec["planet"] = home.id
+    home.society["steward"] = player_id
+    return home
 
 
 def status(kernel: Any, player_id: str) -> Dict[str, Any]:
@@ -319,12 +336,25 @@ def sleep(kernel: Any, player_id: str, deep_years: float) -> List[str]:
         return ["Your people keeps no clock of its own yet."]
     hs = history.stats(kernel)
     first_id, start, was = hs["next"], kernel.cycle_count, clocks.now(kernel, who)
+    from xylarium.kernel import cosmos, exodus
+    woken = None
+    known = cosmos.forecasts(kernel, p.sector_id, exodus._energy(kernel, who))   # a sun it already reads wakes no one
     while kernel.cycle_count - start < SLEEP_YEARS * 100:
         kernel.tick_simulation()
         if clocks.away(kernel, who) is None and kernel.cycle_count % 100 == 1:
             break                                             # looked back, and the annals have carried it the year
-        if p.civilization is None:
+        if kernel.cycle_count % 100 == 1:
+            p = homeworld(kernel, player_id) or p             # its world lost, the people lives on elsewhere
+        if p.civilization is None or p.population <= 0:
             break
+        if not known and kernel.cycle_count % 100 == 1 \
+                and cosmos.forecasts(kernel, p.sector_id, exodus._energy(kernel, who)):
+            woken = "its people has read its sun's end"       # a turning the watcher is woken for
+            (clocks.stats(kernel).get("away") or {}).pop(who, None)
+            break
+    else:
+        woken = "the age is long; you look back to see what it has become"
+        (clocks.stats(kernel).get("away") or {}).pop(who, None)
     seen = [e for e in hs["recent"] if int(e["id"][2:]) > first_id]
     mine = [e for e in seen if who in e.get("actors", [])]
     galaxy = [e for e in seen if who not in e.get("actors", []) and e["kind"] in GALAXY_KINDS]
@@ -340,8 +370,11 @@ def sleep(kernel: Any, player_id: str, deep_years: float) -> List[str]:
     if galaxy:
         out.append(f"  Meanwhile in the galaxy ({len(galaxy)} events): " +
                    "; ".join(e["title"] for e in galaxy[-6:]))
+    p = homeworld(kernel, player_id) or p
     if p.civilization is None or p.population <= 0:
         out.append("Your people has fallen.")
+    elif woken:
+        out.append(f"You are woken: {woken}.")
     return out
 
 

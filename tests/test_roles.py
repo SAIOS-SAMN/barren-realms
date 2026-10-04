@@ -193,3 +193,22 @@ class TestDeepTime(unittest.TestCase):
         self.assertLessEqual(k.cycle_count - cyc0, ages.SLEEP_YEARS * 100)
         self.assertIsNone(clocks.away(k, who))                                      # it has looked back
         self.assertIsNone(clocks.away_pace(k))
+
+
+class TestDeepTimeSafety(unittest.TestCase):
+    def test_a_payment_into_a_money_no_exchange_lists_is_held_not_lost(self):
+        from xylarium.kernel.fx import FXMarket
+        m = FXMarket()
+        out, venue = m.convert("SOL", "NOPE", 1000)
+        self.assertEqual((out, venue), (0, "unsettled"))
+        self.assertEqual(m.unsettled["SOL"], 1000)
+        self.assertFalse(m.can_convert("SOL", "NOPE"))
+
+    def test_a_steward_follows_its_people_when_its_world_is_lost(self):
+        random.seed(3)
+        k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        home = ages.homeworld(k, "player_1")
+        other = next(p for s in k.sectors.values() for p in s.planets if p is not home and p.population == 0)
+        other.civilization, other.population = home.civilization, 500
+        home.population = 0
+        self.assertIs(ages.homeworld(k, "player_1"), other)

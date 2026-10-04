@@ -180,9 +180,11 @@ def look_away(kernel: Any, who: str, deep_years: float) -> Optional[float]:
         return None
     until = now(kernel, who) + deep_years / 1e9
     stats(kernel).setdefault("away", {})[who] = until
+    stats(kernel)["frames"] = {}                              # each place's frame is read afresh for this span
+    coarse = min(float(deep_years), _turning_frame(kernel))
     for sid in list(stats(kernel)["places"]):
-        _set_place_rate(kernel, int(sid), max(float(stats(kernel)["places"][sid]["segs"][-1][2]), float(deep_years)))
-    cosmos.set_rate(kernel, max(cosmos.ruler(kernel), float(deep_years)))
+        _set_place_rate(kernel, int(sid), max(float(stats(kernel)["places"][sid]["segs"][-1][2]), coarse))
+    cosmos.set_rate(kernel, max(cosmos.ruler(kernel), coarse))
     return until
 
 
@@ -204,7 +206,30 @@ def away_pace(kernel: Any) -> Optional[float]:
             st.pop(who, None)                                 # its watcher looks back
         else:
             left.append(rest)
-    return max(left) if left else None
+    if not left:
+        return None
+    return min(max(left), _turning_frame(kernel))
+
+
+def _turning_frame(kernel: Any) -> float:
+    """The coarsest frame that does not step over a living people's sun's death (the same Courant rule tempo
+    follows for history's turnings): a place's frame is set, when first seen while its watcher is away, to a tenth
+    (tempo.FRAMES) of the deep years its star has left, and held there - so the star's end comes after FRAMES clock
+    years of seasons, in which its people can read its sun and leave. A watcher looking away does not take them."""
+    from xylarium.kernel import cosmos, relations, tempo
+    held = stats(kernel).setdefault("frames", {})
+    frame = float("inf")
+    for worlds in relations._peoples(kernel).values():
+        for sid in {w.sector_id for w in worlds if w.population > 0}:
+            life = cosmos.star_life(kernel, sid)
+            if life is None:
+                continue
+            ahead = (life[1] - cosmos.deep_gyr(kernel, sector_id=sid)) * 1e9
+            if ahead <= 0:
+                held.pop(str(sid), None)
+                continue
+            frame = min(frame, held.setdefault(str(sid), ahead / tempo.FRAMES))
+    return max(1.0, frame)
 
 
 def _pace(kernel: Any, wait: Optional[float]) -> float:

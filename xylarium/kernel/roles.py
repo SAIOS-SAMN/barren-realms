@@ -425,13 +425,18 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
                    minds_arisen=cosmos.stats(kernel).get("arisen", 0))
         if role == "progenitor":
             out["ancient"] = stats(kernel).get("ancients", {}).get(player_id)
+            from xylarium.kernel import clocks
+            epoch = (home.society.get("arisen") or {}).get("epoch")
+            if epoch is not None:
+                out["own_years"] = int((clocks.now(kernel, holder) - float(epoch)) * 1e9)
     return out
 
 
 def render_progress(p: Dict[str, Any]) -> str:
     """The progress screen, as text."""
     lines = [f"=== PROGRESS: {p['role'].upper()} - year {p['year']:,} ==="]
-    for key, label in (("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"), ("dominion", "Worlds held (at history's scale)"),
+    for key, label in (("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"), ("dominion", "Worlds held (history's scale)"),
+                       ("own_years", "Years your people has lived"),
                        ("population", "Population"), ("treasury", "Treasury"), ("credits", "Credits"),
                        ("score", "Score"), ("rank", "Rank"), ("bounty", "Bounty on you"), ("citadels", "Citadels"),
                        ("shields", "Shields"), ("fighters", "Fighters"), ("strife", "Worlds that have risen"),
