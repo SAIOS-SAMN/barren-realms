@@ -3,9 +3,11 @@ Xylarium: Cosmic alignment - the Light (syntropy) and the Dark (entropy).
 
 Every people and every captain carries an alignment in [-1, +1], and it is one law for both: the truth of a whole
 history, in lives - what was made and kept, or given and spared (light), against what was taken (dark):
-(light - dark) / (light + dark), never faded (see "a people's history" below). A captain's honest earnings are
-order made for others (the goods are where they are wanted); what it takes - a cargo, a tribute, a native world's
-yield - is taken; the lives it ends and spares count one each. What a court finds, an oath kept, a thing observed are
+(light - dark) / (light + dark), never faded (see "a people's history" below). It measures intelligence as a
+progenitor sees it: order made that lasts, against order destroyed. A captain's honest earnings are order made for
+others (the goods are where they are wanted); what it only moves - a cargo taken, a tribute, a gift - is a
+transfer, kept on its record and weighing nothing; a hull it wrecks is destroyed; the lives it ends and spares
+count one each. What a court finds, an oath kept, a thing observed are
 judgements and records, not consequences: they are kept in the record, and weigh nothing in the truth.
 
 What alignment brings is its consequence, not a rule: trusted (Luminous+) captains trade a little cheaper, while
@@ -203,13 +205,21 @@ def measure(kernel: Any, harmed_sol: float = 0.0, helped_sol: float = 0.0, lives
 
 
 def act(kernel: Any, captain: Any, key: str, harmed_sol: float = 0.0, helped_sol: float = 0.0,
-        lives_lost: float = 0.0, lives_saved: float = 0.0, note: Optional[str] = None) -> float:
-    """An act judged by what it did: the lives it ended and spared, and the wealth it took and gave - in lives
-    (lives_of_sol: a generation of a person's product is a life's work)."""
+        lives_lost: float = 0.0, lives_saved: float = 0.0, note: Optional[str] = None,
+        destroyed_sol: float = 0.0, made_sol: float = 0.0) -> float:
+    """An act judged by what it did to the order of the world: the lives it ended and spared, and the wealth it
+    destroyed (a hull wrecked) or made - in lives (lives_of_sol: a generation of a person's product is a life's
+    work). Wealth it only moved (`harmed_sol` taken, `helped_sol` given) is a transfer: it is kept on the record -
+    others will remember it - and weighs nothing in the truth."""
     if captain is None:
         return 0.0
-    return _apply(kernel, captain, key, light=lives_saved + lives_of_sol(kernel, helped_sol),
-                  dark=lives_lost + lives_of_sol(kernel, harmed_sol), note=note)
+    rec = captain.alignment_record
+    if harmed_sol:
+        rec["taken_sol"] = round(float(rec.get("taken_sol", 0.0)) + float(harmed_sol), 2)
+    if helped_sol:
+        rec["given_sol"] = round(float(rec.get("given_sol", 0.0)) + float(helped_sol), 2)
+    return _apply(kernel, captain, key, light=lives_saved + lives_of_sol(kernel, made_sol),
+                  dark=lives_lost + lives_of_sol(kernel, destroyed_sol), note=note)
 
 
 def deed(kernel: Any, captain: Any, key: str, scale: float = 1.0, note: Optional[str] = None,

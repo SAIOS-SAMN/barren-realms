@@ -164,9 +164,8 @@ def _dug(kernel, captain, sector, action, kwargs, result, pre):
 
 @after(ActionType.SELL_ARTIFACT)
 def _sold(kernel, captain, sector, action, kwargs, result, pre):
-    if pre.get("provenance") == "unlicensed":            # a people's heritage, sold: what it fetched was taken
-        deed(kernel, captain, "black_market_sale",
-             dark=alignment_mod.lives_of_sol(kernel, max(0.0, captain.credits - pre.get("credits", captain.credits))))
+    if pre.get("provenance") == "unlicensed":            # a people's heritage, sold: on the record
+        deed(kernel, captain, "black_market_sale")
 
 
 @after(ActionType.BANK_TRANSACTION)
@@ -188,7 +187,7 @@ def _fought(kernel, captain, sector, action, kwargs, result, pre):
         harm = max(0, pre.get("target_credits", 0) - victim.credits)
         lost_hull = pre.get("target_hull_value", 0) if victim.ship.ship_type != pre.get("target_hull") else 0
         alignment_mod.act(kernel, captain, "piracy" if captain.faction_id is None else "crusade",
-                          harmed_sol=harm + lost_hull)
+                          harmed_sol=harm, destroyed_sol=lost_hull)
     if not pre.get("target_wanted") and captain.faction_id is None:
         if any("[HOSTILE ACT]" in line for line in (result.logs or [])):
             deed(kernel, captain, "hostile_act")              # breaking a protected system's peace: a judgement
@@ -238,5 +237,4 @@ def _ascended(kernel, captain, sector, action, kwargs, result, pre):
 
 @after(ActionType.COVERT_OP)
 def _intrigue(kernel, captain, sector, action, kwargs, result, pre):
-    deed(kernel, captain, "covert_op",           # what it gained by it was someone's
-         dark=alignment_mod.lives_of_sol(kernel, max(0.0, captain.credits - pre.get("credits", captain.credits))))
+    deed(kernel, captain, "covert_op")           # on the record

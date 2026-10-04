@@ -455,7 +455,7 @@ class NativeManager:
         natives["awareness"] = 1.0
         from xylarium.config import COMMODITY_CONFIG
         worth = sum(n * COMMODITY_CONFIG.get(e, {}).get("base_price", 20) for e, n in taken.items())
-        align.deed(kernel, captain, "native_exploit", dark=before - natives["population"] + align.lives_of_sol(kernel, worth))
+        align.act(kernel, captain, "native_exploit", harmed_sol=worth, lives_lost=before - natives["population"])
         captain.adjust_reputation("Indigenous", -15.0)
         from xylarium.kernel import chronicle
         if random.random() < 0.5:

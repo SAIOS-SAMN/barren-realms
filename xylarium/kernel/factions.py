@@ -1003,7 +1003,7 @@ class FactionManager:
                     f.vault["SOL"] = f.vault.get("SOL", 0) + tribute
                     f.bump("tribute", tribute)
                     from xylarium.kernel import alignment
-                    alignment.deed(kernel, cap, "tribute_extorted", dark=alignment.lives_of_sol(kernel, tribute))
+                    alignment.act(kernel, cap, "tribute_extorted", harmed_sol=tribute)
                     if getattr(kernel, "event_bus", None):
                         kernel.event_bus.broadcast_radio(
                             sender=cap.name, text=f"TRIBUTE: {h.name} pays {tribute:,} Cr to the Pyre and is spared.",

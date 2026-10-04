@@ -282,7 +282,7 @@ class AIManager:
                 tribute = int(target.credits * OUTLAW_SHAKEDOWN_SHARE)
                 target.credits -= tribute
                 captain.credits += tribute
-                alignment.deed(kernel, captain, "tribute_extorted", dark=alignment.lives_of_sol(kernel, tribute))
+                alignment.act(kernel, captain, "tribute_extorted", harmed_sol=tribute)
                 if getattr(kernel, "event_bus", None):
                     kernel.event_bus.broadcast_radio(sender=captain.name, channel="ALERT", sector_id=sector.id,
                                                      text=f"SHAKEDOWN: {target.name} pays {tribute:,} Cr to sail on.")

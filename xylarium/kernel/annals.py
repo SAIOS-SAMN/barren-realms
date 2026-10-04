@@ -279,7 +279,9 @@ def season(kernel: Any) -> List[str]:
             growth = max(0.0, math.log(grown_to / grown_from)) / max(1.0, lived_gens * gen)
             rho = rent.choose(kernel, home, ruled=True, growth=growth) if ruled > 0 else 0.0
             n = float(home.population)
-            alignment.flow(civ, light=n * (lived_gens - ruled + ruled * (1.0 - rho)), dark=n * ruled * rho)
+            ss = float(home.society.get("self_sufficiency", 1.0) or 1.0)
+            lost = n * ruled * max(0.0, rent.starved(ss, rho) - rent.starved(ss, 0.0))
+            alignment.flow(civ, light=n * lived_gens - lost, dark=lost)
         if fell is not None:
             logs.append(_fall(kernel, who, worlds, epoch_of(fell)))
             st["falls"] += 1
@@ -332,9 +334,9 @@ def _meetings(kernel: Any, now: float) -> List[str]:
                 st["of"][lose]["dominion"] -= taken
                 st["of"][win]["dominion"] += taken // 2
                 hw, hl = (ha, hb) if win == a else (hb, ha)
-                if hw.civilization is not None:                # the worlds it took, their peoples' order with them
-                    _al.flow(hw.civilization, dark=taken * float(hl.population))
-                    reputation.witness(kernel, lose, win, dark=taken * float(hl.population))
+                # the worlds change hands: a transfer in the truth (what a war destroys is its own count), never
+                # forgotten by those who lost them
+                reputation.witness(kernel, lose, win, dark=taken * float(hl.population))
                 st["wars"] += 1
                 history.event(kernel, "GALACTIC_WAR", f"War between the {na} and the {nb}", actors=[a, b],
                               cause=f"their dominions met {d * 3261.56:,.0f} light years apart; "

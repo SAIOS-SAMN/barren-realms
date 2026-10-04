@@ -254,9 +254,11 @@ def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, h
     sun = float(soc.get("star_k", 1.0))                # a star ageing past its main sequence (cosmos.py)
     sky = float(soc.get("climate_k", 1.0))             # its orbit's swing: lean summers, ice ages (climate.py)
     oath = 1.0 - float(soc.get("forsworn", 0.0))       # food it has sworn off: kin of a mind (kinship.py)
-    if air >= 1.0 and way >= 1.0 and sun >= 1.0 and sky == 1.0 and oath >= 1.0:
+    waste = float(soc.get("waste_k", 1.0))             # what its peoples' waste has done to its climate (waste.py)
+    if air >= 1.0 and way >= 1.0 and sun >= 1.0 and sky == 1.0 and oath >= 1.0 and waste == 1.0:
         return k
-    return int(k * min(1.0, air) * min(1.0, way) * max(0.0, min(1.0, sun)) * max(0.0, sky) * max(0.0, oath))
+    return int(k * min(1.0, air) * min(1.0, way) * max(0.0, min(1.0, sun)) * max(0.0, sky) * max(0.0, oath)
+               * max(0.0, waste))
 
 
 def food_rate(kernel: Any, planet: Any) -> F:

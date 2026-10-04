@@ -133,7 +133,9 @@ class TestSustenance(unittest.TestCase):
         self.assertIsNotNone(log)
         self.assertIn("seized", log)
         self.assertGreater(staples.held(w, food), 0)
-        self.assertLess(w.civilization.alignment, align)      # necessity still darkens
+        self.assertLessEqual(w.civilization.alignment, align)   # stores change hands; only hunger it leaves darkens
+        from xylarium.kernel import reputation
+        self.assertLess(reputation.read(k, sustenance.people_of(victim), sustenance.people_of(w)), 0.0)  # remembered
         self.assertEqual(len(sustenance.stats(k)["wars"]), 1)
         self.assertEqual(m0, money(k))
         self.assertEqual(undeclared(k, t0, n0), {})

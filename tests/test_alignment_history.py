@@ -119,13 +119,16 @@ class TestRent(_World):
         rent.overturned(self.k, self.p)
         self.assertEqual(rent.of(self.p), 0.0)
 
-    def test_what_the_few_take_is_written_as_taken(self):
-        self.p.society["rent"] = 0.25
-        self.p.society["rent_cycle"] = self.k.cycle_count
+    def test_a_take_within_the_surplus_moves_order_and_beyond_it_starves(self):
         civ = self.p.civilization
-        l0, d0 = civ.light, civ.dark
+        self.p.society["rent_cycle"] = self.k.cycle_count
+        self.p.society["rent"] = 0.5                           # ss 3: half leaves the many 1.5 - a transfer
+        d0 = civ.dark
         rent.season(self.k, self.p, 1.0, 10 ** 9)
-        self.assertAlmostEqual((civ.dark - d0) / ((civ.light - l0) + (civ.dark - d0)), 0.25, places=6)
+        self.assertEqual(civ.dark, d0)
+        self.p.society["rent"] = 0.75                          # leaves them 0.75 of their need: a quarter starve
+        rent.season(self.k, self.p, 1.0, 10 ** 9)
+        self.assertAlmostEqual(civ.dark - d0, 0.25 * self.p.population, places=3)
 
 
 class TestRelicMindLeaning(_World):

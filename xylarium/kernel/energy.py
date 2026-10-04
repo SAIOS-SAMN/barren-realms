@@ -212,6 +212,7 @@ def supply(kernel: Any, planet: Any) -> Dict[str, int]:
             planet.element_reserves["C"] -= burn
             matter.sink("combustion", "C", burn)
             out["combustion"] = int(burn * CARBON_EU * MILLI)
+            planet.society["burned_c"] = int(planet.society.get("burned_c", 0)) + burn   # what it leaves (waste.py)
     return out
 
 
@@ -268,6 +269,7 @@ def season(kernel: Any) -> List[str]:
             sink(kernel, "dissipated", spare)
             b["grid"] -= spare
         p.society["dissipated_meu"] = int(max(0, spare))
+        p.society["energy_used_meu"] = int(b["used"] + b.get("bought", 0))   # all of it ends as heat (waste.py)
         p.society["grid_meu"] = int(b["grid"])
         if b["need"] > 0:
             p.society["energy_sufficiency"] = round(min(1.0, (b["used"] + b.get("bought", 0)) / b["need"]), 4)

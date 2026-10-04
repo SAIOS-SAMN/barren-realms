@@ -278,12 +278,19 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
     st["seized"][food] = st["seized"].get(food, 0) + take
     from xylarium.config import COMMODITY_CONFIG
     from xylarium.kernel import alignment
-    taken = take * COMMODITY_CONFIG.get(food, {}).get("base_price", 20)          # judged by what it took
+    taken = take * COMMODITY_CONFIG.get(food, {}).get("base_price", 20)
+    # the stores change hands (a transfer); what the raid destroys is the hunger it leaves: the share of the take
+    # the victim needed to keep its own people fed through the season (its reserve), in famine's arithmetic
+    short = 0
+    if victim is not None:
+        short = min(take, max(0, staples.reserve(kernel, victim, food) - staples.held(victim, food)))
+    starved = short * alignment.LIVES_PER_FOOD_UNIT
     if planet.owner_id:
-        alignment.act(kernel, kernel.captains.get(planet.owner_id), "food_raid", harmed_sol=taken)
+        alignment.act(kernel, kernel.captains.get(planet.owner_id), "food_raid", harmed_sol=taken,
+                      lives_lost=starved)
     else:
-        flow_civ(planet, dark=take * alignment.LIVES_PER_FOOD_UNIT)  # the lives that food held (famine's arithmetic)
-        from xylarium.kernel import reputation
+        flow_civ(planet, dark=starved)
+        from xylarium.kernel import reputation          # the raided remember the whole take
         reputation.witness(kernel, them, me, dark=take * alignment.LIVES_PER_FOOD_UNIT)
     _war(kernel, planet, me, them, food, take, where.id)
     target = victim.name if victim is not None else f"the {port.name} docks"

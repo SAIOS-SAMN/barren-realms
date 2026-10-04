@@ -231,7 +231,8 @@ class TestNpcLineages(unittest.TestCase):
         malakor.ship.fighters = 80
         self.assertTrue(AIManager._keep_outlaw_creed(self.kernel, malakor, sec))
         self.assertLess(mark.credits, 10000)                   # shaken down, not shot, under the port's guns
-        self.assertLess(malakor.cosmic_alignment, 0.0)
+        self.assertGreater(malakor.alignment_record.get("taken_sol", 0), 0)   # on its record: a transfer, nothing
+        self.assertEqual(malakor.cosmic_alignment, 0.0)                         # destroyed
 
 
 class TestVoidCorsairs(unittest.TestCase):

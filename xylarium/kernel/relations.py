@@ -557,11 +557,9 @@ def quarter(kernel: Any) -> List[str]:
         due = tie.get("tribute_sol", 0.0) + tie.get("arrears", 0.0)
         paid = _pay(kernel, by[sub], _capital(by[sup]), due)
         tie["paid"] += paid
-        if tie.get("kind") == "subjugated" and paid > 0:         # held by force, it is taken, not traded
-            from xylarium.kernel import alignment, reputation, sustenance
-            lives = alignment.lives_of_sol(kernel, paid, _capital(by[sup]))
-            sustenance.flow_civ(_capital(by[sup]), dark=lives)
-            reputation.witness(kernel, sub, sup, dark=lives)
+        if tie.get("kind") == "subjugated" and paid > 0:         # held by force: a transfer in the truth, a wrong
+            from xylarium.kernel import alignment, reputation     # in the memory of those it is taken from
+            reputation.witness(kernel, sub, sup, dark=alignment.lives_of_sol(kernel, paid, _capital(by[sup])))
         stats(kernel)["tribute_sol"] += paid
         tie["arrears"] = max(0.0, due - paid)
         if tie["arrears"] > 4 * tie.get("tribute_sol", 0.0):          # a year behind: release it, or hold it

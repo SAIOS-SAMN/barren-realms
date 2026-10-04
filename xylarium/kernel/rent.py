@@ -77,6 +77,13 @@ def _free(ss: float, rho: float) -> float:
     return max(0.0, 1.0 - 1.0 / ssc) if ssc > 0 else 0.0
 
 
+def starved(ss: float, rho: float) -> float:
+    """The share of the many the few's take leaves without bread: a take beyond the surplus is the many's own
+    subsistence (their harvest after it, 1 - ss (1 - rho), short of their need). Within the surplus a rent is a
+    transfer - it moves order, it destroys none."""
+    return max(0.0, 1.0 - ss * (1.0 - rho)) if ss > 0 else 0.0
+
+
 def worth(rho: float, g: float, years: float) -> float:
     """What the few gain over `years` taking `rho` of a product growing at `g` a year (in years of today's product)."""
     gh = min(50.0, g * years)
@@ -127,7 +134,9 @@ def season(kernel: Any, planet: Any, gens: float, gen_years: float) -> None:
         choose(kernel, planet)
     rho = of(planet)
     n = float(planet.population) * max(0.0, gens)
-    alignment.flow(planet.civilization, light=n * (1.0 - rho), dark=n * rho)
+    ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
+    lost = n * max(0.0, starved(ss, rho) - starved(ss, 0.0))          # the hunger the take adds
+    alignment.flow(planet.civilization, light=n - lost, dark=lost)
 
 
 def prehistory(kernel: Any, planet: Any) -> None:
@@ -147,7 +156,9 @@ def prehistory(kernel: Any, planet: Any) -> None:
     n = float(planet.population)
     for key in ("light", "dark", "told_light", "told_dark"):
         setattr(civ, key, 0.0)
-    alignment.flow(civ, light=n * (lived - ruled * rho), dark=n * ruled * rho)
+    ss = float(planet.society.get("self_sufficiency", 1.0) or 1.0)
+    lost = n * ruled * max(0.0, starved(ss, rho) - starved(ss, 0.0))
+    alignment.flow(civ, light=n * lived - lost, dark=lost)
 
 
 def overturned(kernel: Any, planet: Any) -> None:
