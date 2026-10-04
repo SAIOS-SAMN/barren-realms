@@ -243,3 +243,21 @@ class TestForeseenAndAvoidable(unittest.TestCase):
         cs = alignment.causes(c)
         self.assertEqual(list(cs)[0], "waste")
         self.assertEqual(cs["waste"]["share_of_dark"], 1.0)
+
+
+class TestCoupledMinds(_World):
+    def test_minds_that_cannot_hear_each_other_share_no_error(self):
+        technology.stats(self.k)["of"][self.who] = {}
+        self.assertEqual(decide.mood(self.k, self.who), 0.0)
+
+    def test_coupled_unknowing_minds_swing_together_and_lean_the_way_they_tell_themselves(self):
+        technology.stats(self.k)["of"].setdefault(self.who, {})["cyber"] = 1
+        self.assertEqual(decide.coupling(self.k, self.who), 1.0)
+        civ = self.p.civilization
+        civ.light, civ.dark, civ.told_light, civ.told_dark = 1.0, 1.0, 1.0, 0.0    # tells itself all Light
+        moods = []
+        for q in range(40):
+            self.k.cycle_count += 25
+            moods.append(decide.mood(self.k, self.who))
+        self.assertGreater(sum(moods) / len(moods), 0.0)            # it overrates its prospects
+        self.assertGreater(max(moods) - min(moods), 0.1)            # and swings, the whole people at once

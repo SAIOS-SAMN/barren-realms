@@ -93,6 +93,47 @@ def option(name: str, cost: float, value: float, act: Optional[Callable[[], Any]
     return {"name": name, "cost": float(cost), "value": float(value), "act": act, **data}
 
 
+# How far a people's minds hear one another (a signal reaching them all within a season): a people that only talks
+# hears its neighbours; one with radio hears one voice at once; with networks, every voice at once; with the means to
+# aim persuasion at each mind (cyber), the loudest voice is the one it chose to be heard.
+COUPLING = {"radio": 1.0 / 3.0, "networks": 2.0 / 3.0, "cyber": 1.0}       # (declared ladder)
+
+
+def coupling(kernel: Any, holder: Optional[str]) -> float:
+    from xylarium.kernel import technology
+    if not holder:
+        return 0.0
+    return max([0.0] + [c for cap, c in COUPLING.items() if technology.has(kernel, holder, cap)])
+
+
+def mood(kernel: Any, holder: Optional[str]) -> float:
+    """The error a people's minds share this season, on top of each one's own: independent misjudgements average
+    out across many minds (the wisdom of crowds); minds that hear one another err together (information cascades),
+    the more the less they understand (1 - their mastery of what they decide about) - and lean the way they tell
+    themselves they are (persuasion: their doctrine's gap over their history). Gains it weighs are seen x (1 + mood):
+    euphoria and panic, a whole people at once - the pulse of a coupled, unknowing people."""
+    if kernel is None or not holder or not hasattr(kernel, "state"):
+        return 0.0
+    from xylarium.kernel import cache
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    season = kernel.cycle_count // FISCAL_QUARTER_CYCLES
+
+    def compute() -> float:
+        c = coupling(kernel, holder)
+        if c <= 0.0:
+            return 0.0
+        from xylarium.kernel import alignment, knowledge, scheduler
+        known = sum(alignment.foreseen(kernel, holder, d) for d in ("energy", "biology", "information")) / 3.0
+        lean = 0.0
+        ws = [p for s in kernel.sectors.values() for p in s.planets
+              if p.population > 0 and knowledge.holder_of_planet(p) == holder and p.civilization is not None]
+        if ws:
+            lean = alignment.gap(max(ws, key=lambda p: p.population).civilization)
+        rng = scheduler.rng(kernel, "mood", holder, season)
+        return max(-0.99, c * lean + rng.gauss(0.0, c * (1.0 - known)))
+    return cache.memo(kernel, "mood", f"{holder}|{season}", compute, max_age=FISCAL_QUARTER_CYCLES)
+
+
 def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *salt: Any) -> Optional[Dict[str, Any]]:
     """The option worth most over its cost, as this mind judges it; None if nothing is worth doing."""
     if not options:
@@ -109,7 +150,8 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     lesson = [learning.multiplier(kernel, holder, o["name"]) for o in options]
     # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
     # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
-    nets = [o["value"] * strategy.weight(m, o) * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
+    swing = 1.0 + mood(kernel, holder)                 # what its minds, hearing each other, all feel this season
+    nets = [o["value"] * swing * strategy.weight(m, o) * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
                                             o.get("currency", "SOL")) if o.get("cash") else 0.0)
             for o, lz in zip(options, lesson)]
     scale = max(abs(n) for n in nets) or 1.0
