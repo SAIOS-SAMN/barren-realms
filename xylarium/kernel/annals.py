@@ -259,25 +259,31 @@ def season(kernel: Any) -> List[str]:
             history.event(kernel, kind, f"The {who.split(':', 1)[-1]} {text[stage]}", actors=[who], planet=home,
                           cause=f"at the level of history, {epoch_of(t):.4f} Gyr after the Big Bang",
                           data={"epoch": round(epoch_of(t), 6), "stage": stage})
-        # its history as it lived its ages: its own work, and - once it has a state - what its few took of it
+        from xylarium.kernel import biosphere
+        grown_from = max(1, rec["dominion"]) * max(1, biosphere.carrying_capacity(kernel, home))
+        if fell is None:
+            if stage == "crossed":
+                since = max(0.0, gens - (t if "crossed" in rec["passed"][-1:] else 0.0))
+                rec["dominion"] = int(min(DOMINION_MAX, rec["dominion"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since))))
+                rec["reach"] = min(40.0, rec["reach"] + REACH_KPC_PER_GENERATION * since)
+            _apply(kernel, who, home, stage)
+        # its history as it lived its ages: its own work, and - once it has a state - what its few took of it, weighed
+        # against the growth it made in the stretch (its worlds and its land's room, a year)
         civ = getattr(home, "civilization", None)
         if civ is not None:
             from xylarium.kernel import alignment, memory, rent
             lived_gens = fell if fell is not None else gens
             alignment.fade(civ, lived_gens, memory.character_keep(kernel, who, home))     # its telling fades
             ruled = max(0.0, lived_gens - ruled_from) if ruled_from is not None and ruled_from < lived_gens else 0.0
-            rho = rent.choose(kernel, home, ruled=True) if ruled > 0 else 0.0
+            grown_to = max(1, rec["dominion"]) * max(1, biosphere.carrying_capacity(kernel, home))
+            growth = max(0.0, math.log(grown_to / grown_from)) / max(1.0, lived_gens * gen)
+            rho = rent.choose(kernel, home, ruled=True, growth=growth) if ruled > 0 else 0.0
             n = float(home.population)
             alignment.flow(civ, light=n * (lived_gens - ruled + ruled * (1.0 - rho)), dark=n * ruled * rho)
         if fell is not None:
             logs.append(_fall(kernel, who, worlds, epoch_of(fell)))
             st["falls"] += 1
             continue
-        if stage == "crossed":
-            since = max(0.0, gens - (t if "crossed" in rec["passed"][-1:] else 0.0))
-            rec["dominion"] = int(min(DOMINION_MAX, rec["dominion"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since))))
-            rec["reach"] = min(40.0, rec["reach"] + REACH_KPC_PER_GENERATION * since)
-        _apply(kernel, who, home, stage)
         for d in knowledge.DOMAINS:                           # what it knows has grown with its ages
             have = knowledge.experience(kernel, who, d)
             if have > 0:

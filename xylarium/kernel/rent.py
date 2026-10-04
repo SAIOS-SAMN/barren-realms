@@ -83,9 +83,10 @@ def worth(rho: float, g: float, years: float) -> float:
     return rho * (math.expm1(gh) / g if g > 1e-12 else years)
 
 
-def choose(kernel: Any, planet: Any, ruled: bool = False) -> float:
+def choose(kernel: Any, planet: Any, ruled: bool = False, growth: Optional[float] = None) -> float:
     """The few weigh what to take, through their people's mind; returns the rent they set. (`ruled`: the annals know
-    the people has a state though its world's way is not yet written.)"""
+    the people has a state though its world's way is not yet written; `growth`: the growth the annals saw it make,
+    a year, where no season has measured its syntropy.)"""
     from xylarium.kernel import decide, knowledge, syntropy, ways
     soc = planet.society
     if (ways.stateless(planet) and not ruled) or planet.civilization is None:
@@ -94,7 +95,8 @@ def choose(kernel: Any, planet: Any, ruled: bool = False) -> float:
     ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
     now = of(planet)
     holder = knowledge.holder_of_planet(planet)
-    g_now = max(0.0, float((syntropy.stats(kernel)["peoples"].get(holder) or {}).get("slope", 0.0) or 0.0))
+    g_now = max(0.0, float(growth if growth is not None else
+                           (syntropy.stats(kernel)["peoples"].get(holder) or {}).get("slope", 0.0) or 0.0))
     free_now = _free(ss, now)
     m = decide.mind_of_planet(kernel, planet)
     years = decide.horizon(m) / 4.0
