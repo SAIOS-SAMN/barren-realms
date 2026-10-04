@@ -260,8 +260,12 @@ def season(kernel: Any) -> List[str]:
         # alignment wanders as a people lives its ages
         civ = getattr(home, "civilization", None)
         if civ is not None:
-            civ.alignment = round(max(-1.0, min(1.0, float(civ.alignment or 0.0)
-                                                + rng.gauss(0.0, ALIGN_DRIFT * math.sqrt(min(gens, 1e4))))), 4)
+            # its character is its living history: old deeds fade as their telling does, and each generation's own
+            # unrecorded deeds wander it (an AR(1) in its deeds: never pinned, never carried off by deep time alone)
+            from xylarium.kernel import alignment, memory
+            r = 1.0 - memory.TELL_ERR
+            alignment.fade(civ, gens)
+            alignment.people_shift(civ, rng.gauss(0.0, ALIGN_DRIFT * math.sqrt((1.0 - r ** (2 * gens)) / (1.0 - r * r))))
         if fell is not None:
             logs.append(_fall(kernel, who, worlds, epoch_of(fell)))
             st["falls"] += 1

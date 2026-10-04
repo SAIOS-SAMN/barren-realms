@@ -186,8 +186,11 @@ def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> i
         return need                                      # a guardian stands between it and its prey
     planet.population -= taken
     from xylarium.kernel import alignment
-    c["alignment"] = round(max(-1.0, min(1.0, float(c.get("alignment", 0.0))
-                                         + alignment.measure(kernel, lives_lost=taken * kinship.MIND_EATEN))), 4)
+    import math as _m
+    d = c.get("deeds")
+    d = _m.atanh(max(-0.9999, min(0.9999, float(c.get("alignment", 0.0))))) if d is None else float(d)
+    c["deeds"] = d + alignment.measure(kernel, lives_lost=taken * kinship.MIND_EATEN)
+    c["alignment"] = round(_m.tanh(c["deeds"]), 4)
     c["eaten_year"] = int(c.get("eaten_year", 0)) + taken
     stats(kernel)["eaten"] = stats(kernel).get("eaten", 0) + taken
     if (kernel.cycle_count // _quarter()) % 4 == 3:

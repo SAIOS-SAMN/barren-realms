@@ -575,7 +575,8 @@ class NativeManager:
             disposition="empiricist", motto="we climbed the sky on our own ladder", station="unseated",
             era_index=0, tech_level=2,
         )
-        civ.alignment = natives["alignment"]
+        from xylarium.kernel import alignment as _al
+        _al.set_people(civ, natives["alignment"])
         civ.native_policy = "ALPHA" if natives["alignment"] >= 0.3 else None  # they remember being watched
         planet.civilization = civ
         from xylarium.kernel import biosphere

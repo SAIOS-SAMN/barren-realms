@@ -280,7 +280,7 @@ class GameKernel:
             for p in sec.planets:
                 civ = p.civilization
                 if civ is not None and civ.faction_id is None:
-                    civ.alignment = 0.35 if civ.name == "Terran Federation" else alignment_mod.genesis_value(rng)
+                    alignment_mod.set_people(civ, 0.35 if civ.name == "Terran Federation" else alignment_mod.genesis_value(rng))
                     if civ.alignment >= 0.3 and rng.random() < 0.5:
                         civ.native_policy = "ALPHA"  # a Light people guards its neighbours' childhood
 

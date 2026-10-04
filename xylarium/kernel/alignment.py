@@ -19,7 +19,7 @@ of the Dark will not stoop to charity.
 
 import math
 import random
-from typing import Any, Dict, Optional
+from typing import List, Any, Dict, Optional
 
 from xylarium.config import (
     ALIGNMENT_BANDS,
@@ -106,6 +106,59 @@ def _apply_anchor(kernel: Any, captain: Any) -> None:
 # ---------------------------------------------------------------------- consequences
 ALIGNMENT_ACT_SCALE = 0.12      # the largest shift one act can make (the gravest deed in the old table)
 LIVES_PER_FOOD_UNIT = 200       # colony.tick_colony: each unit of a famine's deficit costs this many lives
+
+
+# ---------------------------------------------------------------------- a people's deeds
+# A people's alignment is what its deeds have made of it: the unbounded sum of their measured consequences (`deeds`),
+# read through tanh - near zero one deed moves it by its own measure, and however far a people goes it never sticks
+# at the edge, so two histories of very different weight are never read as one. What a people did fades from its
+# character as its telling of it fades (memory.TELL_ERR a generation): its character is its living history.
+
+def deeds_of(civ: Any) -> float:
+    d = getattr(civ, "deeds", None)
+    a_now = float(getattr(civ, "alignment", 0.0) or 0.0)
+    if d is not None and abs(round(math.tanh(float(d)), 4) - a_now) > 1e-4:
+        d = None                                       # its alignment was set as a given: its deeds follow it
+    if d is None:
+        a = max(-0.9999, min(0.9999, float(getattr(civ, "alignment", 0.0) or 0.0)))
+        d = math.atanh(a)
+    return float(d)
+
+
+def set_people(civ: Any, value: float) -> None:
+    """Set a people's alignment as a given (a genesis, a founding): its deeds are what that alignment would take."""
+    civ.alignment = round(max(-0.9999, min(0.9999, float(value))), 4)
+    civ.deeds = math.atanh(civ.alignment)
+
+
+def people_shift(civ: Any, delta: float) -> None:
+    """A deed: the people's deeds grow by its measure, and its alignment is read from them."""
+    civ.deeds = deeds_of(civ) + float(delta)
+    civ.alignment = round(math.tanh(civ.deeds), 4)
+
+
+def fade(civ: Any, generations: float) -> None:
+    """What a people did fades from its character as its telling of it fades."""
+    from xylarium.kernel import memory
+    civ.deeds = deeds_of(civ) * (1.0 - memory.TELL_ERR) ** max(0.0, generations)
+    civ.alignment = round(math.tanh(civ.deeds), 4)
+
+
+def standing(kernel: Any, who: str, among: List[str]) -> float:
+    """Where a people stands among those it knows, 0 (the darkest of them) .. 1 (the lightest): how peoples read each
+    other in a galaxy whatever its lean - by their deeds, not against an absolute edge."""
+    from xylarium.kernel import relations
+    by = relations._peoples(kernel)
+
+    def d(h: str) -> Optional[float]:
+        ws = by.get(h)
+        civ = getattr(max(ws, key=lambda p: p.population), "civilization", None) if ws else None
+        return deeds_of(civ) if civ is not None else None
+    mine = d(who)
+    others = [x for x in (d(h) for h in set(among) - {who}) if x is not None]
+    if mine is None or not others:
+        return 0.5
+    return (sum(1 for x in others if x < mine) + 0.5 * sum(1 for x in others if x == mine)) / len(others)
 
 
 def scales(kernel: Any) -> Dict[str, float]:

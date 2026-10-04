@@ -277,6 +277,8 @@ def quarter(kernel: Any) -> List[str]:
     logs: List[str] = []
     for p in _peoples(kernel):
         gen = fertility.generation_years(fertility.strategy(kernel, p))
+        from xylarium.kernel import alignment
+        alignment.fade(p.civilization, (_quarter() / 100.0) / max(1e-6, gen))   # old deeds fade as their telling does
         _council(kernel, p)                                   # moves only what no steward has set
         _believe(kernel, p, gen)
         _guilds(kernel, p)

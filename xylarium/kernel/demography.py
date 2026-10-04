@@ -344,7 +344,8 @@ def _stewardship(kernel: Any, planet: Any) -> None:
     else:
         civ = getattr(planet, "civilization", None)
         if civ is not None and hasattr(civ, "alignment"):
-            civ.alignment = round(min(1.0, (civ.alignment or 0.0) + 0.002), 4)
+            from xylarium.kernel import alignment
+            alignment.people_shift(civ, 0.002)
 
 
 def _covenant(kernel: Any, planet: Any) -> None:

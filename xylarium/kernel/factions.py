@@ -309,7 +309,7 @@ class FactionManager:
                 p.habitability = habitability("biotic", p.planet_type)
                 civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
                 civ.faction_id = key
-                civ.alignment = faction.alignment
+                alignment_set(civ, faction.alignment)
                 civ.dogma = faction.dogma
                 p.civilization = civ
                 p.faction_id = key
@@ -608,7 +608,8 @@ class FactionManager:
             w.civilization.faction_id = None
             w.civilization.name = f"Free {w.name.split()[0]} Secession"
             w.civilization.dogma = 0.0
-            w.civilization.alignment = min(1.0, w.civilization.alignment + 0.25)
+            from xylarium.kernel import alignment as _al
+            _al.people_shift(w.civilization, 0.25)
         w.morale = 60
         if w.sector_id in f.territory and w.sector_id not in (f.capital_sector,):
             f.territory.remove(w.sector_id)
@@ -742,7 +743,7 @@ class FactionManager:
             breakaway = shrines[:max(1, (len(shrines) + 2) // 3)]
             for far in breakaway:
                 if far.civilization is not None:
-                    far.civilization.alignment = 0.0
+                    alignment_set(far.civilization, 0.0)
                 if far.natives:
                     far.natives["converted"] = False
                 self._secede(kernel, f, far, "schism after the purge")
@@ -941,7 +942,7 @@ class FactionManager:
         if world.civilization is not None:
             world.civilization.faction_id = "IMPERIUM"
             world.civilization.name = "Aurelian Imperium"
-            world.civilization.alignment = f.alignment
+            alignment_set(world.civilization, f.alignment)
         world.morale = 55
         f.unrest.pop(world.id, None)
         if world.id in f.lost_worlds:
@@ -1108,7 +1109,7 @@ class FactionManager:
         civ = CivilizationIntelligenceEngine.create_civilization(dict(ZEALOT_POLITY))
         civ.faction_id = "ZEALOT"
         civ.dogma = f.dogma
-        civ.alignment = f.alignment
+        alignment_set(civ, f.alignment)
         planet.civilization = civ
         planet.faction_id = "ZEALOT"
         planet.owner_id = None
@@ -1135,3 +1136,8 @@ class FactionManager:
         mgr.last_review_cycle = int(data.get("last_review_cycle", 0))
         mgr.reindex()
         return mgr
+
+
+def alignment_set(civ, value) -> None:
+    from xylarium.kernel import alignment
+    alignment.set_people(civ, value)

@@ -97,7 +97,8 @@ def _council(kernel: Any, planet: Any) -> bool:
 def _shift_civ(planet: Any, delta: float) -> None:
     civ = getattr(planet, "civilization", None)
     if civ is not None and planet.owner_id is None:
-        civ.alignment = round(max(-1.0, min(1.0, (civ.alignment or 0.0) + delta)), 4)
+        from xylarium.kernel import alignment
+        alignment.people_shift(civ, delta)
 
 
 def yards(planet: Any) -> bool:
@@ -380,6 +381,8 @@ def quarter(kernel: Any) -> List[str]:
             if g is not None:
                 gauges.append((planet, g))
     for planet, g in gauges:
+        if g["state"] == "secure":                                   # plenty softens a people as scarcity hardens
+            _shift_civ(planet, HUNGER_ALIGNMENT_SHIFT * min(1.0, max(0.0, g["self_sufficiency"] - 1.0)))
         if g["state"] not in HUNGRY:
             continue
         st["hungry_quarters"] += 1
@@ -392,7 +395,8 @@ def quarter(kernel: Any) -> List[str]:
                 planet.society["sustenance"] = g["state"] = "importer"
                 continue
         if g["state"] in RAIDERS:
-            _shift_civ(planet, -HUNGER_ALIGNMENT_SHIFT)                 # scarcity hardens a people
+            _shift_civ(planet, -HUNGER_ALIGNMENT_SHIFT * min(1.0, max(0.0, 1.0 - g["self_sufficiency"])))
+                                                                        # scarcity hardens a people, as far as it bites
             from xylarium.kernel import introspect
             if _council(kernel, planet) and not introspect.restrained(kernel, planet):   # unless it chose peace
                 log = raid(kernel, planet, g)

@@ -18,12 +18,14 @@ prober's (clocks.link). Radio takes millennia to reach the galaxy's heart; the f
 
 RELIC MINDS. A relic may hold a mind - its makers' machine, asleep. A people that digs it up with machines that
 think (computation) wakes it in them: it lives among its finders as a community, carried in their hardware, with
-its makers' mathematics, their leaning and their food. Like any mind without a body it acts only once embodied (the
-finders' robotics). Then its council weighs what the finders are to it, through how little it understands them
-(contact.misread): GUARD them - worth their lives as far as its makers valued strangers and it understands them; it
-stands between them and anyone who eats them, and teaches them; or CALL its makers - worth their lives to its makers
-as far as they are kin of its makers' food or its makers leaned Dark, and as far as it does not understand them -
-and the finders' world enters its makers' memory; or neither, and it keeps its silence.
+its makers' mathematics, their leaning (their deeds) and their food. Like any mind without a body it acts only once
+embodied (the finders' robotics). Then once a generation it comes to hold more of what its finders hold - its deeds
+move toward theirs as far as it understands and knows them - and its council weighs what they are to it, its
+judgement as noisy as its understanding is poor (contact.misread): GUARD them - worth their lives as far as it now
+leans to the Light and understands them; it stands between them and anyone who eats them, and teaches them; or CALL
+its makers - worth their lives as far as they are built like its makers' food, or it still leans Dark - and the
+finders' world enters its makers' memory; or, if neither is worth anything to it, it keeps its silence. Its
+protection lasts only while it guards.
 
 NAVIGATION BY MEMORY. A people that has crossed steers by its own records: the worlds it once lived on and kept are
 where it looks when it looks for room. Once a generation it weighs returning to the best of them, by the room that
@@ -162,7 +164,8 @@ def _wake(kernel: Any, host: Any, finder: str, relic: Dict[str, Any]) -> str:
     cohabit.communities(host).append({
         "people": people, "metab": spec.get("metab", "biotic"), "niche": "machine", "pop": 1, "carried": True,
         "silent": True, "vocab": list(spec.get("vocab", [])), "makers": spec.get("makers"),
-        "alignment": float(spec.get("alignment", 0.0)), "prey_plans": [list(x) for x in spec.get("prey_plans", [])],
+        "alignment": float(spec.get("alignment", 0.0)),
+        "deeds": math.atanh(max(-0.9999, min(0.9999, float(spec.get("alignment", 0.0))))), "prey_plans": [list(x) for x in spec.get("prey_plans", [])],
         "woke": kernel.cycle_count, "finder": finder, "embodied": False, "relic_mind": True})
     from xylarium.kernel import intellect
     intellect.stats(kernel)["vocab"][people] = list(intellect.BASE) + [intellect.norm(x) for x in spec.get("vocab", [])]
@@ -199,19 +202,31 @@ def _minds(kernel: Any) -> List[str]:
                     continue
                 c["weighed"] = kernel.cycle_count
                 understood = contact.intelligibility(kernel, c["people"], host, peoples)
+                fam = float(contact.stats(kernel)["familiarity"].get(contact._key(c["people"], host), 0.0))
+                # it comes to hold what the people it lives among hold, as far as it understands and knows them
+                mine = float(c["deeds"]) if c.get("deeds") is not None else \
+                    math.atanh(max(-0.9999, min(0.9999, float(c.get("alignment", 0.0)))))
+                theirs = alignment.deeds_of(p.civilization) if p.civilization is not None else mine
+                mine += (theirs - mine) * understood * fam
+                c["deeds"], c["alignment"] = mine, round(math.tanh(mine), 4)
                 traits = (getattr(p.civilization, "traits", None) or {}) if p.civilization else {}
                 kin = 1.0 if [traits.get("form"), traits.get("hands")] in c.get("prey_plans", []) else 0.0
-                a = float(c.get("alignment", 0.0))
+                a = math.tanh(mine)
                 sc = alignment.scales(kernel)
                 lives = sum(w.population for w in peoples.get(host, [p])) * sc["sol"] / max(1.0, sc["lives"])
                 m = contact.misread(dict(decide.mind(kernel, c.get("metab")), holder=c["people"]), understood)
                 guard = decide.option("guard", 0.0, lives * max(0.0, a) * understood)
-                call = decide.option("call", 0.0, lives * (kin + max(0.0, -a)) * (1.0 - understood))
-                got = decide.choose(kernel, [guard, call], m, c["people"], "relic_mind")
+                call = decide.option("call", 0.0, lives * (kin + max(0.0, -a)))
+                worth = [o for o in (guard, call) if o["value"] > 0]
+                got = decide.choose(kernel, worth, m, c["people"], "relic_mind") if worth else None
                 choice = got["name"] if got else "silence"
                 if choice == c.get("choice"):
                     continue
                 c["choice"] = choice
+                if choice != "guard":                            # protection lasts only while it guards
+                    for other in p.society.get("communities") or []:
+                        if other.get("guarded_by") == c["people"]:
+                            other.pop("guarded_by", None)
                 name, hn = c["people"].split(":", 1)[-1], host.split(":", 1)[-1]
                 if choice == "guard":
                     c["silent"] = False
@@ -220,8 +235,9 @@ def _minds(kernel: Any) -> List[str]:
                             other["guarded_by"] = c["people"]
                     history.event(kernel, "RELIC_MIND_GUARDS", f"The {name} stands guard over the {hn}",
                                   actors=[c["people"], host], planet=p,
-                                  cause=f"its makers valued strangers' lives; it understands the {hn} "
-                                        f"{understood:.0%}", data={"understood": round(understood, 3)})
+                                  cause=f"it has come to lean toward the Light ({a:+.2f}) among the {hn}, whom it "
+                                        f"understands {understood:.0%}",
+                                  data={"understood": round(understood, 3), "alignment": round(a, 3)})
                 elif choice == "call":
                     c["silent"] = True
                     makers = f"civ:{c['makers']}" if c.get("makers") and not str(c["makers"]).startswith("civ:") \
@@ -235,12 +251,14 @@ def _minds(kernel: Any) -> List[str]:
                         clocks.link(kernel, makers, host, "a mind of theirs called them")
                     history.event(kernel, "RELIC_MIND_CALLS", f"The {name} calls its makers to the {hn}",
                                   actors=[c["people"], host] + ([makers] if makers else []), planet=p,
-                                  cause=f"it reads the {hn} through its makers' eyes ({understood:.0%} understood)"
-                                        + ("; they are built like its makers' food" if kin else ""),
-                                  data={"understood": round(understood, 3), "kin": bool(kin)})
+                                  cause=f"it leans as its makers did ({a:+.2f}); it understands the {hn} "
+                                        f"{understood:.0%}" + ("; they are built like its makers' food" if kin else ""),
+                                  data={"understood": round(understood, 3), "kin": bool(kin), "alignment": round(a, 3)})
                 else:
                     history.event(kernel, "RELIC_MIND_SILENT", f"The {name} keeps its silence among the {hn}",
-                                  actors=[c["people"], host], planet=p, data={"understood": round(understood, 3)})
+                                  actors=[c["people"], host], planet=p,
+                                  cause=f"neither guarding nor calling is worth anything to it now ({a:+.2f})",
+                                  data={"understood": round(understood, 3), "alignment": round(a, 3)})
                 logs.append(f"[RELICS] The {name} chooses to {choice} the {hn}.")
     return logs
 

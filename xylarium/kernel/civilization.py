@@ -132,7 +132,8 @@ class Civilization:
     trade_urgency: Dict[str, int] = field(default_factory=dict)
     research_points: int = 0
     grown_basis: List[Dict[str, Any]] = field(default_factory=list)
-    alignment: float = 0.0                 # Cosmic alignment of the civilization (Light +1 .. Dark -1)
+    alignment: float = 0.0                 # Cosmic alignment of the civilization (Light +1 .. Dark -1): tanh(deeds)
+    deeds: Optional[float] = None          # the unbounded sum of its measured consequences (alignment.py)
     native_policy: Optional[str] = None    # System-level doctrine for locals (overrides a laxer galactic card)
     dogma: float = 0.0                     # Dogma index for theocracies (Choir of the Pyre)
     faction_id: Optional[str] = None
@@ -173,6 +174,7 @@ class Civilization:
             "research_points": self.research_points,
             "grown_basis": [dict(b) for b in self.grown_basis],
             "alignment": round(self.alignment, 4),
+            "deeds": None if self.deeds is None else round(self.deeds, 6),
             "native_policy": self.native_policy,
             "dogma": round(self.dogma, 4),
             "faction_id": self.faction_id,
@@ -205,6 +207,7 @@ class Civilization:
             research_points=data.get("research_points", 0),
             grown_basis=list(data.get("grown_basis", [])),
             alignment=float(data.get("alignment", 0.0)),
+            deeds=None if data.get("deeds") is None else float(data["deeds"]),
             native_policy=data.get("native_policy"),
             dogma=float(data.get("dogma", 0.0)),
             faction_id=data.get("faction_id"),
