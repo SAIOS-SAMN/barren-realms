@@ -195,7 +195,7 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
     from xylarium.kernel import rent
     rent.overturned(kernel, planet)                         # the few who took are gone, and their take with them
     if dead and planet.civilization is not None:
-        alignment.flow(planet.civilization, dark=dead)      # the lives its own order cost it
+        alignment.flow(planet.civilization, dark=dead, why="strife")      # the lives its own order cost it
     people = getattr(planet.civilization, "name", planet.name)
     from xylarium.kernel import history, knowledge
     history.event(kernel, "STRIFE", f"The {people} turn on themselves", actors=[knowledge.holder_of_planet(planet)],
@@ -228,7 +228,7 @@ def _niche_wars(kernel: Any, planet: Any) -> Optional[str]:
             continue
         c["pop"] -= driven
         stats(kernel)["driven_out"] += driven
-        sustenance.flow_civ(planet, dark=driven)
+        sustenance.flow_civ(planet, dark=driven, why="niche war")
         lines.append(f"[SOCIETY] {planet.name}'s people drive {driven:,} of the {c['people'].split(':')[-1]} "
                      f"out of the {c['niche']} they shared.")
     return "\n".join(lines) or None

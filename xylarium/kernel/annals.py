@@ -281,7 +281,7 @@ def season(kernel: Any) -> List[str]:
             n = float(home.population)
             ss = float(home.society.get("self_sufficiency", 1.0) or 1.0)
             lost = n * ruled * max(0.0, rent.starved(ss, rho) - rent.starved(ss, 0.0))
-            alignment.flow(civ, light=n * lived_gens - lost, dark=lost)
+            alignment.flow(civ, light=n * lived_gens - lost, dark=lost, why="work and rent")
         if fell is not None:
             logs.append(_fall(kernel, who, worlds, epoch_of(fell)))
             st["falls"] += 1

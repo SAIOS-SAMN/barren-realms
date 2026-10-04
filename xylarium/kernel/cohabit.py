@@ -176,7 +176,7 @@ def _own_work(kernel: Any, c: Dict[str, Any], pop: int, share: float) -> None:
     rather than what it takes."""
     from xylarium.kernel import alignment, decide
     gen_years = max(1e-6, decide.mind(kernel, c.get("metab"))["horizon_q"] / 4.0)
-    alignment.flow(c, light=pop * max(0.0, share) * (_quarter() / 100.0) / gen_years)
+    alignment.flow(c, light=pop * max(0.0, share) * (_quarter() / 100.0) / gen_years, why="work")
 
 
 BODY_FEEDS_DAYS = 50.0          # days a body of like mass feeds an eater (daily intake ~2% of body mass)
@@ -196,13 +196,13 @@ def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> i
         from xylarium.kernel import alignment
         for g in communities(planet):                    # a guardian stands between it and its prey: lives spared
             if g.get("people") == c["guarded_by"]:
-                alignment.flow(g, light=taken)
+                alignment.flow(g, light=taken, why="guarding")
                 from xylarium.kernel import reputation
                 reputation.witness(kernel, c["prey"], g["people"], light=taken)
         return need
     planet.population -= taken
     from xylarium.kernel import alignment
-    alignment.flow(c, dark=taken * kinship.MIND_EATEN)  # a life ended and a mind consumed
+    alignment.flow(c, dark=taken * kinship.MIND_EATEN, why="minds eaten")  # a life ended and a mind consumed
     from xylarium.kernel import contact, reputation    # the herd knows who eats it only if it can see them
     if not contact.hidden(kernel, c["people"], niche=c.get("niche")):
         reputation.witness(kernel, c["prey"], c["people"], dark=taken * kinship.MIND_EATEN)
@@ -281,7 +281,7 @@ def _reset(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
         intellect.stats(kernel)["vocab"][herd] = [x for x in v if intellect.RANK_OF.get(intellect.norm(x), 2) <= 2]
     memory._burn(kernel, herd, planet)
     civ.dogma = round(min(1.0, float(civ.dogma or 0.0) + threat * (1.0 - float(civ.dogma or 0.0))), 4)
-    alignment.flow(c, dark=lost)
+    alignment.flow(c, dark=lost, why="reset")
     stats(kernel)["resets"] = stats(kernel).get("resets", 0) + 1
     history.event(kernel, "RESET", f"The {herd.split(':', 1)[-1]} are set back to sticks and stones",
                   actors=[herd], planet=planet, magnitude=lost,
@@ -306,7 +306,7 @@ def _teach(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
         units = int(c["pop"]) / 1000.0 * knowledge.LIVED_SHARE * fam * years
         knowledge.learn(kernel, host, domain, units, "taught by carried minds")
         # a knowledge unit is a thousand minds' year of thought: given, it is that much of lives' work made for others
-        alignment.flow(c, light=units * 1000.0 / max(1.0, gen))
+        alignment.flow(c, light=units * 1000.0 / max(1.0, gen), why="teaching")
         from xylarium.kernel import reputation
         reputation.witness(kernel, host, c["people"], light=units * 1000.0 / max(1.0, gen))
     v = intellect.stats(kernel)["vocab"].setdefault(host, list(intellect.BASE))

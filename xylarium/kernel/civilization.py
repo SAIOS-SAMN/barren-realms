@@ -137,6 +137,7 @@ class Civilization:
     dark: float = 0.0                      # lives its history took
     told_light: float = 0.0                # the same, as its own records still hold them (its doctrine)
     told_dark: float = 0.0
+    causes: Dict[str, List[float]] = field(default_factory=dict)   # its history by cause (alignment.flow)
     native_policy: Optional[str] = None    # System-level doctrine for locals (overrides a laxer galactic card)
     dogma: float = 0.0                     # Dogma index for theocracies (Choir of the Pyre)
     faction_id: Optional[str] = None
@@ -179,6 +180,7 @@ class Civilization:
             "alignment": round(self.alignment, 4),
             "light": round(self.light, 3), "dark": round(self.dark, 3),
             "told_light": round(self.told_light, 3), "told_dark": round(self.told_dark, 3),
+            "causes": {k: [round(v[0], 3), round(v[1], 3)] for k, v in self.causes.items()},
             "native_policy": self.native_policy,
             "dogma": round(self.dogma, 4),
             "faction_id": self.faction_id,
@@ -213,6 +215,7 @@ class Civilization:
             alignment=float(data.get("alignment", 0.0)),
             light=float(data.get("light", 0.0)), dark=float(data.get("dark", 0.0)),
             told_light=float(data.get("told_light", 0.0)), told_dark=float(data.get("told_dark", 0.0)),
+            causes={k: [float(v[0]), float(v[1])] for k, v in (data.get("causes") or {}).items()},
             native_policy=data.get("native_policy"),
             dogma=float(data.get("dogma", 0.0)),
             faction_id=data.get("faction_id"),

@@ -196,7 +196,7 @@ def quarter(kernel: Any) -> List[str]:
                 saved = _carry(kernel, p, dest[0], n, dest[1])
                 if saved:
                     st["rescued"] += saved
-                    sustenance.flow_civ(port, light=saved)
+                    sustenance.flow_civ(port, light=saved, why="rescue")
                     rname = getattr(civ, "name", port.name)
                     history.event(kernel, "RESCUE", f"The {rname} carry {saved:,} of the {name} to safety",
                                   actors=[_holder(port), holder], planet=p, magnitude=saved,
@@ -267,7 +267,8 @@ def perished(kernel: Any, planet: Any, lives: int, kind: str) -> None:
     for w in _worlds_of(kernel, holder):
         if w is planet:
             continue
-        sustenance.flow_civ(w, dark=failed)                         # the government that left them behind darkens
+        alignment.omitted(w, failed, alignment.foreseen(kernel, holder, "energy"), 1.0, "abandoned")   # it could carry
+                                                                 # them; as far as it knew its star, it knew
         w.morale = max(10, w.morale - 25)                        # and its people lose faith in it
     history.event(kernel, "ABANDONED", f"The {name} were left to die", actors=[holder], planet=planet,
                   magnitude=failed, cause="their government could have carried them and did not")

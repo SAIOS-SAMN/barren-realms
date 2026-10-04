@@ -729,7 +729,7 @@ class FactionManager:
             w.population -= loss
             if w.civilization is not None:        # its own order burns its own
                 from xylarium.kernel import alignment
-                alignment.flow(w.civilization, dark=loss)
+                alignment.flow(w.civilization, dark=loss, why="purge")
             lost += loss
             w.morale = max(10, w.morale - 20)
         f.dogma = max(0.2, f.dogma - 0.3)

@@ -136,10 +136,10 @@ def season(kernel: Any, planet: Any, gens: float, gen_years: float) -> None:
     n = float(planet.population) * max(0.0, gens)
     ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
     lost = n * max(0.0, starved(ss, rho) - starved(ss, 0.0))          # the hunger the take adds
-    alignment.flow(planet.civilization, light=n - lost, dark=lost)
+    alignment.flow(planet.civilization, light=n - lost, dark=lost, why="work and rent")
 
 
-def prehistory(kernel: Any, planet: Any) -> None:
+def prehistory(kernel: Any, planet: Any, generations: Optional[float] = None) -> None:
     """A people placed into the world already grown (a genesis, a founding, a scenario) brings its past with it: the
     ages it has passed through, each for its measured span (annals.SPANS, in its own generations), its own work all
     the while - and, since it has had a state, what its few take now (`choose`). Its history is written once, so
@@ -152,13 +152,17 @@ def prehistory(kernel: Any, planet: Any) -> None:
     reached = annals.STAGES[1:annals.STAGES.index(stage) + 1]
     lived = sum(annals.SPANS[s] for s in reached)
     ruled = sum(annals.SPANS[s] for s in reached if annals.STAGES.index(s) > annals.STAGES.index("state"))
+    if generations is not None and generations > lived:      # a past longer than its ages took: ruled since
+        ruled += generations - lived
+        lived = generations
     rho = choose(kernel, planet, ruled=True) if ruled > 0 else 0.0
     n = float(planet.population)
     for key in ("light", "dark", "told_light", "told_dark"):
         setattr(civ, key, 0.0)
+    civ.causes = {}
     ss = float(planet.society.get("self_sufficiency", 1.0) or 1.0)
     lost = n * ruled * max(0.0, starved(ss, rho) - starved(ss, 0.0))
-    alignment.flow(civ, light=n * lived - lost, dark=lost)
+    alignment.flow(civ, light=n * lived - lost, dark=lost, why="prehistory")
 
 
 def overturned(kernel: Any, planet: Any) -> None:

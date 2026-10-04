@@ -155,10 +155,10 @@ def season(kernel: Any) -> List[str]:
             soc["_waste_k_was"] = factor
             change = base * (factor - 1.0) * gens                  # lives of room, this season
             if change < 0:
-                sustenance.flow_civ(p, dark=-change)
+                sustenance.flow_civ(p, dark=-change, why="waste")
                 st["room_lost"] = st.get("room_lost", 0.0) - change
             elif change > 0:
-                sustenance.flow_civ(p, light=change)
+                sustenance.flow_civ(p, light=change, why="waste")
                 st["room_made"] = st.get("room_made", 0.0) + change
     return []
 

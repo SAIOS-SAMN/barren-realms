@@ -226,3 +226,20 @@ class TestCaptains(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestForeseenAndAvoidable(unittest.TestCase):
+    def test_a_loss_counts_as_far_as_it_was_seen_and_could_be_prevented(self):
+        p = SimpleNamespace(civilization=_civ(), owner_id=None)
+        self.assertEqual(alignment.omitted(p, 100, 0.0, 1.0, "famine foreseen"), 0.0)   # it could not know
+        self.assertEqual(alignment.omitted(p, 100, 1.0, 0.0, "famine foreseen"), 0.0)   # it had no means
+        self.assertAlmostEqual(alignment.omitted(p, 100, 0.5, 0.5, "famine foreseen"), 25.0)
+        self.assertAlmostEqual(alignment.causes(p.civilization)["famine foreseen"]["dark"], 25.0)
+
+    def test_every_flow_keeps_its_cause(self):
+        c = _civ()
+        alignment.flow(c, light=90, why="work")
+        alignment.flow(c, dark=10, why="waste")
+        cs = alignment.causes(c)
+        self.assertEqual(list(cs)[0], "waste")
+        self.assertEqual(cs["waste"]["share_of_dark"], 1.0)

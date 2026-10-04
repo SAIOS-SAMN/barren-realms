@@ -112,7 +112,7 @@ def landfill(kernel: Any) -> None:
         world.element_deposits["TAILINGS"] = world.element_deposits.get("TAILINGS", 0) + q
         if k0 > 0:                                 # the room for life its waste takes from its world
             sustenance.flow_civ(world, dark=k0 * (1.0 - float(pollution_factor(world)) /
-                                                    max(1e-12, float(_pf_without(world, q)))))
+                                                    max(1e-12, float(_pf_without(world, q)))), why="tailings")
         st["landfilled"] = st.get("landfilled", 0) + q
 
 

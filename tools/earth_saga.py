@@ -267,7 +267,10 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     _lift(k, keepers, [c for c in technology.CAPS if c != "transfer"],
           ("forage", "farm", "state", "works", "yards", "crossed"), reset=True)
     mastery.stats(k)["crossed"][keepers] = k.cycle_count
-    annals.stats(k)["of"][keepers]["advanced"] = (now - dawn) * 1e9      # the keepers' 66 million years, lived
+    annals.stats(k)["of"][keepers]["advanced"] = (now - dawn) * 1e9      # the keepers' 66 million years, lived -
+    from xylarium.kernel import rent                                       # and written into their history
+    for p in colonies:
+        rent.prehistory(k, p, generations=(now - dawn) * 1e9 / max(1.0, fertility.generation_of(k, p)))
     ledger.event(k, "ASCENT", f"The {keepers.split(':')[-1]} cross to the stars", actors=[keepers], planet=earth,
                  cause="scenario: the great reptiles of Earth's Mesozoic reach the stars",
                  data={"epoch": dawn + (ago(66_000_000) - dawn) * 0.5 if dawn < ago(66_000_000) else dawn})
@@ -309,9 +312,9 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
         lives = (n0 + n1) / 2 * scale * gens             # person-generations lived in the span
         ruled = max(0.0, min(a0, STATES_YEARS_AGO) - a1) / max(1e-9, a0 - a1)
         alignment.fade(earth.civilization, gens, keep)
-        alignment.flow(earth.civilization, light=lives * (1.0 - ruled * rho), dark=lives * ruled * rho)
+        alignment.flow(earth.civilization, light=lives * (1.0 - ruled * rho), dark=lives * ruled * rho, why="work and rent")
     for decade, ended, saved in HUMAN_DEEDS:
-        alignment.flow(earth.civilization, light=saved * 1e6 * scale, dark=ended * 1e6 * scale)
+        alignment.flow(earth.civilization, light=saved * 1e6 * scale, dark=ended * 1e6 * scale, why="recorded decades")
         ledger_deeds.append((decade, round(earth.civilization.alignment, 4), round(alignment.doctrine(earth.civilization), 4)))
     # the war, 12,000 years ago (the Younger Dryas)
     mars = next((p for p in sun.planets[found["w"] + 1:] if p.planet_type not in ("GAS_GIANT", "ROGUE")
@@ -352,7 +355,8 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     eaten_a_year = creation.VIABLE / kinship.PREY_PLANS * days / cohabit.BODY_FEEDS_DAYS
     keeper_gen = decide.mind(k, "biotic")["horizon_q"] / 4.0
     alignment.flow(seas, light=creation.VIABLE * (1.0 - 1.0 / kinship.PREY_PLANS) * HUMANS_YEARS_AGO / keeper_gen,
-                   dark=eaten_a_year * HUMANS_YEARS_AGO * kinship.MIND_EATEN)
+                   why="work")
+    alignment.flow(seas, dark=eaten_a_year * HUMANS_YEARS_AGO * kinship.MIND_EATEN, why="minds eaten")
     earth.society.setdefault("communities", []).append(seas)
     # the elders' works buried in the ancient lands: the fourth axis, their wetware, foresight, and a mind asleep
     ev = dict(elders_world.civilization.to_dict())

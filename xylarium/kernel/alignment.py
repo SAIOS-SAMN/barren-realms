@@ -120,15 +120,50 @@ def gap(x: Any) -> float:
     return doctrine(x) - character(x)
 
 
-def flow(x: Any, light: float = 0.0, dark: float = 0.0) -> None:
-    """Order through a people, in lives: what it made and kept or spared (light), what it took (dark). Goes into its
-    history and into its own telling of it."""
+def flow(x: Any, light: float = 0.0, dark: float = 0.0, why: str = "deeds") -> None:
+    """Order through a people, in lives: what it made and kept or spared (light), what it destroyed (dark). Goes into
+    its history and into its own telling of it, and is kept by its cause (`why`), so a reading can be explained."""
     light, dark = max(0.0, float(light)), max(0.0, float(dark))
     if light <= 0.0 and dark <= 0.0:
         return
     for key, add in (("light", light), ("dark", dark), ("told_light", light), ("told_dark", dark)):
         _put(x, key, float(_get(x, key, 0.0) or 0.0) + add)
+    causes = _get(x, "causes", None)
+    if causes is None:
+        causes = {}
+        _put(x, "causes", causes)
+    c = causes.setdefault(why, [0.0, 0.0])
+    c[0] += light
+    c[1] += dark
     _put(x, "alignment", round(character(x), 4))
+
+
+def foreseen(kernel: Any, holder: Optional[str], domain: str) -> float:
+    """How far a people could have seen a loss coming, 0 .. 1: its mastery of the science that predicts it (what it
+    knows of `domain`, laws.mastery). A people that could not know is not answerable for what it did not see."""
+    from xylarium.config import KNOWLEDGE_UNIT
+    from xylarium.kernel import knowledge, laws
+    if not holder:
+        return 0.0
+    return laws.mastery(knowledge.experience(kernel, holder, domain), KNOWLEDGE_UNIT)
+
+
+def omitted(planet: Any, lives: float, foreseen_share: float, avoidable_share: float, why: str) -> float:
+    """Lives lost to what a people could have seen coming and had the means to prevent, and did not: dark, as far
+    as both reach. Returns the lives counted."""
+    counted = max(0.0, lives) * max(0.0, min(1.0, foreseen_share)) * max(0.0, min(1.0, avoidable_share))
+    civ = getattr(planet, "civilization", None)
+    if counted > 0 and civ is not None and getattr(planet, "owner_id", None) is None:
+        flow(civ, dark=counted, why=why)
+    return counted
+
+
+def causes(x: Any) -> Dict[str, Dict[str, float]]:
+    """A people's history by cause: lives made and destroyed, and each cause's share of all that was destroyed."""
+    cs = _get(x, "causes", None) or {}
+    dark = sum(v[1] for v in cs.values()) or 1.0
+    return {k: {"light": round(v[0], 3), "dark": round(v[1], 3), "share_of_dark": round(v[1] / dark, 4)}
+            for k, v in sorted(cs.items(), key=lambda kv: -kv[1][1])}
 
 
 def lives_of_sol(kernel: Any, sol: float, planet: Any = None) -> float:

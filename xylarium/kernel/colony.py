@@ -658,6 +658,8 @@ class ColonyManager:
                 fertility.mark(planet, "famine", kernel.cycle_count)
             famine_loss = max(0, min(planet.population - 100, max(5, deficit * 200)))
             planet.population -= famine_loss          # down to a last hundred, never up from below it
+            if kernel is not None and planet.civilization is not None and not planet.owner_id:
+                _famine_answered(kernel, planet, famine_loss, deficit)
             planet.morale = max(10, planet.morale - 15)
             pop_growth = -famine_loss
             # a remnant its own land cannot feed (its measured harvest short of even its need) does not linger:
@@ -1163,3 +1165,17 @@ class ColonyManager:
             data={"element_id": element_id, "amount": amount, "direction": direction},
             logs=[msg]
         )
+
+
+def _famine_answered(kernel: Any, planet: Any, lost: int, deficit: int) -> None:
+    """A famine a people could have seen (what it knows of its own harvests: biology) and had the food to prevent -
+    held in its other worlds' stores beyond their own season - is its omission (alignment.omitted)."""
+    from xylarium.kernel import alignment, knowledge, staples, sustenance
+    holder = knowledge.holder_of_planet(planet)
+    food = staples.of(kernel, planet)
+    spare = sum(max(0, staples.held(w, food) - staples.reserve(kernel, w, food))
+                for s in kernel.sectors.values() for w in s.planets
+                if w is not planet and w.population > 0 and sustenance.people_of(w) == holder)
+    alignment.omitted(planet, lost, alignment.foreseen(kernel, holder, "biology"),
+                      spare / max(1, deficit), "famine foreseen")
+

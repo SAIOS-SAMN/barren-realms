@@ -222,7 +222,7 @@ def _season_world(kernel: Any, planet: Any, years: float, rec: Dict[str, Any]) -
     # ill health kills beyond what the people's own balance carries; medicine spares some of those it would
     if excess < 0 and medicine(kernel, planet) > 0:            # lives its own healing spares are its deeds too
         from xylarium.kernel import sustenance
-        sustenance.flow_civ(planet, light=-excess)
+        sustenance.flow_civ(planet, light=-excess, why="medicine")
     owed = excess + float(life.get("excess_carry", 0.0))
     take = max(-10 ** 12, min(int(owed), planet.population))
     life["excess_carry"] = round(owed - int(owed), 6)

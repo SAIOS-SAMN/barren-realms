@@ -68,7 +68,7 @@ def _uplift(kernel: Any, elder: str, port: Any, young: str, worlds: List[Any]) -
         return None
     for d, u in lesson.items():
         knowledge.learn(kernel, young, d, u, why="taught")
-    sustenance.flow_civ(port, light=lives)              # the lives its lesson reaches
+    sustenance.flow_civ(port, light=lives, why="uplift")              # the lives its lesson reaches
     from xylarium.kernel import reputation
     reputation.witness(kernel, young, elder, light=lives)
     st = stats(kernel)
@@ -121,7 +121,7 @@ def _seed(kernel: Any, elder: str, port: Any) -> Optional[str]:
     out = designer.seed(kernel, elder, {"metabolism": metab}, w, ename)
     if out.get("why_not"):
         return None
-    sustenance.flow_civ(port, light=pv["foragers_fed"])   # the lives the seeded world will feed
+    sustenance.flow_civ(port, light=pv["foragers_fed"], why="seeding")   # the lives the seeded world will feed
     stats(kernel)["seeded"] += 1
     return f"[GUIDANCE] The {ename} seed a {metab} people on {w.name}."
 

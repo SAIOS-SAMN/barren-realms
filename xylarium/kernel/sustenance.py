@@ -93,12 +93,12 @@ def _council(kernel: Any, planet: Any) -> bool:
     return owner is None or bool(getattr(owner, "is_ai", False))
 
 
-def flow_civ(planet: Any, light: float = 0.0, dark: float = 0.0) -> None:
-    """Lives a council-led people made or spared (light) or took (dark), into its history (alignment.flow)."""
+def flow_civ(planet: Any, light: float = 0.0, dark: float = 0.0, why: str = "deeds") -> None:
+    """Lives a council-led people made or spared (light) or destroyed (dark), into its history (alignment.flow)."""
     civ = getattr(planet, "civilization", None)
     if civ is not None and planet.owner_id is None:
         from xylarium.kernel import alignment
-        alignment.flow(civ, light=light, dark=dark)
+        alignment.flow(civ, light=light, dark=dark, why=why)
 
 
 def yards(planet: Any) -> bool:
@@ -289,7 +289,7 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
         alignment.act(kernel, kernel.captains.get(planet.owner_id), "food_raid", harmed_sol=taken,
                       lives_lost=starved)
     else:
-        flow_civ(planet, dark=starved)
+        flow_civ(planet, dark=starved, why="raid")
         from xylarium.kernel import reputation          # the raided remember the whole take
         reputation.witness(kernel, them, me, dark=take * alignment.LIVES_PER_FOOD_UNIT)
     _war(kernel, planet, me, them, food, take, where.id)
@@ -371,7 +371,7 @@ def relieve(kernel: Any, planet: Any, gauge: Dict[str, Any]) -> Optional[str]:
     if donor.owner_id:
         alignment.act(kernel, kernel.captains.get(donor.owner_id), "famine_aid", helped_sol=helped, lives_saved=saved)
     else:
-        flow_civ(donor, light=saved)
+        flow_civ(donor, light=saved, why="relief")
     from xylarium.kernel import reputation
     reputation.witness(kernel, me, people_of(donor), light=saved)
     return (f"[RELIEF] {people_name(kernel, people_of(donor))} of {donor.name} sent {give:,} {food} to the hungry "

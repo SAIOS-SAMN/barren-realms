@@ -364,7 +364,7 @@ def _cores(kernel: Any) -> List[str]:
             if owner is not None:
                 alignment.act(kernel, owner, "core_harvest", lives_lost=lost)
             else:
-                sustenance.flow_civ(p, dark=lost)
+                sustenance.flow_civ(p, dark=lost, why="core harvest")
     return logs
 
 
