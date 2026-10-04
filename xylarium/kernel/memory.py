@@ -90,6 +90,7 @@ TALES = {                       # what a record keeps once it is told as myth: i
     "EXODUS": "they fled a dying sun",
     "WORLD_STRIPPED": "a world was stripped to the bone",
     "WORLD_SHATTERED": "a world was broken",
+    "FLOOD": "the waters rose and swallowed the land of the ones who came before",
     "famine": "the {colour} sun turned its face away, and the fields gave nothing",
     "blight": "a sickness walked out of the crowded places, and the {colour} sun did not stop it",
     "bombarded": "fire fell from the dark between the stars",

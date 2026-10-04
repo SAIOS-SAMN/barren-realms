@@ -116,7 +116,7 @@ def kind_of(a: float, b: float) -> str:
 
 # ---------------------------------------------------------------------- the season
 def quarter(kernel: Any) -> List[str]:
-    from xylarium.kernel import biosphere, fertility, staples
+    from xylarium.kernel import biosphere, fertility, knowledge, staples
     st = stats(kernel)
     logs: List[str] = []
     kinds: Dict[str, int] = {}
@@ -136,6 +136,8 @@ def quarter(kernel: Any) -> List[str]:
                     k = max(0, k - p.population)          # a shared niche is shared
                 staple = STAPLES.get(m, "ORGANICS")
                 need = _need_q(pop)
+                if c.get("prey") and c["prey"] == knowledge.holder_of_planet(p) and p.population > 1:
+                    need = _hunt(kernel, p, c, pop, need)          # what it takes of its host, it need not grow
                 grown = staples.add(p, staple, min(need, _need_q(k)), "harvest") if staple != "ORE" else \
                     _graze(p, min(need, _need_q(k)))
                 eaten = staples.take(p, staple, need, "eaten")
@@ -160,6 +162,31 @@ def quarter(kernel: Any) -> List[str]:
     if (kernel.cycle_count // _quarter()) % 4 == 0:
         logs += _settle(kernel)
     return logs
+
+
+BODY_FEEDS_DAYS = 50.0          # days a body of like mass feeds an eater (daily intake ~2% of body mass)
+
+
+def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> int:
+    """A community that keeps its host's people as prey takes its diet's share of them - one of the handful of
+    body plans its world feeds it on (kinship.PREY_PLANS) - a body feeding one of it for BODY_FEEDS_DAYS; what it
+    takes it need not harvest. Each year the ledger records the lives taken (KIN_EATEN: a mind eaten by a mind)."""
+    from xylarium.kernel import history, knowledge, kinship
+    share = 1.0 / kinship.PREY_PLANS
+    days = _quarter() / 100.0 * 365.25
+    taken = min(planet.population - 1, int(pop * share * days / BODY_FEEDS_DAYS))
+    if taken <= 0:
+        return need
+    planet.population -= taken
+    c["eaten_year"] = int(c.get("eaten_year", 0)) + taken
+    stats(kernel)["eaten"] = stats(kernel).get("eaten", 0) + taken
+    if (kernel.cycle_count // _quarter()) % 4 == 3:
+        history.event(kernel, "KIN_EATEN", f"The {c['people'].split(':', 1)[-1]} take "
+                      f"{c['eaten_year']:,} of the {c['prey'].split(':', 1)[-1]}", actors=[c["people"], c["prey"]],
+                      planet=planet, magnitude=c["eaten_year"],
+                      cause="they keep the people they share a world with as food")
+        c["eaten_year"] = 0
+    return int(need * (1.0 - share))
 
 
 def _graze(planet: Any, n: int) -> int:

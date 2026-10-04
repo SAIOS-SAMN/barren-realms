@@ -60,6 +60,24 @@ class TestCohabit(unittest.TestCase):
         self.assertTrue(cohabit.communities(host))
         self.assertIn("kind", cohabit.communities(host)[0])
 
+    def test_a_community_that_keeps_its_host_as_prey_takes_its_diets_share(self):
+        from xylarium.kernel import kinship, knowledge
+        random.seed(101)
+        k = GameKernel(seed=7)
+        k.activate()
+        host = next(p for s in k.sectors.values() for p in s.planets if p.population > 10_000 and not p.natives
+                    and getattr(p, "civilization", None) is not None)
+        prey = knowledge.holder_of_planet(host)
+        cohabit.communities(host).append({"people": "civ:Hunters", "metab": "biotic", "pop": 500, "niche": "sea",
+                                          "since": 0, "origin": "x", "prey": prey})
+        before = host.population
+        k.cycle_count = 25
+        cohabit.quarter(k)
+        taken = cohabit.stats(k)["eaten"]
+        days = 25 / 100.0 * 365.25
+        self.assertEqual(taken, int(500 / kinship.PREY_PLANS * days / cohabit.BODY_FEEDS_DAYS))
+        self.assertEqual(before - host.population, taken)
+
 
 if __name__ == "__main__":
     unittest.main()
