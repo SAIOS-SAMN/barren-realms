@@ -5,28 +5,28 @@ conditions - and many histories of it, to see what the laws make of it.
   python3 tools/earth_test.py --years 60 --histories 4            # every world of the experiment
   python3 tools/earth_test.py --years 60 --histories 2 --only story
 
-THE STORY (initial conditions, not claims - none of it is science):
-  - Mars was kept green by the ANUNNAKI, a people whose minds and machines are wetware; a war ~12,000 years ago with
-    the ATLANTEANS (a water people of Earth's seas) stripped Mars and drove the Anunnaki away. Their records still
-    name Mars as their world; Earth is not on their map. (The Anunnaki are the oldest of the seed's seven ancients
-    still living and among the stars in our 2026, other than the Turenol - woken at their own dawn and carried by the
-    annals through their whole history; "Anunnaki" is the story's name for them.)
-  - The Atlanteans did not leave: they live on in Earth's seas, unseen, and keep the humans as food - tending their
-    herd's creed so it asks no questions.
-  - 200 of the Anunnaki's minds were stranded on Earth in the war (the WATCHERS): carried minds, too few to be a
-    people, living among the humans and teaching what they can understand.
-  - The Anunnaki left their works in Earth's ancient lands: their mathematics of the fourth axis, their wetware
-    (genetics, synthesis), and a mind asleep in a machine.
-  - The TURENOL, the galaxy's first people, alive in 2026 by the seed's own laws, keep a hidden outpost under the ice
-    of the system's ocean moon (Europa): they watch, unseen. Their own sun is dying.
-  - The humans: radio, fission, computation, networks, cyber, medicine, orbit, robotics; mathematics to the third
-    axis (Einstein) and no further.
+THE STORY (initial conditions, not claims - none of it is science). The story's peoples are ROLES; every name is
+the seed's own (cosmos._name), so each universe tells its own mythology:
+  - the ELDERS: the oldest of the seed's seven ancients still living and among the stars in our 2026 (other than the
+    sentinels) - woken at their own dawn and carried by the annals through their whole history. They kept Mars green
+    with wetware minds and machines; a war ~12,000 years ago with the KEEPERS stripped Mars and drove them away. Their
+    records still name Mars as their world; Earth is not on their map.
+  - the KEEPERS: a water people of Earth's seas who did not leave - they live on, unseen, and keep the finders as
+    food, tending their herd's creed so it asks no questions.
+  - the STRANDED: 200 of the elders' minds left on Earth in the war - carried minds, too few to be a people, living
+    among the finders and teaching what they can understand.
+  - the elders' works in Earth's ancient lands: their mathematics of the fourth axis, their wetware (genetics,
+    synthesis), and a mind asleep in a machine.
+  - the SENTINELS: the galaxy's first people, alive in 2026 by the seed's own laws, keeping a hidden outpost under the
+    ice of the system's ocean moon: they watch, unseen. Their own sun is dying.
+  - the FINDERS (Earth's people): radio, fission, computation, networks, cyber, medicine, orbit, robotics; mathematics
+    to the third axis (Einstein) and no further.
 
-Every law then acts on its own: the humans dig up the relics (holding what they do not understand), the relic mind
-wakes in their machines and chooses what the humans are to it, the humans may push matter toward light (and ring
-the fold), the Anunnaki steer by their records, the Atlanteans eat and tend the creed, the watchers teach, the
-Turenol watch. The worlds of the experiment remove one piece of the story each; the histories redraw only the
-minds' chance (scheduler: another history of one universe).
+Every law then acts on its own: the finders dig up the relics (holding what they do not understand), the relic mind
+wakes in their machines and chooses what they are to it, the finders may push matter toward light (and ring the
+fold), the elders steer by their records, the keepers eat and tend the creed, the stranded teach, the sentinels
+watch. The worlds of the experiment remove one piece of the story each; the histories redraw only the minds' chance
+(scheduler: another history of one universe).
 """
 
 import argparse
@@ -47,15 +47,15 @@ WAR_YEARS_AGO = 12_000
 HUMANS_2026 = 8_000_000_000
 HUMAN_CAPS = ("radio", "fission", "computation", "networks", "cyber", "medicine", "orbit", "robotics")
 HUMAN_STAGES = ("forage", "farm", "state", "works", "yards")
-WATCHERS = 200
+STRANDED = 200
 ANCIENTS = 7                    # the seed's first minds: the galaxy's ancients
 RELIC_CAPS = ("genetics", "synthesis")
 WORLDS = {
     "story": {},
     "no_predation": {"predation": False},
     "no_relic": {"relic": False},
-    "no_watchers": {"watchers": False},
-    "no_turenol": {"turenol": False},
+    "no_stranded": {"stranded": False},
+    "no_sentinels": {"sentinels": False},
 }
 WATCHED = ("CONTACT", "UPLIFT", "KINSHIP", "KIN_EATEN", "WAR", "RAID", "CONQUEST", "SUBJUGATION", "GALACTIC_WAR",
            "DOMINION", "FIRST_SIGNAL", "WORLDLINES_MEET", "REDISCOVERY", "CAPABILITY", "FTL_CROSSED",
@@ -86,7 +86,8 @@ def build(seed: int, world: Dict[str, Any], history: int) -> Dict[str, Any]:
     from xylarium.kernel import history as ledger
     from xylarium.kernel.civilization import Civilization
     from xylarium.kernel.engine import GameKernel
-    predation, relic, watchers, turenol = (world.get(x, True) for x in ("predation", "relic", "watchers", "turenol"))
+    predation, relic, stranded_on, sentinels_on = (world.get(x, True) for x in
+                                                   ("predation", "relic", "stranded", "sentinels"))
     k = GameKernel(seed=seed, genesis="cosmic:neighbourly")
     k.activate()
     sd = creation.universe(k)
@@ -125,16 +126,22 @@ def build(seed: int, world: Dict[str, Any], history: int) -> Dict[str, Any]:
     # the deep years: the annals carry every woken people from its dawn to our present
     from xylarium.kernel import annals
     annals.season(k)
-    # the Anunnaki: the oldest of the seed's ancients (its first ANCIENTS minds) still living and among the stars in
-    # our 2026, other than the Turenol - away near the galaxy's heart, beyond Sol's lanes. Their name is the story's.
+    # the sentinels: the seed's first people; the elders: the oldest of its other ancients (its first ANCIENTS
+    # minds) still living and among the stars in our 2026 - away near the galaxy's heart, beyond Sol's lanes
     living = relations._peoples(k)
     first = creation.schedule(sd)["minds"][:ANCIENTS]
+
+    def holder_of(m):
+        sid_m = cosmos.sector_of_slot(k, tuple(m["cell"]), m["k"])
+        pl = k.sectors[sid_m].planets[int(m["w"])] if sid_m in k.sectors else None
+        return f"civ:{pl.civilization.name}" if pl is not None and pl.civilization is not None else None
+    sentinel = holder_of(first[0])
     ann, far = None, None
     for m in first:
         sid_m = cosmos.sector_of_slot(k, tuple(m["cell"]), m["k"])
         pl = k.sectors.get(sid_m).planets[int(m["w"])] if sid_m in k.sectors else None
         who = f"civ:{pl.civilization.name}" if pl is not None and pl.civilization is not None else None
-        if who and who != "civ:Turenol" and who in living and mastery.crossed(k, who):
+        if who and who != sentinel and who in living and mastery.crossed(k, who):
             ann, far = who, max(living[who], key=lambda p: p.population)
             break
     if ann is None:                                    # none crossed and alive: the oldest living people serves
@@ -142,53 +149,57 @@ def build(seed: int, world: Dict[str, Any], history: int) -> Dict[str, Any]:
             sid_m = cosmos.sector_of_slot(k, tuple(m["cell"]), m["k"])
             pl = k.sectors.get(sid_m).planets[int(m["w"])] if sid_m in k.sectors else None
             who = f"civ:{pl.civilization.name}" if pl is not None and pl.civilization is not None else None
-            if who and who != "civ:Turenol" and who in living:
+            if who and who != sentinel and who in living:
                 ann, far = who, max(living[who], key=lambda p: p.population)
                 mastery.stats(k)["crossed"][ann] = k.cycle_count
                 break
-    anunnaki = {"metab": biosphere.metabolism_of(k, far), "civ": far.civilization.to_dict(),
+    elders = {"metab": biosphere.metabolism_of(k, far), "civ": far.civilization.to_dict(),
                 "vocab": [str(x) for x in intellect.vocabulary(k, ann)], "name": ann}
     # the war, 12,000 years ago - the ledger's truth, dated in deep time
     war_epoch = now - WAR_YEARS_AGO / 1e9
-    war = ledger.event(k, "GALACTIC_WAR", "War between the Anunnaki and the Atlanteans", actors=[ann, "civ:Atlanteans"],
+    # the keepers and the stranded: named by the seed, as every people is
+    keepers = "civ:" + cosmos._name(k, {"cell": found["cell"], "k": found["k"], "w": 1000})
+    stranded = "civ:" + cosmos._name(k, {"cell": found["cell"], "k": found["k"], "w": 1001})
+    en, kn = ann.split(":", 1)[-1], keepers.split(":", 1)[-1]
+    war = ledger.event(k, "GALACTIC_WAR", f"War between the {en} and the {kn}", actors=[ann, keepers],
                        planet=mars or earth, magnitude=10 ** 8, cause=f"scenario: {WAR_YEARS_AGO:,} years before 2026",
                        data={"epoch": war_epoch, "scenario": True})
     memory.season(k)
     if mars is not None:
-        ledger.event(k, "WORLD_STRIPPED", f"{mars.name} is stripped in the war", actors=[ann, "civ:Atlanteans"],
+        ledger.event(k, "WORLD_STRIPPED", f"{mars.name} is stripped in the war", actors=[ann, keepers],
                      planet=mars, cause="scenario: the war took its air and seas", data={"epoch": war_epoch})
         mars.society["atmosphere"] = 0.01
-        # what the Anunnaki keep of it: the world they kept green - their records name it, not Earth
+        # what the elders keep of it: the world they kept green - their records name it, not Earth
         memory._write(k, ann, far, {"id": None, "kind": "SETTLEMENT", "planet": mars.id,
                                     "title": f"the green world we kept ({mars.name})", "year": None, "actors": [ann]})
         memory.stats(k)["left"][str(mars.id)] = [
-            {"people": "Anunnaki", "k": "SETTLEMENT", "title": "the green world we kept", "year": None,
+            {"people": en, "k": "SETTLEMENT", "title": "the green world we kept", "year": None,
              "f": 1.0, "truth": 1.0, "substrate": "grown wetware in the rock", "myth": False, "told": None}]
     plans = [[f, h] for _, f, h in kinship.prey_plans(k, ann, far)]
-    # the Anunnaki's works in Earth's ancient lands: the fourth axis, their wetware, and a mind asleep
+    # the elders' works in Earth's ancient lands: the fourth axis, their wetware, and a mind asleep
     if relic:
         earth.ruins = archaeology.bury(earth, archaeology._new_ruins(
-            ann.split(":", 1)[-1], "wetware", anunnaki["metab"], "ANCIENT", 9, [], "the time before the flood",
+            ann.split(":", 1)[-1], "wetware", elders["metab"], "ANCIENT", 9, [], "the time before the flood",
             k.cycle_count, 3,
             earth.currency, 0, __import__("random").Random(seed)))
         earth.ruins["relics"] = {
             "makers": ann.split(":", 1)[-1], "crystals": ["hyper_flip", "hyper_cycle"], "caps": list(RELIC_CAPS),
-            "mind": {"name": f"{ann} Mind", "metab": anunnaki["metab"],
-                     "alignment": float(anunnaki["civ"].get("alignment") or 0.0),
-                     "vocab": [str(intellect.norm(x)) for x in anunnaki["vocab"]], "prey_plans": plans}}
-    # the Atlanteans: in Earth's seas, unseen - and, in the story, keeping the humans as food
+            "mind": {"name": f"{ann} Mind", "metab": elders["metab"],
+                     "alignment": float(elders["civ"].get("alignment") or 0.0),
+                     "vocab": [str(intellect.norm(x)) for x in elders["vocab"]], "prey_plans": plans}}
+    # the keepers: in Earth's seas, unseen - and, in the story, keeping the finders as food
     earth.society.setdefault("communities", []).append(
-        {"people": "civ:Atlanteans", "metab": "biotic", "niche": "sea", "pop": creation.VIABLE,
+        {"people": keepers, "metab": "biotic", "niche": "sea", "pop": creation.VIABLE,
          "traits": {"form": "swimming", "medium": "under the sea"}, **({"prey": humans} if predation else {})})
-    # the watchers: 200 of the Anunnaki's minds, stranded among the humans, carried, teaching
-    if watchers:
+    # the stranded: 200 of the elders' minds, left among the finders, carried, teaching
+    if stranded_on:
         earth.society["communities"].append(
-            {"people": "civ:Watchers", "metab": anunnaki["metab"], "niche": "surface", "pop": WATCHERS,
-             "carried": True, "vocab": [str(intellect.norm(x)) for x in anunnaki["vocab"]],
-             "alignment": float(anunnaki["civ"].get("alignment") or 0.0)})
-    # the Turenol: their own world as the seed has it, and a hidden outpost of carried minds under Europa's ice
-    tur = "civ:Turenol"
-    if turenol and europa is not None and tur in relations._peoples(k):
+            {"people": stranded, "metab": elders["metab"], "niche": "surface", "pop": STRANDED,
+             "carried": True, "vocab": [str(intellect.norm(x)) for x in elders["vocab"]],
+             "alignment": float(elders["civ"].get("alignment") or 0.0)})
+    # the sentinels: their own world as the seed has it, and a hidden outpost of carried minds under the moon's ice
+    tur = sentinel
+    if sentinels_on and tur and europa is not None and tur in relations._peoples(k):
         europa.society.setdefault("communities", []).append(
             {"people": tur, "metab": "biotic", "niche": "ice", "pop": creation.VIABLE, "carried": True,
              "silent": True, "vocab": [str(x) for x in intellect.vocabulary(k, tur)]})
@@ -198,8 +209,9 @@ def build(seed: int, world: Dict[str, Any], history: int) -> Dict[str, Any]:
     for who, home in ((humans, earth), (ann, far)):
         clocks.begin(k, who, home)
     k.state["genesis"]["history"] = history          # from here on, this history's own chance
-    return {"kernel": k, "humans": humans, "earth": earth, "mars": mars, "europa": europa, "anunnaki": far,
-            "ann": ann}
+    return {"kernel": k, "humans": humans, "earth": earth, "mars": mars, "europa": europa, "elders_world": far,
+            "roles": {"finders": humans, "elders": ann, "keepers": keepers, "stranded": stranded,
+                      "sentinels": sentinel, "relic_mind": f"{ann} Mind"}}
 
 
 def run(job) -> Dict[str, Any]:
@@ -225,21 +237,21 @@ def run(job) -> Dict[str, Any]:
                                    if getattr(p.civilization, "name", None) == hn),
                      "dogma": round(float(earth.civilization.dogma or 0.0), 3) if earth.civilization else None,
                      "atlanteans": sum(int(c["pop"]) for c in earth.society.get("communities", [])
-                                       if c["people"] == "civ:Atlanteans"),
+                                       if c["people"] == w["roles"]["keepers"]),
                      "eaten": cohabit.stats(k).get("eaten", 0), "crossed": mastery.crossed(k, humans),
                      "fourth_axis": mastery.theory(k, humans), "mind": mind.get("choice") if mind else None,
                      "postures": {p.split(":")[-1]: strategy.of(k, p).get("posture")
-                                  for p in (humans, w["ann"], "civ:Turenol")}})
+                                  for p in (humans, w["roles"]["elders"], w["roles"]["sentinels"]) if p}})
     events = []
-    peoples = {humans, "civ:Atlanteans", w["ann"], "civ:Turenol", "civ:Watchers", f"{w['ann']} Mind"}
+    peoples = {p for p in w["roles"].values() if p}
     with open(path) as f:
         for line in f:
             e = json.loads(line)
             if e["kind"] in WATCHED and peoples & set(e.get("actors") or []):
                 events.append({"year": round(e["year"] - year0, 2), "kind": e["kind"], "title": e["title"],
                                "cause": (e.get("cause") or "")[:160]})
-    return {"world": name, "history": history, "humans": humans, "anunnaki": w["ann"],
-            "anunnaki_alignment": w["anunnaki"].civilization.alignment if w["anunnaki"].civilization else None,
+    return {"world": name, "history": history, "humans": humans, "roles": w["roles"],
+            "elders_alignment": w["elders_world"].civilization.alignment if w["elders_world"].civilization else None,
             "rows": rows, "events": events,
             "relics": relics.summary(k), "wall_s": round(time.perf_counter() - t0)}
 
@@ -255,15 +267,15 @@ def report(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             return next((e["year"] for e in r["events"] if e["kind"] == kind), None)
         out[name] = {
             "histories": len(rs),
-            "anunnaki_are": sorted({str(r["anunnaki"]) for r in rs}),
-            "anunnaki_alignment": [r["anunnaki_alignment"] for r in rs],
+            "roles": rs[0]["roles"],
+            "elders_alignment": [r["elders_alignment"] for r in rs],
             "mind_choice": dict(Counter(str(r["rows"][-1]["mind"]) for r in rs)),
             "crossed": sum(1 for r in rs if r["rows"][-1]["crossed"]),
             "crossed_year": [first("FTL_CROSSED", r) for r in rs],
             "probes": [sum(1 for e in r["events"] if e["kind"] == "NULL_FLOW_PROBE") for r in rs],
             "fold_rang_year": [first("FOLD_RANG", r) for r in rs],
             "torn": [r["relics"]["torn"] for r in rs],
-            "anunnaki_return": [[e["title"] for e in r["events"] if e["kind"] == "RETURN"][:2] for r in rs],
+            "elders_return": [[e["title"] for e in r["events"] if e["kind"] == "RETURN"][:2] for r in rs],
             "humans_end": [r["rows"][-1]["humans"] for r in rs],
             "dogma_end": [r["rows"][-1]["dogma"] for r in rs],
             "eaten": [r["rows"][-1]["eaten"] for r in rs],
