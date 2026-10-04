@@ -149,7 +149,8 @@ def medicine(kernel: Any, planet: Any) -> float:
     m = laws.mastery(knowledge.experience(kernel, holder, "biology"), KNOWLEDGE_UNIT)
     if technology.has(kernel, holder, "genetics"):
         m = m + (1.0 - m) * technology.GENETIC_GAIN / (1.0 + technology.GENETIC_GAIN)   # it rewrites its own ageing
-    return m
+    from xylarium.kernel import rent
+    return m * (1.0 - rent.of(planet))           # it reaches the many as far as their few let it (gatekept)
 
 
 def expectancy_years(kernel: Any, planet: Any, health: Optional[float] = None) -> float:
@@ -221,8 +222,7 @@ def _season_world(kernel: Any, planet: Any, years: float, rec: Dict[str, Any]) -
     born = max(0.0, planet.population - n0 + f["ref"])
     # ill health kills beyond what the people's own balance carries; medicine spares some of those it would
     if excess < 0 and medicine(kernel, planet) > 0:            # lives its own healing spares are its deeds too
-        from xylarium.kernel import sustenance
-        sustenance.flow_civ(planet, light=-excess, why="medicine")
+        _healing_answered(kernel, planet, -excess)
     owed = excess + float(life.get("excess_carry", 0.0))
     take = max(-10 ** 12, min(int(owed), planet.population))
     life["excess_carry"] = round(owed - int(owed), 6)
@@ -419,3 +419,21 @@ register_subsystem(Subsystem(
     season=quarter,
     summary=summary,
 ))
+
+
+def _healing_answered(kernel: Any, planet: Any, spared: float) -> None:
+    """What its healing did, as the ledger keeps it: the lives it spared (made); the harm of healing applied beyond
+    what the people understands of life - each treatment is guided by its mastery of biology, and the rest, misapplied,
+    harms as much as it would have helped (destroyed: the choice to use what it does not understand is the deed); and
+    the lives its few kept it from (gatekept: they held it, and could have let it reach them - alignment.omitted)."""
+    from xylarium.config import KNOWLEDGE_UNIT
+    from xylarium.kernel import alignment, knowledge, laws, rent, sustenance, technology
+    sustenance.flow_civ(planet, light=spared, why="medicine")
+    holder = knowledge.holder_of_planet(planet)
+    understood = laws.mastery(knowledge.experience(kernel, holder, "biology"), KNOWLEDGE_UNIT)
+    if technology.has(kernel, holder, "medicine") or technology.has(kernel, holder, "genetics"):
+        sustenance.flow_civ(planet, dark=spared * (1.0 - understood), why="misguided medicine")
+    gate = rent.of(planet)
+    if 0.0 < gate < 1.0:
+        alignment.omitted(planet, spared * gate / (1.0 - gate), 1.0, 1.0, "gatekept medicine")
+

@@ -152,9 +152,11 @@ def omitted(planet: Any, lives: float, foreseen_share: float, avoidable_share: f
     """Lives lost to what a people could have seen coming and had the means to prevent, and did not: dark, as far
     as both reach. Returns the lives counted."""
     counted = max(0.0, lives) * max(0.0, min(1.0, foreseen_share)) * max(0.0, min(1.0, avoidable_share))
-    civ = getattr(planet, "civilization", None)
-    if counted > 0 and civ is not None and getattr(planet, "owner_id", None) is None:
-        flow(civ, dark=counted, why=why)
+    if counted > 0 and getattr(planet, "civilization", None) is not None and getattr(planet, "society", None) is not None:
+        from xylarium.kernel import sustenance
+        sustenance.flow_civ(planet, dark=counted, why=why)
+    elif counted > 0 and getattr(planet, "civilization", None) is not None and getattr(planet, "owner_id", None) is None:
+        flow(planet.civilization, dark=counted, why=why)
     return counted
 
 

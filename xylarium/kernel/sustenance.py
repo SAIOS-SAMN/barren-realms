@@ -99,6 +99,17 @@ def flow_civ(planet: Any, light: float = 0.0, dark: float = 0.0, why: str = "dee
     if civ is not None and planet.owner_id is None:
         from xylarium.kernel import alignment
         alignment.flow(civ, light=light, dark=dark, why=why)
+    impacts(planet, light, dark, why)
+
+
+def impacts(planet: Any, light: float, dark: float, why: str) -> None:
+    """A world's own record of what its peoples did to it, by cause - read against the course its physics alone would
+    take (imprint.py keeps the acts; this keeps their consequences)."""
+    if light <= 0 and dark <= 0:
+        return
+    rec = planet.society.setdefault("impacts", {}).setdefault(why, [0.0, 0.0])
+    rec[0] = round(rec[0] + max(0.0, light), 3)
+    rec[1] = round(rec[1] + max(0.0, dark), 3)
 
 
 def yards(planet: Any) -> bool:

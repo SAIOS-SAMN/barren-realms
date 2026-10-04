@@ -261,3 +261,18 @@ class TestCoupledMinds(_World):
             moods.append(decide.mood(self.k, self.who))
         self.assertGreater(sum(moods) / len(moods), 0.0)            # it overrates its prospects
         self.assertGreater(max(moods) - min(moods), 0.1)            # and swings, the whole people at once
+
+
+class TestHealing(_World):
+    def test_healing_beyond_understanding_harms_and_gatekept_healing_is_withheld(self):
+        from xylarium.kernel import lifespan, sustenance
+        technology.stats(self.k)["of"].setdefault(self.who, {})["medicine"] = 1
+        self.p.society["rent"] = 0.5
+        civ = self.p.civilization
+        civ.causes = {}
+        lifespan._healing_answered(self.k, self.p, 100.0)
+        cs = alignment.causes(civ)
+        self.assertEqual(cs["medicine"]["light"], 100.0)
+        self.assertGreater(cs["misguided medicine"]["dark"], 0.0)       # it knows little of life
+        self.assertAlmostEqual(cs["gatekept medicine"]["dark"], 100.0)  # its few kept half of it from them
+        self.assertIn("gatekept medicine", self.p.society["impacts"])    # and its world keeps the record

@@ -88,7 +88,7 @@ class TestTheGaugeInTheUniverse(unittest.TestCase):
 
     def test_peoples_climb_and_prove_it(self):
         from xylarium.kernel import knowledge
-        for _ in range(400):
+        for _ in range(800):                    # peoples whose few keep medicine from them think later (rent.py)
             self.k.tick_simulation()
         st = I.stats(self.k)
         self.assertGreater(len(st["gauge"]), 0)
