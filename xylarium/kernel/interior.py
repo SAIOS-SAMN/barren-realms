@@ -144,6 +144,8 @@ def radiogenic_w_per_kg(inv: Dict[str, float], age: float, laws: Any = None) -> 
 def love_number(mass: float, radius: float, icy: bool) -> float:
     """k2 of a uniform elastic body: 1.5 / (1 + 19 mu / (2 rho g R))."""
     m, r = mass * M_EARTH_KG, radius * R_EARTH_M
+    if m <= 0.0 or r <= 0.0:
+        return 0.0                                   # nothing to raise a tide in: no self-gravity, no bulge
     rho = m / (4.0 / 3.0 * math.pi * r ** 3)
     g = G_SI * m / r ** 2
     mu = MU_ICE if icy else MU_ROCK
