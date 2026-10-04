@@ -79,6 +79,10 @@ HUMAN_CARBON_GTC = ((1750, 0.5), (1850, 0.3), (1860, 0.6), (1870, 1.0), (1880, 1
                     (1910, 5.2), (1920, 6.0), (1930, 6.4), (1940, 8.0), (1950, 13.0), (1960, 22.0), (1970, 40.0),
                     (1980, 52.0), (1990, 63.0), (2000, 76.0), (2010, 96.0), (2020, 60.0))
 HUMAN_RESERVE_GTC = 1000.0
+# what the finders know, measured: ~1.5e8 researcher-years of science since 1900 (UNESCO counts of researchers,
+# summed), a knowledge unit being a thousand minds' year of thought - shared over the domains they work in
+HUMAN_RESEARCH_YEARS = 1.5e8
+HUMAN_DOMAIN_SHARE = {"energy": 0.25, "materials": 0.2, "information": 0.25, "biology": 0.3}
 HUMAN_POWER_W = 1.9e13
 HUMANS_THEN = ((12_600, 4e6), (10_000, 5e6), (5_000, 1.4e7), (2_026, 2.0e8), (1_026, 3.0e8), (526, 4.5e8),
                (226, 1.0e9), (126, 1.6e9), (76, 2.5e9), (26, 6.1e9), (0, 8.0e9))
@@ -296,7 +300,8 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     earth.citadel_level = max(earth.citadel_level, 4)
     earth.population = int(min(HUMANS_2026, max(1, biosphere.carrying_capacity(k, earth))))
     einstein = list(intellect.BASE) + [c for c, r in intellect.RANK_OF.items() if r <= 3]
-    _lift(k, finders, HUMAN_CAPS, HUMAN_STAGES, vocab=einstein, reset=True)
+    _lift(k, finders, HUMAN_CAPS, HUMAN_STAGES, vocab=einstein, reset=True,
+          stocks={d: HUMAN_RESEARCH_YEARS / 1000.0 * sh for d, sh in HUMAN_DOMAIN_SHARE.items()})
     mastery.stats(k)["crossed"].pop(finders, None)
     annals.stats(k)["of"][finders]["advanced"] = float(HUMANS_YEARS_AGO)   # their deep history is lived: the annals
                                                                         # do not carry them through it again
@@ -464,6 +469,27 @@ TOLD = ("RELIC_FOUND", "RELIC_MIND_WAKES", "RELIC_MIND_EMBODIED", "RELIC_MIND_CA
         "BREAKAWAY", "PHILOSOPHY")
 
 
+def _measures(k: Any, finders: str, earth: Any) -> Dict[str, Any]:
+    """What the year shows of the finders as the progenitor reads them: where they live, what their world holds and
+    keeps, what their history makes of them and what they tell themselves, what their few take, how their minds swing."""
+    from xylarium.kernel import alignment, decide, energy, rent, sustenance, waste
+    worlds = [p for s in k.sectors.values() for p in s.planets
+              if p.population > 0 and sustenance.people_of(p) == finders]
+    civ = earth.civilization
+    try:
+        w = waste.assess(k, earth)
+    except Exception:
+        w = {}
+    reserve_gtc = earth.element_reserves.get("C", 0) * energy.CARBON_EU * waste.eu_joules() \
+        / waste.FUELS["C"]["heat_j_per_kg"] / 1e12
+    return {"worlds": len(worlds), "off_world": sum(1 for p in worlds if p is not earth),
+            "alignment": round(alignment.character(civ), 4) if civ else None,
+            "doctrine": round(alignment.doctrine(civ), 4) if civ else None, "rent": rent.of(earth),
+            "mood": round(decide.mood(k, finders), 4), "warming_k": w.get("warming_k"), "room": w.get("room"),
+            "reserve_gtc": round(reserve_gtc, 1),
+            "dark_causes": {c: v["dark"] for c, v in alignment.causes(civ).items() if v["dark"] > 0} if civ else {}}
+
+
 def forward(job) -> Dict[str, Any]:
     path, history, years, wall, out_dir = job
     from xylarium.kernel import cohabit, history as ledger, mastery, relics, strategy
@@ -499,7 +525,8 @@ def forward(job) -> Dict[str, Any]:
                      "mind": (mind.get("choice"), mind.get("alignment")) if mind else None,
                      "postures": {r: strategy.of(k, roles[r]).get("posture") for r in ("finders", "elders", "keepers",
                                                                                        "sentinels") if roles[r]},
-                     "probes": relics.stats(k)["probes"], "torn": relics.stats(k)["torn"]})
+                     "probes": relics.stats(k)["probes"], "torn": relics.stats(k)["torn"],
+                     **_measures(k, finders, earth)})
     cast = {p for p in roles.values() if p}
     events = []
     with open(ev_path) as f:
