@@ -121,7 +121,7 @@ def _fare(kernel: Any, n: int, planet: Any) -> float:
 # ---------------------------------------------------------------------- the season
 def quarter(kernel: Any) -> List[str]:
     from xylarium.config import DAUGHTER_EMIGRANTS_MAX
-    from xylarium.kernel import alignment, biosphere, contact, cosmos, decide, history, sustenance
+    from xylarium.kernel import biosphere, contact, cosmos, decide, history, sustenance
     if not cosmos.is_cosmic(kernel):
         return []
     st = stats(kernel)
@@ -196,7 +196,7 @@ def quarter(kernel: Any) -> List[str]:
                 saved = _carry(kernel, p, dest[0], n, dest[1])
                 if saved:
                     st["rescued"] += saved
-                    sustenance._shift_civ(port, alignment.measure(kernel, lives_saved=saved))
+                    sustenance.flow_civ(port, light=saved)
                     rname = getattr(civ, "name", port.name)
                     history.event(kernel, "RESCUE", f"The {rname} carry {saved:,} of the {name} to safety",
                                   actors=[_holder(port), holder], planet=p, magnitude=saved,
@@ -261,14 +261,13 @@ def perished(kernel: Any, planet: Any, lives: int, kind: str) -> None:
                                                                         if failed else ""))
     if failed <= 0:
         return
-    shift = alignment.measure(kernel, lives_lost=failed)
     owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
     if owner is not None:
         alignment.act(kernel, owner, "core_harvest", lives_lost=failed)
     for w in _worlds_of(kernel, holder):
         if w is planet:
             continue
-        sustenance._shift_civ(w, shift)                          # the government that left them behind darkens
+        sustenance.flow_civ(w, dark=failed)                         # the government that left them behind darkens
         w.morale = max(10, w.morale - 25)                        # and its people lose faith in it
     history.event(kernel, "ABANDONED", f"The {name} were left to die", actors=[holder], planet=planet,
                   magnitude=failed, cause="their government could have carried them and did not")

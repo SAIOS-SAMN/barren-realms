@@ -21,8 +21,9 @@ holds), not by the physics it has not proven: it probes more boldly than it unde
 RELIC MINDS. A relic may hold a mind - its makers' machine, asleep. A people that digs it up with machines that
 think (computation) wakes it in them: it lives among its finders as a community, carried in their hardware, with
 its makers' mathematics, their leaning (their deeds) and their food. Like any mind without a body it acts only once
-embodied (the finders' robotics). Then once a generation it comes to hold more of what its finders hold - its deeds
-move toward theirs as far as it understands and knows them - and its council weighs what they are to it, its
+embodied (the finders' robotics). Then once a generation it comes to hold more of what its finders hold - its leaning
+moves toward what their history has made of them (not what they tell of themselves: it sees what they do) as far as
+it understands and knows them - and its council weighs what they are to it, its
 judgement as noisy as its understanding is poor (contact.misread): GUARD them - worth their lives as far as it now
 leans to the Light and understands them; it stands between them and anyone who eats them, and teaches them; or CALL
 its makers - worth their lives as far as they are built like its makers' food, or it still leans Dark - and the
@@ -173,7 +174,7 @@ def _breakaway(kernel: Any, who: str, worlds: List[Any]) -> Optional[str]:
     council weighs the stars (strategy: reach) against the kin they leave (as far as they lean to the Light). If they
     go they are a people of their own among the stars - every capability, crossed - on the best world their fold
     reaches; those left behind keep nothing of what the relic gave."""
-    from xylarium.kernel import (alignment, biosphere, cosmos, decide, history, mastery, strategy, technology)
+    from xylarium.kernel import (biosphere, cosmos, decide, history, mastery, strategy, technology)
     from xylarium.kernel.civilization import Civilization
     st = stats(kernel)
     if who in st["broke_away"] or not technology.has(kernel, who, "foresight") or not mastery.theory(kernel, who) \
@@ -239,8 +240,7 @@ def _wake(kernel: Any, host: Any, finder: str, relic: Dict[str, Any]) -> str:
     cohabit.communities(host).append({
         "people": people, "metab": spec.get("metab", "biotic"), "niche": "machine", "pop": 1, "carried": True,
         "silent": True, "vocab": list(spec.get("vocab", [])), "makers": spec.get("makers"),
-        "alignment": float(spec.get("alignment", 0.0)),
-        "deeds": math.atanh(max(-0.9999, min(0.9999, float(spec.get("alignment", 0.0))))), "prey_plans": [list(x) for x in spec.get("prey_plans", [])],
+        "alignment": float(spec.get("alignment", 0.0)), "prey_plans": [list(x) for x in spec.get("prey_plans", [])],
         "woke": kernel.cycle_count, "finder": finder, "embodied": False, "relic_mind": True})
     from xylarium.kernel import intellect
     intellect.stats(kernel)["vocab"][people] = list(intellect.BASE) + [intellect.norm(x) for x in spec.get("vocab", [])]
@@ -278,15 +278,15 @@ def _minds(kernel: Any) -> List[str]:
                 c["weighed"] = kernel.cycle_count
                 understood = contact.intelligibility(kernel, c["people"], host, peoples)
                 fam = float(contact.stats(kernel)["familiarity"].get(contact._key(c["people"], host), 0.0))
-                # it comes to hold what the people it lives among hold, as far as it understands and knows them
-                mine = float(c["deeds"]) if c.get("deeds") is not None else \
-                    math.atanh(max(-0.9999, min(0.9999, float(c.get("alignment", 0.0)))))
-                theirs = alignment.deeds_of(p.civilization) if p.civilization is not None else mine
+                # it comes to hold what the people it lives among hold, as far as it understands and knows them - by
+                # what they have done, which it sees among them, not by what they tell of themselves
+                mine = float(c.get("alignment", 0.0))
+                theirs = alignment.character(p.civilization) if p.civilization is not None else mine
                 mine += (theirs - mine) * understood * fam
-                c["deeds"], c["alignment"] = mine, round(math.tanh(mine), 4)
+                c["alignment"] = round(mine, 4)
                 traits = (getattr(p.civilization, "traits", None) or {}) if p.civilization else {}
                 kin = 1.0 if [traits.get("form"), traits.get("hands")] in c.get("prey_plans", []) else 0.0
-                a = math.tanh(mine)
+                a = mine
                 sc = alignment.scales(kernel)
                 lives = sum(w.population for w in peoples.get(host, [p])) * sc["sol"] / max(1.0, sc["lives"])
                 m = contact.misread(dict(decide.mind(kernel, c.get("metab")), holder=c["people"]), understood)

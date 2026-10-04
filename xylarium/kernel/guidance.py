@@ -53,7 +53,7 @@ def teaching(kernel: Any, elder: str, young: str) -> Dict[str, float]:
 
 
 def _uplift(kernel: Any, elder: str, port: Any, young: str, worlds: List[Any]) -> Optional[str]:
-    from xylarium.kernel import alignment, decide, exodus, history, knowledge, sustenance
+    from xylarium.kernel import decide, exodus, history, knowledge, sustenance
     lesson = teaching(kernel, elder, young)
     known = sum(knowledge.stocks(kernel, elder).values())
     taught = sum(lesson.values())
@@ -68,7 +68,7 @@ def _uplift(kernel: Any, elder: str, port: Any, young: str, worlds: List[Any]) -
         return None
     for d, u in lesson.items():
         knowledge.learn(kernel, young, d, u, why="taught")
-    sustenance._shift_civ(port, alignment.measure(kernel, helped_sol=fare))
+    sustenance.flow_civ(port, light=lives)              # the lives its lesson reaches
     st = stats(kernel)
     st["uplifts"] += 1
     ename, yname = elder.split(":", 1)[-1], young.split(":", 1)[-1]
@@ -80,7 +80,7 @@ def _uplift(kernel: Any, elder: str, port: Any, young: str, worlds: List[Any]) -
 
 def _seed(kernel: Any, elder: str, port: Any) -> Optional[str]:
     from xylarium.config import HABITABILITY
-    from xylarium.kernel import alignment, biosphere, decide, demography, designer, exodus, sustenance
+    from xylarium.kernel import biosphere, decide, demography, designer, exodus, sustenance
     from xylarium.kernel import topology
     if _light(port) <= 0:
         return None                                       # it values strangers' lives at nothing: seeding is worth nothing
@@ -119,7 +119,7 @@ def _seed(kernel: Any, elder: str, port: Any) -> Optional[str]:
     out = designer.seed(kernel, elder, {"metabolism": metab}, w, ename)
     if out.get("why_not"):
         return None
-    sustenance._shift_civ(port, alignment.measure(kernel, helped_sol=cost))
+    sustenance.flow_civ(port, light=pv["foragers_fed"])   # the lives the seeded world will feed
     stats(kernel)["seeded"] += 1
     return f"[GUIDANCE] The {ename} seed a {metab} people on {w.name}."
 

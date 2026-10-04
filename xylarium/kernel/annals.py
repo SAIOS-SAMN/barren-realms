@@ -41,7 +41,6 @@ DOMINION_PER_GENERATION = 0.01  # worlds a crossed people settles per generation
 DOMINION_MAX = 10000            # worlds one dominion can hold together
 REACH_KPC_PER_GENERATION = 0.002   # how far a crossed people's reach grows a generation (declared)
 WAR_PER_MEETING = 0.5           # chance two dominions of opposed doctrines go to war when they meet
-ALIGN_DRIFT = 0.02              # how far a people's alignment wanders a generation, as it lives (declared)
 MIN_GENERATIONS = 1.0           # gaps shorter than a generation are left to the full engine
 
 
@@ -197,6 +196,7 @@ def season(kernel: Any) -> List[str]:
         t = 0.0                                               # generations lived in this stretch
         epoch_of = lambda tt: own_now - (gens - tt) * gen / 1e9   # noqa: E731
         fell = None
+        ruled_from = 0.0 if STAGES.index(stage) >= STAGES.index("state") else None   # since when it has had a few
         while t < gens:
             nxt = STAGES.index(stage) + 1
             if nxt >= len(STAGES):
@@ -249,6 +249,8 @@ def season(kernel: Any) -> List[str]:
                 break
             t += wait_up
             stage = STAGES[nxt]
+            if stage == "state":
+                ruled_from = t
             _grant(kernel, who, home, nxt)                    # what that stage brings, it holds from then on
             rec["passed"].append(stage)
             kind = "ASCENT" if stage == "crossed" else "ERA"
@@ -257,15 +259,16 @@ def season(kernel: Any) -> List[str]:
             history.event(kernel, kind, f"The {who.split(':', 1)[-1]} {text[stage]}", actors=[who], planet=home,
                           cause=f"at the level of history, {epoch_of(t):.4f} Gyr after the Big Bang",
                           data={"epoch": round(epoch_of(t), 6), "stage": stage})
-        # alignment wanders as a people lives its ages
+        # its history as it lived its ages: its own work, and - once it has a state - what its few took of it
         civ = getattr(home, "civilization", None)
         if civ is not None:
-            # its character is its living history: old deeds fade as its record of them does, and each generation's own
-            # unrecorded deeds wander it (an AR(1) in its deeds: never pinned, never carried off by deep time alone)
-            from xylarium.kernel import alignment, memory
-            r = min(memory.character_keep(kernel, who, home), 1.0 - 1e-9)
-            alignment.fade(civ, gens, r)
-            alignment.people_shift(civ, rng.gauss(0.0, ALIGN_DRIFT * math.sqrt((1.0 - r ** (2 * gens)) / (1.0 - r * r))))
+            from xylarium.kernel import alignment, memory, rent
+            lived_gens = fell if fell is not None else gens
+            alignment.fade(civ, lived_gens, memory.character_keep(kernel, who, home))     # its telling fades
+            ruled = max(0.0, lived_gens - ruled_from) if ruled_from is not None and ruled_from < lived_gens else 0.0
+            rho = rent.choose(kernel, home, ruled=True) if ruled > 0 else 0.0
+            n = float(home.population)
+            alignment.flow(civ, light=n * (lived_gens - ruled + ruled * (1.0 - rho)), dark=n * ruled * rho)
         if fell is not None:
             logs.append(_fall(kernel, who, worlds, epoch_of(fell)))
             st["falls"] += 1

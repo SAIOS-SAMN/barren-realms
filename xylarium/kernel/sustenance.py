@@ -31,7 +31,6 @@ from xylarium.config import (
     DAUGHTER_CITADEL_TIER,
     DAUGHTER_MIN_HABITABILITY,
     FOOD_WAR_PEACE_QUARTERS,
-    HUNGER_ALIGNMENT_SHIFT,
     RELIEF_LIGHT_THRESHOLD,
     SUSTENANCE_RUNWAY_QUARTERS,
     SUSTENANCE_SMOOTHING,
@@ -94,11 +93,12 @@ def _council(kernel: Any, planet: Any) -> bool:
     return owner is None or bool(getattr(owner, "is_ai", False))
 
 
-def _shift_civ(planet: Any, delta: float) -> None:
+def flow_civ(planet: Any, light: float = 0.0, dark: float = 0.0) -> None:
+    """Lives a council-led people made or spared (light) or took (dark), into its history (alignment.flow)."""
     civ = getattr(planet, "civilization", None)
     if civ is not None and planet.owner_id is None:
         from xylarium.kernel import alignment
-        alignment.people_shift(civ, delta)
+        alignment.flow(civ, light=light, dark=dark)
 
 
 def yards(planet: Any) -> bool:
@@ -282,7 +282,7 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
     if planet.owner_id:
         alignment.act(kernel, kernel.captains.get(planet.owner_id), "food_raid", harmed_sol=taken)
     else:
-        _shift_civ(planet, alignment.measure(kernel, harmed_sol=taken))
+        flow_civ(planet, dark=take * alignment.LIVES_PER_FOOD_UNIT)  # the lives that food held (famine's arithmetic)
     _war(kernel, planet, me, them, food, take, where.id)
     target = victim.name if victim is not None else f"the {port.name} docks"
     return f"[FOOD WAR] {people_name(kernel, me)} of {planet.name} seized {take:,} {food} from {target}."
@@ -362,8 +362,7 @@ def relieve(kernel: Any, planet: Any, gauge: Dict[str, Any]) -> Optional[str]:
     if donor.owner_id:
         alignment.act(kernel, kernel.captains.get(donor.owner_id), "famine_aid", helped_sol=helped, lives_saved=saved)
     else:
-        _shift_civ(donor, alignment.measure(kernel, helped_sol=helped, lives_saved=saved))
-    _shift_civ(planet, alignment.measure(kernel, helped_sol=helped) / 2)      # gratitude, not merit
+        flow_civ(donor, light=saved)
     return (f"[RELIEF] {people_name(kernel, people_of(donor))} of {donor.name} sent {give:,} {food} to the hungry "
             f"of {planet.name} ({people_name(kernel, me)}).")
 
@@ -381,8 +380,6 @@ def quarter(kernel: Any) -> List[str]:
             if g is not None:
                 gauges.append((planet, g))
     for planet, g in gauges:
-        if g["state"] == "secure":                                   # plenty softens a people as scarcity hardens
-            _shift_civ(planet, HUNGER_ALIGNMENT_SHIFT * min(1.0, max(0.0, g["self_sufficiency"] - 1.0)))
         if g["state"] not in HUNGRY:
             continue
         st["hungry_quarters"] += 1
@@ -394,8 +391,6 @@ def quarter(kernel: Any) -> List[str]:
             if g["runway"] >= SUSTENANCE_RUNWAY_QUARTERS:
                 planet.society["sustenance"] = g["state"] = "importer"
                 continue
-        if g["state"] in RAIDERS:
-            _shift_civ(planet, -HUNGER_ALIGNMENT_SHIFT * min(1.0, max(0.0, 1.0 - g["self_sufficiency"])))
                                                                         # scarcity hardens a people, as far as it bites
             from xylarium.kernel import introspect
             if _council(kernel, planet) and not introspect.restrained(kernel, planet):   # unless it chose peace

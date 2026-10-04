@@ -27,7 +27,6 @@ against what they would take; the newcomers weigh the room. Communities make the
 other's closest contacts (contact.py).
 """
 
-import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import FOOD_PER_THOUSAND, METABOLIC_WASTE, STAPLES
@@ -140,11 +139,12 @@ def quarter(kernel: Any) -> List[str]:
                 if c["niche"] == host_n:
                     k = max(0, k - p.population)          # a shared niche is shared
                 staple = STAPLES.get(m, "ORGANICS")
-                need = _need_q(pop)
+                need = whole = _need_q(pop)
                 if c.get("prey") and c["prey"] == knowledge.holder_of_planet(p) and p.population > 1:
                     need = _hunt(kernel, p, c, pop, need)          # what it takes of its host, it need not grow
                     _steer(kernel, p, c)                            # and a herd that asks no questions
                     _reset(kernel, p, c)                            # and a herd that learns too much is set back
+                _own_work(kernel, c, pop, need / max(1, whole))     # the lives its own work sustains
                 grown = staples.add(p, staple, min(need, _need_q(k)), "harvest") if staple != "ORE" else \
                     _graze(p, min(need, _need_q(k)))
                 eaten = staples.take(p, staple, need, "eaten")
@@ -171,6 +171,14 @@ def quarter(kernel: Any) -> List[str]:
     return logs
 
 
+def _own_work(kernel: Any, c: Dict[str, Any], pop: int, share: float) -> None:
+    """A community's own work, a season of it, into its history (alignment.flow): the lives it feeds by what it grows
+    rather than what it takes."""
+    from xylarium.kernel import alignment, decide
+    gen_years = max(1e-6, decide.mind(kernel, c.get("metab"))["horizon_q"] / 4.0)
+    alignment.flow(c, light=pop * max(0.0, share) * (_quarter() / 100.0) / gen_years)
+
+
 BODY_FEEDS_DAYS = 50.0          # days a body of like mass feeds an eater (daily intake ~2% of body mass)
 
 
@@ -188,11 +196,7 @@ def _hunt(kernel: Any, planet: Any, c: Dict[str, Any], pop: int, need: int) -> i
         return need                                      # a guardian stands between it and its prey
     planet.population -= taken
     from xylarium.kernel import alignment
-    import math as _m
-    d = c.get("deeds")
-    d = _m.atanh(max(-0.9999, min(0.9999, float(c.get("alignment", 0.0))))) if d is None else float(d)
-    c["deeds"] = d + alignment.measure(kernel, lives_lost=taken * kinship.MIND_EATEN)
-    c["alignment"] = round(_m.tanh(c["deeds"]), 4)
+    alignment.flow(c, dark=taken * kinship.MIND_EATEN)  # a life ended and a mind consumed
     c["eaten_year"] = int(c.get("eaten_year", 0)) + taken
     stats(kernel)["eaten"] = stats(kernel).get("eaten", 0) + taken
     if (kernel.cycle_count // _quarter()) % 4 == 3:
@@ -268,8 +272,7 @@ def _reset(kernel: Any, planet: Any, c: Dict[str, Any]) -> None:
         intellect.stats(kernel)["vocab"][herd] = [x for x in v if intellect.RANK_OF.get(intellect.norm(x), 2) <= 2]
     memory._burn(kernel, herd, planet)
     civ.dogma = round(min(1.0, float(civ.dogma or 0.0) + threat * (1.0 - float(civ.dogma or 0.0))), 4)
-    c["deeds"] = float(c.get("deeds", 0.0) or 0.0) + alignment.measure(kernel, lives_lost=lost)
-    c["alignment"] = round(math.tanh(c["deeds"]), 4)
+    alignment.flow(c, dark=lost)
     stats(kernel)["resets"] = stats(kernel).get("resets", 0) + 1
     history.event(kernel, "RESET", f"The {herd.split(':', 1)[-1]} are set back to sticks and stones",
                   actors=[herd], planet=planet, magnitude=lost,

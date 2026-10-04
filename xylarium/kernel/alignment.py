@@ -108,54 +108,101 @@ ALIGNMENT_ACT_SCALE = 0.12      # the largest shift one act can make (the graves
 LIVES_PER_FOOD_UNIT = 200       # colony.tick_colony: each unit of a famine's deficit costs this many lives
 
 
-# ---------------------------------------------------------------------- a people's deeds
-# A people's alignment is what its deeds have made of it: the unbounded sum of their measured consequences (`deeds`),
-# read through tanh - near zero one deed moves it by its own measure, and however far a people goes it never sticks
-# at the edge, so two histories of very different weight are never read as one. What a people did fades from its
-# character as its telling of it fades (memory.TELL_ERR a generation): its character is its living history.
+# ---------------------------------------------------------------------- a people's history
+# A people's alignment is the truth of its whole history, kept by the steward's ledger and never faded: of all the
+# order that has flowed through it, in lives (a life sustained, taken or spared counts one; a generation of its own
+# work sustaining it counts its numbers), the share that was made and shared rather than taken:
+#
+#     alignment = (light - dark) / (light + dark)
+#
+#   light   the lives its own work sustains and its many keep (rent.py: what its few do not take), lives spared
+#           (medicine, relief)
+#   dark    what its few take from its many (rent), lives taken (strife it brings on itself, predation, a food war's
+#           seizure, a reset)
+#
+# It is a ratio of whole histories, so a people is read by what it did over its thousands of years, not its latest
+# generation: eighty years of taking are not undone by a turn, only by as many years of making as were spent taking.
+# What a people tells of itself (its doctrine, `told`) is another ledger - the same flows, faded as its records fade
+# (memory.character_keep: its best medium) - and the gap between the two is the distance between what it says it is
+# and what it has been.
 
-def deeds_of(civ: Any) -> float:
-    d = getattr(civ, "deeds", None)
-    a_now = float(getattr(civ, "alignment", 0.0) or 0.0)
-    if d is not None and abs(round(math.tanh(float(d)), 4) - a_now) > 1e-4:
-        d = None                                       # its alignment was set as a given: its deeds follow it
-    if d is None:
-        a = max(-0.9999, min(0.9999, float(getattr(civ, "alignment", 0.0) or 0.0)))
-        d = math.atanh(a)
-    return float(d)
-
-
-def set_people(civ: Any, value: float) -> None:
-    """Set a people's alignment as a given (a genesis, a founding): its deeds are what that alignment would take."""
-    civ.alignment = round(max(-0.9999, min(0.9999, float(value))), 4)
-    civ.deeds = math.atanh(civ.alignment)
-
-
-def people_shift(civ: Any, delta: float) -> None:
-    """A deed: the people's deeds grow by its measure, and its alignment is read from them."""
-    civ.deeds = deeds_of(civ) + float(delta)
-    civ.alignment = round(math.tanh(civ.deeds), 4)
+def _get(x: Any, key: str, default: Any = 0.0) -> Any:
+    return x.get(key, default) if isinstance(x, dict) else getattr(x, key, default)
 
 
-def fade(civ: Any, generations: float, keep: Optional[float] = None) -> None:
-    """What a people did fades from its character as its record of it fades: `keep` is what its best medium holds of
-    a record over a generation (memory.character_keep; a telling people's by default)."""
+def _put(x: Any, key: str, value: Any) -> None:
+    if isinstance(x, dict):
+        x[key] = value
+    else:
+        setattr(x, key, value)
+
+
+def _ratio(light: float, dark: float) -> Optional[float]:
+    total = light + dark
+    return (light - dark) / total if total > 0 else None
+
+
+def character(x: Any) -> float:
+    """What a people's whole history makes of it (light - dark over light + dark); a people with no history yet is
+    what it was given."""
+    r = _ratio(float(_get(x, "light", 0.0) or 0.0), float(_get(x, "dark", 0.0) or 0.0))
+    return float(_get(x, "alignment", 0.0) or 0.0) if r is None else r
+
+
+def doctrine(x: Any) -> float:
+    """What a people tells of itself: its flows as its own records still hold them."""
+    r = _ratio(float(_get(x, "told_light", 0.0) or 0.0), float(_get(x, "told_dark", 0.0) or 0.0))
+    return character(x) if r is None else r
+
+
+def gap(x: Any) -> float:
+    """How much lighter a people tells itself than it has been (negative: it thinks worse of itself than it is)."""
+    return doctrine(x) - character(x)
+
+
+def flow(x: Any, light: float = 0.0, dark: float = 0.0) -> None:
+    """Order through a people, in lives: what it made and kept or spared (light), what it took (dark). Goes into its
+    history and into its own telling of it."""
+    light, dark = max(0.0, float(light)), max(0.0, float(dark))
+    if light <= 0.0 and dark <= 0.0:
+        return
+    for key, add in (("light", light), ("dark", dark), ("told_light", light), ("told_dark", dark)):
+        _put(x, key, float(_get(x, key, 0.0) or 0.0) + add)
+    _put(x, "alignment", round(character(x), 4))
+
+
+def set_people(x: Any, value: float, weight: float = 0.0) -> None:
+    """A people given an alignment (a genesis, a founding, a steward's scenario): a history of `weight` lives that
+    reads as it - with no weight, what it does from now on is all that counts once it does anything."""
+    value = max(-1.0, min(1.0, float(value)))
+    w = max(0.0, float(weight))
+    for key in ("light", "told_light"):
+        _put(x, key, w * (1.0 + value) / 2.0)
+    for key in ("dark", "told_dark"):
+        _put(x, key, w * (1.0 - value) / 2.0)
+    _put(x, "alignment", round(value, 4))
+
+
+def fade(x: Any, generations: float, keep: Optional[float] = None) -> None:
+    """A people's telling of its history fades as its records do: `keep` is what its best medium holds of a record
+    over a generation (memory.character_keep; a telling people's by default). The history itself does not fade."""
     from xylarium.kernel import memory
     keep = (1.0 - memory.TELL_ERR) if keep is None else keep
-    civ.deeds = deeds_of(civ) * keep ** max(0.0, generations)
-    civ.alignment = round(math.tanh(civ.deeds), 4)
+    f = keep ** max(0.0, generations)
+    for key in ("told_light", "told_dark"):
+        _put(x, key, float(_get(x, key, 0.0) or 0.0) * f)
 
 
 def standing(kernel: Any, who: str, among: List[str]) -> float:
     """Where a people stands among those it knows, 0 (the darkest of them) .. 1 (the lightest): how peoples read each
-    other in a galaxy whatever its lean - by their deeds, not against an absolute edge."""
+    other in a galaxy whatever its lean - by their histories, not against an absolute edge."""
     from xylarium.kernel import relations
     by = relations._peoples(kernel)
 
     def d(h: str) -> Optional[float]:
         ws = by.get(h)
         civ = getattr(max(ws, key=lambda p: p.population), "civilization", None) if ws else None
-        return deeds_of(civ) if civ is not None else None
+        return character(civ) if civ is not None else None
     mine = d(who)
     others = [x for x in (d(h) for h in set(among) - {who}) if x is not None]
     if mine is None or not others:

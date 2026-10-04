@@ -132,8 +132,11 @@ class Civilization:
     trade_urgency: Dict[str, int] = field(default_factory=dict)
     research_points: int = 0
     grown_basis: List[Dict[str, Any]] = field(default_factory=list)
-    alignment: float = 0.0                 # Cosmic alignment of the civilization (Light +1 .. Dark -1): tanh(deeds)
-    deeds: Optional[float] = None          # the unbounded sum of its measured consequences (alignment.py)
+    alignment: float = 0.0                 # Cosmic alignment (Light +1 .. Dark -1): its whole history (alignment.py)
+    light: float = 0.0                     # lives its history made and kept or spared (alignment.flow)
+    dark: float = 0.0                      # lives its history took
+    told_light: float = 0.0                # the same, as its own records still hold them (its doctrine)
+    told_dark: float = 0.0
     native_policy: Optional[str] = None    # System-level doctrine for locals (overrides a laxer galactic card)
     dogma: float = 0.0                     # Dogma index for theocracies (Choir of the Pyre)
     faction_id: Optional[str] = None
@@ -174,7 +177,8 @@ class Civilization:
             "research_points": self.research_points,
             "grown_basis": [dict(b) for b in self.grown_basis],
             "alignment": round(self.alignment, 4),
-            "deeds": None if self.deeds is None else round(self.deeds, 6),
+            "light": round(self.light, 3), "dark": round(self.dark, 3),
+            "told_light": round(self.told_light, 3), "told_dark": round(self.told_dark, 3),
             "native_policy": self.native_policy,
             "dogma": round(self.dogma, 4),
             "faction_id": self.faction_id,
@@ -207,7 +211,8 @@ class Civilization:
             research_points=data.get("research_points", 0),
             grown_basis=list(data.get("grown_basis", [])),
             alignment=float(data.get("alignment", 0.0)),
-            deeds=None if data.get("deeds") is None else float(data["deeds"]),
+            light=float(data.get("light", 0.0)), dark=float(data.get("dark", 0.0)),
+            told_light=float(data.get("told_light", 0.0)), told_dark=float(data.get("told_dark", 0.0)),
             native_policy=data.get("native_policy"),
             dogma=float(data.get("dogma", 0.0)),
             faction_id=data.get("faction_id"),

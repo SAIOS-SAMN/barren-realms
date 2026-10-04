@@ -360,12 +360,11 @@ def _cores(kernel: Any) -> List[str]:
             if lost <= 0:
                 continue
             st["people_unfed"] += lost
-            shift = alignment.measure(kernel, lives_lost=lost)
             owner = kernel.captains.get(p.owner_id) if p.owner_id else None
             if owner is not None:
                 alignment.act(kernel, owner, "core_harvest", lives_lost=lost)
             else:
-                sustenance._shift_civ(p, shift)
+                sustenance.flow_civ(p, dark=lost)
     return logs
 
 

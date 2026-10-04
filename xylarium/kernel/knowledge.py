@@ -145,7 +145,8 @@ def effort(kernel: Any, planet: Any) -> float:
     from xylarium.config import ZEALOT_RD_FREEZE_DOGMA
     from xylarium.kernel import biosphere
     soc = planet.society
-    ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
+    from xylarium.kernel import rent
+    ss = rent.commons(planet)              # the many think with the hands their harvest frees, after their few's take
     free = max(0.0, 1.0 - 1.0 / ss) if ss > 0 else 0.0
     leisure = 1.0 + laws.clamp(float(soc.get("lux_access", 0.0) or 0.0))
     depth = biosphere.cognition_of(kernel, planet)["depth"]

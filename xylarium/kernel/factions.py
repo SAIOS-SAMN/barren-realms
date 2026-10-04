@@ -608,8 +608,6 @@ class FactionManager:
             w.civilization.faction_id = None
             w.civilization.name = f"Free {w.name.split()[0]} Secession"
             w.civilization.dogma = 0.0
-            from xylarium.kernel import alignment as _al
-            _al.people_shift(w.civilization, 0.25)
         w.morale = 60
         if w.sector_id in f.territory and w.sector_id not in (f.capital_sector,):
             f.territory.remove(w.sector_id)

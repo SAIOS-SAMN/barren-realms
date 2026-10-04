@@ -1579,7 +1579,6 @@ WASTE_SHARE = "1/2"                    # of what is eaten, given back as waste (
 SUSTENANCE_RUNWAY_QUARTERS = 4
 SUSTENANCE_SMOOTHING = 0.25            # weight of the newest quarter in the year's self-sufficiency
 FOOD_WAR_PEACE_QUARTERS = 8            # a war over food ends after this long without a raid
-HUNGER_ALIGNMENT_SHIFT = 0.005         # each pressed quarter hardens a people toward the Dark
 RELIEF_LIGHT_THRESHOLD = 0.3           # peoples at least this luminous send their surplus to hungry kin
 # Meaning (mu): a people's collective momentum against the satiation of comfort, a multiplier on fertility
 # in [MEANING_FLOOR, MEANING_CEIL], read from state (fertility.meaning: open land in reach, knowledge growth over a

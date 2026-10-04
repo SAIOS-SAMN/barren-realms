@@ -160,16 +160,16 @@ def _respond(kernel: Any, eater: str, young: str, kind: str, peoples: Dict[str, 
              else "the world whose life they once ate has raised a mind")
     if name == "abstain":
         home.society["forsworn"] = round(min(0.9, float(home.society.get("forsworn", 0.0)) + share), 4)
-        sustenance._shift_civ(home, alignment.measure(kernel, lives_saved=n_young * share))
+        sustenance.flow_civ(home, light=n_young * share)
     elif name == "deny":
         civ.dogma = round(min(1.0, dogma + 0.1 * (1.0 - dogma)), 4)
     elif name == "continue":
-        sustenance._shift_civ(home, alignment.measure(kernel, lives_lost=n_young * max(share, 0.1) * known))
+        sustenance.flow_civ(home, dark=n_young * max(share, 0.1) * known)
         history.event(kernel, "KIN_EATEN", f"The {y_name} learn the {e_name} eat their kin", actors=[eater, young],
                       planet=_home(theirs), cause=cause)
     elif name == "guard":
         home.society["forsworn"] = round(min(0.9, float(home.society.get("forsworn", 0.0)) + share), 4)
-        sustenance._shift_civ(home, alignment.measure(kernel, lives_saved=n_young))
+        sustenance.flow_civ(home, light=n_young)
     history.event(kernel, "KINSHIP", f"The {e_name} {title[name].format(y=y_name)}", actors=[eater, young],
                   planet=home, cause=cause, data={"kind": kind, "choice": name})
     if len(nets) > 1 and nets[0] > 0 and nets[1] >= SCHISM_SHARE * nets[0]:

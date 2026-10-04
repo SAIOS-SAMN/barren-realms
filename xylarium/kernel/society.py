@@ -157,9 +157,8 @@ def _believe(kernel: Any, planet: Any, gen_years: float) -> None:
 # ---------------------------------------------------------------------- stress and strife
 def stress(kernel: Any, planet: Any) -> Dict[str, float]:
     """Turchin's reading: the share of the people that would rise."""
-    from xylarium.kernel import biosphere, ways
-    soc = planet.society
-    ss = float(soc.get("self_sufficiency", 1.0) or 1.0)
+    from xylarium.kernel import biosphere, rent, ways
+    ss = rent.commons(planet)                               # the many's harvest, after what their few take
     crowd = min(1.0, planet.population / max(1, biosphere.carrying_capacity(kernel, planet)))
     mmp = max(0.0, 1.0 - ss) * crowd
     dogma = float(getattr(planet.civilization, "dogma", 0.0) or 0.0)
@@ -181,7 +180,7 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
         return None                                         # a handful riots; it does not turn a people on itself
     if kernel.cycle_count - int(soc.get("strife_cycle", -10 ** 9)) < gen_years * 100:
         return None                                         # the exhausted generation does not rise again
-    from xylarium.kernel import alignment, primordial, sustenance
+    from xylarium.kernel import alignment, primordial
     clash = min(s["rising"], max(g["levy"], 0.01))
     dead = int(planet.population * clash * 0.5)
     planet.population = max(1, planet.population - dead)
@@ -193,8 +192,10 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
     soc["strife_cycle"] = kernel.cycle_count
     st = stats(kernel)
     st["strife"] += 1
-    if dead:
-        sustenance._shift_civ(planet, alignment.measure(kernel, lives_lost=dead))
+    from xylarium.kernel import rent
+    rent.overturned(kernel, planet)                         # the few who took are gone, and their take with them
+    if dead and planet.civilization is not None:
+        alignment.flow(planet.civilization, dark=dead)      # the lives its own order cost it
     people = getattr(planet.civilization, "name", planet.name)
     from xylarium.kernel import history, knowledge
     history.event(kernel, "STRIFE", f"The {people} turn on themselves", actors=[knowledge.holder_of_planet(planet)],
@@ -210,7 +211,7 @@ def _strife(kernel: Any, planet: Any, s: Dict[str, float], gen_years: float) -> 
 
 def _niche_wars(kernel: Any, planet: Any) -> Optional[str]:
     """A host pressed against its land drives a competing community out of its share of the room."""
-    from xylarium.kernel import alignment, biosphere, cohabit, sustenance
+    from xylarium.kernel import biosphere, cohabit, sustenance
     cs = cohabit.communities(planet)
     if not cs:
         return None
@@ -227,7 +228,7 @@ def _niche_wars(kernel: Any, planet: Any) -> Optional[str]:
             continue
         c["pop"] -= driven
         stats(kernel)["driven_out"] += driven
-        sustenance._shift_civ(planet, alignment.measure(kernel, lives_lost=driven))
+        sustenance.flow_civ(planet, dark=driven)
         lines.append(f"[SOCIETY] {planet.name}'s people drive {driven:,} of the {c['people'].split(':')[-1]} "
                      f"out of the {c['niche']} they shared.")
     return "\n".join(lines) or None
@@ -279,8 +280,10 @@ def quarter(kernel: Any) -> List[str]:
         gen = fertility.generation_years(fertility.strategy(kernel, p))
         from xylarium.kernel import alignment
         from xylarium.kernel import knowledge as _kn, memory as _mem
-        alignment.fade(p.civilization, (_quarter() / 100.0) / max(1e-6, gen),     # old deeds fade as its record does
-                       _mem.character_keep(kernel, _kn.holder_of_planet(p), p))
+        from xylarium.kernel import rent
+        gens = (_quarter() / 100.0) / max(1e-6, gen)
+        alignment.fade(p.civilization, gens, _mem.character_keep(kernel, _kn.holder_of_planet(p), p))   # its telling
+        rent.season(kernel, p, gens, gen)                     # its own work, written into its history
         _council(kernel, p)                                   # moves only what no steward has set
         _believe(kernel, p, gen)
         _guilds(kernel, p)

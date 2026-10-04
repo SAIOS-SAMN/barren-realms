@@ -341,11 +341,7 @@ def _stewardship(kernel: Any, planet: Any) -> None:
     if owner is not None:
         from xylarium.kernel import alignment
         alignment.deed(kernel, owner, "stewardship")
-    else:
-        civ = getattr(planet, "civilization", None)
-        if civ is not None and hasattr(civ, "alignment"):
-            from xylarium.kernel import alignment
-            alignment.people_shift(civ, 0.002)
+    # (a council-led people's stewardship is its history itself: what it makes and keeps - rent.season)
 
 
 def _covenant(kernel: Any, planet: Any) -> None:

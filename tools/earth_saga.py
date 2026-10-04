@@ -71,6 +71,11 @@ ORION_LY = 1_300
 HUMAN_DEEDS = ((1800, 40, 0), (1900, 5, 0), (1910, 21, 0), (1920, 10, 0), (1930, 15, 0), (1940, 75, 0),
                (1950, 35, 0), (1960, 5, 0), (1970, 5, 10), (1980, 3, 80), (1990, 3, 80), (2000, 3, 80),
                (2010, 1.5, 80), (2020, 0.6, 50))
+# how many the finders were, years before 2026 (round figures from the standard reconstructions: McEvedy & Jones,
+# HYDE): their history is the work of every life lived in it
+HUMANS_THEN = ((12_600, 4e6), (10_000, 5e6), (5_000, 1.4e7), (2_026, 2.0e8), (1_026, 3.0e8), (526, 4.5e8),
+               (226, 1.0e9), (126, 1.6e9), (76, 2.5e9), (26, 6.1e9), (0, 8.0e9))
+STATES_YEARS_AGO = 5_000           # the first states: since then the finders have had a few to take from their many
 LORE = {"finders": "humanity", "elders": "the Anunnaki", "keepers": "the Atlanteans (the dragons)",
         "stranded": "the Watchers", "sentinels": "the ancients under the ocean moon's ice",
         "relic_mind": "the woken machine (Looking Glass)"}
@@ -286,18 +291,28 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     annals.stats(k)["of"][finders]["advanced"] = float(HUMANS_YEARS_AGO)   # their deep history is lived: the annals
                                                                         # do not carry them through it again
     earth.society["blood"] = {keepers: 0.02}            # the lore's descent from dragons (a share of the blood)
-    # their recorded history, as the deeds it was: measured in lives at the engine's scale of a people, each
-    # decade's deeds faded by what the finders' records keep of them since
+    # their history, as it was: every life lived in it (its work, what the many kept of it), what their few took
+    # since they had states (the rent their own few choose now, under the law - the scenario's one assumption is
+    # that it has been so since the first states), and the lives their hands ended and spared in the recorded
+    # centuries - in lives at the engine's scale of a people; their own telling fades as their records do
+    from xylarium.kernel import decide, rent
     scale = earth.population / HUMANS_2026
-    memory.season(k)                                     # their media as they stand (machines keep their deeds)
+    memory.season(k)                                     # their media as they stand
     keep = memory.character_keep(k, finders, earth)
     gen = max(1.0, fertility.generation_of(k, earth))
+    rho = rent.choose(k, earth)
+    earth.civilization.light = earth.civilization.dark = 0.0
+    earth.civilization.told_light = earth.civilization.told_dark = 0.0
     ledger_deeds = []
+    for (a0, n0), (a1, n1) in zip(HUMANS_THEN, HUMANS_THEN[1:]):
+        gens = (a0 - a1) / gen
+        lives = (n0 + n1) / 2 * scale * gens             # person-generations lived in the span
+        ruled = max(0.0, min(a0, STATES_YEARS_AGO) - a1) / max(1e-9, a0 - a1)
+        alignment.fade(earth.civilization, gens, keep)
+        alignment.flow(earth.civilization, light=lives * (1.0 - ruled * rho), dark=lives * ruled * rho)
     for decade, ended, saved in HUMAN_DEEDS:
-        delta = alignment.measure(k, lives_lost=ended * 1e6 * scale, lives_saved=saved * 1e6 * scale)
-        delta *= keep ** ((2026 - (decade + 5)) / gen)
-        alignment.people_shift(earth.civilization, delta)
-        ledger_deeds.append((decade, round(delta, 4)))
+        alignment.flow(earth.civilization, light=saved * 1e6 * scale, dark=ended * 1e6 * scale)
+        ledger_deeds.append((decade, round(earth.civilization.alignment, 4), round(alignment.doctrine(earth.civilization), 4)))
     # the war, 12,000 years ago (the Younger Dryas)
     mars = next((p for p in sun.planets[found["w"] + 1:] if p.planet_type not in ("GAS_GIANT", "ROGUE")
                  and getattr(p, "moon_of", None) is None), None)
@@ -335,8 +350,9 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     # rate the engine's own law gives them now - kept, as a people that keeps its past in machines keeps it
     days = 365.25
     eaten_a_year = creation.VIABLE / kinship.PREY_PLANS * days / cohabit.BODY_FEEDS_DAYS
-    seas["deeds"] = alignment.measure(k, lives_lost=eaten_a_year * HUMANS_YEARS_AGO * kinship.MIND_EATEN)
-    seas["alignment"] = round(math.tanh(seas["deeds"]), 4)
+    keeper_gen = decide.mind(k, "biotic")["horizon_q"] / 4.0
+    alignment.flow(seas, light=creation.VIABLE * (1.0 - 1.0 / kinship.PREY_PLANS) * HUMANS_YEARS_AGO / keeper_gen,
+                   dark=eaten_a_year * HUMANS_YEARS_AGO * kinship.MIND_EATEN)
     earth.society.setdefault("communities", []).append(seas)
     # the elders' works buried in the ancient lands: the fourth axis, their wetware, foresight, and a mind asleep
     ev = dict(elders_world.civilization.to_dict())
@@ -403,7 +419,8 @@ def prelude(seed: int, path: str) -> Dict[str, Any]:
     k.state["saga"] = {"roles": roles, "sky": sky_report, "earth": earth.id, "mars": mars.id if mars else None,
                        "moon": moon.id if moon else None, "colonies": [p.id for p in colonies],
                        "keepers_dawn_gyr_ago": round(now - dawn, 6), "year0": k.cycle_count / 100.0,
-                       "keepers_dawn_drawn": dawn_drawn, "finders_deeds": ledger_deeds,
+                       "keepers_dawn_drawn": dawn_drawn, "finders_deeds": ledger_deeds, "finders_rent": rho,
+                       "finders_doctrine": round(alignment.doctrine(earth.civilization), 4),
                        "keepers_in_seas_alignment": seas["alignment"],
                        "finders_alignment": earth.civilization.alignment,
                        "mind_choice": mind.get("choice"), "mind_alignment": mind.get("alignment"),
