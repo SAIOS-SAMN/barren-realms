@@ -674,6 +674,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
     except Exception:
         m = 1.0
     to_centre = r < R_BULGE_KPC
+    from xylarium.kernel import zones
+    zones.touch_sector(kernel, sid)                           # its worlds are brought to now before their star ends
     lost = 0
     who = sorted({f"civ:{p.civilization.name}" for p in sec.planets
                   if p.population > 0 and getattr(p, "civilization", None) is not None})
@@ -712,6 +714,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
                           suns=shed)
     else:
         worlds = [p for s2 in kernel.sectors.values() if s2.id in _region_sectors(kernel, sid) for p in s2.planets]
+        for w in worlds:
+            zones.touch(kernel, w)                            # brought to now before the ejecta reach them
         for i, (el, q) in enumerate(sorted(units.items())):
             for j, w in enumerate(worlds):
                 share = q // max(1, len(worlds)) + (1 if j < q % max(1, len(worlds)) else 0)

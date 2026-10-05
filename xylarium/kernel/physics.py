@@ -377,7 +377,9 @@ def escape_energy(planet: Any) -> F:
     return b.get("mass", F(1)) / r
 
 
-def planet_flux(sector: Any, planet: Any) -> F:
+def planet_flux(sector: Any, planet: Any, swell: Optional[float] = None) -> F:
+    """Starlight at the world, relative to Earth's - after its star's arrays, and as swollen as its star is now (or
+    at the season given: `swell`, the star's luminosity factor then)."""
     b = body(planet)
     if "q" not in b:
         return F(1)
@@ -387,7 +389,8 @@ def planet_flux(sector: Any, planet: Any) -> F:
     if shaded > 0:                                  # the star's arrays take their share of its light first
         fl = fl * F(int(round((1.0 - shaded) * 10 ** 9)), 10 ** 9)
     from xylarium.kernel import cosmos
-    swell = cosmos.lum(getattr(sector, "id", 0)) if sector is not None else 1.0
+    if swell is None:
+        swell = cosmos.lum(getattr(sector, "id", 0)) if sector is not None else 1.0
     if swell != 1.0:                                # a star on its giant branch (cosmos.py)
         fl = fl * F(swell).limit_denominator(10 ** 6)
     return fl

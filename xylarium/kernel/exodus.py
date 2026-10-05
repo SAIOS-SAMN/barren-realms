@@ -228,6 +228,8 @@ def _salvage(kernel: Any, sectors: List[int]) -> List[str]:
             if sid not in reach or haul <= 0 or not cosmos.forecasts(kernel, sid, _energy(kernel, holder)):
                 continue
             taken = 0
+            from xylarium.kernel import zones
+            zones.touch_sector(kernel, sid)                   # its ground is brought to now before it is stripped
             for w in kernel.sectors[sid].planets:
                 if w.population > 0 and _holder(w) != holder:
                     continue                                   # not another people's living world

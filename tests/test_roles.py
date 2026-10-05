@@ -277,3 +277,43 @@ class TestHistoryStreams(unittest.TestCase):
         self.assertAlmostEqual(rec1["hist"]["P"], rec2["hist"]["P"], places=6)
         self.assertAlmostEqual(rec1["hist"]["H"], rec2["hist"]["H"], places=6)
         self.assertEqual(rec1["hist"]["T"], rec2["hist"]["T"])
+
+
+class TestInverseCompaction(unittest.TestCase):
+    """The realm held folded: a folded world caught up is exactly the world that was stepped."""
+
+    def _run(self, all_open):
+        from xylarium.kernel import cosmos, geology, zones
+        zones.ALL_OPEN = all_open
+        try:
+            random.seed(3)
+            k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+            home = ages.homeworld(k, "player_1")
+            for nb in cosmos.neighbours_now(k, cosmos.cell_of_sector(k, home.sector_id)):
+                cosmos.materialise(k, nb, "a test looks further")
+            for _ in range(4 * 25):
+                k.tick_simulation()
+            folded = sum(1 for sid in k.sectors if zones.level(k, sid) < zones.WORLD)
+            zones.settle_all(k)
+        finally:
+            zones.ALL_OPEN = False
+        return ({p.id: dict(p.element_deposits) for s in k.sectors.values() for p in s.planets},
+                dict(geology.stats(k)), dict(k.matter.sources), folded)
+
+    def test_a_folded_world_caught_up_is_the_world_that_was_stepped(self):
+        stepped, folded = self._run(True), self._run(False)
+        self.assertGreater(folded[3], 10)                          # most of the charted realm was held folded
+        self.assertEqual(stepped[0], folded[0])
+        self.assertEqual(stepped[1], folded[1])
+        self.assertEqual(stepped[2], folded[2])
+
+    def test_each_seat_holds_open_what_its_office_reaches(self):
+        from xylarium.kernel import zones
+        self.assertLess(zones.ASPECT["progenitor"].get(zones.WORLD, 0), zones.ASPECT["sovereign"][zones.WORLD])
+        self.assertIn(zones.SURFACE, zones.ASPECT["sovereign"])
+        self.assertNotIn(zones.SURFACE, zones.ASPECT["progenitor"])
+        random.seed(5)
+        k = roles.start_steward(42, "Queen", pick=0, rule="council")
+        realm = roles.stats(k)["realms"]["player_1"]
+        for wid in realm["worlds"]:
+            self.assertGreaterEqual(zones.level(k, k.get_planet(wid).sector_id), zones.SURFACE)

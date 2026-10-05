@@ -382,6 +382,9 @@ def resource_worth(kernel: Any, home: Any, cand: Any) -> float:
     belts at its price, weighted by its scarcity at home (1 / (1 + held at home / offered))."""
     from xylarium.config import COMMODITY_CONFIG
     sec = kernel.sectors.get(cand.sector_id)
+    from xylarium.kernel import zones
+    zones.touch(kernel, cand)                                 # a people reads its ground: it is brought to now
+    zones.touch(kernel, home)
     offered: Dict[str, float] = {}
     for el, q in (cand.element_deposits or {}).items():
         offered[el] = offered.get(el, 0.0) + q

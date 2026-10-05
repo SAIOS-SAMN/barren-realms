@@ -20,7 +20,7 @@ it receives, and how tightly it holds on to gas (escape energy). The few chosen 
 
 import math
 from fractions import Fraction as F
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from xylarium.kernel import matter, physics
 
@@ -81,6 +81,10 @@ def survey(kernel: Any) -> None:
 
 def mine_crust(planet: Any, want: int) -> int:
     """Ore out of the ground into the colony's silo (a transfer: the crust is in the census)."""
+    from xylarium.kernel import ledger
+    k = ledger.active_kernel()
+    if k is not None and "geology" in getattr(k, "state", {}):
+        settle(k, planet)                                     # a folded crust is brought to now before it is mined
     if "ORE" not in planet.element_deposits:
         # an unsurveyed world (created mid-cycle): its mine face works as before and is declared
         return matter.produce(planet, "ore_silo", "ORE", want, "mine_face")
@@ -132,44 +136,92 @@ def pollution_factor(planet: Any) -> float:
     return 1.0 / (1.0 + t / (area * TAILINGS_TOLERANCE_PER_AREA))
 
 
+_DECAY_SHARE = 1.0 - 0.5 ** (1.0 / (URANIUM_HALF_LIFE_YEARS * _SEASONS_PER_YEAR))
+
+
 def quarter(kernel: Any) -> None:
-    """One season of the worlds' own processes."""
+    """One season of the worlds' own processes - run where the realm is open to the worlds (zones.WORLD); folded
+    worlds keep the season they were last brought to and are caught up exactly when they open or are touched."""
+    from xylarium.kernel import zones
     st = stats(kernel)
     survey(kernel)
     landfill(kernel)
-    decay_share = 1.0 - 0.5 ** (1.0 / (URANIUM_HALF_LIFE_YEARS * _SEASONS_PER_YEAR))
-    carry = state.of(kernel, "geology")["decay_carry"]
+    decay_share = _DECAY_SHARE
+    g = state.of(kernel, "geology")
+    carry = g["decay_carry"]
+    g["season"] = int(g.get("season", 0)) + 1
+    g["cycle"] = kernel.cycle_count
+    at = g.setdefault("at", {})
     for sec in kernel.sectors.values():
+        opened = zones.open_at(kernel, sec.id, zones.WORLD)
         for p in sec.planets:
-            if getattr(p, "body", None) and getattr(sec, "kind", "SYSTEM") == "SYSTEM":
-                _world_season(kernel, sec, p, st)
-            for store, label in ((p.element_deposits, f"g:{p.id}"), (p.element_reserves, f"r:{p.id}")):
-                _decay(store, "U", decay_share, carry, label, st)
+            if p.id not in at:
+                at[p.id] = g["season"] - 1                    # it was here this season: it owes it
+            if opened:
+                settle(kernel, p, sec)
         if sec.port is not None:
             _decay(sec.port.stock, "U", decay_share, carry, f"p:{sec.id}", st)
     for cap in kernel.captains.values():
         _decay(cap.ship.cargo.elements, "U", decay_share, carry, f"c:{cap.id}", st)
 
 
-def _world(kernel: Any, sec: Any, p: Any) -> Dict[str, Any]:
-    """A world's fixed physics for its season: changed only by its body, its kind, its star's swelling or the
-    arrays that shade it."""
+def _world(kernel: Any, sec: Any, p: Any, swell: Optional[float] = None) -> Dict[str, Any]:
+    """A world's fixed physics for its season: changed only by its body, its kind, its star's swelling (now, or in
+    the season given) or the arrays that shade it."""
     from xylarium.kernel import cache, cosmos, harvest
+    if swell is None:
+        swell = cosmos.lum(sec.id)
 
     def compute() -> Dict[str, Any]:
-        return {"cap": crust_capacity(p), "heat": heat(p), "flux": float(physics.planet_flux(sec, p)),
+        return {"cap": crust_capacity(p), "heat": heat(p), "flux": float(physics.planet_flux(sec, p, swell)),
                 "area": float(physics.surface_area(p)), "airless": airless(p), "rocky": rocky(p),
                 "esc": float(physics.escape_energy(p)) if rocky(p) else 0.0}
     if not hasattr(kernel, "caches"):
         return compute()
-    stamp = (p.planet_type, str(getattr(p, "body", None)), cosmos.lum(sec.id), harvest.shade(sec.id))
+    stamp = (p.planet_type, str(getattr(p, "body", None)), swell, harvest.shade(sec.id))
     return cache.stamped(kernel, "geology_world", p.id, stamp, compute)
 
 
-def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any]) -> None:
+def _swell(kernel: Any, sec: Any, cycle: int) -> float:
+    """The star's luminosity factor in the season of `cycle`, as the cosmos season set it then (cosmos._stars runs
+    before geology in each quarter): closed-form in the place's own time."""
+    from xylarium.kernel import cosmos
+    if "cosmos" not in getattr(kernel, "state", {}) or not cosmos.is_cosmic(kernel) \
+            or str(sec.id) not in cosmos.stats(kernel)["place"] or not sec.planets:
+        return cosmos.lum(sec.id)
+    return round(cosmos.luminosity_factor(kernel, sec.id, cosmos.deep_gyr(kernel, cycle, sector_id=sec.id)), 4)
+
+
+def settle(kernel: Any, p: Any, sec: Any = None) -> int:
+    """Bring a world's folded seasons to now: each season it missed, run by the very season function an open world
+    runs, with that season's own starlight - so a world caught up is the world that was stepped. Returns the seasons
+    run."""
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES as Q
+    g = state.of(kernel, "geology")
+    now = int(g.get("season", 0))
+    at = g.setdefault("at", {})
+    last = at.get(p.id)
+    if last is None or last >= now:
+        at[p.id] = now if last is None else last
+        return 0
+    sec = sec if sec is not None else kernel.sectors.get(p.sector_id)
+    st = stats(kernel)
+    carry = g["decay_carry"]
+    system = sec is not None and getattr(p, "body", None) and getattr(sec, "kind", "SYSTEM") == "SYSTEM"
+    for k in range(last + 1, now + 1):
+        if system:
+            cyc = int(g.get("cycle", kernel.cycle_count)) - (now - k) * Q
+            _world_season(kernel, sec, p, st, _swell(kernel, sec, cyc))
+        for store, label in ((p.element_deposits, f"g:{p.id}"), (p.element_reserves, f"r:{p.id}")):
+            _decay(store, "U", _DECAY_SHARE, carry, label, st)
+    at[p.id] = now
+    return now - last
+
+
+def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any], swell: Optional[float] = None) -> None:
     deposits = p.element_deposits
     season = 1.0 / _SEASONS_PER_YEAR
-    w = _world(kernel, sec, p)
+    w = _world(kernel, sec, p, swell)
     # Tectonic renewal toward crust capacity
     cap = w["cap"]
     if cap and "ORE" in deposits and deposits["ORE"] < cap:

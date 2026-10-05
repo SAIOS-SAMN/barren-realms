@@ -166,6 +166,8 @@ def survey(kernel: Any) -> None:
         for p in sec.planets:
             if p.society.get("chem_surveyed") or not getattr(p, "body", None):
                 continue
+            from xylarium.kernel import zones
+            zones.touch(kernel, p)                            # its folded seasons first, then what it is found to hold
             held, why = inventory(kernel, sec, p)
             for sym in set(held) | {s for s in p.element_deposits if s in TABLE}:
                 old, new = p.element_deposits.get(sym, 0), held.get(sym, 0)
