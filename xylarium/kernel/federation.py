@@ -51,14 +51,11 @@ def _alignment(kernel: Any, worlds: List[Any]) -> float:
 
 
 def preferred_card(alignment: float) -> str:
-    """The doctrine a people would keep alone, by its alignment: the Light leaves the young alone, the Dark takes."""
-    if alignment >= 0.5:
-        return "ALPHA"
-    if alignment >= 0.15:
-        return "BETA"
-    if alignment >= -0.15:
-        return "GAMMA"
-    return "DELTA"
+    """The doctrine a people would keep alone, by its alignment: the Light leaves the young alone, the Dark takes. The
+    deck's four cards split the alignment's whole range (-1 to 1) into its four equal quarters."""
+    from xylarium.config import POLICY_ORDER
+    quarter = int((1.0 - max(-1.0, min(1.0, alignment))) * len(POLICY_ORDER) / 2.0)
+    return POLICY_ORDER[min(len(POLICY_ORDER) - 1, quarter)]
 
 
 def member_of(kernel: Any, people: Optional[str]) -> Optional[str]:

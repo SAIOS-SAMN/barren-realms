@@ -11,8 +11,10 @@ kept by where it comes from, never summed:
   taken    what it seized: the wars its sovereigns opened, the worlds its captains took
 
 A house is of the realm its first seat lies in. It has one duty a year - its senior sovereign's lead (the first
-deficit in that mind's need order) - and it hands that duty to its captains: a captain in its service puts the
-office book that answers it before its own (offices.choose). That is the higher tier commanding the lower.
+deficit in that mind's need order) - and it hands that duty to its captains as work: a captain in its service puts
+that office book before its own (offices.choose). Which work answers which duty is not laid down: the house's own
+mind learns it from what its captains' service delivered (a crystal; a wall where it delivered nothing). That is the
+higher tier commanding the lower.
 
 A CAPTAIN who serves no house is RONIN, and has agency. Where a house holds the system a ronin is in, the house offers
 it a commission; the ronin takes it unless the duty is one its own mind has walled (it learned that book does not pay
@@ -31,7 +33,7 @@ from typing import Any, Dict, List, Optional
 
 from xylarium.kernel import mindcore as mc
 
-DUTY = {"food": "haul", "room": "works", "security": "haul", "wealth": "trade", "standing": "unknown"}
+FAMILIES = ("trade", "haul", "matter", "works", "unknown", "money")   # the office books a house can set its captains to
 TAKEN = ("CONQUEST", "SUBJUGATION")
 
 
@@ -116,19 +118,56 @@ def _attend(kernel: Any) -> List[str]:
     return logs
 
 
+def _books(kernel: Any, h: Dict[str, Any]) -> mc.Chain:
+    """A house's books: its senior sovereign's residual, read as the house's own."""
+    from xylarium.kernel import polity
+    recs = [polity.sovereigns(kernel)[sid] for sid in h["polities"] if sid in polity.sovereigns(kernel)]
+    if not recs:
+        return {}
+    senior = min(recs, key=lambda s: (s["since"], s["id"]))
+    res = polity.chain(kernel, senior, {senior["id"]: polity.field(kernel, senior)})
+    out: mc.Chain = {}
+    for (_, book), v in res.items():
+        out[(h["line"], book)] = out.get((h["line"], book), Fraction(0)) + v
+    return out
+
+
 def _duty(kernel: Any, h: Dict[str, Any]) -> Optional[str]:
     """A house's duty this year: what its seated sovereign orders (command.py), else its senior sovereign's lead -
     the book its captains are set to."""
     from xylarium.kernel import polity
     if h.get("ordered"):
         return h["ordered"]
-    recs = [polity.sovereigns(kernel)[sid] for sid in h["polities"] if sid in polity.sovereigns(kernel)]
-    if not recs:
-        return None
-    senior = min(recs, key=lambda s: (s["since"], s["id"]))
-    res = polity.chain(kernel, senior, {senior["id"]: polity.field(kernel, senior)})
-    lead = mc.lead(res, polity.BOOKS)
+    lead = mc.lead(_books(kernel, h), polity.BOOKS)
     return lead[1] if lead else None
+
+
+def family_for(kernel: Any, h: Dict[str, Any]) -> Optional[str]:
+    """The office book a house sets its captains to for its duty: what its own mind has learned answers that duty (a
+    crystal), else the next it has not yet found wanting (a wall) - no table says which work answers which need."""
+    book = h.get("duty")
+    if not book:
+        return None
+    m = h.setdefault("mind", mc.new_mind())
+    entry = (h["line"], book)
+    recalled = mc.recall(m, entry, Fraction(1), "house")
+    if recalled:
+        return recalled
+    barred = mc.walls(m, mc.shape(entry, Fraction(1), "house"))
+    return next((f for f in FAMILIES if f not in barred), None)
+
+
+def _learn(kernel: Any, h: Dict[str, Any]) -> None:
+    """A year of service read: did the work its captains were set to drain the duty it was set for? Sealed in the
+    house's mind (a crystal for that work, or a wall) - then this year's duty and work set."""
+    res = _books(kernel, h)
+    m = h.setdefault("mind", mc.new_mind())
+    mc.seal(m, res)
+    h["duty"] = _duty(kernel, h)
+    h["work"] = family_for(kernel, h)
+    if h["duty"] and h["work"]:
+        entry = (h["line"], h["duty"])
+        mc.intend(m, entry, res.get(entry, Fraction(1)) or Fraction(1), h["work"], "house")
 
 
 def duty_of(kernel: Any, captain_id: str) -> Optional[str]:
@@ -137,7 +176,7 @@ def duty_of(kernel: Any, captain_id: str) -> Optional[str]:
         return None
     line = stats(kernel)["serves"].get(str(captain_id))
     h = houses(kernel).get(line) if line else None
-    return DUTY.get(h["duty"]) if h and h.get("duty") and not h.get("ended") else None
+    return h.get("work") if h and h.get("duty") and not h.get("ended") else None
 
 
 # ---------------------------------------------------------------------- captains: service or the ronin's ways
@@ -179,7 +218,7 @@ def _commission(kernel: Any, held: Dict[int, str]) -> List[str]:
             continue                                          # a player's captain serves by its own choice
         line = st["serves"].get(cid)
         if line is not None and line in standing(kernel):
-            book = DUTY.get(houses(kernel)[line].get("duty") or "")
+            book = houses(kernel)[line].get("work")
             if book is not None and book in mc.walls(offices.mind(kernel, c), mc.shape(("self", book), Fraction(1))):
                 st["serves"].pop(cid)                         # it has learned its duty does not pay it: it leaves
                 history.event(kernel, "REFUSAL", f"{c.name} leaves the House of {houses(kernel)[line]['name']}",
@@ -192,7 +231,7 @@ def _commission(kernel: Any, held: Dict[int, str]) -> List[str]:
         h = houses(kernel).get(offer) if offer else None
         if h is None or _raider(c) or _lawless(kernel, c):
             continue
-        book = DUTY.get(h.get("duty") or "", None)
+        book = h.get("work")
         m = offices.mind(kernel, c)
         if book is not None and book in mc.walls(m, mc.shape(("self", book), Fraction(1))):
             continue                                          # it knows that duty does not pay it: it declines
@@ -254,7 +293,7 @@ def season(kernel: Any) -> List[str]:
         return []
     logs = _attend(kernel)
     for h in standing(kernel).values():
-        h["duty"] = _duty(kernel, h)
+        _learn(kernel, h)
     logs += _commission(kernel, _held(kernel))
     _ways(kernel)
     return logs

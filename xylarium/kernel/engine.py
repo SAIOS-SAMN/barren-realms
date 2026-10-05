@@ -471,7 +471,7 @@ class GameKernel:
         return actions_mod.turn_cost(action)
 
     def _handle_move(self, captain: Captain, current_sector: Sector, destination: Optional[int]) -> ActionResult:
-        if destination is None or destination not in current_sector.warps or transit_mod.refuses(self, captain, current_sector.id, destination):
+        if destination is None or destination not in current_sector.warps or not transit_mod.admits(self, captain, current_sector.id, destination):
             return ActionResult(
                 success=False,
                 action=ActionType.MOVE,
@@ -525,10 +525,8 @@ class GameKernel:
                     tariff_pct = p.sector_tariff_pct
                     toll_planet = p
 
-        if tariff_pct > 0 and toll_planet and captain.credits > 0:
-            base_toll = int(tariff_pct * 15)
-            pct_toll = int(captain.credits * (tariff_pct / 100) * 0.05)
-            toll = min(captain.credits, max(50, base_toll + pct_toll))
+        if tariff_pct > 0 and toll_planet and captain.credits > 0 and fibres_mod.cargo_value(captain) > 0:
+            toll = min(captain.credits, int(fibres_mod.cargo_value(captain) * tariff_pct / 100))   # customs: its rate on the goods brought in
             captain.credits -= toll
             from xylarium.kernel.fx import ACTIVE_FX
             if toll_planet.currency != "SOL" and ACTIVE_FX is not None:

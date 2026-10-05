@@ -209,6 +209,7 @@ def order(kernel: Any, pid: str, book: Optional[str]) -> Dict[str, Any]:
     h["ordered"] = book                                       # None: its captains follow your realm's own lead again
     from xylarium.kernel import dynasties
     h["duty"] = dynasties._duty(kernel, h)                     # it reaches its captains at once
+    h["work"] = dynasties.family_for(kernel, h)
     return {"ok": True, "house": h["name"], "duty": book}
 
 
@@ -227,7 +228,7 @@ def commission(kernel: Any, pid: str, captain_id: str) -> Dict[str, Any]:
     if st["serves"].get(captain_id) == h["line"]:
         return _no("it already serves you")
     if c.is_ai:
-        book = dynasties.DUTY.get(dynasties._duty(kernel, h) or "")
+        book = h.get("work")
         walled = book is not None and book in mc.walls(offices.mind(kernel, c), mc.shape(("self", book), Fraction(1)))
         if dynasties._raider(c) or dynasties._lawless(kernel, c) or walled:
             history.event(kernel, "REFUSAL", f"{c.name} refuses the House of {h['name']}'s commission",

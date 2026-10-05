@@ -31,7 +31,7 @@ class TestTolls(unittest.TestCase):
     def test_a_toll_lies_between_what_the_lane_cost_and_what_it_saves(self):
         a, b = self._held_lane()
         with mock.patch.object(transit, "_payer", return_value="captain:nobody"), \
-                mock.patch.object(transit, "_around", return_value=fibres.lane_cost(self.k, a, b) + 3):
+                mock.patch.object(transit, "_around", return_value=fibres.base_lane_cost(self.k, a, b) + 3):
             q = transit.quote(self.k, self.cap, a, b)
         self.assertLessEqual(q["toll"], q["ceiling"])                 # never more than going round
         self.assertAlmostEqual(q["ceiling"], 3 * transit.hop_value(self.k, self.cap), places=6)
@@ -46,7 +46,7 @@ class TestTolls(unittest.TestCase):
         rec = transit.lane(self.k, a, b)
         rec["collected"] = rec["cost_cr"]                             # paid off: no floor left
         with mock.patch.object(transit, "_payer", return_value="captain:nobody"), \
-                mock.patch.object(transit, "_around", return_value=fibres.lane_cost(self.k, a, b)):
+                mock.patch.object(transit, "_around", return_value=fibres.base_lane_cost(self.k, a, b)):
             self.assertEqual(transit.quote(self.k, self.cap, a, b)["toll"], 0.0)
 
     def test_what_a_network_collects_pays_for_its_passages(self):
@@ -61,6 +61,23 @@ class TestTolls(unittest.TestCase):
             self.assertEqual(research.jump_cost(self.k, self.cap), max(1, int(transit.passage_cr(self.k) / 0.5)))
 
 
+class TestRoutesWeighTolls(unittest.TestCase):
+    def test_a_route_goes_round_a_lane_whose_toll_costs_more_than_the_hops_it_saves(self):
+        random.seed(5)
+        k = GameKernel(seed=42)
+        a = sorted(k.sectors)[0]
+        b = next(w for w in k.sectors[a].warps if w in k.sectors)
+        base = fibres.base_lane_cost(k, a, b)
+        self.assertEqual(fibres.lane_cost(k, a, b), base + transit.charge_hops(k, a, b))
+        with mock.patch.object(transit, "charge_hops", side_effect=lambda kk, x, y: 1e6 if {x, y} == {a, b} else 0.0):
+            from xylarium.kernel import cache
+            cache.clear(k)
+            fibres._bump(k)
+            path = fibres.geodesic(k, a, b)
+        if transit._around(k, a, b) != float("inf"):
+            self.assertNotEqual(path, [a, b])                 # it pays to go round
+
+
 class TestThroats(unittest.TestCase):
     def setUp(self):
         random.seed(5)
@@ -72,10 +89,12 @@ class TestThroats(unittest.TestCase):
         w = transit.open_throat(self.k, self.a, self.b, "civ:Holder", "forged", 1000.0, "test")
         self.assertIn(self.b, self.k.sectors[self.a].warps)
         w["handling"] = "tolled"
-        self.assertEqual(fibres.lane_cost(self.k, self.a, self.b), fibres.MIN_COST)
+        self.assertEqual(fibres.base_lane_cost(self.k, self.a, self.b), fibres.MIN_COST)   # one hop through the bounce
+        self.assertGreater(fibres.lane_cost(self.k, self.a, self.b), fibres.MIN_COST)     # routes weigh its tithe
+        self.assertGreater(transit.tithe_cr(self.k, self.a, self.b), 0)
         self.assertFalse(transit.refuses(self.k, self.cap, self.a, self.b))
         w["handling"] = "guarded"
-        self.assertEqual(fibres.lane_cost(self.k, self.a, self.b), float("inf"))   # not on the shared routes
+        self.assertEqual(fibres.base_lane_cost(self.k, self.a, self.b), float("inf"))   # not on the shared routes
         self.assertTrue(transit.refuses(self.k, self.cap, self.a, self.b))
         with mock.patch.object(transit, "_payer", return_value="civ:Holder"):
             self.assertFalse(transit.refuses(self.k, self.cap, self.a, self.b))    # its own pass
@@ -102,6 +121,19 @@ class TestThroats(unittest.TestCase):
         w = transit.forge(self.k, who, anchor, target, [])
         self.assertEqual(w["owner"], who)
         self.assertAlmostEqual(net["bank_j"], cost / 2)
+
+    def test_a_galaxy_beyond_stays_unwitnessed_until_a_ship_passes(self):
+        from xylarium.kernel import cluster
+        gals = cluster.stats(self.k).get("galaxies") or []
+        if len(gals) < 2:
+            cluster.stats(self.k)["galaxies"] = [{"name": "home", "mass": 1, "dist_kpc": 0},
+                                                 {"name": "Far", "mass": 1e10, "dist_kpc": 700.0}]
+        heart = transit.MOUTH_BASE + 1
+        transit.open_throat(self.k, self.a, heart, "civ:Holder", "intergalactic", 1.0, "test")
+        self.assertNotIn(heart, self.k.sectors)                # a formula until witnessed
+        self.assertTrue(transit.admits(self.k, self.cap, self.a, heart))
+        self.assertIn(heart, self.k.sectors)                   # the passage is the observation
+        self.assertIn(self.a, self.k.sectors[heart].warps)
 
     def test_mouths_are_black_holes(self):
         sid = sorted(self.k.sectors)[3]

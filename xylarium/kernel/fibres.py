@@ -208,12 +208,21 @@ def _bump(kernel: Any) -> None:
     st["version"] = st.get("version", 0) + 1
 
 
-def lane_cost(kernel: Any, a: int, b: int) -> float:
+def base_lane_cost(kernel: Any, a: int, b: int) -> float:
+    """What a lane costs to travel, before anyone's toll: development, curvature, the shear's stretch - or, for a
+    wormhole's throat, one hop through the bounce."""
     from xylarium.kernel import cosmos, transit               # a lane between rings stretches as the galaxy shears
-    w = transit.worm_cost(kernel, a, b)                       # a wormhole's throat: one hop through the bounce
+    w = transit.worm_cost(kernel, a, b)
     if w is not None:
         return w
     return cost(kernel, a, b) * (1.0 + curvature(kernel, a, b)) * cosmos.stretch(kernel, a, b)
+
+
+def lane_cost(kernel: Any, a: int, b: int) -> float:
+    """What a lane costs a route: travelling it, and what its holder charges a passer (toll and a throat's tithe,
+    in the hops that money would buy - transit.charge_hops) - so routes weigh tolls as passers pay them."""
+    from xylarium.kernel import transit
+    return base_lane_cost(kernel, a, b) + transit.charge_hops(kernel, a, b)
 
 
 def geodesic(kernel: Any, start: int, goal: int) -> List[int]:

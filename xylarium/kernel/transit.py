@@ -24,15 +24,21 @@ WORMHOLES. Where matter is dense enough that spin-torsion bounces it (Einstein-C
 and a white hole beyond - blackhole.py), the fabric has a mouth. The galactic centre is one; so is every black hole a
 heavy star leaves (cosmos.BLACK_HOLE_SUNS); so is every other galaxy's centre - galaxies are spheres stacked on their
 bounces. A throat joins mouth to mouth: each star's hole to its galaxy's centre (the long haul), the centre to every
-other galaxy's centre (across the void). Through the bounce a ship is carried on the torsion's own repulsion, its
-mass undistorted, its clock dilated: a throat is crossed in one hop, as cheap as the cheapest lane.
+other galaxy's centre (across the void) - each kept dark until a ship passes it, the observation that puts that
+galaxy's heart on the map. Through the bounce a ship is carried on the torsion's own repulsion, its mass undistorted,
+its clock dilated: a throat is crossed in one hop, as cheap to travel as the cheapest lane - and paid for by its
+tithe.
 
   MASTERY   no one passes a throat until a people devises how: an ancient people (board.ancient_peoples) - the core's
             first, whose own reach makes it to the core (its network's reach at least its home's distance from the
             centre) - masters the bounce. It holds every throat whose mouth its network reaches, and the centre's
-  HANDLING  its own choice, read from what it is (federation.preferred_card of its whole-history doctrine):
-            ALPHA open (only the floor: what the throat cost), BETA/GAMMA tolled (the toll law), DELTA guarded (its
-            own and its bonded only). A player's progenitor sets its own (command.py)
+  HANDLING  its own choice, by its needs: closed while it is at war, guarded (its own and its bonded only) while
+            its sovereign's first need is security, else tolled by the toll law; a player's progenitor sets its own
+            - open (only what the throat cost), tolled, guarded or closed (command.py)
+  TITHE     the bounce carries a ship the throat's whole span in one passage - the torsion its accelerant, the
+            dilation its clock, the ship's mass undistorted - and the throat is held open again by the folds it
+            stands in for: every passer pays the progenitors who keep it, for their ancients, a passage's energy for
+            each lane's length the throat spans (time as distance), at energy's price
   FORGING   a progenitor line may punch a stabilised throat of its own from a mouth its network holds to the
             busiest system of the galaxy it can reach (time as distance: where the most traffic loses the most hops
             going round). It costs a passage held open for each hop it replaces, every year of one of its stewards'
@@ -47,7 +53,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from xylarium.kernel import mindcore as mc
 
 MOUTH_BASE = 9_000_000          # sector ids for mouths beyond the charts: the centre, then the other galaxies' centres
-HANDLING = {"ALPHA": "open", "BETA": "tolled", "GAMMA": "tolled", "DELTA": "guarded"}
 FREE_BONDS = ("federation", "conglomerate")
 
 
@@ -181,7 +186,7 @@ def _around(kernel: Any, a: int, b: int) -> float:
             for w in kernel.sectors[s].warps:
                 if w not in kernel.sectors or {s, w} == {a, b}:
                     continue
-                nd = d + fibres.lane_cost(kernel, s, w)
+                nd = d + fibres.base_lane_cost(kernel, s, w)
                 if nd < dist.get(w, float("inf")):
                     dist[w] = nd
                     heapq.heappush(heap, (nd, w))
@@ -206,20 +211,20 @@ def quote(kernel: Any, captain: Any, a: int, b: int) -> Dict[str, Any]:
     from xylarium.kernel import fibres
     holder = owner(kernel, a, b)
     if holder is None or _free(kernel, _payer(kernel, captain), holder):
-        return {"owner": holder, "toll": 0.0, "floor": 0.0, "ceiling": 0.0}
+        return {"owner": holder, "toll": 0.0, "floor": 0.0, "ceiling": 0.0, "tithe": 0.0}
     rec = lane(kernel, a, b)
     floor = max(0.0, rec["cost_cr"] - rec["collected"]) / max(1, rec["last_year"])
     around = _around(kernel, a, b)
     if around == float("inf"):
         ceiling = fibres.cargo_value(captain) + hop_value(kernel, captain)      # no way round: all it carries
     else:
-        ceiling = max(0.0, around - fibres.lane_cost(kernel, a, b)) * hop_value(kernel, captain)
+        ceiling = max(0.0, around - fibres.base_lane_cost(kernel, a, b)) * hop_value(kernel, captain)
     w = worm(kernel, a, b)
     if w is not None and w.get("handling") == "open":
         toll = min(floor, ceiling)
     else:
         toll = min(ceiling, floor + max(0.0, ceiling - floor) / 2.0)
-    return {"owner": holder, "toll": toll, "floor": floor, "ceiling": ceiling}
+    return {"owner": holder, "toll": toll, "floor": floor, "ceiling": ceiling, "tithe": tithe_cr(kernel, a, b)}
 
 
 def on_passage(kernel: Any, captain: Any, a: int, b: int) -> int:
@@ -230,19 +235,25 @@ def on_passage(kernel: Any, captain: Any, a: int, b: int) -> int:
     rec = lane(kernel, a, b)
     rec["transits"] += 1
     rec["year"] += 1
-    amt = int(min(q["toll"], max(0, captain.credits)))
-    if amt <= 0:
-        return 0
-    captain.credits -= amt
-    _pay_owner(kernel, q["owner"], amt)
-    rec["collected"] += amt
     st = stats(kernel)
-    st["revenue"][q["owner"]] = st["revenue"].get(q["owner"], 0.0) + amt
-    st["paid"] += amt
-    if hasattr(kernel, "action_logs"):
+    tithe = int(min(q["tithe"], max(0, captain.credits)))       # the bounce's upkeep first: the throat must hold
+    if tithe > 0:
+        captain.credits -= tithe
+        _pay_owner(kernel, q["owner"], tithe)
+        st.setdefault("tithes", {})[q["owner"]] = st["tithes"].get(q["owner"], 0.0) + tithe
+        st["tithed"] = st.get("tithed", 0.0) + tithe
+    amt = int(min(q["toll"], max(0, captain.credits)))
+    if amt > 0:
+        captain.credits -= amt
+        _pay_owner(kernel, q["owner"], amt)
+        rec["collected"] += amt
+        st["revenue"][q["owner"]] = st["revenue"].get(q["owner"], 0.0) + amt
+        st["paid"] += amt
+    if (amt or tithe) and hasattr(kernel, "action_logs"):
         kernel.action_logs.append(f"[TRANSIT] {captain.name} pays the {q['owner'].split(':', 1)[-1]} {amt:,} Cr "
-                                  f"to pass {a}<->{b}.")
-    return amt
+                                  f"toll" + (f" and {tithe:,} Cr tithe for the bounce" if tithe else "")
+                                  + f" to pass {a}<->{b}.")
+    return amt + tithe
 
 
 def _pay_owner(kernel: Any, who: str, amount: int) -> None:
@@ -258,6 +269,101 @@ def _pay_owner(kernel: Any, who: str, amount: int) -> None:
         home.treasury += ACTIVE_FX.swap_sol_to(home.currency, amount)
     else:
         home.treasury += amount
+
+
+# ---------------------------------------------------------------------- the bounce's upkeep, and what routes see
+def _mean_lane_kpc(kernel: Any) -> Optional[float]:
+    """How far one lane carries in this galaxy, on the mean: the proper length of its charted lanes."""
+    from xylarium.kernel import cache, cosmos
+    if not cosmos.is_cosmic(kernel):
+        return None
+
+    def build() -> Optional[float]:
+        got = []
+        for sid, sec in sorted(kernel.sectors.items()):
+            for w in sec.warps:
+                if sid < w and worm(kernel, sid, w) is None:
+                    d = cosmos.distance_kpc(kernel, sid, w)
+                    if d:
+                        got.append(d)
+        return sum(got) / len(got) if got else None
+    if not hasattr(kernel, "caches"):
+        return build()
+    return cache.memo(kernel, "transit_lane_kpc", "mean", build, epoch=(len(kernel.sectors), kernel.cycle_count // 2500))
+
+
+def span_kpc(kernel: Any, w: Dict[str, Any]) -> Optional[float]:
+    """The proper distance a throat spans: to another galaxy, its distance across the void; to the centre, how far
+    the other mouth lies from it; else between its mouths."""
+    from xylarium.kernel import cluster, cosmos
+    a, b = w["a"], w["b"]
+    gals = cluster.stats(kernel).get("galaxies") or []
+    for s in (a, b):
+        if 0 < s - MOUTH_BASE < len(gals):
+            return float(gals[s - MOUTH_BASE]["dist_kpc"])
+    if MOUTH_BASE in (a, b):
+        other = b if a == MOUTH_BASE else a
+        p = cosmos.position(kernel, other)
+        return float(p["r"]) if p else None
+    return cosmos.distance_kpc(kernel, a, b)
+
+
+def tithe_cr(kernel: Any, a: int, b: int) -> float:
+    """The bounce's upkeep for one passage, tithed to the progenitors who keep the throat for their ancients: the
+    bounce carries a ship the throat's whole span in one passage (its torsion the accelerant, the dilation its
+    clock), and the throat is held open again by the folds it stands in for - a passage's energy for every lane's
+    length it spans (time as distance), at energy's price."""
+    w = worm(kernel, a, b)
+    if w is None:
+        return 0.0
+    lane_kpc = _mean_lane_kpc(kernel)
+    span = span_kpc(kernel, w)
+    if lane_kpc and span:
+        hops = span / lane_kpc
+    else:
+        around = _around(kernel, a, b)                       # on a board with no galaxy's geometry: the hops it replaces
+        hops = around if around != float("inf") else 1.0
+    return passage_cr(kernel) * max(1.0, hops)
+
+
+def _typical_hop(kernel: Any) -> float:
+    """What a hop costs a typical passer: the median of what the crews in the galaxy burn."""
+    from xylarium.kernel import cache
+
+    def build() -> float:
+        vals = sorted(hop_value(kernel, c) for c in kernel.captains.values())
+        return vals[len(vals) // 2] if vals else passage_cr(kernel)
+    if not hasattr(kernel, "caches"):
+        return build()
+    return cache.memo(kernel, "transit_hop", "median", build, epoch=kernel.cycle_count // 25)
+
+
+def charge_hops(kernel: Any, a: int, b: int) -> float:
+    """What a passer from outside the holder's bonds pays to pass a lane - its toll and a throat's tithe - in the hops
+    that money would buy a typical passer: the weight a route gives what a lane charges."""
+    if not hasattr(kernel, "state"):
+        return 0.0
+    w = worm(kernel, a, b)
+    holder = w["owner"] if w is not None else owner(kernel, a, b)
+    if holder is None:
+        return 0.0
+    from xylarium.kernel import fibres
+    hv = _typical_hop(kernel)
+    if hv <= 0:
+        return 0.0
+    rec = stats(kernel)["lanes"].get(key(a, b))
+    cost_cr = rec["cost_cr"] if rec else (float(w["cost_cr"]) if w else passage_cr(kernel))
+    floor = max(0.0, cost_cr - (rec["collected"] if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
+    around = _around(kernel, a, b)
+    saving = (float("inf") if around == float("inf") else
+              max(0.0, around - fibres.base_lane_cost(kernel, a, b)) * hv)
+    if saving == float("inf"):
+        toll = floor
+    elif w is not None and w.get("handling") == "open":
+        toll = min(floor, saving)
+    else:
+        toll = min(saving, floor + max(0.0, saving - floor) / 2.0)
+    return (toll + tithe_cr(kernel, a, b)) / hv
 
 
 def drain_revenue(kernel: Any, who: str) -> Fraction:
@@ -332,27 +438,69 @@ def open_throat(kernel: Any, a: int, b: int, who: str, kind: str, cost_cr: float
     if k in st["worms"]:
         return st["worms"][k]
     for x, y in ((a, b), (b, a)):
-        if y not in kernel.sectors[x].warps:
-            kernel.sectors[x].warps.append(y)
+        if x in kernel.sectors and y not in kernel.sectors[x].warps:
+            kernel.sectors[x].warps.append(y)               # a mouth not yet witnessed gets its way back when it is
     w = st["worms"][k] = {"a": a, "b": b, "owner": who, "kind": kind, "opened": kernel.cycle_count,
                           "cost_cr": float(cost_cr), "handling": handling_of(kernel, who)}
     topology.changed(kernel)
     fibres._bump(kernel)
-    history.event(kernel, "WORMHOLE", f"A throat opens between {kernel.sectors[a].name} and {kernel.sectors[b].name}",
+    history.event(kernel, "WORMHOLE", f"A throat opens between {_name(kernel, a)} and {_name(kernel, b)}",
                   actors=[who] if who.startswith("civ:") else [], sector_id=a,
                   cause=why, data={"a": a, "b": b, "kind": kind, "handling": w["handling"]})
     return w
 
 
+def _name(kernel: Any, sid: int) -> str:
+    """A mouth's name - a galaxy's heart not yet witnessed is known only by its galaxy."""
+    if sid in kernel.sectors:
+        return kernel.sectors[sid].name
+    from xylarium.kernel import cluster
+    gals = cluster.stats(kernel).get("galaxies") or []
+    i = sid - MOUTH_BASE
+    return f"the unwitnessed heart of {gals[i]['name']}" if 0 < i < len(gals) else f"sector {sid}"
+
+
+def admits(kernel: Any, captain: Any, a: int, b: int) -> bool:
+    """May this ship pass from a to b? Not through a throat its holder bars it from. Passing a throat into a galaxy
+    no one has witnessed is the observation that puts its heart on the map (inverse compaction: until a ship arrives,
+    the galaxy is its formula)."""
+    if refuses(kernel, captain, a, b):
+        return False
+    if b not in kernel.sectors and worm(kernel, a, b) is not None:
+        i = b - MOUTH_BASE
+        if _galaxy_sector(kernel, i) is None:
+            return False
+        if a not in kernel.sectors[b].warps:
+            kernel.sectors[b].warps.append(a)
+        from xylarium.kernel import cluster, history, topology
+        cluster.stats(kernel)["charted"] = cluster.stats(kernel).get("charted") or kernel.cycle_count
+        topology.changed(kernel)
+        g = cluster.stats(kernel)["galaxies"][i]
+        history.event(kernel, "GALAXY_REACHED", f"{captain.name} passes the bounce into {g['name']}", sector_id=b,
+                      actors=[f"captain:{captain.id}"],
+                      cause=f"through the core's throat, {g['dist_kpc']:,.0f} kpc across the void in one passage: "
+                            f"the first witness of that galaxy's heart", data={"galaxy": g["name"]})
+    return True
+
+
 def handling_of(kernel: Any, who: str) -> str:
-    """How a people handles its throats, by what it is (its doctrine's card) - unless its player has chosen."""
-    from xylarium.kernel import alignment, federation, spheres
+    """How a people handles its throats, by its own needs - unless its player has chosen: closed while it is at war
+    (nothing comes through), guarded while its sovereign's first need is its security, tolled otherwise (the toll law
+    itself asks nothing where the throat has paid for itself and saves no one anything)."""
+    from xylarium.kernel import mindcore, polity, realmwars
     chosen = stats(kernel)["handling"].get(who)
     if chosen:
         return chosen
-    home = spheres._home(kernel, who)
-    civ = getattr(home, "civilization", None) if home is not None else None
-    return HANDLING[federation.preferred_card(alignment.doctrine(civ) if civ is not None else 0.0)]
+    if "realmwars" in kernel.state and any(w["status"] == "open" and who in (w.get("taker"), w.get("holder"))
+                                           for w in realmwars.stats(kernel)["wars"].values()):
+        return "closed"
+    recs = polity.of_people(kernel, who) if "polity" in kernel.state else []
+    if recs:
+        s = min(recs, key=lambda r: (r["since"], r["id"]))
+        lead = mindcore.lead(polity.chain(kernel, s, {s["id"]: polity.field(kernel, s)}), polity.BOOKS)
+        if lead is not None and lead[1] == "security":
+            return "guarded"
+    return "tolled"
 
 
 def _masters(kernel: Any, logs: List[str]) -> None:
@@ -395,11 +543,12 @@ def _natural(kernel: Any, logs: List[str]) -> None:
             logs.append(f"[WORMHOLE] A long-haul throat opens from {kernel.sectors[sid].name} to the centre.")
     gals = cluster.stats(kernel).get("galaxies") or []
     for i in range(1, len(gals)):
-        g = _galaxy_sector(kernel, i)
-        if g is not None and key(centre, g) not in st["worms"]:
+        g = MOUTH_BASE + i                                   # its heart stays a formula until a ship passes (admits)
+        if key(centre, g) not in st["worms"]:
             open_throat(kernel, centre, g, first, "intergalactic", passage_cr(kernel),
-                        f"galaxies are spheres stacked on their bounces: the core's throat reaches {gals[i]['name']}")
-            logs.append(f"[WORMHOLE] A throat across the void opens to {gals[i]['name']}.")
+                        f"galaxies are spheres stacked on their bounces: the core's throat reaches toward "
+                        f"{gals[i]['name']}, unwitnessed")
+            logs.append(f"[WORMHOLE] A throat across the void opens toward {gals[i]['name']}.")
 
 
 # ---------------------------------------------------------------------- forging
@@ -491,7 +640,7 @@ def render(kernel: Any) -> str:
     for who, c in sorted(st["masters"].items(), key=lambda kv: kv[1]):
         lines.append(f"  Masters of the bounce: the {who.split(':', 1)[-1]} ({handling_of(kernel, who)})")
     for w in st["worms"].values():
-        lines.append(f"  {w['kind']} throat {kernel.sectors[w['a']].name} <-> {kernel.sectors[w['b']].name}: "
+        lines.append(f"  {w['kind']} throat {_name(kernel, w['a'])} <-> {_name(kernel, w['b'])}: "
                      f"the {w['owner'].split(':', 1)[-1]}'s, {w['handling']}")
     busiest = sorted(st["lanes"].items(), key=lambda kv: -kv[1]["collected"])[:5]
     for k, rec in busiest:
@@ -515,7 +664,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 register_subsystem(Subsystem(
     name="transit",
     state=lambda: {"lanes": {}, "worms": {}, "masters": {}, "revenue": {}, "handling": {}, "paid": 0.0,
-                   "forged": 0},
+                   "forged": 0, "tithes": {}, "tithed": 0.0},
     season=season,
     summary=summary,
 ))

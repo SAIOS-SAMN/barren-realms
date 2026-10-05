@@ -690,7 +690,8 @@ class TestDynasties(unittest.TestCase):
         st = dynasties.stats(self.k)
         line = next(iter(dynasties.standing(self.k)))
         h = dynasties.houses(self.k)[line]
-        h["duty"] = "room"                                    # the house needs room: its captains build
+        h["duty"], work = "room", h.get("work")               # the house needs room; it has learned building answers it
+        h["work"] = "works"
         cap = next(c for c in self.k.captains.values() if c.is_ai)
         was, duty = st["serves"].get(cap.id), h["duty"]
         st["serves"][cap.id] = line
@@ -699,7 +700,7 @@ class TestDynasties(unittest.TestCase):
             options = [(5.0, {"kind": "haul"}, None), (1.0, {"kind": "settle"}, None)]
             self.assertEqual(offices.choose(self.k, cap, options)[1]["kind"], "settle")
         finally:
-            h["duty"] = duty
+            h["duty"], h["work"] = duty, work
             if was is None:
                 st["serves"].pop(cap.id)
             else:
@@ -787,6 +788,22 @@ class TestSpheres(unittest.TestCase):
         self.assertIn("fold", [d for ws in lines["civ:Far"]["fold_mind"]["walls"].values() for d in ws])
 
 
+class TestHouseLearning(unittest.TestCase):
+    def test_a_house_learns_which_work_answers_its_duty(self):
+        from fractions import Fraction
+        from xylarium.kernel import dynasties, mindcore as mc
+        h = {"line": "L", "duty": "food", "mind": mc.new_mind()}
+        first = dynasties.family_for(None, h)
+        self.assertEqual(first, dynasties.FAMILIES[0])
+        mc.intend(h["mind"], ("L", "food"), Fraction(5), first, "house")
+        mc.seal(h["mind"], {("L", "food"): Fraction(5)})          # the work delivered nothing: walled
+        self.assertNotEqual(dynasties.family_for(None, h), first)
+        second = dynasties.family_for(None, h)
+        mc.intend(h["mind"], ("L", "food"), Fraction(5), second, "house")
+        mc.seal(h["mind"], {("L", "food"): Fraction(2)})          # it drained the need: a crystal
+        self.assertEqual(dynasties.family_for(None, h), second)
+
+
 class TestCommand(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -835,7 +852,8 @@ class TestCommand(unittest.TestCase):
             if dynasties._raider(c):
                 self.assertFalse(res["ok"])                    # a raider serves no house
             elif res["ok"]:
-                self.assertEqual(dynasties.duty_of(k, c.id), "works")   # the ordered duty reaches the captain
+                self.assertEqual(dynasties.duty_of(k, c.id), h["work"])   # the ordered duty reaches the captain
+                self.assertIn(h["work"], dynasties.FAMILIES)          # as the work its house has learned answers it
                 self.assertTrue(command.dismiss(k, "liege", c.id)["ok"])
         finally:
             seat["player"] = was
