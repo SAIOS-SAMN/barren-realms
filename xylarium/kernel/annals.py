@@ -213,6 +213,65 @@ def _dominion_until(rate: float, w0: float, need: float) -> float:
     return full + (need - at_full) * DOMINION_MAX / rate
 
 
+def _next_kind(kernel: Any, who: str, home: Any, worlds: List[Any], stage: str) -> tuple:
+    """The turning a people waits on next, and its span: its next stage, or what stands before it - hands (a
+    genome-less people's vessel), its own genome (to live under another sun) - or none (its gravity holds it)."""
+    from xylarium.kernel import mastery as _mastery, technology as _tech
+    nxt = STAGES.index(stage) + 1
+    kind: Optional[str] = STAGES[nxt]
+    span = SPANS.get(STAGES[nxt], 0.0)
+    if STAGES[nxt] == "works" and not _tech.embodied(kernel, who, home):
+        kind, span = "embodiment", EMBODIMENT_SPAN
+    elif STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
+        kind = None                                           # its gravity holds it: it lives on, on its world
+    elif STAGES[nxt] == "crossed" and not _mastery.genome_ready(kernel, who, worlds):
+        kind = None if _tech.genomeless(kernel, home) else "genetics"   # a vessel needs no genome of its own
+        span = GENETICS_SPAN
+    return kind, span
+
+
+def _due(kernel: Any, who: str, home: Any, rec: Dict[str, Any], lived: float, gen: float) -> bool:
+    """Has an unguided people's own history reached its next turning in the years the engine lived it?"""
+    h = rec.get("hist")
+    if h is None:
+        return False
+    stage = _stage(kernel, who, home)
+    if STAGES.index(stage) + 1 >= len(STAGES):
+        return False
+    from xylarium.kernel import relations
+    kind, span = _next_kind(kernel, who, home, relations._peoples(kernel).get(who, [home]), stage)
+    if kind is None:
+        return False
+    progress = h["P"] + _speed(kernel, home) * max(0.0, lived - float(h.get("lived", lived))) / max(1.0, gen)
+    return progress >= _threshold(kernel, who, h, kind, span)
+
+
+def history_decides(kernel: Any, who: Optional[str]) -> bool:
+    """Does this people's own history decide its turnings? In a universe begun at its Big Bang, every people no
+    seat guides; in a settled universe (no annals), its councils, as ever."""
+    from xylarium.kernel import cosmos
+    return cosmos.is_cosmic(kernel) and not guided(kernel, who)
+
+
+def guided(kernel: Any, who: Optional[str]) -> bool:
+    """Does a seat guide this people - a steward or progenitor (human or AI) at its councils, or an owner (a
+    captain's or a ruler's holdings)? A guided people's councils choose its turnings, its seat's counsel weighed
+    among their reasons; an unguided people turns when its own history comes to it (its stream), whether it is lived
+    year by year or carried here - so watching it never changes when it turns."""
+    if not who:
+        return False
+    if who.startswith("captain:"):
+        return True
+    from xylarium.kernel import ages, knowledge
+    for pid, rec in (ages.stats(kernel).get("stewards") or {}).items() if "ages" in getattr(kernel, "state", {}) else []:
+        if rec.get("people") == who:
+            return True
+        p = kernel.get_planet(rec.get("planet"))
+        if p is not None and knowledge.holder_of_planet(p) == who:
+            return True
+    return False
+
+
 def _threshold(kernel: Any, who: str, h: Dict[str, Any], kind: str, span: float) -> float:
     """Where in its own progress a people makes this turning: from the point its wait began, its own stream's
     draw for this turning (an exponential wait, its mean the bridge's span) - drawn once, kept."""
@@ -245,8 +304,12 @@ def season(kernel: Any) -> List[str]:
         deficit = (own_now - float(arisen["epoch"])) * 1e9 - lived - rec["advanced"]
         gen = max(1.0, fertility.generation_of(kernel, home))
         gens = deficit / gen
-        if gens < MIN_GENERATIONS:
-            continue
+        if "hist" not in rec:                                 # its history is kept from its first year
+            _history(kernel, who, rec, _stage(kernel, who, home), lived, gen, _speed(kernel, home),
+                     FALL_PER_GENERATION / resilience(kernel, who))
+        if gens < MIN_GENERATIONS and (guided(kernel, who) or not _due(kernel, who, home, rec, lived, gen)):
+            continue                                          # nothing to carry, and no turning of its own is due
+        gens = max(gens, 1e-9)
         rec["advanced"] += deficit
         speed = _speed(kernel, home)
         fall_rate = FALL_PER_GENERATION / resilience(kernel, who)
@@ -274,16 +337,8 @@ def season(kernel: Any) -> List[str]:
                     hist["H"] += ran
                 hist["P"] += speed * left
                 break
-            from xylarium.kernel import mastery as _mastery, technology as _tech
-            kind: Optional[str] = STAGES[nxt]
-            span = SPANS.get(STAGES[nxt], 0.0)
-            if STAGES[nxt] == "works" and not _tech.embodied(kernel, who, home):
-                kind, span = "embodiment", EMBODIMENT_SPAN
-            elif STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
-                kind = None                                   # its gravity holds it: it lives on, on its world
-            elif STAGES[nxt] == "crossed" and not _mastery.genome_ready(kernel, who, worlds):
-                kind = None if _tech.genomeless(kernel, home) else "genetics"   # a vessel needs no genome of its own
-                span = GENETICS_SPAN
+            from xylarium.kernel import technology as _tech
+            kind, span = _next_kind(kernel, who, home, worlds, stage)
             to_fall = (hist["E"] - hist["H"]) / fall_rate     # generations until its hazard comes due
             to_turn = float("inf") if kind is None else \
                 max(0.0, (_threshold(kernel, who, hist, kind, span) - hist["P"]) / speed)

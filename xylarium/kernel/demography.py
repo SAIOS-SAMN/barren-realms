@@ -249,6 +249,9 @@ def _works(kernel: Any, planet: Any) -> Optional[str]:
     from xylarium.kernel import knowledge as _kn, technology as _tech
     if not _tech.embodied(kernel, _kn.holder_of_planet(planet), planet):
         nxt = -1                                      # a people without hands raises no works
+    from xylarium.kernel import annals
+    if nxt in (1, DAUGHTER_CITADEL_TIER) and annals.history_decides(kernel, _kn.holder_of_planet(planet)):
+        nxt = -1                                      # its first works and its yards are turnings of its history (annals)
     if self_governed(planet, kernel) and nxt in CITADEL_CONFIG:
         cfg = CITADEL_CONFIG[nxt]
         cost = cfg["upgrade_cost"] * level

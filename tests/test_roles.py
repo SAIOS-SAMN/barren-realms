@@ -317,3 +317,27 @@ class TestInverseCompaction(unittest.TestCase):
         realm = roles.stats(k)["realms"]["player_1"]
         for wid in realm["worlds"]:
             self.assertGreaterEqual(zones.level(k, k.get_planet(wid).sector_id), zones.SURFACE)
+
+
+class TestWhoDecidesTurnings(unittest.TestCase):
+    def test_an_unguided_people_turns_by_its_history_and_a_guided_one_by_its_councils(self):
+        from xylarium.kernel import annals, knowledge, ways
+        random.seed(3)
+        k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        home = ages.homeworld(k, "player_1")
+        mine = knowledge.holder_of_planet(home)
+        self.assertTrue(annals.guided(k, mine))                      # the progenitor's people: its councils choose
+        self.assertFalse(annals.history_decides(k, mine))
+        self.assertTrue(annals.guided(k, "captain:someone"))          # a holding answers to its holder
+        ages.stats(k)["stewards"].pop("player_1")                    # the seat leaves: its people is unguided
+        self.assertTrue(annals.history_decides(k, mine))
+        home.society["way"] = "forage"
+        home.society["crop_z"] = 50.0                                 # a council would sow at once...
+        ways.quarter(k)
+        self.assertEqual(home.society["way"], "forage")               # ...but its history has not come to it
+
+    def test_in_a_settled_universe_councils_choose_as_ever(self):
+        from xylarium.kernel import annals
+        random.seed(5)
+        k = roles.start_steward(42, "Queen", pick=0, rule="council")
+        self.assertFalse(annals.history_decides(k, "civ:anyone"))

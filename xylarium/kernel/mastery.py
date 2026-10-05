@@ -167,8 +167,9 @@ def season(kernel: Any) -> List[str]:
             if m[key] >= 1.0 > float(prev.get(key, 0.0)):
                 history.event(kernel, kind, f"{who.split(':', 1)[-1]} {text}", sector_id=home(worlds).sector_id, actors=[who],
                               data={"power_w": float(f"{m['power_w']:.3g}")})
-        if law and who not in st["crossed"] and theory(kernel, who) and energy_held_j(worlds) >= E_BRIDGE_J \
-                and genome_ready(kernel, who, worlds):
+        from xylarium.kernel import annals
+        if law and who not in st["crossed"] and not annals.history_decides(kernel, who) and theory(kernel, who) \
+                and energy_held_j(worlds) >= E_BRIDGE_J and genome_ready(kernel, who, worlds):
             st["crossed"][who] = kernel.cycle_count
             history.event(kernel, "FTL_CROSSED", f"{who.split(':', 1)[-1]} folds space and crosses to the stars",
                           sector_id=home(worlds).sector_id, actors=[who],

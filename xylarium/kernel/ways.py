@@ -151,6 +151,9 @@ def quarter(kernel: Any) -> List[str]:
         _breed(kernel, p, pressure if how == "forage" else 1.0)
         if how == "state":
             continue
+        from xylarium.kernel import annals, knowledge as _knowledge
+        if annals.history_decides(kernel, _knowledge.holder_of_planet(p)):
+            continue                                   # an unguided people turns when its history comes to it (annals)
         m = decide.mind_of_planet(kernel, p)
         name = getattr(getattr(p, "civilization", None), "name", p.name)
         if how == "forage":
