@@ -290,6 +290,14 @@ class WebSocketGateway:
             await client.send_json({"status": "ok", "action": "SOVEREIGNS", "sovereigns": live,
                                     "treaties": list(polity.stats(self.kernel)["treaties"].values())})
 
+        elif action == "COMMAND":
+            from xylarium.kernel import command
+            p_id = payload.get("player_id", client.player_id)
+            args = {k: v for k, v in payload.items() if k not in ("action", "player_id", "order")}
+            res = command.dispatch(self.kernel, p_id, str(payload.get("order", "")), **args)
+            await client.send_json({"status": "ok" if res.get("ok") else "error", "action": "COMMAND",
+                                    "standing": command.standing(self.kernel, p_id), **res})
+
         elif action in ("RULE", "SEAL"):
             from xylarium.kernel import stewardship
             p_id = payload.get("player_id", client.player_id)

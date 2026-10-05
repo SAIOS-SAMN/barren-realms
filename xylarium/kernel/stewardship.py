@@ -263,7 +263,7 @@ def _seal(kernel: Any, progenitor_id: str, ruling_id: str) -> Dict[str, Any]:
 def overview(kernel: Any, realm: str) -> Dict[str, Any]:
     """A realm as its steward reads it: every people at the level of history (its stage, what holds it back), its
     sovereigns, its disputes, its rulings - and its balance: made and destroyed over all its peoples' whole histories."""
-    from xylarium.kernel import alignment, annals, knowledge, relations
+    from xylarium.kernel import alignment, annals, dynasties, knowledge, realmwars, relations
     rows = []
     made = destroyed = 0.0
     for who, worlds in peoples_of(kernel, realm).items():
@@ -282,7 +282,8 @@ def overview(kernel: Any, realm: str) -> Dict[str, Any]:
     sent = [{"name": e["name"], "sender": e["sender"], "line": e["line"], "ruled": e["ruled"],
              "authority": dict(e["authority"]), "alignment": bent(kernel, e)} for e in envoys(kernel, realm)]
     return {"realm": realm, "name": realm_name(realm), "steward": steward_of(kernel, realm), "peoples": rows,
-            "envoys": sent,
+            "envoys": sent, "wars": realmwars.of_realm(kernel, realm) if "realmwars" in kernel.state else [],
+            "houses": dynasties.of_realm(kernel, realm) if "dynasties" in kernel.state else [],
             "sovereigns": sovereigns_of(kernel, realm), "disputes": disputes(kernel, realm), "rulings": rulings,
             "balance": round((made - destroyed) / (made + destroyed), 4) if made + destroyed > 0 else None}
 
@@ -314,6 +315,17 @@ def render(o: Dict[str, Any]) -> str:
                          + (f" ({e['alignment']:+.2f})" if e["alignment"] is not None else "")
                          + f": {a['granted']} / {float(Fraction(a['earned'])):.3g} / {float(Fraction(a['grown'])):.3g}"
                          f" / {float(Fraction(a['taken'])):.3g}, {e['ruled']} rulings")
+    for w in o.get("wars", []):
+        lines.append(f"  Realm war {w['id']} ({w['side']}): {realm_name(w['from'])} claims {realm_name(w['against'])}"
+                     f" - {w['status']}" + (", in the progenitors' hands" if w.get("escalated") else "")
+                     + f"; taken {float(Fraction(w['taken'])):.3g}")
+    if o.get("houses"):
+        lines.append("  Houses (authority: granted / earned / grown / taken):")
+        for h in o["houses"]:
+            a = h["authority"]
+            lines.append(f"   House of {h['name']} of the {h['people'].split(':', 1)[-1]}: {a['granted']} / "
+                         f"{float(Fraction(a['earned'])):.3g} / {a['grown']} / {a['taken']}; duty {h['duty'] or '-'}, "
+                         f"{len(h['captains'])} captains")
     if o["disputes"]:
         lines.append("  Disputes:")
         for i, d in enumerate(o["disputes"], 1):
@@ -343,7 +355,7 @@ def envoys(kernel: Any, realm: str) -> List[Dict[str, Any]]:
     peoples within the line's reach of its ancients' home) - so a realm may hold several, of different ancients and
     different alignments. A settled universe's elders send one to every realm. An envoy whose line has ended stays,
     its grant lapsed: it holds only the authority it has earned and grown."""
-    from xylarium.kernel import board, history, mindcore as _mc
+    from xylarium.kernel import board
     st = stats(kernel)
     env = st.setdefault("envoys", {})
     if not isinstance(st["minds"].get(realm, ""), str):
@@ -352,23 +364,11 @@ def envoys(kernel: Any, realm: str) -> List[Dict[str, Any]]:
     people = list(peoples_of(kernel, realm))
     for who, line in senders.items():
         key = f"{who}@{realm}"
-        if key in env:
+        if key in env or line.get("player"):
+            continue                                         # a player's line sends whom it chooses (command.py)
+        if not covers(kernel, line, people):
             continue
-        if line.get("ancient") is not None:
-            reach = line.get("reach_kpc", 0.0)
-            near = [p for p in people if (board._home_sector(kernel, p) is not None and
-                                          board._distance(kernel, line["ancient"], board._home_sector(kernel, p)) <= reach)]
-            if not near:
-                continue
-        st["next"] += 1
-        rec = env[key] = {"id": f"W-{st['next']:05d}", "name": _steward_name(kernel, key, 1), "sender": who,
-                          "line": line["name"], "realm": realm, "since": kernel.cycle_count, "generation": 1,
-                          "ruled": 0, "mind": _mc.new_mind(),
-                          "authority": {"granted": "1", "earned": "0", "grown": "0", "taken": "0"}}
-        history.event(kernel, "STEWARD_SENT", f"{rec['name']} is sent to keep {realm_name(realm)}",
-                      actors=[who] if who.startswith("civ:") else [],
-                      cause=f"by {line['name']}, progenitor of the {who.split(':', 1)[-1]}" if line.get("ancient")
-                      else "by the elders", data={"steward": rec["id"], "realm": realm})
+        send(kernel, who, line, realm)
     out = [r for r in env.values() if r["realm"] == realm]
     for r in out:
         _authority(kernel, r, senders)
@@ -378,13 +378,64 @@ def envoys(kernel: Any, realm: str) -> List[Dict[str, Any]]:
     return out
 
 
+def covers(kernel: Any, line: Dict[str, Any], people: List[str]) -> bool:
+    """A progenitor line's reach covers a realm when any of its peoples lies within it of its ancients' home (the
+    elders, who have no home of their own, cover every realm)."""
+    from xylarium.kernel import board
+    if line.get("ancient") is None:
+        return True
+    reach = line.get("reach_kpc", 0.0)
+    for p in people:
+        home = board._home_sector(kernel, p)
+        if home is not None and board._distance(kernel, line["ancient"], home) <= reach:
+            return True
+    return False
+
+
+def send(kernel: Any, who: str, line: Dict[str, Any], realm: str, taken: bool = False) -> Dict[str, Any]:
+    """A progenitor line's steward takes a seat in a realm: sent there (granted), or seated by a war (taken)."""
+    from xylarium.kernel import history, mindcore as _mc
+    st = stats(kernel)
+    key = f"{who}@{realm}"
+    st["next"] += 1
+    rec = st["envoys"][key] = {"id": f"W-{st['next']:05d}", "name": _steward_name(kernel, key, 1), "sender": who,
+                               "line": line["name"], "realm": realm, "since": kernel.cycle_count, "generation": 1,
+                               "ruled": 0, "mind": _mc.new_mind(), "taken_seat": taken,
+                               "authority": {"granted": "0" if taken else "1", "earned": "0", "grown": "0",
+                                             "taken": "0"}}
+    history.event(kernel, "STEWARD_SEATED" if taken else "STEWARD_SENT",
+                  f"{rec['name']} {'takes a seat in' if taken else 'is sent to keep'} {realm_name(realm)}",
+                  actors=[who] if who.startswith("civ:") else [],
+                  cause=("by war" if taken else f"by {line['name']}, progenitor of the {who.split(':', 1)[-1]}")
+                  if line.get("ancient") else ("by war" if taken else "by the elders"),
+                  data={"steward": rec["id"], "realm": realm})
+    return rec
+
+
+def realm_balance(kernel: Any, realm: str) -> Optional[float]:
+    """Made against destroyed, over all the realm's peoples' whole histories."""
+    from xylarium.kernel import alignment
+    made = destroyed = 0.0
+    for worlds in peoples_of(kernel, realm).values():
+        civ = getattr(max(worlds, key=lambda w: (w.population, w.id)), "civilization", None)
+        if civ is not None:
+            for v in alignment.causes(civ).values():
+                made += v["light"]
+                destroyed += v["dark"]
+    return (made - destroyed) / (made + destroyed) if made + destroyed > 0 else None
+
+
 def bent(kernel: Any, rec: Dict[str, Any]) -> Optional[float]:
     """A steward's alignment: its sender's - the ancient people whose progenitors sent it (whole-history light
-    against dark); the elders' stewards and those of fallen lines carry none they can be read by."""
+    against dark). A steward with no living people behind it (the elders', or a fallen line's) is of the realm it
+    keeps: its peoples' balance."""
     from xylarium.kernel import alignment, relations
     worlds = relations._peoples(kernel).get(rec["sender"]) or []
     civ = getattr(max(worlds, key=lambda w: (w.population, w.id)), "civilization", None) if worlds else None
-    return round(alignment.character(civ), 3) if civ is not None else None
+    if civ is not None:
+        return round(alignment.character(civ), 3)
+    b = realm_balance(kernel, rec["realm"])
+    return round(b, 3) if b is not None else None
 
 
 def _authority(kernel: Any, rec: Dict[str, Any], senders: Dict[str, Any]) -> None:
@@ -393,7 +444,7 @@ def _authority(kernel: Any, rec: Dict[str, Any], senders: Dict[str, Any]) -> Non
     from fractions import Fraction
     from xylarium.kernel import mindcore as _mc
     a = rec.setdefault("authority", {"granted": "1", "earned": "0", "grown": "0", "taken": "0"})
-    a["granted"] = "1" if rec["sender"] in senders else "0"
+    a["granted"] = "1" if rec["sender"] in senders and not rec.get("taken_seat") else "0"
     a["earned"] = str(sum((Fraction(c["delivers"]) for c in _mc.crystals(rec.get("mind") or {}).values()), Fraction(0)))
     a["grown"] = str(Fraction(kernel.cycle_count - rec["since"], 100))
 

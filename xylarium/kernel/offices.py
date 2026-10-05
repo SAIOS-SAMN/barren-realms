@@ -18,6 +18,8 @@ delivers most is taken - options serving different books are never weighed again
 What a plan delivered, per turn, when it closes (cognition.track_plan) is sealed in the office's mind: a crystal
 for that book, or a wall - so an office that has learned which of its books pays turns there first.
 
+A captain in a house's service (dynasties.py) puts the book its house's duty asks before all its own.
+
 Players' offices are theirs (roles.OFFICES); a captain of the realm's own crews holds the office its calling is.
 """
 
@@ -74,6 +76,10 @@ def choose(kernel: Any, captain: Any, options: List[Tuple[float, Dict[str, Any],
     paid = [b for b in order if mc.recall(m, ("self", b), Fraction(1)) is not None]
     walled = [b for b in order if b in mc.walls(m, mc.shape(("self", b), Fraction(1)))]
     ranked = paid + [b for b in order if b not in paid and b not in walled] + [b for b in order if b in walled]
+    from xylarium.kernel import dynasties
+    duty = dynasties.duty_of(kernel, captain.id)
+    if duty is not None:
+        ranked = [duty] + [b for b in ranked if b != duty]     # its house's duty comes before its own books
     for book in ranked + sorted(set(by) - set(ranked)):
         if book in by:
             return max(by[book], key=lambda o: o[0])

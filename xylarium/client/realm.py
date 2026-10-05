@@ -34,7 +34,8 @@ def run(kernel: Any, pid: str, save: Optional[Callable[[], Any]] = None) -> None
     while True:
         o = stewardship.overview(kernel, realm)
         print(stewardship.render(o))
-        print(c_gray("  [R]ule on a dispute | [P]ass a season | [Y]ear passes | [Q]uit (saves)"))
+        print(c_gray("  [R]ule on a dispute | [C]laim a realm | [W]ithdraw a claim | [G]rant a house | [P]ass a season | "
+                     "[Y]ear passes | [Q]uit (saves)"))
         cmd = _ask("Steward > ").upper()
         if cmd == "Q":
             if save:
@@ -46,6 +47,21 @@ def run(kernel: Any, pid: str, save: Optional[Callable[[], Any]] = None) -> None
         elif cmd == "Y":
             for _ in range(100):
                 kernel.tick_simulation()
+        elif cmd in ("C", "W", "G"):
+            from xylarium.kernel import command
+            if cmd == "C":
+                others = [r for r in stewardship.realms(kernel) if r != realm]
+                for i, r in enumerate(others, 1):
+                    print(f"  {c_gold(f'[{i}]')} {stewardship.realm_name(r)}")
+                raw = _ask("Claim which > ")
+                if not raw.isdigit() or not 1 <= int(raw) <= len(others):
+                    continue
+                res = command.claim(kernel, pid, others[int(raw) - 1])
+            elif cmd == "W":
+                res = command.withdraw(kernel, pid)
+            else:
+                res = command.grant(kernel, pid, _ask("House (name) > "))
+            print(c_green(f"  Done: {res}") if res["ok"] else c_red("  " + res["why"]))
         elif cmd == "R":
             if not o["disputes"]:
                 print(c_gray("  No dispute is before you."))

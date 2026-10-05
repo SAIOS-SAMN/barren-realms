@@ -377,6 +377,33 @@ def prompt_publish(cli: Any) -> None:
     _ask("Enter to return > ")
 
 
+def prompt_house(cli: Any) -> None:
+    """The houses: a captain swears to one or keeps a ronin's way; a sovereign orders its house and commissions."""
+    from xylarium.kernel import command
+    kernel, pid = cli.kernel, cli.player_id
+    while True:
+        st = command.standing(kernel, pid)
+        if not st:
+            print(c_gray("No house has risen yet."))
+            return
+        print(f"  House: {st['house'] or '-'}   duty: {st['duty'] or '-'}   "
+              f"ronin: {(st['ronin'] or {}).get('way', '-') if not st['house'] else '-'}")
+        print(c_gray(f"  Houses holding this system: {', '.join(st['houses_here']) or 'none'}"))
+        print(c_gray("  [S]wear <house> | [F]orswear | [W]ay <solo|band|pirate> | [O]rder <book> | "
+                     "[C]ommission <captain> | [D]ismiss <captain> | Enter to exit"))
+        raw = (_ask("House > ") or "").split(maxsplit=1)
+        if not raw:
+            return
+        verb, arg = raw[0].upper(), (raw[1] if len(raw) > 1 else "")
+        name = {"S": "swear", "F": "forswear", "W": "way", "O": "order", "C": "commission", "D": "dismiss"}.get(verb)
+        if name is None:
+            continue
+        kw = {"swear": {"house": arg}, "way": {"way": arg.lower()}, "order": {"book": arg.lower() or None},
+              "commission": {"captain": arg}, "dismiss": {"captain": arg}}.get(name, {})
+        res = command.dispatch(kernel, pid, name, **kw)
+        print(c_gray("  Done.") if res["ok"] else c_gray("  " + res["why"]))
+
+
 def prompt_realm(cli: Any) -> None:
     """The ruler's dashboard: every world it governs, how near each is to rising, and how it is governed."""
     from xylarium.kernel import roles
@@ -414,6 +441,7 @@ SCREENS: Dict[str, Callable[[Any], None]] = {
     "ADVISOR": prompt_advisor,
     "REALM": prompt_realm,
     "PUBLISH": prompt_publish,
+    "HOUSE": prompt_house,
     "PROGRESS": prompt_progress,
     "REALMS": prompt_realms,
     "WORKBENCH": prompt_workbench,

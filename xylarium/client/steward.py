@@ -79,6 +79,7 @@ def _menu(kernel: Any, pid: str, seat: Optional[str] = None) -> None:
         opts += [("T", "Look away: let an age pass (a thousand to a billion years)"),
                  ("B", "Seal what is appealed to you (fold space and time)"),
                  ("O", "Read the board (the watcher's and the progenitors' books)"),
+                 ("S", "Send or recall your line's stewards; fold or yield in a war of the progenitors"),
                  ("Y", "Counsel seeding young worlds"), ("V", "Counsel uplifting younger minds"),
                  ("H", "Write into your chronicle")]
     if kernel.get_player(pid) is not None:
@@ -115,8 +116,28 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             from xylarium.kernel import roles
             print(roles.render_progress(roles.progress(kernel, pid)))
             continue
-        if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B", "O"):
-            if cmd == "O":
+        if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B", "O", "S"):
+            if cmd == "S":
+                from xylarium.kernel import command, realmwars, stewardship
+                held = command.line_of(kernel, pid)
+                if held is None:
+                    print(c_gray("  Your people has not yet raised its progenitors."))
+                    continue
+                mine = [k.split("@", 1)[1] for k in stewardship.stats(kernel).get("envoys", {}) if k.startswith(held[0] + "@")]
+                print(f"  {held[1]['name']}: stewards in {', '.join(stewardship.realm_name(r) for r in mine) or 'no realm'}")
+                wars = [w for w in realmwars.stats(kernel)["wars"].values()
+                        if w["status"] == "open" and held[0] in w.get("lines", [])]
+                for w in wars:
+                    print(f"  Fold war {w['id']} over {stewardship.realm_name(w['against'])}"
+                          f" (stands: {w.get('stands') or 'none yet'})")
+                act = input(c_gold("[S]end / [R]ecall <realm>, [F]old / [Y]ield <war> > ")).strip().split()
+                if len(act) == 2:
+                    verb = {"S": "send", "R": "recall", "F": "fold", "Y": "fold"}.get(act[0].upper())
+                    kw = ({"war": act[1], "deed": "yield" if act[0].upper() == "Y" else "fold"}
+                          if act[0].upper() in ("F", "Y") else {"realm": act[1]})
+                    res = command.dispatch(kernel, pid, verb or "", **kw)
+                    print("  " + ("Done." if res["ok"] else res["why"]))
+            elif cmd == "O":
                 from xylarium.kernel import board
                 print(board.render(kernel))
             elif cmd == "B":

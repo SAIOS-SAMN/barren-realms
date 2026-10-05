@@ -7,6 +7,7 @@ import asyncio
 import builtins
 import random
 import unittest
+from unittest import mock
 
 from xylarium.kernel import ages, roles
 from xylarium.kernel.models import ActionType
@@ -625,6 +626,216 @@ class TestEnvoys(unittest.TestCase):
         self.assertEqual(rec["authority"]["granted"], "0")
         self.assertEqual(Fraction(rec["authority"]["earned"]), 3)
         self.assertEqual(Fraction(rec["authority"]["grown"]), Fraction(5, 2))
+
+
+class TestDynasties(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        cls.k = GameKernel(seed=42)
+        for _ in range(4 * 100):
+            cls.k.tick_simulation()
+
+    def test_houses_emerge_from_lines_that_outgrow_one_reign(self):
+        from fractions import Fraction
+        from xylarium.kernel import dynasties, polity, stewardship
+        hs = dynasties.standing(self.k)
+        self.assertTrue(hs)
+        for line, h in hs.items():
+            a = h["authority"]
+            self.assertEqual(set(a), {"granted", "earned", "grown", "taken"})
+            self.assertTrue(Fraction(a["grown"]) > 1 or Fraction(a["taken"]) or Fraction(a["granted"]))
+            self.assertIn(h["realm"], stewardship.realms(self.k))
+            for sid in h["polities"]:
+                self.assertEqual(polity.sovereigns(self.k)[sid]["line"], line)
+
+    def test_captains_serve_a_standing_house_or_keep_a_ronins_way(self):
+        from xylarium.kernel import dynasties
+        st = dynasties.stats(self.k)
+        for cid, line in st["serves"].items():
+            self.assertIn(line, dynasties.standing(self.k))
+            self.assertNotIn(cid, st["ronin"])
+            self.assertFalse(dynasties._raider(self.k.captains[cid]))
+        for cid, r in st["ronin"].items():
+            self.assertIn(r["way"], ("band", "pirate", "solo"))
+            if dynasties._raider(self.k.captains[cid]):
+                self.assertEqual(r["way"], "pirate")
+        ai = {c for c, cap in self.k.captains.items() if cap.is_ai}
+        self.assertEqual(ai, set(st["serves"]) | set(st["ronin"]))   # every crew is one or the other
+
+    def test_a_houses_duty_comes_before_a_captains_own_books(self):
+        from xylarium.kernel import dynasties, offices
+        st = dynasties.stats(self.k)
+        line = next(iter(dynasties.standing(self.k)))
+        h = dynasties.houses(self.k)[line]
+        h["duty"] = "room"                                    # the house needs room: its captains build
+        cap = next(c for c in self.k.captains.values() if c.is_ai)
+        was, duty = st["serves"].get(cap.id), h["duty"]
+        st["serves"][cap.id] = line
+        try:
+            self.assertEqual(dynasties.duty_of(self.k, cap.id), "works")
+            options = [(5.0, {"kind": "haul"}, None), (1.0, {"kind": "settle"}, None)]
+            self.assertEqual(offices.choose(self.k, cap, options)[1]["kind"], "settle")
+        finally:
+            h["duty"] = duty
+            if was is None:
+                st["serves"].pop(cap.id)
+            else:
+                st["serves"][cap.id] = was
+
+
+class TestRealmWars(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        cls.k = GameKernel(seed=42)
+        for _ in range(2 * 100):
+            cls.k.tick_simulation()
+
+    def test_a_steward_claims_only_when_its_own_realm_is_accounted(self):
+        from xylarium.kernel import mindcore as mc, realmwars, stewardship
+        e = dict(stewardship.mind(self.k, "0.0"), bidding=mc.new_mind())
+        key = f"{e['sender']}@test"
+        before = len(realmwars.stats(self.k)["wars"])
+        with mock.patch.object(realmwars, "settled", return_value=False):
+            realmwars._bidding(self.k, key, e, [])
+        self.assertEqual(len(realmwars.stats(self.k)["wars"]), before)     # its realm's books come first
+        with mock.patch.object(realmwars, "settled", return_value=True), \
+                mock.patch.object(stewardship, "bent", return_value=-0.5):
+            res = realmwars.reach(self.k, e)
+            realmwars._bidding(self.k, key, e, [])
+        w = realmwars.war_of(self.k, key)
+        if any(v > 0 for v in res.values()):                 # a richer realm: the Dark claims it
+            self.assertIsNotNone(w)
+            self.assertEqual(w["side"], "dark")
+            realmwars._end(self.k, w, "withdrawn", "test")
+
+    def test_a_stewards_sender_will_claims_realms_and_learning_ends_it(self):
+        from xylarium.kernel import realmwars, stewardship
+        wars = realmwars.stats(self.k)["wars"]
+        for w in wars.values():
+            self.assertNotEqual(w["from"], w["against"])
+            self.assertIn(w["side"], ("light", "dark"))
+            self.assertIn(w["status"], ("open", "withdrawn", "sealed", "undone", "lost"))
+            e = stewardship.stats(self.k)["envoys"].get(w["by"])
+            if w["status"] == "withdrawn" and e is not None:   # it learned its claim did not deliver
+                self.assertIn("claim", [d for ws in e["bidding"]["walls"].values() for d in ws])
+
+    def test_reach_reads_by_the_wills_own_side(self):
+        from xylarium.kernel import realmwars, stewardship
+        e = dict(stewardship.mind(self.k, "0.0"))
+        with mock.patch.object(stewardship, "bent", return_value=-0.5):
+            res = realmwars.reach(self.k, e)                   # the Dark: richer realms are its deficits
+        for (other, book), v in res.items():
+            self.assertEqual(v, realmwars._people(self.k, other) - realmwars._people(self.k, "0.0"))
+        with mock.patch.object(stewardship, "bent", return_value=0.0):
+            self.assertEqual(realmwars.reach(self.k, e), {})   # no will, no reach
+
+    def test_a_fold_war_is_settled_by_which_fold_arrives_first_then_the_other_yields(self):
+        from xylarium.kernel import board, realmwars
+        lines = {"civ:Near": {"name": "Nearline", "ancient": "civ:Near"},
+                 "civ:Far": {"name": "Farline", "ancient": "civ:Far"}}
+        war = {"id": "G-T", "by": "civ:Far@0.1", "sender": "civ:Far", "from": "0.2", "against": "0.1",
+               "side": "dark", "since": 0, "status": "open", "taken": "1", "escalated": 1,
+               "lines": ["civ:Far", "civ:Near"], "wills": {"civ:Far": "stands", "civ:Near": "undone"}}
+        dist = {"civ:Near": 1.0, "civ:Far": 9.0}
+        with mock.patch.object(board, "progenitors", return_value=lines), \
+                mock.patch.object(board, "_distance", side_effect=lambda k, a, b: dist[a]):
+            logs = []
+            realmwars._fold(self.k, war, logs)                 # both fold: the nearer's stands
+            self.assertEqual(war["stands"], "civ:Near")
+            realmwars._fold(self.k, war, logs)                 # the farther's fold is walled: it yields
+        self.assertEqual(war["status"], "undone")
+        self.assertEqual(war["sealed_by"], "civ:Near")
+        self.assertIn("fold", [d for ws in lines["civ:Far"]["fold_mind"]["walls"].values() for d in ws])
+
+
+class TestCommand(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        cls.k = GameKernel(seed=42)
+        for _ in range(4 * 100):
+            cls.k.tick_simulation()
+
+    def test_a_steward_claims_withdraws_and_grants(self):
+        from xylarium.kernel import command, dynasties, realmwars, stewardship
+        k = self.k
+        h = next(iter(dynasties.standing(k).values()))
+        stewardship.seat_steward(k, "keeper", "Keeper", h["realm"])
+        try:
+            other = next(r for r in stewardship.realms(k) if r != h["realm"])
+            res = command.claim(k, "keeper", other)
+            self.assertTrue(res["ok"])
+            w = realmwars.stats(k)["wars"][res["war"]]
+            self.assertEqual((w["from"], w["against"], w["status"]), (h["realm"], other, "open"))
+            self.assertFalse(command.claim(k, "keeper", other)["ok"])         # one claim at a time
+            self.assertTrue(command.withdraw(k, "keeper")["ok"])
+            self.assertEqual(w["status"], "withdrawn")
+            before = h.get("grants", 0)
+            self.assertTrue(command.grant(k, "keeper", h["name"])["ok"])
+            self.assertEqual(h["grants"], before + 1)
+        finally:
+            stewardship.stats(k)["stewards"].pop(h["realm"], None)
+
+    def test_a_sovereign_orders_its_house_and_its_commissions_meet_a_captains_agency(self):
+        from xylarium.kernel import command, dynasties, polity
+        k = self.k
+        line, h = next(iter(dynasties.standing(k).items()))
+        seat = polity.sovereigns(k)[h["polities"][0]]
+        was = seat.get("player")
+        seat["player"] = "liege"
+        try:
+            self.assertTrue(command.order(k, "liege", "room")["ok"])
+            self.assertEqual(dynasties._duty(k, h), "room")
+            self.assertFalse(command.order(k, "liege", "glory")["ok"])
+            held = [s for s, l in dynasties._held(k).items() if l == line]
+            c = next(c for c in k.captains.values() if c.is_ai and dynasties.stats(k)["serves"].get(c.id) != line)
+            c.sector_id = held[0]
+            res = command.commission(k, "liege", c.id)
+            if dynasties._raider(c):
+                self.assertFalse(res["ok"])                    # a raider serves no house
+            elif res["ok"]:
+                self.assertEqual(dynasties.duty_of(k, c.id), "works")   # the ordered duty reaches the captain
+                self.assertTrue(command.dismiss(k, "liege", c.id)["ok"])
+        finally:
+            seat["player"] = was
+            h.pop("ordered", None)
+
+    def test_a_captain_swears_forswears_and_keeps_a_ronins_way(self):
+        from xylarium.kernel import command, dynasties
+        k = self.k
+        line, h = next(iter(dynasties.standing(k).items()))
+        me = k.register_player("drifter", "Drifter")
+        me.sector_id = next(s for s, l in dynasties._held(k).items() if l == line)
+        self.assertTrue(command.swear(k, "drifter", h["name"])["ok"])
+        self.assertEqual(dynasties.stats(k)["serves"]["drifter"], line)
+        self.assertFalse(command.way(k, "drifter", "pirate")["ok"])           # it serves: forswear first
+        self.assertTrue(command.forswear(k, "drifter")["ok"])
+        self.assertTrue(command.way(k, "drifter", "pirate")["ok"])
+        self.assertEqual(dynasties.stats(k)["ronin"]["drifter"]["way"], "pirate")
+        dynasties._ways(k)
+        self.assertEqual(dynasties.stats(k)["ronin"]["drifter"]["way"], "pirate")   # its choice is kept
+
+    def test_a_progenitor_sends_and_recalls_its_lines_stewards(self):
+        from xylarium.kernel import command, roles, stewardship
+        k = self.k
+        roles.stats(k).setdefault("of", {})["elder"] = "progenitor"
+        try:
+            who, line = command.line_of(k, "elder")
+            realm = stewardship.realms(k)[0]
+            self.assertTrue(command.recall(k, "elder", realm)["ok"])
+            stewardship.envoys(k, realm)
+            self.assertNotIn(f"{who}@{realm}", stewardship.stats(k)["envoys"])   # a player's line sends by choice
+            self.assertTrue(command.send(k, "elder", realm)["ok"])
+            self.assertFalse(command.send(k, "elder", realm)["ok"])
+            self.assertFalse(command.fold(k, "elder", "G-none")["ok"])
+        finally:
+            roles.stats(k)["of"].pop("elder", None)
+            line["player"] = None
 
 
 class TestBoard(unittest.TestCase):
