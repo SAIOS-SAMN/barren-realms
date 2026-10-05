@@ -20,6 +20,7 @@ pact (the parties are bound by a pact, relations.py) - each for a span of clock 
 """
 
 import math
+from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
@@ -278,7 +279,10 @@ def overview(kernel: Any, realm: str) -> Dict[str, Any]:
                      "folded": _folded(kernel, who)})
     rows.sort(key=lambda r: -r["population"])
     rulings = [r for r in stats(kernel)["rulings"].values() if r["realm"] == realm or r.get("sealed")]
+    sent = [{"name": e["name"], "sender": e["sender"], "line": e["line"], "ruled": e["ruled"],
+             "authority": dict(e["authority"]), "alignment": bent(kernel, e)} for e in envoys(kernel, realm)]
     return {"realm": realm, "name": realm_name(realm), "steward": steward_of(kernel, realm), "peoples": rows,
+            "envoys": sent,
             "sovereigns": sovereigns_of(kernel, realm), "disputes": disputes(kernel, realm), "rulings": rulings,
             "balance": round((made - destroyed) / (made + destroyed), 4) if made + destroyed > 0 else None}
 
@@ -302,6 +306,14 @@ def render(o: Dict[str, Any]) -> str:
         lines.append(f"  {r['people'].split(':', 1)[-1][:21]:<22}{r['worlds']:>7}{r['population']:>14,}  "
                      f"{(r['stage'] or '-'):<9}{(r['alignment'] if r['alignment'] is not None else 0):>+7.2f}  "
                      f"{'folded' if r['folded'] else 'open'}")
+    if o.get("envoys"):
+        lines.append("  Stewards sent here (authority: granted / earned / grown / taken):")
+        for e in o["envoys"]:
+            a = e["authority"]
+            lines.append(f"   {e['name']} of {e['line']}"
+                         + (f" ({e['alignment']:+.2f})" if e["alignment"] is not None else "")
+                         + f": {a['granted']} / {float(Fraction(a['earned'])):.3g} / {float(Fraction(a['grown'])):.3g}"
+                         f" / {float(Fraction(a['taken'])):.3g}, {e['ruled']} rulings")
     if o["disputes"]:
         lines.append("  Disputes:")
         for i, d in enumerate(o["disputes"], 1):
@@ -326,26 +338,85 @@ def render(o: Dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------- the stewards' minds
-def mind(kernel: Any, realm: str) -> Dict[str, Any]:
-    """A realm's steward as a line: a player where one keeps the seat (the line's own mind yields to it), else the
-    realm's own steward-mind - named, serving a term, succeeded, its rulings its memory."""
+def envoys(kernel: Any, realm: str) -> List[Dict[str, Any]]:
+    """The stewards in a realm: envoys, each sent by a progenitor line whose reach covers the realm (any of its
+    peoples within the line's reach of its ancients' home) - so a realm may hold several, of different ancients and
+    different alignments. A settled universe's elders send one to every realm. An envoy whose line has ended stays,
+    its grant lapsed: it holds only the authority it has earned and grown."""
+    from xylarium.kernel import board, history, mindcore as _mc
     st = stats(kernel)
-    m = st["minds"].get(realm)
-    if m is None:
+    env = st.setdefault("envoys", {})
+    if not isinstance(st["minds"].get(realm, ""), str):
+        st["minds"].pop(realm)                               # a save from before envoys: its steward is sent anew
+    senders = board.progenitors(kernel)
+    people = list(peoples_of(kernel, realm))
+    for who, line in senders.items():
+        key = f"{who}@{realm}"
+        if key in env:
+            continue
+        if line.get("ancient") is not None:
+            reach = line.get("reach_kpc", 0.0)
+            near = [p for p in people if (board._home_sector(kernel, p) is not None and
+                                          board._distance(kernel, line["ancient"], board._home_sector(kernel, p)) <= reach)]
+            if not near:
+                continue
         st["next"] += 1
-        m = st["minds"][realm] = {"id": f"W-{st['next']:05d}", "name": _steward_name(kernel, realm, 1),
-                                  "since": kernel.cycle_count, "generation": 1, "realm": realm, "ruled": 0}
-    seated = st["stewards"].get(realm)
-    m["player"] = seated
-    if seated is None and kernel.cycle_count - m["since"] >= 100 * RULING_YEARS:
+        rec = env[key] = {"id": f"W-{st['next']:05d}", "name": _steward_name(kernel, key, 1), "sender": who,
+                          "line": line["name"], "realm": realm, "since": kernel.cycle_count, "generation": 1,
+                          "ruled": 0, "mind": _mc.new_mind(),
+                          "authority": {"granted": "1", "earned": "0", "grown": "0", "taken": "0"}}
+        history.event(kernel, "STEWARD_SENT", f"{rec['name']} is sent to keep {realm_name(realm)}",
+                      actors=[who] if who.startswith("civ:") else [],
+                      cause=f"by {line['name']}, progenitor of the {who.split(':', 1)[-1]}" if line.get("ancient")
+                      else "by the elders", data={"steward": rec["id"], "realm": realm})
+    out = [r for r in env.values() if r["realm"] == realm]
+    for r in out:
+        _authority(kernel, r, senders)
+    out.sort(key=lambda r: (r["since"], r["id"]))
+    if out:
+        st["minds"][realm] = next(k for k, v in env.items() if v is out[0])   # the senior envoy: of record
+    return out
+
+
+def bent(kernel: Any, rec: Dict[str, Any]) -> Optional[float]:
+    """A steward's alignment: its sender's - the ancient people whose progenitors sent it (whole-history light
+    against dark); the elders' stewards and those of fallen lines carry none they can be read by."""
+    from xylarium.kernel import alignment, relations
+    worlds = relations._peoples(kernel).get(rec["sender"]) or []
+    civ = getattr(max(worlds, key=lambda w: (w.population, w.id)), "civilization", None) if worlds else None
+    return round(alignment.character(civ), 3) if civ is not None else None
+
+
+def _authority(kernel: Any, rec: Dict[str, Any], senders: Dict[str, Any]) -> None:
+    """Authority, by where it comes from - never summed: granted (its sender's line stands), earned (what its
+    rulings measurably stopped: its crystals' deliveries), grown (years held), taken (in war)."""
+    from fractions import Fraction
+    from xylarium.kernel import mindcore as _mc
+    a = rec.setdefault("authority", {"granted": "1", "earned": "0", "grown": "0", "taken": "0"})
+    a["granted"] = "1" if rec["sender"] in senders else "0"
+    a["earned"] = str(sum((Fraction(c["delivers"]) for c in _mc.crystals(rec.get("mind") or {}).values()), Fraction(0)))
+    a["grown"] = str(Fraction(kernel.cycle_count - rec["since"], 100))
+
+
+def mind(kernel: Any, realm: str) -> Optional[Dict[str, Any]]:
+    """A realm's steward of record: the senior envoy (a player where one keeps the seat)."""
+    out = envoys(kernel, realm)
+    m = out[0] if out else None
+    if m is not None:
+        m["player"] = stats(kernel)["stewards"].get(realm)
+        _succeed_envoy(kernel, m)
+    return m
+
+
+def _succeed_envoy(kernel: Any, m: Dict[str, Any]) -> None:
+    if m.get("player") is None and kernel.cycle_count - m.get("term_since", m["since"]) >= 100 * RULING_YEARS:
         from xylarium.kernel import history
         old = m["name"]
         m["generation"] += 1
-        m["name"] = _steward_name(kernel, realm, m["generation"])
-        m["since"] = kernel.cycle_count
-        history.event(kernel, "SUCCESSION", f"{m['name']} succeeds {old} as steward of {realm_name(realm)}",
-                      cause="a steward's term is over; the realm's line goes on", data={"steward": m["id"]})
-    return m
+        m["name"] = _steward_name(kernel, m["realm"] + m["sender"], m["generation"])
+        m["term_since"] = kernel.cycle_count
+        history.event(kernel, "SUCCESSION", f"{m['name']} succeeds {old} as steward of {realm_name(m['realm'])}",
+                      cause="a steward's term is over; its sender's line goes on", data={"steward": m["id"]})
 
 
 def _steward_name(kernel: Any, realm: str, generation: int) -> str:
@@ -437,35 +508,12 @@ def season(kernel: Any) -> List[str]:
         return []
     logs: List[str] = []
     for realm in realms(kernel):
-        m = mind(kernel, realm)
-        if m.get("player"):
-            continue
-        mm = m.setdefault("mind", _mc.new_mind())
-        res = books(kernel, realm)
-        _mc.seal(mm, res)
-        entry = _mc.lead(res, STEWARD_BOOKS, deepest=True)
-        if entry is not None:
-            site, book = entry
-            owed = res[entry]
-            role = "people" if book == "power" else "pair"
-            recalled = _mc.recall(mm, entry, owed, role)
-            barred = _mc.walls(mm, _mc.shape(entry, owed, role))
-            order = ([recalled] if recalled else []) + [d for d in STEWARD_VOCABULARY[book] if d != recalled]
-            if book == "power":
-                victim = _victim(kernel, site, realm)
-                a, b = (site, victim) if victim else (None, None)
-            else:
-                a, b = site.split("|", 1)
-            for kind in order:
-                if kind in barred or a is None:
-                    continue
-                res_r = _rule(kernel, realm, m["id"], kind, a, b)
-                if res_r.get("ok"):
-                    _mc.intend(mm, entry, owed, kind, role)
-                    m["ruled"] += 1
-                    logs.append(f"[STEWARD] {m['name']} of {realm_name(realm)} rules a {kind} between the "
-                                f"{a.split(':', 1)[-1]} and the {b.split(':', 1)[-1]} ({book}).")
-                    break
+        m0 = mind(kernel, realm)
+        if m0 is None or m0.get("player"):
+            continue                                         # no steward sent yet - or a player keeps the realm
+        for m in envoys(kernel, realm):
+            _succeed_envoy(kernel, m)
+            _envoy_deed(kernel, realm, m, logs)
         mine = set(peoples_of(kernel, realm))                  # sending up is not a ruling: it is done every year
         pending = {frozenset((r["a"], r["b"])) for r in stats(kernel)["appeals"]}
         beyond = [d for d in disputes(kernel, realm)                # what reaches past its realm goes up, once
@@ -473,8 +521,39 @@ def season(kernel: Any) -> List[str]:
                   and not binds(kernel, d["a"], d["b"])]
         if beyond:
             d = max(beyond, key=lambda d: float(d.get("stake") or 0.0))
-            _rule(kernel, realm, m["id"], "ceasefire", d["a"], d["b"])
+            _rule(kernel, realm, m0["id"], "ceasefire", d["a"], d["b"])
     return logs
+
+
+def _envoy_deed(kernel: Any, realm: str, m: Dict[str, Any], logs: List[str]) -> None:
+    """One steward's one ruling a year: its realm's books, its own mind."""
+    from xylarium.kernel import mindcore as _mc
+    mm = m.setdefault("mind", _mc.new_mind())
+    res = books(kernel, realm)
+    _mc.seal(mm, res)
+    entry = _mc.lead(res, STEWARD_BOOKS, deepest=True)
+    if entry is not None:
+        site, book = entry
+        owed = res[entry]
+        role = "people" if book == "power" else "pair"
+        recalled = _mc.recall(mm, entry, owed, role)
+        barred = _mc.walls(mm, _mc.shape(entry, owed, role))
+        order = ([recalled] if recalled else []) + [d for d in STEWARD_VOCABULARY[book] if d != recalled]
+        if book == "power":
+            victim = _victim(kernel, site, realm)
+            a, b = (site, victim) if victim else (None, None)
+        else:
+            a, b = site.split("|", 1)
+        for kind in order:
+            if kind in barred or a is None:
+                continue
+            res_r = _rule(kernel, realm, m["id"], kind, a, b)
+            if res_r.get("ok"):
+                _mc.intend(mm, entry, owed, kind, role)
+                m["ruled"] += 1
+                logs.append(f"[STEWARD] {m['name']} of {realm_name(realm)} rules a {kind} between the "
+                            f"{a.split(':', 1)[-1]} and the {b.split(':', 1)[-1]} ({book}).")
+                break
 
 
 def appeal(kernel: Any, sovereign: Dict[str, Any], against: str) -> Optional[Dict[str, Any]]:
@@ -496,7 +575,9 @@ def appeal(kernel: Any, sovereign: Dict[str, Any], against: str) -> Optional[Dic
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     return {"stewards": dict(st["stewards"]), "rulings": len(st["rulings"]), "appeals": len(st["appeals"]),
-            "minds": {r: m["name"] for r, m in st.get("minds", {}).items()}}
+            "minds": {r: st["envoys"][k]["name"] for r, k in st.get("minds", {}).items() if k in st.get("envoys", {})},
+            "envoys": {k: {"name": v["name"], "realm": v["realm"], "sender": v["sender"], "ruled": v["ruled"]}
+                       for k, v in st.get("envoys", {}).items()}}
 
 
 from xylarium.kernel import state  # noqa: E402

@@ -583,13 +583,48 @@ class TestStewardBooks(unittest.TestCase):
             for (site, book), v in res.items():
                 self.assertIn(book, stewardship.STEWARD_BOOKS)
                 self.assertIsInstance(v, mc.Fraction)
-            m = stewardship.stats(k)["minds"][realm]
+            m = stewardship.mind(k, realm)
             self.assertIn("mind", m)
-        ruled = sum(m["ruled"] for m in stewardship.stats(k)["minds"].values())
-        learned = sum(len(m["mind"]["crystals"]) + len(m["mind"]["walls"])
-                      for m in stewardship.stats(k)["minds"].values())
+        envoys = list(stewardship.stats(k)["envoys"].values())
+        ruled = sum(m["ruled"] for m in envoys)
+        learned = sum(len(m["mind"]["crystals"]) + len(m["mind"]["walls"]) for m in envoys)
         self.assertGreater(ruled, 0)
         self.assertGreater(learned, 0)                         # what its rulings did is in its memory
+
+
+class TestEnvoys(unittest.TestCase):
+    def test_stewards_are_sent_by_progenitor_lines_and_hold_authority_by_its_sources(self):
+        from fractions import Fraction
+        from xylarium.kernel import board, stewardship
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        k = GameKernel(seed=42)
+        for _ in range(2 * 100):
+            k.tick_simulation()
+        lines = board.progenitors(k)
+        env = stewardship.stats(k)["envoys"]
+        self.assertTrue(env)
+        for key, e in env.items():
+            self.assertEqual(key, f"{e['sender']}@{e['realm']}")    # one per sender per realm
+            self.assertIn(e["sender"], lines)                       # every steward was sent by a standing line
+            self.assertEqual(set(e["authority"]), {"granted", "earned", "grown", "taken"})
+            self.assertEqual(Fraction(e["authority"]["granted"]), 1)
+        for realm in stewardship.realms(k):
+            senior = stewardship.mind(k, realm)
+            if senior is not None:
+                self.assertEqual(stewardship.stats(k)["minds"][realm], f"{senior['sender']}@{realm}")
+
+    def test_a_steward_whose_line_ended_keeps_only_what_it_earned_and_grew(self):
+        from fractions import Fraction
+        from xylarium.kernel import stewardship
+        rec = {"sender": "civ:Gone", "since": 0, "mind": {"crystals": {"a|b|+": {"deed": "pact", "delivers": "3"}}}}
+
+        class K:
+            cycle_count = 250
+        stewardship._authority(K(), rec, {})
+        self.assertEqual(rec["authority"]["granted"], "0")
+        self.assertEqual(Fraction(rec["authority"]["earned"]), 3)
+        self.assertEqual(Fraction(rec["authority"]["grown"]), Fraction(5, 2))
 
 
 class TestBoard(unittest.TestCase):
