@@ -244,6 +244,18 @@ def _commission(kernel: Any, held: Dict[int, str]) -> List[str]:
     return logs
 
 
+def forget(kernel: Any, cid: str) -> None:
+    """A captain leaves the game (its hull struck off, its line ended): no house keeps it, no ronin's way."""
+    if kernel is None or "dynasties" not in getattr(kernel, "state", {}):
+        return
+    st = stats(kernel)
+    st["serves"].pop(cid, None)
+    st["ronin"].pop(cid, None)
+    for b in st["bands"].values():
+        if cid in b["members"]:
+            b["members"].remove(cid)
+
+
 def _ways(kernel: Any) -> None:
     """Each ronin's way: a band where ronin of different offices share a system, a pirate if raiding is what is
     left to it, else solo. Bands are kept while their members stay ronin."""

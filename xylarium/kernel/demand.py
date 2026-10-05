@@ -76,7 +76,8 @@ def _buy_at_port(kernel: Any, planet: Any, comm: str, n: int) -> int:
         return 0
     pay = int(q * unit * rate)
     planet.treasury -= pay
-    got = pay if port.currency == planet.currency or fx is None else fx.convert(planet.currency, port.currency, pay)[0]
+    from xylarium.kernel import exchanges
+    got = exchanges.convert_at(kernel, planet.sector_id, planet.currency, port.currency, pay)
     port.treasury += got
     port.stock[comm] -= q
     planet.element_reserves[comm] = planet.element_reserves.get(comm, 0) + q
@@ -89,9 +90,10 @@ def _to_sol(kernel: Any, cur: str, amount: float) -> float:
     return amount if cur == "SOL" or fx is None else fx.to_sol_value(cur, amount)
 
 
-def _pay(kernel: Any, src_cur: str, dst: Any, amount: int) -> None:
-    fx = getattr(kernel, "fx_market", None)
-    dst.treasury += amount if dst.currency == src_cur or fx is None else fx.convert(src_cur, dst.currency, amount)[0]
+def _pay(kernel: Any, src_cur: str, dst: Any, amount: int, at: Any = None) -> None:
+    """Pay from one money to a holder in its own - converted at the payer's place (its exchange, if it keeps one)."""
+    from xylarium.kernel import exchanges
+    dst.treasury += exchanges.convert_at(kernel, at, src_cur, dst.currency, amount)
 
 
 def _bring(kernel: Any, buyer: Any, sector: Any, comm: str, n: int, payer: Optional[str], to_shelf: bool) -> int:
@@ -118,7 +120,7 @@ def _bring(kernel: Any, buyer: Any, sector: Any, comm: str, n: int, payer: Optio
     rate = 1.0 / max(1e-12, _to_sol(kernel, buyer.currency, 1.0))          # local per SOL
     paid = int(q * float(rec[2]) * rate) + int(q * hops * per * rate)
     buyer.treasury -= paid
-    _pay(kernel, buyer.currency, sp, paid)                                # the source sells; its carriers haul
+    _pay(kernel, buyer.currency, sp, paid, sector.id)                     # the source sells; its carriers haul
     for a, b in zip(path, path[1:]):
         owed = transit.flow_passage(kernel, payer, a, b)
         if owed > 0:

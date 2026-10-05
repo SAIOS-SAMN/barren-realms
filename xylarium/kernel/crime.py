@@ -137,11 +137,14 @@ def _opportunities(kernel: Any, captain: Any, sector: Any) -> List[Tuple[float, 
         if ops >= 3 and other.credits > 1000:
             out.append((other.credits * 0.17, 0.0, "siphon", {"action": ActionType.COVERT_OP, "target_type": "SHIP",
                                                          "target_id": other.id, "op_type": "siphon", "operatives": 3}))
-        if (other.ship.fighters < captain.ship.fighters * 0.7 and other.bounty <= 0
+        from xylarium.kernel import fxroutes
+        guard = fxroutes.escort_fighters(other)                # a world's escort sails with it
+        if (other.ship.fighters + guard < captain.ship.fighters * 0.7 and other.bounty <= 0
                 and sector.security.value != "FEDERATION"):
-            mine, theirs = _power(captain.ship), _power(other.ship)
+            mine, theirs = _power(captain.ship), _power(other.ship) + guard
             p_win = mine / max(1e-9, mine + theirs)
-            gain = p_win * (other.credits * 0.5 + (other.ship.cargo.ore + other.ship.cargo.organics) * 5)
+            purse = fxroutes.purse_sol(kernel, other)          # money aboard is worth a pirate's while
+            gain = p_win * ((other.credits + purse) * 0.5 + (other.ship.cargo.ore + other.ship.cargo.organics) * 5)
             hull = hulls.spec(captain.ship).get("price", 0) * 0.6
             downside = (1.0 - p_win) * (hull + captain.credits * 0.5)
             out.append((gain, downside, "piracy", {"action": ActionType.ATTACK_SHIP, "target_id": other.id}))

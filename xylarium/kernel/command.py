@@ -8,7 +8,7 @@ realmwars.py); a player's seat is skipped by them and acts only by these orders.
                     its network holds to a system (transit.py), paid from its network's banked energy
   STEWARD (T2)      claim another realm (a realm war), withdraw a claim; grant authority to a house of its realm
   SOVEREIGN (T3)    order its house's duty (the book its captains are set to); commission a captain in its systems;
-                    dismiss one
+                    dismiss one; found an exchange at a port of its worlds (business.py)
   CAPTAIN (T4-T9)   swear to a house whose system it is in; forswear (ronin); keep a ronin's way - solo, band,
                     pirate
 
@@ -21,7 +21,7 @@ from typing import Any, Dict, Optional, Tuple
 
 ORDERS = {"progenitor": ("send", "recall", "fold", "handle", "forge"), "steward": ("claim", "withdraw", "grant"),
           "steward_ascent": ("charter", "quarantine", "fortify"),
-          "sovereign": ("order", "commission", "dismiss"), "captain": ("swear", "forswear", "way")}
+          "sovereign": ("order", "commission", "dismiss", "exchange"), "captain": ("swear", "forswear", "way")}
 
 
 def _no(why: str) -> Dict[str, Any]:
@@ -334,6 +334,15 @@ def way(kernel: Any, pid: str, how: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------- one door for the bridge and the consoles
+def exchange(kernel: Any, pid: str, sector: int) -> Dict[str, Any]:
+    """A sovereign player founds an exchange at a port of its people's worlds, paying the capital (business.py)."""
+    from xylarium.kernel import business, polity
+    seat = next((s for s in polity.sovereigns(kernel).values() if s.get("player") == pid and not s.get("ended")), None)
+    if seat is None:
+        return _no("you hold no sovereign's seat")
+    return business.found_exchange(kernel, seat["people"], int(sector))
+
+
 def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
     fn = {"send": lambda: send(kernel, pid, str(kw.get("realm", ""))),
           "recall": lambda: recall(kernel, pid, str(kw.get("realm", ""))),
@@ -349,6 +358,7 @@ def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
           "order": lambda: order(kernel, pid, kw.get("book")),
           "commission": lambda: commission(kernel, pid, str(kw.get("captain", ""))),
           "dismiss": lambda: dismiss(kernel, pid, str(kw.get("captain", ""))),
+          "exchange": lambda: exchange(kernel, pid, int(kw.get("sector", 0) or 0)),
           "swear": lambda: swear(kernel, pid, str(kw.get("house", ""))),
           "forswear": lambda: forswear(kernel, pid),
           "way": lambda: way(kernel, pid, str(kw.get("way", "solo")))}.get(name)

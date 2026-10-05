@@ -352,6 +352,34 @@ and pay their regions' households. Commodities include ore, organics, equipment,
 periodic elements, exotic minerals, manufactured components (superconductors, biosphere packs, engine manifolds,
 warp cores) and the four luxuries.
 
+### Supply: what the galaxy made, and what is exotic (`supply.py`)
+A port sells the elements and minerals its own system holds and buys what it lacks; it refills its shelves from its
+system's ground each year until the ground is mined out. The galaxy spread its elements by mass (heavy ones stay
+near the core), so what a system holds depends on where it formed. Every importer prices a good at its landed cost:
+the cheapest source's price plus the haul, each hop costing what the good's mass (or bulk) costs to move, so heavy
+core elements are dearest far from the core. A good's exotic index at a port is landed cost over source price; in
+cosmic seed 7 uranium reaches ~4.5x, xenon ~4x, salt ~3.7x, while iron is held everywhere. Salt (NaCl) is laid down
+where seas evaporated, from chlorine at the Sun's abundance: a world that never had seas has none.
+
+### Demand: salt, wants and imports (`demand.py`)
+Water-based life eats salt with its food (sodium's share of a diet, Earth's ~0.7% as the data point), keeping two
+seasons in store; a world short of it is less healthy. Whatever a world cannot get at home it wants - salt, water
+for a dry pleasure dome, hull metal for a station - and its port brings it from the landed source (paying the
+source, its carriers and the lanes' tolls), or the world's own office does where the port cannot. Provisioning
+offices also post freight contracts for captains, priced at landed cost and at least a ship's trip.
+
+### Local exchanges and currency routes (`exchanges.py`, `fxroutes.py`, `business.py`)
+Where enough foreign money passes through a port, a council founds a local exchange: its own pools of the port's
+money against SOL, deep enough that a typical conversion slips no more than the fee. Conversions made there clear
+through it, so its rate drifts with the place's own trade - a place that buys more than it sells finds its money
+cheapest at home. A captain converts where it is docked: at the exchange's rate there, the federation's elsewhere.
+So a gap is a currency route: buy where the money is cheap, fly it out, sell where it is dear. Money aboard is cargo
+- pirates weigh a purse, and a destroyed ship loses half of it - so a captain may hire a world's government to lend
+fighters for the trip (paid for what they are expected to lose; they take the fight's losses first and go home
+when the route ends). Each seat has its business book (`business.py`): a captain sees exotic goods, open routes and
+wanted cargo near it; a sovereign sees its people's model, imports, exchanges and salt, and may found an exchange
+at one of its ports (`command`: exchange); a steward sees its realm's exchanges, their gaps and its salt shortfalls.
+
 ### Waystations (`waystations.py`)
 Genesis gave most systems a starport; from then on ports are founded by the economy. Every arrival is counted
 where it lands. Each year, for every portless system with traffic, the worth of a dock is measured off the docks

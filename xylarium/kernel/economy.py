@@ -263,7 +263,12 @@ class EconomyManager:
             # Convert enough for the real counter price (reputation friction, xeno surcharges, rounding)
             _, unit = cls.get_unit_prices(port, commodity)
             unit = max(1, int(round(unit * cls.counterparty_factor(captain, port, "buy")))) + 1
-            fx.ACTIVE_FX.ensure_local(captain, cur, unit * amount)
+            from xylarium.kernel import exchanges, ledger as _ledger
+            k = _ledger.active_kernel()
+            if k is not None and getattr(k, "fx_market", None) is fx.ACTIVE_FX:
+                exchanges.ensure_local(k, captain, port.sector_id, cur, unit * amount)   # the place's own exchange
+            else:
+                fx.ACTIVE_FX.ensure_local(captain, cur, unit * amount)
         before = fx.balance(captain, cur)
         key = commodity.lower()
         cargo = captain.ship.cargo

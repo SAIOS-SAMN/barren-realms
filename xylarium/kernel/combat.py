@@ -329,6 +329,10 @@ class CombatManager:
                 message="Your ship has no fighters or shields operational to engage!",
             )
 
+        from xylarium.kernel import fxroutes
+        escorted = fxroutes.escort_fighters(defender)          # a world's fighters sailing with it stand in the line
+        defender.ship.fighters += escorted
+        def_line = defender.ship.fighters
         def_fighters = defender.ship.fighters
 
         logs.append(f"TACTICAL ENGAGEMENT: {attacker.name} opens fire on {defender.name} in Sector {sector.id}!")
@@ -377,8 +381,17 @@ class CombatManager:
             attacker.ship.fighters -= att_lost
             logs.append(f"<< Return fire incinerated {att_lost} of {attacker.name}'s fighters.")
 
+        if escorted:                                           # the escort takes the line's losses first
+            lost = def_line - defender.ship.fighters
+            left = max(0, escorted - lost)
+            defender.ship.fighters -= left
+            defender.escort["fighters"] = left
+            if left:
+                logs.append(f">> {defender.name}'s escort holds the line ({left} fighters remain with it).")
+
         # 3. Check for destruction
-        defender_destroyed = (defender.ship.shields <= 0 and defender.ship.fighters <= 0)
+        defender_destroyed = (defender.ship.shields <= 0 and defender.ship.fighters <= 0 and not left
+                              if escorted else defender.ship.shields <= 0 and defender.ship.fighters <= 0)
         attacker_destroyed = (attacker.ship.shields <= 0 and attacker.ship.fighters <= 0)
 
         data = {
@@ -395,6 +408,10 @@ class CombatManager:
             defender.credits -= bounty_cr
             attacker.credits += bounty_cr
             attacker.score += 500
+            purse = fxroutes.plunder_purse(attacker, defender)   # money aboard is cargo
+            if purse and kernel is not None and "fxroutes" in getattr(kernel, "state", {}):
+                fxroutes.stats(kernel)["plundered"] += 1
+                logs.append(f"*** Seized {', '.join(f'{v:,} {c}' for c, v in purse.items())} from its purse! ***")
 
             # Salvage cargo
             salvage_ore = defender.ship.cargo.ore // 2

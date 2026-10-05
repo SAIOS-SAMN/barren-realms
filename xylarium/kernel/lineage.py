@@ -442,6 +442,8 @@ def _npc_death(kernel: Any, captain: Any, cause: str) -> str:
         if captain.id in s.captains:
             s.captains.remove(captain.id)
     del kernel.captains[captain.id]
+    from xylarium.kernel import dynasties
+    dynasties.forget(kernel, captain.id)
     msg = f"[HOUSE] {captain.name} of {(house or {}).get('name', 'no house')} has died ({cause})."
     if house is not None:
         house["members"].pop(captain.id, None)

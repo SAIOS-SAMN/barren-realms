@@ -118,6 +118,9 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     if fxm is not None:
         for cur, amt in fxm.pool_holdings().items():
             add(cur, "fx_pools", amt)
+    from xylarium.kernel import exchanges
+    for cur, amt in exchanges.holdings(kernel).items():
+        add(cur, "local_exchanges", amt)
     banking = getattr(kernel, "banking", None)
     if banking is not None:
         for cur, bank in banking.banks.items():

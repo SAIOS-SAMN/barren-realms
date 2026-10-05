@@ -1337,6 +1337,23 @@ class SeatGrow:
                     parameters={"contract_id": contract.id, "planet_id": contract.destination_planet_id}, ration_cost=1,
                 )
             return cls._step_toward(captain, kernel, parent, contract.destination_sector, "HAUL_TO_MARKET")
+        if kind == "fx":
+            from xylarium.kernel import fxroutes
+            nxt = fxroutes.step(kernel, captain, plan)
+            if nxt is None:
+                return None
+            what, p = nxt
+            if what == "move":
+                return cls._step_toward(captain, kernel, parent, p["to"], "CARRY_MONEY")
+            if what == "escort":
+                return CognitiveDeed(seat="GROW", action_type=ActionType.HIRE_ESCORT, deed_name="HIRE_LOCAL_SECURITY",
+                                     target_coordinate=p["planet_id"], residual_magnitude=1.0,
+                                     parameters={"planet_id": p["planet_id"], "fighters": p["fighters"],
+                                                 "hazard": p["hazard"]}, ration_cost=1)
+            return CognitiveDeed(seat="GROW", action_type=ActionType.FX_EXCHANGE, deed_name="CONVERT_MONEY",
+                                 target_coordinate=p["to"], residual_magnitude=float(p["amount"]),
+                                 parameters={"from_currency": p["from"], "to_currency": p["to"],
+                                             "amount": p["amount"]}, ration_cost=1)
         if kind == "mine":
             if captain.ship.cargo.available_space < 3:
                 return None  # holds full: liquidate next
@@ -1518,6 +1535,13 @@ class SeatGrow:
             opts.append((value, {"kind": kind, "contract": c.id, "since": cycle, "xp_per_turn": xp / (turns + 2),
                                  "risk": risk}, None))
         return opts
+
+    @classmethod
+    def _fx_route_options(cls, captain: Captain, dist: Dict[int, int], kernel: "GameKernel") -> List[Tuple[float, Dict[str, Any], Optional[CognitiveDeed]]]:
+        """Currency routes in reach (fxroutes.py): money bought where it is cheap and carried to where it is dear."""
+        from xylarium.kernel import fxroutes
+        cycle = cls._cycle(kernel)
+        return [(v, dict(p, since=cycle, xp_per_turn=0.5), None) for v, p in fxroutes.options(kernel, captain, dist)]
 
     @classmethod
     def _mining_options(cls, captain: Captain, dist: Dict[int, int], kernel: "GameKernel") -> List[Tuple[float, Dict[str, Any], Optional[CognitiveDeed]]]:
@@ -1757,6 +1781,7 @@ class SeatGrow:
 
         # 4. Best expected SOL profit per turn across arbitrage, contracts and mining
         options = (cls._arbitrage_options(captain, sector, dist, kernel)
+                   + cls._fx_route_options(captain, dist, kernel)
                    + cls._contract_options(captain, dist, kernel)
                    + cls._mining_options(captain, dist, kernel)
                    + cls._archaeology_options(captain, dist, kernel))
@@ -2121,7 +2146,8 @@ class CognitiveOrgan:
         elif act in (ActionType.FREIGHT_ACCEPT, ActionType.FREIGHT_DELIVER, ActionType.BANK_TRANSACTION,
                      ActionType.SCAN_SPACE, ActionType.MINE_ASTEROIDS, ActionType.SALVAGE_DEBRIS,
                      ActionType.DEPLOY_SENTRIES, ActionType.SURVEY_RUINS, ActionType.EXCAVATE,
-                     ActionType.SELL_ARTIFACT, ActionType.STUDY_ARTIFACT):
+                     ActionType.SELL_ARTIFACT, ActionType.STUDY_ARTIFACT, ActionType.FX_EXCHANGE,
+                     ActionType.HIRE_ESCORT):
             return kernel.dispatch(captain.id, act, **params)
         elif act == ActionType.ATTACK_SHIP:
             target_id = params.get("target_id")

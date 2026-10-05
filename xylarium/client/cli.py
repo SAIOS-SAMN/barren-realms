@@ -635,13 +635,31 @@ class TerminalClient:
                 trend = c_red(f"weakened {100 * (drift - 1):.1f}%") if drift > 1 else c_green(f"strengthened {100 * (1 - drift):.1f}%")
                 print(f"  1 SOL = {rate:,.4f} {cur}   ({trend} vs genesis price level)")
             print(f"  Local currency here: {c_cyan(fxv.get('local_currency', 'SOL'))}")
+            if fxv.get("local_rate"):
+                print(f"  {c_cyan('Local exchange here')}: 1 SOL = {fxv['local_rate']:,.4f} {fxv.get('local_currency')} "
+                      f"(the federation's elsewhere) - a gap is a currency route")
+            from xylarium.kernel import business
+            me = self.kernel.get_player(self.player_id)
+            book = business.captain_book(self.kernel, me) if me is not None else {}
+            for r in book.get("routes", [])[:3]:
+                print(f"  Route: {r['dir'].replace('_', ' ')} {r['cur']} at {r['at']:03d}, out via {r['other']:03d} - "
+                      f"{r['sol']:,} SOL, ~{r['value_per_turn']:,.0f}/turn ({r['hazard'].lower()})")
+            for g in book.get("escorts_here", [])[:3]:
+                print(f"  Escort: {g['name']} can lend up to {g['spare']} fighters - 'ESCORT {g['planet']} <n>'")
             try:
-                raw = input(c_gold("Exchange as '<amount> <FROM> <TO>' (e.g. 500 SOL VOID), or Enter to exit > ")).strip().upper()
+                raw = input(c_gold("Exchange as '<amount> <FROM> <TO>' (e.g. 500 SOL VOID), 'ESCORT <world> <n>', "
+                                   "or Enter to exit > ")).strip().upper()
             except (KeyboardInterrupt, EOFError):
                 return
             if not raw:
                 return
             parts = raw.split()
+            if len(parts) == 3 and parts[0] == "ESCORT" and parts[2].isdigit():
+                pid = next((g["planet"] for g in book.get("escorts_here", []) if g["planet"].upper() == parts[1]),
+                           parts[1])
+                self._print_result(self.kernel.dispatch(self.player_id, ActionType.HIRE_ESCORT, planet_id=pid,
+                                                        fighters=int(parts[2])))
+                continue
             if len(parts) != 3 or not parts[0].isdigit():
                 print(c_red("Format: <amount> <FROM> <TO>"))
                 continue

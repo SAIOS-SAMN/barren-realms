@@ -141,7 +141,8 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
         return 0
     price = int(q * unit * rate)
     bw.treasury -= price
-    earned = _to(kernel, bw.currency, sw.currency, price)
+    from xylarium.kernel import exchanges
+    earned = exchanges.convert_at(kernel, bw.sector_id, bw.currency, sw.currency, price)
     sw.treasury += earned
     for a, b, owed in tolls:
         if owed <= 0:

@@ -660,11 +660,23 @@ def _surface_invade(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str,
 
 @action(ActionType.FX_EXCHANGE, turns=0)
 def _fx_exchange(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
-    ok, msg, out = k.fx_market.exchange(
-        captain, kwargs.get("from_currency", "SOL"), kwargs.get("to_currency", "FRN"), int(kwargs.get("amount", 0))
-    )
+    from xylarium.kernel import fxroutes
+    ok, msg, out = fxroutes.exchange(k, captain, getattr(current_sector, "id", None),
+                                     kwargs.get("from_currency", "SOL"), kwargs.get("to_currency", "FRN"),
+                                     int(kwargs.get("amount", 0)))      # where it is docked: the place's own desk
     result = ActionResult(success=ok, action=action, message=msg, data={"received": out})
     return result
+
+
+@action(ActionType.HIRE_ESCORT, turns=0)
+def _hire_escort(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    from xylarium.kernel import fxroutes
+    planet = k.get_planet(kwargs.get("planet_id", ""))
+    if planet is None or planet.sector_id != captain.sector_id:
+        return ActionResult(success=False, action=action, message="Hire an escort from a world in this system.")
+    ok, msg = fxroutes.hire(k, captain, planet, int(kwargs.get("fighters", 10)),
+                            k.cycle_count + int(kwargs.get("cycles", 100)), kwargs.get("hazard", "BORDERLAND"))
+    return ActionResult(success=ok, action=action, message=msg)
 
 
 @action(ActionType.SCAN_SPACE, turns=1)

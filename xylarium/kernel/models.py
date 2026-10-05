@@ -141,6 +141,7 @@ class ActionType(str, Enum):
 
     # [7] Null space, industry & monetary actions
     FX_EXCHANGE = "FX_EXCHANGE"
+    HIRE_ESCORT = "HIRE_ESCORT"
     SCAN_SPACE = "SCAN_SPACE"
     MINE_ASTEROIDS = "MINE_ASTEROIDS"
     SALVAGE_DEBRIS = "SALVAGE_DEBRIS"
@@ -827,6 +828,7 @@ class Captain:
     traits: Dict[str, Any] = field(default_factory=dict)   # persona of an autonomous mind (see cognition.temperament)
     persona_memory: Dict[str, Any] = field(default_factory=dict)  # remembered payoff per plan kind
     wages_due: int = 0                    # crew pay accrued at sea, settled at the next port
+    escort: Optional[Dict[str, Any]] = None   # a world's fighters sailing with it (fxroutes.py)
 
     def __post_init__(self):
         if not self.phylogeny_node_id:
@@ -1142,6 +1144,7 @@ class Captain:
             "traits": dict(self.traits),
             "persona_memory": dict(self.persona_memory),
             "wages_due": self.wages_due,
+            "escort": dict(self.escort) if self.escort else None,
         }
 
     @classmethod
@@ -1231,6 +1234,7 @@ class Captain:
             traits=dict(data.get("traits", {})),
             persona_memory=dict(data.get("persona_memory", {})),
             wages_due=int(data.get("wages_due", 0)),
+            escort=dict(data["escort"]) if data.get("escort") else None,
         )
 
 
