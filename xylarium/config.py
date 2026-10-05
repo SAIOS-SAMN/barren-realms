@@ -95,6 +95,15 @@ COMMODITY_CONFIG = {
         "max_price": 75,
         "volatility": 0.45,
     },
+    "NaCl": {                      # halite: dug from evaporite beds as ore is dug from crust - ORE's price where it
+        "name": "Halite (Salt)",   # is plentiful; where it is not, its landed cost carries it (supply.py)
+        "symbol": "NaCl",
+        "category": "MINERALS",
+        "base_price": 25,
+        "min_price": 10,
+        "max_price": 75,
+        "volatility": 0.45,
+    },
     "ORGANICS": {
         "name": "Organics",
         "symbol": "ORG",
@@ -220,6 +229,8 @@ COMMODITY_STACK_MULTIPLIERS: Dict[str, int] = {
     "Cu": 4,
     "ADL": 4,
     "AdL": 4,
+    "NACL": 4,
+    "NaCl": 4,
 
     # [3] Standard Tri-Commodities & Biomaterials - 2x density
     "ORGANICS": 2,

@@ -330,6 +330,7 @@ class Port:
     base_buys: Dict[str, bool] = field(default_factory=dict)  # the charter's buy list (restocking adds to it)
     regional_income: float = 0.0          # smoothed quarterly retail revenue from the region's households
     leisure: Dict[str, Any] = field(default_factory=dict)   # orbital leisure station and tourist traffic (tourism.py)
+    landed: Dict[str, Any] = field(default_factory=dict)    # good -> [landed SOL/unit, source sector, source SOL] (supply.py)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -347,6 +348,7 @@ class Port:
             "regional_income": self.regional_income,
             "base_buys": dict(self.base_buys),
             "leisure": dict(self.leisure),
+            "landed": dict(self.landed),
         }
 
     @classmethod
@@ -366,6 +368,7 @@ class Port:
             regional_income=float(data.get("regional_income", 0.0)),
             base_buys=dict(data.get("base_buys", {})),
             leisure=dict(data.get("leisure", {})),
+            landed=dict(data.get("landed", {})),
         )
 
 

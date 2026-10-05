@@ -85,11 +85,23 @@ class EconomyManager:
                     port.sells[comm] = True
             return
 
+        from xylarium.kernel import ledger as _ledger, supply as _supply
+        k = _ledger.active_kernel()
+        physical = k is not None and port.sector_id in getattr(k, "sectors", {})
         for comm, cfg in COMMODITY_CONFIG.items():
             if comm in port.buys and comm in port.sells and comm in port.stock:
                 continue
 
             cat = cfg.get("category", "METALS")
+            if physical and cat in _supply.PHYSICAL and comm not in _supply.TRIAD:
+                # the galaxy's elements decide: a port sells what its system holds and buys what it lacks
+                max_s = 500 if cat == "EXOTICS" else 800
+                b, sl, st0 = _supply.charter(k, port, comm, max_s)
+                port.max_stock.setdefault(comm, max_s)
+                port.buys.setdefault(comm, b)
+                port.sells.setdefault(comm, sl)
+                port.stock.setdefault(comm, st0)
+                continue
             h = int(hashlib.md5(f"port_{port.sector_id}_{comm}".encode()).hexdigest(), 16)
 
             can_buy = False
@@ -156,6 +168,10 @@ class EconomyManager:
         min_p = cfg["min_price"]
         max_p = cfg["max_price"]
         volatility = cfg["volatility"]
+        land = (getattr(port, "landed", None) or {}).get(matched_comm)
+        if land:                                   # brought in: the landed cost is its price, its bounds scale with it
+            scale = max(1.0, float(land[0]) / max(1e-9, base))
+            base, min_p, max_p = float(land[0]), int(round(min_p * scale)), int(round(max_p * scale))
 
         max_stock = max(1, port.max_stock.get(matched_comm, 1000))
         current_stock = max(0, min(port.stock.get(matched_comm, 500), max_stock))
@@ -175,7 +191,7 @@ class EconomyManager:
         buy_price = max(5, buy_price)
 
         # Regional economics: quote in the port's currency, with a distance-from-Sol gradient
-        factor = cls.regional_factor(port, cfg.get("category", "METALS"))
+        factor = cls.regional_factor(port, cfg.get("category", "METALS"), landed=bool(land))
         if factor != 1.0:
             sell_price = max(1, int(round(sell_price * factor)))
             buy_price = max(1, min(sell_price - 1, int(round(buy_price * factor))))
@@ -198,11 +214,14 @@ class EconomyManager:
         return max(lo, min(hi, lo + (hi - lo) * min(1.0, ratio / 2.0)))
 
     @staticmethod
-    def regional_factor(port: Port, category: str) -> float:
-        """Price level of the port's currency x remoteness gradient (manufactures dearer, raw goods cheaper)."""
+    def regional_factor(port: Port, category: str, landed: bool = False) -> float:
+        """Price level of the port's currency x remoteness gradient (manufactures dearer, raw goods cheaper) - a good
+        priced at its landed cost carries its distance already (supply.py)."""
         cur = getattr(port, "currency", "SOL")
         from xylarium.kernel import prices
         level = prices.level(cur)             # MV = PY, sticky (prices.py)
+        if landed:
+            return level
         hops = getattr(port, "remoteness", 0)
         if category == "MANUFACTURED":
             gradient = min(GRADIENT_MANUFACTURED_MAX, 1.0 + GRADIENT_MANUFACTURED_PER_HOP * hops)

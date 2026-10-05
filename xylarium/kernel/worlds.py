@@ -62,7 +62,7 @@ VOLATILES = {
 # ---------------------------------------------------------------------- the elements a disc offers (formation)
 # Solar abundances, atoms per million silicon (Lodders 2003): the star's own, scaled by its metallicity.
 ABUNDANCE = {"O": 1.41e7, "C": 7.19e6, "N": 1.95e6, "Mg": 1.02e6, "Si": 1.0e6, "Fe": 8.38e5, "S": 4.45e5,
-             "Ni": 4.78e4}
+             "Ni": 4.78e4, "Na": 5.75e4, "Cl": 5.24e3}
 CARBON_AS = {"CO": 0.5, "CO2": 0.2, "CH4": 0.3}         # how a cooling nebula holds its carbon (declared)
 NITROGEN_AS = {"NH3": 0.5, "N2": 0.5}                   # and its nitrogen (declared)
 

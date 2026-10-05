@@ -46,7 +46,8 @@ def _wrap(text: str, colour: Callable[[str], str] = c_gray, indent: str = "    "
     return [colour(line) for line in textwrap.wrap(text, WIDTH, initial_indent=indent, subsequent_indent=indent + "  ")]
 
 
-CATEGORY = {"METALS": "metals", "VOLATILES": "volatiles", "EXOTICS": "exotics", "MANUFACTURED": "manufactured",
+CATEGORY = {"METALS": "metals", "MINERALS": "minerals", "VOLATILES": "volatiles", "EXOTICS": "exotics",
+            "MANUFACTURED": "manufactured",
             "LUXURY": "luxuries", "SYNTHETIC": "made from energy", "WASTE": "waste"}
 
 
