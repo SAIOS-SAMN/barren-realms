@@ -77,6 +77,7 @@ def _menu(kernel: Any, pid: str, seat: Optional[str] = None) -> None:
         opts.append(("W", "Speak for great works"))
     if seat == "progenitor":
         opts += [("T", "Look away: let an age pass (a thousand to a billion years)"),
+                 ("B", "Seal what is appealed to you (fold space and time)"),
                  ("Y", "Counsel seeding young worlds"), ("V", "Counsel uplifting younger minds"),
                  ("H", "Write into your chronicle")]
     if kernel.get_player(pid) is not None:
@@ -113,8 +114,20 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             from xylarium.kernel import roles
             print(roles.render_progress(roles.progress(kernel, pid)))
             continue
-        if seat == "progenitor" and cmd in ("T", "Y", "V", "H"):
-            if cmd == "T":
+        if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B"):
+            if cmd == "B":
+                from xylarium.kernel import stewardship
+                ap = stewardship.appeals(kernel)
+                for r in ap:
+                    print(f"  {r['id']} {r['kind']}: {r['a'].split(':', 1)[-1]} / {r['b'].split(':', 1)[-1]} "
+                          f"(from {stewardship.realm_name(r['realm'])})")
+                if not ap:
+                    print(c_gray("  Nothing is appealed to you."))
+                    continue
+                rid = input(c_gold("Seal which ruling (id) > ")).strip()
+                res = stewardship.seal(kernel, pid, rid)
+                print("  " + ("Sealed: it stands for good." if res["ok"] else res["why"]))
+            elif cmd == "T":
                 print("  " + "   ".join(f"{c_gold(f'[{i}]')} {n}" for i, (n, _y) in enumerate(AGES, 1)))
                 raw = input(c_gold("How long [3] > ")).strip() or "3"
                 if raw.isdigit() and 1 <= int(raw) <= len(AGES):

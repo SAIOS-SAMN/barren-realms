@@ -224,7 +224,13 @@ class WebSocketGateway:
                                             "message": "The Progenitor's seat needs a Big Bang universe of its own: "
                                                        "start one with main.py (single player)."})
                     return
-                if role == "steward":
+                if role == "steward" and not (payload.get("polity") is not None or payload.get("rule")):
+                    from xylarium.kernel import stewardship
+                    keys = stewardship.realms(self.kernel)
+                    want = str(payload.get("realm") or keys[0])
+                    seat = stewardship.seat_steward(self.kernel, p_id, name, want if want in keys else keys[0])
+                    captain = self.kernel.get_player(p_id)
+                elif role in ("sovereign", "steward"):          # "steward" with a polity: an older client's ruler
                     if cosmos.is_cosmic(self.kernel):
                         await client.send_json({"status": "error", "action": "REGISTER",
                                                 "message": "No settled polities in this universe to rule."})

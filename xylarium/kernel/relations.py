@@ -427,9 +427,11 @@ def offer(kernel: Any, sub: str, sup: str, by: Dict[str, List[Any]], t: Optional
           base: Optional[float] = None) -> Optional[str]:
     """`sup` offers `sub` protection for tribute: both judge their own side - through how well they understand
     each other (contact.misread) - and the tie stands only if both accept."""
-    from xylarium.kernel import contact, decide
+    from xylarium.kernel import contact, decide, stewardship
     if sub in ties(kernel) or sub not in by or sup not in by or root(kernel, sup) == sub:
         return None
+    if stewardship.binds(kernel, sub, sup, "release") or stewardship.binds(kernel, sub, sup):
+        return None                                   # a steward's ruling stands between them
     if t is None:
         t = _terms(kernel, sub, sup, by, _pressed_share(kernel) if base is None else base)
         if t is None:

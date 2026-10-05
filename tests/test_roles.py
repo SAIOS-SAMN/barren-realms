@@ -49,7 +49,7 @@ class TestStewardSeat(unittest.TestCase):
         self.assertTrue(res.success or "capacity" in msg, msg)        # accepted, or refused only at its own limits
         self.assertNotIn("you do not", msg)                           # never refused as another's world
         p = roles.progress(self.k, "player_1")
-        self.assertEqual(p["role"], "steward")
+        self.assertEqual(p["role"], "sovereign")
         self.assertEqual(p["rule"], "throne")
         self.assertGreaterEqual(p["worlds"], 1)
 
@@ -94,8 +94,8 @@ class TestOpeningMenu(unittest.TestCase):
         from xylarium.client import roles as roles_ui
         real = builtins.input
         try:
-            for raw, want in (("1", "progenitor"), ("2", "steward"), ("3", "captain"), ("4", roles_ui.EARLIER),
-                              ("", "captain")):
+            for raw, want in (("1", "progenitor"), ("2", "steward"), ("3", "sovereign"), ("4", "captain"),
+                              ("5", roles_ui.EARLIER), ("", "captain")):
                 builtins.input = lambda *_a, r=raw: r
                 self.assertEqual(roles_ui.choose_role(), want)
         finally:
@@ -118,8 +118,11 @@ class TestBridgeSeats(unittest.TestCase):
         c = Client()
         asyncio.run(gw._process_client_message(c, {"action": "ROLES"}))
         self.assertEqual([r["key"] for r in sent[-1]["roles"]], list(roles.KEYS))
-        asyncio.run(gw._process_client_message(c, {"action": "REGISTER", "name": "Remote Ruler", "role": "steward",
+        asyncio.run(gw._process_client_message(c, {"action": "REGISTER", "name": "Remote Ruler", "role": "sovereign",
                                                    "rule": "commonwealth"}))
+        self.assertEqual(sent[-1]["seat"]["role"], "sovereign")
+        asyncio.run(gw._process_client_message(Client(), {"action": "REGISTER", "name": "Keeper", "role": "steward",
+                                                          "realm": "0.1"}))
         self.assertEqual(sent[-1]["seat"]["role"], "steward")
         asyncio.run(gw._process_client_message(Client(), {"action": "REGISTER", "name": "Remote Pilot"}))
         self.assertEqual(sent[-1]["seat"]["role"], "captain")
@@ -431,3 +434,57 @@ class ColonyStub:
     def tick(kernel, planet):
         from xylarium.kernel.colony import ColonyManager
         return ColonyManager.tick_colony(planet, kernel=kernel)
+
+
+class TestStewardship(unittest.TestCase):
+    def setUp(self):
+        from xylarium.kernel import stewardship
+        random.seed(5)
+        self.k = roles.start_sovereign(42, "Queen", pick=0, rule="council")
+        self.st = stewardship
+        self.realm = next(r for r in stewardship.realms(self.k) if len(stewardship.peoples_of(self.k, r)) >= 2)
+        self.peoples = sorted(stewardship.peoples_of(self.k, self.realm))
+
+    def test_realms_partition_the_galaxy_and_never_move(self):
+        seen = {}
+        for sid in self.k.sectors:
+            r = self.st.realm_of(self.k, sid)
+            self.assertIn(r, self.st.realms(self.k))
+            seen[sid] = r
+        for _ in range(50):
+            self.k.tick_simulation()                                            # the map grows; realms stay put
+        self.assertEqual({sid: self.st.realm_of(self.k, sid) for sid in seen}, seen)
+        self.assertEqual(self.st.sphere_quadrant([1.0, 0.0, 0.0, 0.0]), 0)        # home at the sphere's pole
+
+    def test_a_stewards_ceasefire_binds_raids_holds_and_a_sovereigns_guns(self):
+        from xylarium.kernel import relations
+        self.st.seat_steward(self.k, "player_7", "Keeper", self.realm)
+        self.assertEqual(roles.role_of(self.k, "player_7"), "steward")
+        self.assertEqual(roles.tier_of(self.k, "player_7"), "T2")
+        a, b = self.peoples[:2]
+        res = self.st.rule(self.k, "player_7", "ceasefire", a, b)
+        self.assertTrue(res["ok"])
+        self.assertFalse(res["appealed"])
+        self.assertIsNotNone(self.st.binds(self.k, a, b))
+        self.assertIsNotNone(self.st.binds(self.k, b, a))
+        by = relations._peoples(self.k)
+        self.assertIsNone(relations.offer(self.k, a, b, by))                        # no hold across a ruling
+        o = self.st.overview(self.k, self.realm)
+        self.assertTrue(any(r["id"] == res["ruling"]["id"] for r in o["rulings"]))
+        self.assertIn("Rulings", self.st.render(o))
+
+    def test_what_reaches_beyond_a_realm_goes_up_and_a_progenitor_seals_it(self):
+        self.st.seat_steward(self.k, "player_7", "Keeper", self.realm)
+        other = next(r for r in self.st.realms(self.k) if r != self.realm and self.st.peoples_of(self.k, r))
+        far = sorted(self.st.peoples_of(self.k, other))[0]
+        res = self.st.rule(self.k, "player_7", "ceasefire", self.peoples[0], far)
+        self.assertTrue(res["appealed"])
+        self.assertIsNone(self.st.binds(self.k, self.peoples[0], far))           # not yet: it waits on the progenitors
+        rid = res["ruling"]["id"]
+        self.assertFalse(self.st.seal(self.k, "player_1", rid)["ok"])            # a sovereign cannot seal
+        roles.stats(self.k)["of"]["player_0"] = "progenitor"
+        self.assertTrue(self.st.seal(self.k, "player_0", rid)["ok"])
+        rec = self.st.binds(self.k, self.peoples[0], far)
+        self.assertTrue(rec["sealed"])
+        self.k.cycle_count += 100 * (self.st.RULING_YEARS + 5)
+        self.assertIsNotNone(self.st.binds(self.k, self.peoples[0], far))       # sealed: it stands for good

@@ -498,6 +498,14 @@ class CombatManager:
                 message=f"You cannot bombard your own colony ({planet.name})!",
             )
 
+        if kernel is not None:
+            from xylarium.kernel import knowledge, stewardship, sustenance
+            ruled = stewardship.binds(kernel, knowledge.holder_of_captain(attacker), sustenance.people_of(planet))
+            if ruled is not None:
+                msg = (f"A steward's {ruled['kind']} ({ruled['id']}) stands between you and {planet.name}'s people: "
+                       f"your guns stay cold" + (" - a progenitor has sealed it." if ruled["sealed"] else "."))
+                return ActionResult(success=False, action=ActionType.ATTACK_PLANET, message=msg)
+
         logs.append(f"ORBITAL STRIKE: {attacker.name} enters high orbit around {planet.name} (Governor: {planet.owner_id})!")
         logs.append(f">> Planetary Shields: {planet.shields}/{planet.max_shields} | Defense Fighters: {planet.fighters}")
 

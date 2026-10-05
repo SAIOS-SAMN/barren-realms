@@ -451,7 +451,9 @@ def _meetings(kernel: Any, now: float) -> List[str]:
             opposed = any(abs(POLICY_ORDER.index(x) - POLICY_ORDER.index(y)) >= 2 or "DELTA" in (x, y)
                           for x, y in ((ca, cb_seen), (cb, ca_seen)))        # either sees an enemy in the other
             na, nb = a.split(":", 1)[-1], b.split(":", 1)[-1]
-            if opposed and rng.random() < WAR_PER_MEETING:
+            from xylarium.kernel import stewardship
+            ruled = stewardship.binds(kernel, a, b) or stewardship.binds(kernel, a, b, "pact")
+            if opposed and not ruled and rng.random() < WAR_PER_MEETING:
                 da, db = st["of"][a]["dominion"], st["of"][b]["dominion"]
                 win, lose = (a, b) if rng.random() < da / max(1, da + db) else (b, a)
                 taken = st["of"][lose]["dominion"] - max(1, st["of"][lose]["dominion"] // 2)

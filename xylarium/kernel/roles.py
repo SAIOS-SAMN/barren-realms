@@ -1,16 +1,21 @@
 """
 Xylarium roles: the seats a player - human or AI - can take in the realm the architects laid.
 
-The tiers (as in /opt/netstratum and /opt/xylarium): T0 Progenitor, T1 Watcher, T2 Observer, T3 Sovereign, and below
-the sovereign the offices T4-T9 - each a specialization of the sovereign's work played in the realm:
+The tiers, above them all the ancients - the architects' laws, which no seat can override:
 
   T0 PROGENITOR   start from the Big Bang as one of the first minds the universe raises near its galaxy's core: shape
                   that ancient people, carry it through deep time, seed the young worlds after it, write its chronicle.
-  T1 WATCHER, T2 OBSERVER   see far and seal what they see into the chart (seats still to be opened).
-  T3 SOVEREIGN    rule an established polity on the brink of interstellar travel: how it is governed, its defences,
-                  its wars, its settlements (Barren Realms Elite). Its seat key is "steward".
+                  The last word under the laws: it folds space and time to seal what is appealed to it.
+  T1 WATCHER      sees across realms (a seat still to be opened).
+  T2 STEWARD      a realm - a quadrant of the 3-sphere (stewardship.py): no people's own, it keeps the balance between
+                  the sovereigns of its peoples and adjudicates between them; its rulings bind them.
+  T3 SOVEREIGN    one people, or the worlds of one people (the observer is merged here): partisan by its people's own
+                  alignment - how it is governed, its defences, its wars, its settlements (Barren Realms Elite).
   T4-T9 OFFICES   a ship and a specialization, starting at Tradewards - the settled galaxy's densest cluster of
                   docks (TradeWars). Its seat key is "captain"; the office is its specialization (OFFICES).
+
+Conflict goes up the chain: offices answer to their sovereign, sovereigns bend to their realm's steward, a dispute
+beyond a steward goes to a progenitor, and the laws are above every seat.
 
 A seat is a place to stand, never a different law: every seat acts through the same doors as the realm's own minds,
 and its status decides its levers and how far the realm unfolds around it (zones.ASPECT), never what is true.
@@ -23,9 +28,12 @@ ROLES: List[Dict[str, str]] = [
     {"key": "progenitor", "name": "Progenitor (T0)", "tier": "T0",
      "blurb": "Start from the Big Bang as one of the first minds near the galactic core. Shape your ancient people, "
               "carry it through what deep time throws at it, seed young worlds, and write its chronicle."},
-    {"key": "steward", "name": "Sovereign (T3)", "tier": "T3",
-     "blurb": "Rule an established polity on the brink of interstellar travel. Choose how it is governed, then build "
-              "its planetary defences, make war, and settle new worlds (Barren Realms Elite)."},
+    {"key": "steward", "name": "Steward (T2)", "tier": "T2",
+     "blurb": "Keep a realm - a quadrant of the universe - for no people of your own: hear the sovereigns' disputes, "
+              "rule between them, shield the young, and send what you cannot settle up to the progenitors."},
+    {"key": "sovereign", "name": "Sovereign (T3)", "tier": "T3",
+     "blurb": "Rule a people's worlds, on the brink of interstellar travel, by its own lights. Choose how it is "
+              "governed, then build its planetary defences, make war, and settle new worlds (Barren Realms Elite)."},
     {"key": "captain", "name": "Office (T4-T9)", "tier": "T4-T9",
      "blurb": "Take a ship and an office - trader, developer, financier, defender, intelligence or logistics - "
               "starting at Tradewards, where docks are everywhere (TradeWars)."},
@@ -33,10 +41,11 @@ ROLES: List[Dict[str, str]] = [
 KEYS = tuple(r["key"] for r in ROLES)
 
 TIERS: List[Dict[str, str]] = [
-    {"tier": "T0", "name": "Progenitor", "seat": "progenitor", "holds": "the board: genomes, seeding, uplift, deep time"},
-    {"tier": "T1", "name": "Watcher", "seat": "", "holds": "far sight over a galaxy (to be opened)"},
-    {"tier": "T2", "name": "Observer", "seat": "", "holds": "sealing what is seen into the chart (to be opened)"},
-    {"tier": "T3", "name": "Sovereign", "seat": "steward", "holds": "a realm: rule, defence, war, settlement"},
+    {"tier": "T0", "name": "Progenitor", "seat": "progenitor",
+     "holds": "the board: genomes, seeding, uplift, deep time; seals what is appealed to it"},
+    {"tier": "T1", "name": "Watcher", "seat": "", "holds": "sight across realms (to be opened)"},
+    {"tier": "T2", "name": "Steward", "seat": "steward", "holds": "a realm of the 3-sphere: balance and binding rulings"},
+    {"tier": "T3", "name": "Sovereign", "seat": "sovereign", "holds": "a people's worlds: rule, defence, war, settlement"},
 ]
 
 # the offices below the sovereign: each a specialization of its work, played from a ship (the "captain" seat)
@@ -75,7 +84,7 @@ def tier_of(kernel: Any, player_id: str) -> Optional[str]:
     role = role_of(kernel, player_id)
     if role == "captain":
         return (office_of(kernel, player_id) or OFFICES[0])["tier"]
-    return {"progenitor": "T0", "steward": "T3"}.get(role or "")
+    return {"progenitor": "T0", "steward": "T2", "sovereign": "T3"}.get(role or "")
 TRADEWARDS_REACH = 2            # jumps: the docks a captain can reach from a hub without ranging far
 
 
@@ -84,7 +93,10 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 def role_of(kernel: Any, player_id: str) -> Optional[str]:
-    return stats(kernel)["of"].get(player_id)
+    role = stats(kernel)["of"].get(player_id)
+    if role == "steward" and player_id in stats(kernel).get("realms", {}):
+        stats(kernel)["of"][player_id] = role = "sovereign"   # an older save's ruler: the sovereign's seat now
+    return role
 
 
 def describe() -> List[Dict[str, str]]:
@@ -206,10 +218,10 @@ def seat_ruler(kernel: Any, player_id: str, name: str, holder: str, rule: str = 
             fertility.set_natal(kernel, ruler, w, natal)
     _inherit(kernel, holder, f"captain:{player_id}")
     st = stats(kernel)
-    st["of"][player_id] = "steward"
+    st["of"][player_id] = "sovereign"
     st.setdefault("realms", {})[player_id] = {"holder": holder, "rule": form["key"], "capital": cap_world.id,
                                               "worlds": [w.id for w in worlds]}
-    return {"role": "steward", "polity": holder.split(":", 1)[-1], "rule": form["name"], "worlds": len(worlds),
+    return {"role": "sovereign", "polity": holder.split(":", 1)[-1], "rule": form["name"], "worlds": len(worlds),
             "capital": cap_world.name, "sector": cap_world.sector_id}
 
 
@@ -346,7 +358,7 @@ def set_take(kernel: Any, player_id: str, rule: str) -> Optional[str]:
     return f"Your realm is now governed as {form['name']}: the few take {form['rent']:.0%}."
 
 
-def start_steward(seed: int, name: str, pick: int = 0, rule: str = "council",
+def start_sovereign(seed: int, name: str, pick: int = 0, rule: str = "council",
                   gauges: Optional[Dict[str, float]] = None, natal: Optional[str] = None,
                   player_id: str = "player_1") -> Any:
     """A new settled universe whose `pick`-th largest independent polity the player rules. Returns the kernel."""
@@ -357,6 +369,9 @@ def start_steward(seed: int, name: str, pick: int = 0, rule: str = "council",
         raise ValueError("This universe has no independent polity to rule.")
     seat_ruler(k, player_id, name, ps[min(max(0, pick), len(ps) - 1)]["holder"], rule, gauges, natal)
     return k
+
+
+start_steward = start_sovereign          # the older name of the sovereign's seat (saves, tools)
 
 
 # ---------------------------------------------------------------------- progenitor: an ancient
@@ -439,7 +454,7 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
     """Where a seat stands, read from what the laws already keep: its history (made and destroyed, by cause), how
     others read it, and the measures of its own seat."""
     from xylarium.kernel import ages, cosmos, mastery, relations, syntropy
-    role = role_of(kernel, player_id) or ("steward" if ages.stats(kernel)["stewards"].get(player_id) else "captain")
+    role = role_of(kernel, player_id) or ("counsel" if ages.stats(kernel)["stewards"].get(player_id) else "captain")
     out: Dict[str, Any] = {"role": role, "year": kernel.cycle_count // 100, "tier": tier_of(kernel, player_id)}
     if role == "captain" and office_of(kernel, player_id):
         out["office"] = office_of(kernel, player_id)["name"]
@@ -448,7 +463,16 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
         out.update(credits=cap.credits, score=cap.score, rank=cap.rank_tier, bounty=cap.bounty,
                    ledger=_ledger(cap.alignment_record), seen_by_others=None, sector=cap.sector_id)
         return out
-    if role == "steward" and player_id in stats(kernel).get("realms", {}):
+    if role == "steward":
+        from xylarium.kernel import stewardship
+        realm = stewardship.realm_held(kernel, player_id)
+        if realm is not None:
+            o = stewardship.overview(kernel, realm)
+            out.update(realm=o["name"], peoples=len(o["peoples"]), disputes=len(o["disputes"]),
+                       rulings=len(o["rulings"]), balance=o["balance"],
+                       population=sum(r["population"] for r in o["peoples"]))
+            return out
+    if role == "sovereign" and player_id in stats(kernel).get("realms", {}):
         realm = stats(kernel)["realms"][player_id]
         worlds = [kernel.get_planet(w) for w in realm["worlds"]]
         worlds = [w for w in worlds if w is not None and w.owner_id == player_id]
@@ -489,9 +513,11 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
 
 def render_progress(p: Dict[str, Any]) -> str:
     """The progress screen, as text."""
-    seat = {"steward": "SOVEREIGN", "captain": (p.get("office") or "OFFICE").upper()}.get(p["role"], p["role"].upper())
+    seat = {"captain": (p.get("office") or "OFFICE").upper()}.get(p["role"], p["role"].upper())
     lines = [f"=== PROGRESS: {seat}{' (' + p['tier'] + ')' if p.get('tier') else ''} - year {p['year']:,} ==="]
-    for key, label in (("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"), ("dominion", "Worlds held (history's scale)"),
+    for key, label in (("realm", "Realm"), ("peoples", "Peoples of the realm"), ("disputes", "Disputes before you"),
+                       ("rulings", "Rulings standing"), ("balance", "Balance (all its peoples)"),
+                       ("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"), ("dominion", "Worlds held (history's scale)"),
                        ("own_years", "Years your people has lived"),
                        ("population", "Population"), ("treasury", "Treasury"), ("credits", "Credits"),
                        ("score", "Score"), ("rank", "Rank"), ("bounty", "Bounty on you"), ("citadels", "Citadels"),

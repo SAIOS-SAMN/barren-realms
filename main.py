@@ -65,11 +65,16 @@ def main():
                 kernel, player_id = lineage_genesis(args.seed, args.name)
                 roles.seat_captain(kernel, player_id, roles_ui.choose_office())
                 roles_ui.announce_tradewards(kernel, player_id)
-            elif seat == "steward":
+            elif seat == "sovereign":
                 from xylarium.client import ruler as ruler_ui
                 kernel, player_id = ruler_ui.begin(args.seed, args.name, player_id)
                 if kernel is None:
                     return
+            elif seat == "steward":
+                from xylarium.client import realm as realm_ui
+                kernel = realm_ui.begin(args.seed, args.name, player_id)
+                realm_ui.run(kernel, player_id, save=lambda: StatePersistence.save_to_file(kernel, save_file))
+                return
             elif seat == "progenitor":
                 from xylarium.client import ancient as ancient_ui
                 ancient_ui.begin(args.seed, args.name, player_id,

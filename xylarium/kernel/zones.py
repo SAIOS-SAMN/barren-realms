@@ -34,6 +34,7 @@ ASPECT: Dict[str, Dict[int, int]] = {
     "intelligence": {WORLD: 2},               # the intelligence office: what lies a lane further, unseen
     "people": {WORLD: 0},                     # a people lives on its worlds
     "station": {WORLD: 0},                    # a port's people, the sector it stands in
+    "steward": {WORLD: 0},                    # a realm's steward: the worlds of the peoples whose disputes it hears
 }
 
 ALL_OPEN = False                              # tests: hold every charted region open (the stepped reference)
@@ -76,7 +77,7 @@ def observers(kernel: Any, seated: bool = False) -> Dict[str, Set[int]]:
         seat = seats.get(cid)
         if seated and seat is None:
             continue                                      # a crew of the realm, not a player's seat
-        if seat == "steward" and cid in realms:
+        if seat in ("sovereign", "steward") and cid in realms:
             out["sovereign"].add(cap.sector_id)
             for wid in realms[cid]["worlds"]:
                 w = kernel.get_planet(wid)
@@ -86,6 +87,13 @@ def observers(kernel: Any, seated: bool = False) -> Dict[str, Set[int]]:
             out[offices[cid]].add(cap.sector_id)          # an office that sees further than a ship's next lanes
         else:
             out["office"].add(cap.sector_id)
+    if "stewardship" in getattr(kernel, "state", {}):
+        from xylarium.kernel import relations, stewardship
+        by = relations._peoples(kernel)
+        for realm, pid in stewardship.stats(kernel)["stewards"].items():
+            for d in stewardship.disputes(kernel, realm):     # a steward's attention: where it is called to rule
+                for who in (d["a"], d["b"]):
+                    out["steward"] |= {w.sector_id for w in by.get(who, [])}
     if "ages" in getattr(kernel, "state", {}):
         for pid in ages.stats(kernel).get("stewards", {}):
             home = ages.homeworld(kernel, pid)
