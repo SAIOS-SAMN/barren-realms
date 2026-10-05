@@ -93,18 +93,29 @@ class AstronomyManager:
         self.cycle_count += 1
         self._sectors = sectors
         from xylarium.kernel import physics
+        seen = self._seen(sectors)
         for p in planets:
             sec = sectors.get(p.sector_id) if sectors else None
             if sec is not None and getattr(p, "body", None):
                 # a world with exact physics is a closed-form function of time: computed where someone is there to
                 # see it, and on demand anywhere else (compute_position) - the sky is not redrawn every cycle
-                if self._watched(sec):
+                if p.sector_id in seen:
                     p.orbital_angle = physics.orbital_angle(sec, p, self.cycle_count)
                 continue
             period = max(1, p.orbital_period)
             p.orbital_angle = (p.orbital_angle + 360.0 / period) % 360.0
 
-    def _watched(self, sec: Any) -> bool:
+    @staticmethod
+    def _seen(sectors: Optional[Dict[int, Any]]) -> Any:
+        """The watched sectors (zones.py), read once a cycle."""
+        from xylarium.kernel import ledger, zones
+        k = ledger.active_kernel()
+        if k is not None and getattr(k, "sectors", None) is sectors:
+            return zones.watched(k)
+        return {sid for sid, sec in (sectors or {}).items() if AstronomyManager._watched(sec)}
+
+    @staticmethod
+    def _watched(sec: Any) -> bool:
         return getattr(sec, "port", None) is not None or any(
             q.population > 0 or getattr(q, "owner_id", None) for q in getattr(sec, "planets", []))
 

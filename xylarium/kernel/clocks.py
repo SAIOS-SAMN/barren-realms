@@ -169,22 +169,28 @@ def fold(kernel: Any, who: str, from_sector: int, to_sector: int) -> None:
 
 
 def look_away(kernel: Any, who: str, deep_years: float) -> Optional[float]:
-    """A watcher (a progenitor) looks away for a span of deep years of its people's own time: the whole galaxy is
-    filmed at the coarsest frame that holds the span in a clock year - every place and the galaxy's own clock - and
-    the annals carry every people across it at the level of history, by the same bridges and the same hazards as
-    ever. The camera's speed changes nothing it films: only how much of it is seen year by year. Returns the
-    people's own now (Gyr) when the span ends, or None."""
+    """A watcher (a progenitor) looks away for a span of deep years of its people's own time: every place and the
+    galaxy's own clock are set to reach the span's end - each at the coarsest frame that holds what is left of it in a
+    clock year - and the annals carry every people across it at the level of history, by the same bridges and the
+    same hazards as ever. The camera's speed changes nothing it films: only how much of it is seen year by year.
+    A place whose living people's star will die in the span is held to its own frame (_frame), so the death comes
+    after its seasons; every other place runs on. Returns the people's own now (Gyr) when the span ends, or None."""
     from xylarium.kernel import cosmos
     rec = _people(kernel, who)
     if rec is None or deep_years <= 0:
         return None
+    st = stats(kernel)
     until = now(kernel, who) + deep_years / 1e9
-    stats(kernel).setdefault("away", {})[who] = until
-    stats(kernel)["frames"] = {}                              # each place's frame is read afresh for this span
-    coarse = min(float(deep_years), _turning_frame(kernel))
-    for sid in list(stats(kernel)["places"]):
-        _set_place_rate(kernel, int(sid), max(float(stats(kernel)["places"][sid]["segs"][-1][2]), coarse))
-    cosmos.set_rate(kernel, max(cosmos.ruler(kernel), coarse))
+    st.setdefault("away", {})[who] = until
+    st["frames"] = {}                                         # each place's frame is read afresh for this span
+    gauge = max(float(st.get("gauge_until") or 0.0), cosmos.deep_gyr(kernel) + deep_years / 1e9)
+    st["gauge_until"] = gauge
+    targets = st.setdefault("targets", {})
+    for sid in list(st["places"]):
+        targets[sid] = max(float(targets.get(sid) or 0.0), place_now(kernel, int(sid)) + deep_years / 1e9)
+        _set_place_rate(kernel, int(sid), max(float(st["places"][sid]["segs"][-1][2]),
+                                              place_pace(kernel, int(sid)) or 0.0))
+    cosmos.set_rate(kernel, max(cosmos.ruler(kernel), float(deep_years)))
     return until
 
 
@@ -194,42 +200,66 @@ def away(kernel: Any, who: Optional[str]) -> Optional[float]:
 
 
 def away_pace(kernel: Any) -> Optional[float]:
-    """While a watcher has looked away: the deep years a clock year must hold to finish its span in the coming
-    year (the largest over watchers). A watcher whose span is done looks back. None when all are watching."""
+    """While a watcher has looked away: the deep years the galaxy's own clock must run in the coming clock year to
+    reach the span's end. A watcher whose people's own time has reached its end looks back; when none is away, every
+    clock returns to the pace of the living. None when the galaxy's clock has nothing left to run."""
     if not _on(kernel):
         return None
-    st = stats(kernel).get("away") or {}
-    left = []
-    for who, until in list(st.items()):
-        rest = (until - now(kernel, who)) * 1e9 if _people(kernel, who) is not None else 0.0
-        if rest <= 0:
-            st.pop(who, None)                                 # its watcher looks back
-        else:
-            left.append(rest)
-    if not left:
+    from xylarium.kernel import cosmos
+    st = stats(kernel)
+    away_ = st.get("away") or {}
+    for who, until in list(away_.items()):
+        if _people(kernel, who) is None or until <= now(kernel, who):
+            away_.pop(who, None)                              # its watcher looks back
+    if not away_:
+        st.pop("targets", None)
+        st.pop("gauge_until", None)
         return None
-    return min(max(left), _turning_frame(kernel))
+    rest = (float(st.get("gauge_until") or 0.0) - cosmos.deep_gyr(kernel)) * 1e9
+    return rest if rest > 0 else None
 
 
-def _turning_frame(kernel: Any) -> float:
-    """The coarsest frame that does not step over a living people's sun's death (the same Courant rule tempo
-    follows for history's turnings): a place's frame is set, when first seen while its watcher is away, to a tenth
-    (tempo.FRAMES) of the deep years its star has left, and held there - so the star's end comes after FRAMES clock
-    years of seasons, in which its people can read its sun and leave. A watcher looking away does not take them."""
-    from xylarium.kernel import cosmos, relations, tempo
+def place_pace(kernel: Any, sector_id: int) -> Optional[float]:
+    """While a watcher has looked away: the deep years this place must run in the coming clock year to reach its end
+    of the span - no faster than its own frame where a living people's star will die (_frame). None when it is done
+    (it returns to the pace of the living there) or no one is away."""
+    st = stats(kernel)
+    targets = st.get("targets")
+    if not targets or not st.get("away"):
+        return None
+    key = str(sector_id)
+    here = place_now(kernel, sector_id)
+    if here is None:
+        return None
+    if key not in targets:                                    # a place charted during the span: the galaxy's rest
+        from xylarium.kernel import cosmos
+        targets[key] = here + max(0.0, float(st.get("gauge_until") or 0.0) - cosmos.deep_gyr(kernel))
+    rest = (float(targets[key]) - here) * 1e9
+    if rest <= 0:
+        return None
+    return max(1.0, min(rest, _frame(kernel, sector_id)))
+
+
+def _frame(kernel: Any, sector_id: int) -> float:
+    """The coarsest frame that does not step over the death of a star that living people see (the same Courant
+    rule tempo follows for history's turnings): set, when first read in a span, to a tenth (tempo.FRAMES) of the deep
+    years the star has left, and held there - so its end comes after FRAMES clock years of seasons, in which its
+    people can read it and leave, and others can come for them. A watcher looking away does not take them."""
+    from xylarium.kernel import cosmos, tempo, zones
+    if sector_id not in zones.peopled(kernel):
+        return float("inf")
     held = stats(kernel).setdefault("frames", {})
-    frame = float("inf")
-    for worlds in relations._peoples(kernel).values():
-        for sid in {w.sector_id for w in worlds if w.population > 0}:
-            life = cosmos.star_life(kernel, sid)
-            if life is None:
-                continue
-            ahead = (life[1] - cosmos.deep_gyr(kernel, sector_id=sid)) * 1e9
-            if ahead <= 0:
-                held.pop(str(sid), None)
-                continue
-            frame = min(frame, held.setdefault(str(sid), ahead / tempo.FRAMES))
-    return max(1.0, frame)
+    key = str(sector_id)
+    if key in held:
+        return held[key]
+    life = cosmos.star_life(kernel, sector_id)
+    if life is None:
+        return float("inf")
+    ahead = (life[1] - cosmos.deep_gyr(kernel, sector_id=sector_id)) * 1e9
+    if ahead <= 0:
+        return float("inf")
+    held[key] = ahead / tempo.FRAMES
+    return held[key]
 
 
 def _pace(kernel: Any, wait: Optional[float]) -> float:
@@ -274,9 +304,10 @@ def season(kernel: Any) -> List[str]:
         for b in got:
             if b != a and b not in (st["peoples"].get(a) or {}).get("links", {}):
                 link(kernel, a, b, "the light of one reached the other")
-    coarse = away_pace(kernel)                                # a watcher looking away films every place coarsely
+    away_pace(kernel)                                         # watchers whose span is done look back
     for sid in list(st["places"]):
         pace = paces.get(sid, cosmos.ceiling(kernel))
+        coarse = place_pace(kernel, int(sid))                 # a watcher looking away films each place to its end
         _set_place_rate(kernel, int(sid), max(pace, coarse) if coarse else pace)
     return []
 

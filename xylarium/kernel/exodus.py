@@ -127,7 +127,9 @@ def quarter(kernel: Any) -> List[str]:
     st = stats(kernel)
     logs: List[str] = []
     doomed = [int(s) for s, ph in cosmos.stats(kernel)["phase"].items() if ph == "giant"]
-    doomed += [int(s) for s in cosmos.stats(kernel)["place"] if int(s) not in doomed
+    from xylarium.kernel import zones
+    lived = zones.peopled(kernel)                         # a main-sequence star matters here only where people live
+    doomed += [int(s) for s in cosmos.stats(kernel)["place"] if int(s) not in doomed and int(s) in lived
                and cosmos.phase(kernel, int(s))[0] == "main"]
     for sid in doomed:
         sec = kernel.sectors.get(sid)

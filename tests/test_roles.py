@@ -212,3 +212,42 @@ class TestDeepTimeSafety(unittest.TestCase):
         other.civilization, other.population = home.civilization, 500
         home.population = 0
         self.assertIs(ages.homeworld(k, "player_1"), other)
+
+
+class TestZones(unittest.TestCase):
+    def test_zones_hold_the_living_and_the_ports_and_the_sky_is_the_same_read_or_stepped(self):
+        from xylarium.kernel import physics, zones
+        random.seed(3)
+        k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        from xylarium.kernel import cosmos
+        home = ages.homeworld(k, "player_1")
+        for nb in cosmos.neighbours_now(k, cosmos.cell_of_sector(k, home.sector_id)):
+            cosmos.materialise(k, nb, "a test looks further")  # empty space beyond the people's own system
+        k.tick_simulation()
+        for sid, sec in k.sectors.items():
+            living = any(p.population > 0 or p.owner_id for p in sec.planets)
+            self.assertEqual(sid in zones.peopled(k), living)
+            self.assertEqual(sid in zones.watched(k), living or sec.port is not None)
+        far = next(p for sid, s in k.sectors.items() if sid not in zones.watched(k) for p in s.planets
+                   if getattr(p, "body", None))
+        am = k.astronomy_manager
+        self.assertAlmostEqual(am.angle_now(far),
+                               physics.orbital_angle(k.sectors[far.sector_id], far, am.cycle_count))
+
+    def test_a_dying_sun_is_held_to_its_frame_while_other_places_run_the_span(self):
+        from xylarium.kernel import clocks, cosmos, knowledge, tempo, zones
+        random.seed(3)
+        k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        who = knowledge.holder_of_planet(ages.homeworld(k, "player_1"))
+        clocks.look_away(k, who, 1e9)
+        for key in clocks.stats(k)["places"]:
+            sid = int(key)
+            pace = clocks.place_pace(k, sid)
+            life = cosmos.star_life(k, sid)
+            if pace is None or life is None:
+                continue
+            ahead = (life[1] - cosmos.deep_gyr(k, sector_id=sid)) * 1e9
+            if sid in zones.peopled(k) and 0 < ahead < 1e9:
+                self.assertLessEqual(pace, ahead / tempo.FRAMES * 1.0001)   # its people get their seasons
+            elif sid not in zones.peopled(k):
+                self.assertGreater(pace, 1e8)                              # nothing to watch: the span runs on

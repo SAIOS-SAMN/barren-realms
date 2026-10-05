@@ -343,10 +343,10 @@ def sleep(kernel: Any, player_id: str, deep_years: float) -> List[str]:
         kernel.tick_simulation()
         if clocks.away(kernel, who) is None and kernel.cycle_count % 100 == 1:
             break                                             # looked back, and the annals have carried it the year
-        if kernel.cycle_count % 100 == 1:
-            p = homeworld(kernel, player_id) or p             # its world lost, the people lives on elsewhere
         if p.civilization is None or p.population <= 0:
-            break
+            p = homeworld(kernel, player_id) or p             # its world lost, the people lives on elsewhere
+            if p.civilization is None or p.population <= 0:
+                break
         if not known and kernel.cycle_count % 100 == 1 \
                 and cosmos.forecasts(kernel, p.sector_id, exodus._energy(kernel, who)):
             woken = "its people has read its sun's end"       # a turning the watcher is woken for
