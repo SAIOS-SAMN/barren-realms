@@ -209,7 +209,10 @@ def _bump(kernel: Any) -> None:
 
 
 def lane_cost(kernel: Any, a: int, b: int) -> float:
-    from xylarium.kernel import cosmos                        # a lane between rings stretches as the galaxy shears
+    from xylarium.kernel import cosmos, transit               # a lane between rings stretches as the galaxy shears
+    w = transit.worm_cost(kernel, a, b)                       # a wormhole's throat: one hop through the bounce
+    if w is not None:
+        return w
     return cost(kernel, a, b) * (1.0 + curvature(kernel, a, b)) * cosmos.stretch(kernel, a, b)
 
 

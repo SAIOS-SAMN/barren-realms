@@ -118,8 +118,9 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             continue
         if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B", "O", "S"):
             if cmd == "S":
-                from xylarium.kernel import command, realmwars, spheres, stewardship
+                from xylarium.kernel import command, realmwars, spheres, stewardship, transit
                 print(spheres.render(kernel))
+                print(transit.render(kernel))
                 held = command.line_of(kernel, pid)
                 if held is None:
                     print(c_gray("  Your people has not yet raised its progenitors."))
@@ -131,8 +132,16 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
                 for w in wars:
                     print(f"  Fold war {w['id']} over {stewardship.realm_name(w['against'])}"
                           f" (stands: {w.get('stands') or 'none yet'})")
-                act = input(c_gold("[S]end / [R]ecall <realm>, [F]old / [Y]ield <war> > ")).strip().split()
-                if len(act) == 2:
+                act = input(c_gold("[S]end / [R]ecall <realm>, [F]old / [Y]ield <war>, [H]andle <open|tolled|guarded|"
+                                   "closed>, [G] forge <mouth> <system> > ")).strip().split()
+                if len(act) == 3 and act[0].upper() == "G":
+                    res = command.forge(kernel, pid, int(act[1]), int(act[2])) if act[1].isdigit() and act[2].isdigit() \
+                        else {"ok": False, "why": "forge <mouth sector> <target sector>"}
+                    print("  " + ("Done." if res["ok"] else res["why"]))
+                elif len(act) == 2 and act[0].upper() == "H":
+                    res = command.handle(kernel, pid, act[1].lower())
+                    print("  " + ("Done." if res["ok"] else res["why"]))
+                elif len(act) == 2:
                     verb = {"S": "send", "R": "recall", "F": "fold", "Y": "fold"}.get(act[0].upper())
                     kw = ({"war": act[1], "deed": "yield" if act[0].upper() == "Y" else "fold"}
                           if act[0].upper() in ("F", "Y") else {"realm": act[1]})

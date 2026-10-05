@@ -296,6 +296,13 @@ class WebSocketGateway:
                                     "fronts": spheres.fronts(self.kernel),
                                     "bonds": list(spheres.stats(self.kernel)["bonds"].values())})
 
+        elif action == "TRANSIT":
+            from xylarium.kernel import transit
+            st = transit.stats(self.kernel)
+            await client.send_json({"status": "ok", "action": "TRANSIT", "summary": transit.summary(self.kernel),
+                                    "throats": list(st["worms"].values()),
+                                    "passage_cr": transit.passage_cr(self.kernel)})
+
         elif action == "COMMAND":
             from xylarium.kernel import command
             p_id = payload.get("player_id", client.player_id)

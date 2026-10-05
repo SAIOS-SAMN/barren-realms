@@ -1060,7 +1060,7 @@ class SeatSurvive:
                 surplus: float) -> Optional[CognitiveDeed]:
         """Value each use of spare capital in SOL today against what it costs, and take the best (or none)."""
         from xylarium.config import (COLONY_KIT_COLONISTS, COLONY_KIT_CREDITS, SHARE_ISSUANCE_MAX_MULTIPLE,
-                                     TOLL_GATE_DEFAULT_FEE, TOLL_GATE_DEPLOY_COST_CREDITS)
+                                     TOLL_GATE_DEPLOY_COST_CREDITS)
         from xylarium.kernel import decide, fertility, laws
         from xylarium.kernel.colony import ColonyManager
         m = decide.mind_of_captain(kernel, captain)
@@ -1087,7 +1087,8 @@ class SeatSurvive:
         # B. a toll on a secret shortcut: the fee times the traffic a sector sees in a quarter
         if captain.unlocked_secrets and not captain.toll_gates and TOLL_GATE_DEPLOY_COST_CREDITS <= spare:
             passages = len(kernel.captains) * 25 / max(1, len(kernel.sectors))
-            worth = laws.present_value(TOLL_GATE_DEFAULT_FEE * passages, horizon, rate)
+            from xylarium.kernel import transit                # what a hop saved is worth to a passer like itself
+            worth = laws.present_value(transit.hop_value(kernel, captain) * passages, horizon, rate)
             options.append(decide.option("toll_gate", TOLL_GATE_DEPLOY_COST_CREDITS, worth,
                                          shortcut_id=captain.unlocked_secrets[0]))
         # C. shares: a share is worth its dividends over the horizon; buy where that most exceeds its price
@@ -1160,7 +1161,7 @@ class SeatSurvive:
         if pick["name"] == "toll_gate":
             return CognitiveDeed(seat="SURVIVE", action_type=ActionType.TOLL_GATE_DEPLOY, deed_name="DEPLOY_ORBITAL_TOLL_GATE",
                                  target_coordinate="MONOPOLY_TRANSIT", residual_magnitude=surplus,
-                                 parameters={"shortcut_id": pick["shortcut_id"], "toll_fee": TOLL_GATE_DEFAULT_FEE},
+                                 parameters={"shortcut_id": pick["shortcut_id"], "toll_fee": 0},
                                  ration_cost=1)
         return CognitiveDeed(seat="SURVIVE", action_type=ActionType.STOCK_BUY, deed_name="ACQUIRE_CORPORATE_SHARES",
                              target_coordinate="CAPITAL_DIVIDENDS", residual_magnitude=surplus,
@@ -2191,7 +2192,7 @@ class CognitiveOrgan:
                 captain.id,
                 act,
                 shortcut_id=params.get("shortcut_id", "SMUGGLER_SHORTCUT"),
-                toll_fee=params.get("toll_fee", 500),
+                toll_fee=params.get("toll_fee", 0),
             )
         elif act in (ActionType.STOCK_SELL, ActionType.STOCK_SHORT, ActionType.STOCK_COVER):
             return kernel.dispatch(captain.id, act, ticker=params.get("ticker"), amount=params.get("shares", 10))

@@ -4,7 +4,8 @@ it, and what those seats may answer. The AI seats do the same by their minds (st
 realmwars.py); a player's seat is skipped by them and acts only by these orders.
 
   PROGENITOR (T0)   send a steward of its line to a realm its reach covers (granted); recall one; in a fold war,
-                    fold or yield
+                    fold or yield; handle its throats (open, tolled, guarded, closed); forge a throat from a mouth
+                    its network holds to a system (transit.py), paid from its network's banked energy
   STEWARD (T2)      claim another realm (a realm war), withdraw a claim; grant authority to a house of its realm
   SOVEREIGN (T3)    order its house's duty (the book its captains are set to); commission a captain in its systems;
                     dismiss one
@@ -18,7 +19,7 @@ reach. Every order returns {"ok": bool, "why"/...} and is written in the history
 
 from typing import Any, Dict, Optional, Tuple
 
-ORDERS = {"progenitor": ("send", "recall", "fold"), "steward": ("claim", "withdraw", "grant"),
+ORDERS = {"progenitor": ("send", "recall", "fold", "handle", "forge"), "steward": ("claim", "withdraw", "grant"),
           "sovereign": ("order", "commission", "dismiss"), "captain": ("swear", "forswear", "way")}
 
 
@@ -90,6 +91,45 @@ def fold(kernel: Any, pid: str, war_id: str, deed: str = "fold") -> Dict[str, An
         return _no(f"a line may {' or '.join(realmwars.FOLD_VOCABULARY)}")
     w.setdefault("player_deeds", {})[held[0]] = deed
     return {"ok": True, "war": war_id, "deed": deed}
+
+
+def handle(kernel: Any, pid: str, how: str) -> Dict[str, Any]:
+    """How a progenitor's people handles its throats - its choice, for all it holds."""
+    from xylarium.kernel import transit
+    held = line_of(kernel, pid)
+    if held is None:
+        return _no("you hold no progenitor line")
+    if how not in ("open", "tolled", "guarded", "closed"):
+        return _no("a throat is open, tolled, guarded or closed")
+    transit.stats(kernel)["handling"][held[0]] = how
+    for w in transit.stats(kernel)["worms"].values():
+        if w["owner"] == held[0]:
+            w["handling"] = how
+    from xylarium.kernel import fibres
+    fibres._bump(kernel)
+    return {"ok": True, "handling": how}
+
+
+def forge(kernel: Any, pid: str, anchor: int, target: int) -> Dict[str, Any]:
+    """A progenitor punches a throat from a mouth its network holds to a system - if its banked energy pays."""
+    from xylarium.kernel import spheres, transit
+    held = line_of(kernel, pid)
+    if held is None:
+        return _no("you hold no progenitor line")
+    who = held[0]
+    if who not in transit.stats(kernel)["masters"]:
+        return _no("your people has not mastered the bounce")
+    mine = set(spheres.stats(kernel)["nets"].get(who, {}).get("held", []))
+    if anchor not in transit.mouths(kernel) or (anchor not in mine and anchor != transit.MOUTH_BASE):
+        return _no("no mouth of yours there")
+    if target not in kernel.sectors:
+        return _no("no such system")
+    w = transit.forge(kernel, who, anchor, target, [])
+    if w is None:
+        need = transit.forge_cost_j(kernel, who, anchor, target)
+        have = float(spheres.stats(kernel)["nets"].get(who, {}).get("bank_j", 0.0))
+        return _no(f"your network has banked {have:.3g} J of the {need:.3g} J it needs")
+    return {"ok": True, "throat": w}
 
 
 # ---------------------------------------------------------------------- the steward
@@ -276,6 +316,8 @@ def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
     fn = {"send": lambda: send(kernel, pid, str(kw.get("realm", ""))),
           "recall": lambda: recall(kernel, pid, str(kw.get("realm", ""))),
           "fold": lambda: fold(kernel, pid, str(kw.get("war", "")), str(kw.get("deed", "fold"))),
+          "handle": lambda: handle(kernel, pid, str(kw.get("how", "tolled"))),
+          "forge": lambda: forge(kernel, pid, int(kw.get("anchor", 0) or 0), int(kw.get("target", 0) or 0)),
           "claim": lambda: claim(kernel, pid, str(kw.get("realm", ""))),
           "withdraw": lambda: withdraw(kernel, pid),
           "grant": lambda: grant(kernel, pid, str(kw.get("house", ""))),

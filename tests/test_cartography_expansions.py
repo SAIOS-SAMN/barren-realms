@@ -47,7 +47,6 @@ from xylarium.kernel.models import (
 from xylarium.kernel.cartography import FRAGMENT_TEMPLATES
 from xylarium.config import (
     TOLL_GATE_DEPLOY_COST_CREDITS,
-    TOLL_GATE_DEFAULT_FEE,
     SURVEY_PROBE_COST_CREDITS,
     FORGED_CHIT_SYNTH_COST,
     FORGED_CHIT_BROKER_VALUE,
@@ -212,7 +211,7 @@ class TestTollGatesAndMonopolies(unittest.TestCase):
         self.assertEqual(self.rival.ship.shields, init_shields - 35)
 
     def test_set_toll_fee(self):
-        """Owner can reconfigure toll fee with clamping between 100 and 2500 Cr."""
+        """Owner can reconfigure its toll fee - any it chooses; none set returns it to what the shortcut is worth."""
         self.kernel.cartography_manager.solve_puzzle(self.player, "PUZZLE-SHORTCUT", self.kernel)
         self.kernel.dispatch(
             self.player.id,
@@ -232,7 +231,7 @@ class TestTollGatesAndMonopolies(unittest.TestCase):
         self.assertTrue(res.success)
         self.assertEqual(self.kernel.cartography_manager.toll_gates[gate_id].toll_fee, 1200)
 
-        # Clamping to max 2500
+        # No cap: an owner's price is its own (the market answers it - passers go round)
         res_high = self.kernel.dispatch(
             self.player.id,
             ActionType.TOLL_GATE_SET_FEE,
@@ -240,7 +239,16 @@ class TestTollGatesAndMonopolies(unittest.TestCase):
             toll_fee=9999,
         )
         self.assertTrue(res_high.success)
-        self.assertEqual(self.kernel.cartography_manager.toll_gates[gate_id].toll_fee, 2500)
+        self.assertEqual(self.kernel.cartography_manager.toll_gates[gate_id].toll_fee, 9999)
+
+        # None set: what the shortcut is worth to each passer (transit.gate_fee)
+        self.kernel.dispatch(self.player.id, ActionType.TOLL_GATE_SET_FEE, gate_id=gate_id, toll_fee=0)
+        gate = self.kernel.cartography_manager.toll_gates[gate_id]
+        from xylarium.kernel import transit
+        self.rival.credits = 10 ** 9
+        expect = transit.gate_fee(self.kernel, self.rival, gate)
+        paid = self.kernel.cartography_manager.check_toll_transit(self.rival, from_sec=10, to_sec=70, kernel=self.kernel)
+        self.assertEqual(paid, expect)
 
         # Non-owner cannot update
         res_rival = self.kernel.cartography_manager.set_toll_fee(self.rival, gate_id, 300)

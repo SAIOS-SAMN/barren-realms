@@ -24,7 +24,6 @@ from xylarium.kernel.models import (
 from xylarium.config import (
     COMMODITY_CONFIG,
     TOLL_GATE_DEPLOY_COST_CREDITS,
-    TOLL_GATE_DEFAULT_FEE,
     SURVEY_PROBE_COST_CREDITS,
     FORGED_CHIT_SYNTH_COST,
     FORGED_CHIT_BROKER_VALUE,
@@ -980,7 +979,7 @@ class CartographyManager:
         gate_id = f"TOLL-{self.gate_counter}"
         self.gate_counter += 1
 
-        toll_fee = max(100, min(2500, toll_fee))
+        toll_fee = max(0, int(toll_fee or 0))                  # 0: priced by what the shortcut is worth (transit.py)
         gate = TollGate(
             id=gate_id,
             owner_id=captain.id,
@@ -1027,7 +1026,7 @@ class CartographyManager:
         if gate.owner_id != captain.id:
             return ActionResult(success=False, action=ActionType.TOLL_GATE_SET_FEE, message="Cannot modify toll rates of a gate you do not own.")
 
-        clamped = max(100, min(2500, new_fee))
+        clamped = max(0, int(new_fee))                         # 0: back to what the shortcut is worth
         gate.toll_fee = clamped
         return ActionResult(
             success=True,
@@ -1061,7 +1060,10 @@ class CartographyManager:
                 if gate.owner_id == traveler.id:
                     return 0
 
-                fee = gate.toll_fee
+                fee = gate.toll_fee                                   # its owner's own price, if it set one,
+                if not fee and kernel is not None:                     # else what the shortcut is worth to this passer
+                    from xylarium.kernel import transit
+                    fee = transit.gate_fee(kernel, traveler, gate)
                 owner = kernel.captains.get(gate.owner_id) if kernel else None
 
                 if traveler.credits >= fee:
@@ -1084,6 +1086,9 @@ class CartographyManager:
                     if kernel and hasattr(kernel, "action_logs"):
                         kernel.action_logs.append(log_msg)
                     return -1
+        if kernel is not None:                                 # the networks' own lanes and throats (transit.py)
+            from xylarium.kernel import transit
+            transit.on_passage(kernel, traveler, from_sec, to_sec)
         return 0
 
     def forge_starmap_chit(

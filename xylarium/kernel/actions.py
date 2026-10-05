@@ -449,7 +449,7 @@ def _cartography_select(k: Any, captain: Any, current_sector: Any, kwargs: Dict[
 @action(ActionType.TOLL_GATE_DEPLOY, turns=0)
 def _toll_gate_deploy(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     s_id = kwargs.get("shortcut_id", "SMUGGLER_SHORTCUT")
-    fee = int(kwargs.get("toll_fee", 500))
+    fee = int(kwargs.get("toll_fee", 0) or 0)                  # none given: what the shortcut is worth (transit.py)
     result = k.cartography_manager.deploy_toll_gate(captain, shortcut_id=s_id, toll_fee=fee, kernel=k)
     return result
 
@@ -457,7 +457,7 @@ def _toll_gate_deploy(k: Any, captain: Any, current_sector: Any, kwargs: Dict[st
 @action(ActionType.TOLL_GATE_SET_FEE, turns=0)
 def _toll_gate_set_fee(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     g_id = kwargs.get("gate_id", "")
-    fee = int(kwargs.get("toll_fee", 500))
+    fee = int(kwargs.get("toll_fee", 0) or 0)
     result = k.cartography_manager.set_toll_fee(captain, gate_id=g_id, new_fee=fee)
     return result
 

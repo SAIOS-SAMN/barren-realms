@@ -298,6 +298,8 @@ def grow(kernel: Any, who: str, net: Dict[str, Any], logs: List[str]) -> None:
         return
     paid = Fraction(max(0.0, mastery.power_w(kernel, worlds) * (now - float(net["t"])) * YEAR_S)) / \
         Fraction(mastery.E_BRIDGE_J)
+    from xylarium.kernel import transit
+    paid += transit.drain_revenue(kernel, who)              # what its lanes collected pays for more of them
     net["t"] = now
     owed = Fraction(net["owed"]) + paid
     if owed < 1:
@@ -325,8 +327,13 @@ def grow(kernel: Any, who: str, net: Dict[str, Any], logs: List[str]) -> None:
         if bond(kernel, who, other) is None:
             blocked = True                                   # at war on this front: it presses no further this year
             break
-    # what it could not spend is held for later (stored power) - unless nothing is left within its charts to reach
-    net["owed"] = str(owed if blocked else owed - int(owed))
+    # what it could not spend is held for later (stored power); with nothing left within its charts to reach, the
+    # whole passages it could not open are banked as energy (transit.py: a line forges throats from that bank)
+    if blocked:
+        net["owed"] = str(owed)
+    else:
+        net["bank_j"] = float(net.get("bank_j", 0.0)) + int(owed) * mastery.E_BRIDGE_J
+        net["owed"] = str(owed - int(owed))
 
 
 def season(kernel: Any) -> List[str]:

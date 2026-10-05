@@ -558,8 +558,8 @@ def can_fold(kernel: Any, captain: Any) -> bool:
 
 
 def jump_cost(kernel: Any, captain: Any) -> int:
-    """Capacitor charge for a fold: 250 Cr at full mastery of the drive, more as mastery falls (1 / mastery);
-    none at all without the mathematics of a fourth axis."""
-    from xylarium.kernel import knowledge
+    """Capacitor charge for a fold: a passage's energy at the price energy trades at (transit.passage_cr), more as
+    mastery of the drive falls (1 / mastery); none at all without the mathematics of a fourth axis."""
+    from xylarium.kernel import knowledge, transit
     m = knowledge.captain_mastery(kernel, captain, "jump_drive")
-    return int(250 / m) if (m > 0 and can_fold(kernel, captain)) else 10 ** 9
+    return max(1, int(transit.passage_cr(kernel) / m)) if (m > 0 and can_fold(kernel, captain)) else 10 ** 9
