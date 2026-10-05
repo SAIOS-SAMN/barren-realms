@@ -331,6 +331,8 @@ def track_plan(captain: Any, kernel: Any, plan: Optional[Dict[str, Any]]) -> Non
         rate = (worth - prev["m0"]) / max(1, cycle - prev["t0"])
         k = prev["kind"]
         mem[k] = round((1 - PERSONA_MEMORY_RATE) * mem.get(k, rate) + PERSONA_MEMORY_RATE * rate, 3)
+        from xylarium.kernel import offices
+        offices.learn(kernel, captain, k, rate)                # sealed in the office's mind: a crystal or a wall
     mem["open"] = {"kind": plan["kind"], "m0": worth, "t0": cycle} if plan else None
 
 
@@ -642,9 +644,10 @@ class SeatSurvive:
                         ration_cost=0,
                     )
 
-            # 4. Matter surplus investment
+            # 4. Matter surplus investment (a citadel when its vault covers the next tier's own price)
+            from xylarium.config import CITADEL_CONFIG
             matter_book = books.get("MATTER")
-            if matter_book and matter_book.total_surplus >= 5000:
+            if matter_book and matter_book.total_surplus > 0:
                 from xylarium.kernel import demography
                 if planet.population < demography.housing_cap(planet, kernel_ref()):
                     return CognitiveDeed(
@@ -656,7 +659,8 @@ class SeatSurvive:
                         parameters={"planet_id": planet.id, "amount": 1000},
                         ration_cost=0,
                     )
-                elif planet.citadel_level < 5 and planet.treasury >= 10000:
+                elif planet.citadel_level + 1 in CITADEL_CONFIG and \
+                        planet.treasury >= CITADEL_CONFIG[planet.citadel_level + 1]["upgrade_cost"]:
                     return CognitiveDeed(
                         seat="SURVIVE",
                         action_type=ActionType.PLANET_UPGRADE_CITADEL,
@@ -906,7 +910,7 @@ class SeatSurvive:
 
         # If Security book has massive surplus and hostiles present in sector: ENGAGE CONQUEST
         from xylarium.kernel import lineage as _lineage
-        if security_book and security_book.total_surplus > 10 and current_sec.security != SecurityLevel.FEDERATION \
+        if security_book and security_book.total_surplus > 0 and current_sec.security != SecurityLevel.FEDERATION \
                 and not _lineage.house_endangered(kernel, captain):
             # Lawful engagement only: anyone in null space, but only wanted outlaws inside protected systems
             # Only pirates prey on anyone in open space; lawful captains hunt wanted outlaws and pirates
@@ -1762,9 +1766,10 @@ class SeatGrow:
         xp_weight = cls._xp_value(captain, kernel)
         options = [((v + xp_weight * p.get("xp_per_turn", 0.0)) * persona_factor(captain, kernel, p), p, d)
                    for v, p, d in options]
-        options = [o for o in options if o[0] >= AI_MIN_PROFIT_PER_TURN]
-        if options:
-            value, plan, first = max(options, key=lambda o: o[0])
+        from xylarium.kernel import offices
+        best = offices.choose(kernel, captain, options)       # the office's books lead; unlike options never weighed
+        if best is not None:
+            value, plan, first = best
             track_plan(captain, kernel, plan)
             captain.active_plan = plan
             return first or cls._advance_plan(captain, plan, sector, dist, parent, kernel)

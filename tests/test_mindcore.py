@@ -55,3 +55,28 @@ class TestReduction(unittest.TestCase):
         self.assertEqual(mc.reading(ba, "b")["integrity"], Fraction(3, 4))
         self.assertEqual(mc.reading(bb, "a")["integrity"], Fraction(3, 4))
         self.assertIsNone(mc.reading(ba, "b")["compassion"])
+
+
+class TestOffices(unittest.TestCase):
+    def setUp(self):
+        import random
+        from xylarium.kernel import roles
+        random.seed(3)
+        self.k = roles.start_captain(42, "Spy", office="intelligence")
+        self.cap = self.k.get_player("player_1")
+
+    def test_an_office_leads_with_its_own_book_and_never_weighs_unlike_options(self):
+        from xylarium.kernel import offices
+        opts = [(90.0, {"kind": "haul"}, None), (5.0, {"kind": "dig"}, None), (30.0, {"kind": "freight"}, None),
+                (8.0, {"kind": "dig"}, None)]
+        best = offices.choose(self.k, self.cap, opts)
+        self.assertEqual(best[1]["kind"], "dig")                    # intelligence: the unknown first...
+        self.assertEqual(best[0], 8.0)                              # ...and within it, what delivers most
+        self.assertIsNone(offices.choose(self.k, self.cap, [(0.0, {"kind": "dig"}, None)]))   # nothing for nothing
+
+    def test_what_a_plan_delivered_reorders_the_office(self):
+        from xylarium.kernel import offices
+        offices.learn(self.k, self.cap, "dig", -1.0)                # digging paid nothing: a wall
+        offices.learn(self.k, self.cap, "freight", 12.0)            # freight paid: a crystal
+        opts = [(5.0, {"kind": "dig"}, None), (30.0, {"kind": "freight"}, None), (90.0, {"kind": "haul"}, None)]
+        self.assertEqual(offices.choose(self.k, self.cap, opts)[1]["kind"], "freight")
