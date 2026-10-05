@@ -522,10 +522,10 @@ class TestSovereignMinds(unittest.TestCase):
     def test_a_sovereigns_line_goes_on(self):
         from xylarium.kernel import polity
         s = next(iter(polity.sovereigns(self.k).values()))
-        crystals, line = dict(s["crystals"]), s["line"]
+        crystals, line = dict(s["mind"]["crystals"]), s["line"]
         polity._succeed(self.k, s)
         self.assertEqual(s["line"], line)
-        self.assertEqual(s["crystals"], crystals)               # the chronicle inherited, never edited
+        self.assertEqual(s["mind"]["crystals"], crystals)       # the chronicle inherited, never edited
         self.assertGreaterEqual(s["generation"], 2)
 
     def test_the_realms_own_stewards_rule_and_keep_their_lines(self):

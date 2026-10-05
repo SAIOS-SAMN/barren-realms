@@ -6,26 +6,28 @@ player (human or AI) where one has taken it, else the polity's own mind. A peopl
 people founds, or that breaks away from it, has its own - and they keep their people's alignment: a sovereign serves
 its people, by its people's lights, and treats its kin's sovereigns as its people's character inclines it to.
 
-HOW A SOVEREIGN THINKS (netstratum's reduction, docs/51-54: no score, no gate, no candidate loop):
+HOW A SOVEREIGN THINKS - by the mind core (mindcore.py: netstratum's reduction; no score, no gate, no search):
 
-  BOOKS      it reads its dominion as a signed field, each book in its own units and never summed:
-               food      what its worlds lack of their staple, less what they hold beyond need
-               room      its people against what its lands feed
-               security  the arms of the hostile it has met, against its own
-               wealth    what its works and garrisons must keep, against its vaults
-               standing  how dark the sovereigns it has met read it, against how bright
-  RESIDUAL   what its treaties already cover is drained from the field; what is left, read in the order needs are
-             met (food first, standing last), names the deed. Nothing is chosen by a number weighed against others.
-  DEEDS      the residual's book names whom to turn to: the sovereign it has met whose own field is the mirror of
-             its own on that book (a surplus where it lacks - mutual interest): a treaty, if the other's own residual
-             is drained by it too (both must agree: a treaty serves both or it is not made); failing that, a sovereign
-             who is weaker and holds what it lacks: war (taken alone; it is recorded as war); failing that, nothing.
-  CRYSTALS   what a deed did is read next year as the change in the field it named: a book it drained is sealed with
-             it (that signature -> that deed), recalled at once the next time; a book it did not drain is a wall,
-             and that deed is not taken again for that signature. Thinking changes the thinker.
-  HEARING    when two sovereigns first meet, each hears what the other tells of itself (its doctrine) through what it
-             can understand (contact.intelligibility); their conduct books open - given and taken, per book - and
-             every treaty kept or broken is written in them.
+  BOOKS      its dominion measured as need and have, exactly, per book, each in its own units, never summed:
+               food      what its worlds lack of their staple / what they hold beyond need
+               room      its people / what its lands feed
+               security  the arms of those that strike it or are more hostile than it / its own arms
+               wealth    what its works and garrisons must keep / its vaults
+               standing  how dark the sovereigns it has met read it / how bright
+  RESIDUAL   the field less what its treaties deliver, exactly - a trade partner's surplus of what it lacks, an
+             ally's arms, the arms a peace takes off those that strike it - the lesser captured, the rest carried.
+  LEAD       the first deficit, in the order needs are met (food first, standing last), names the book; a crystal
+             of that shape recalls its deed, else the book's vocabulary is taken in order (food: trade, then war;
+             security: defense, then peace; ...), and a deed walled for that shape is not taken again.
+  CANDIDATE  the difference supplies it: among those it has met, the one whose own field holds a surplus where it
+             lacks (the deepest first), who trusts it, and whose own residual the treaty drains too - both are
+             served or nothing is made; war only on a weaker holder of what it lacks (arms measured, not dialled).
+  SEAL       next year, what the deed delivered on the entry it named seals a crystal (that shape, that deed, that
+             much) or a wall. Thinking changes the thinker.
+  HEARING    at a first meeting each hears what the other tells of itself as far as it understands it, and one of
+             the other's crystals, reduced against its own: understood, or learned in part.
+  CONDUCT    two-sided books per axis (compassion, bond, integrity, morality; syntropic and entropic): a treaty kept
+             or broken, a war made, written by both; a sovereign that has broken more than it kept is not treated with.
 
 CONTINUITY. A sovereign reigns a generation of its people (fertility.generation_of); its successor takes its seat,
 its crystals and its books - a chronicle inherited, never edited. A polity that breaks away is born with its
@@ -36,12 +38,14 @@ ABOVE IT. A realm's steward (stewardship.py) binds it: no war is made across a s
 down ends. Treaties are the sovereigns' own; a steward's ruling is the realm's.
 """
 
-import random
+from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple
 
+from xylarium.kernel import mindcore as mc
+
 BOOKS = ("food", "room", "security", "wealth", "standing")     # the order needs are met: the first in deficit leads
+SELF = "self"
 TREATIES = ("trade", "defense", "peace", "war")
-SERVES = {"food": "trade", "wealth": "trade", "security": "defense", "standing": "peace", "room": "peace"}
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -127,9 +131,8 @@ def _seat(kernel: Any, realm: Dict[str, Any], parent: Optional[Dict[str, Any]] =
     rec = {"id": sid, "name": _name(kernel, sid), "people": holder, "realm": realm["id"], "polity": realm["name"],
            "since": kernel.cycle_count, "line": parent["line"] if parent else sid, "generation": 1,
            "parent": parent["id"] if parent else None, "player": seated,
-           "crystals": {k: dict(v) for k, v in (parent or {}).get("crystals", {}).items()},
-           "walls": {k: list(v) for k, v in (parent or {}).get("walls", {}).items()},
-           "books": {}, "heard": {}, "last": None}
+           "mind": mc.inherit(parent["mind"]) if parent and parent.get("mind") else mc.new_mind(),
+           "books": {}, "heard": {}}
     sovereigns(kernel)[sid] = rec
     st["by_realm"][realm["id"]] = sid
     from xylarium.kernel import history
@@ -193,55 +196,98 @@ def attackers(kernel: Any, rec: Dict[str, Any]) -> List[str]:
     return out
 
 
-def field(kernel: Any, rec: Dict[str, Any]) -> Dict[str, float]:
-    """Its dominion as a signed field: each book's need less what it has (positive: a deficit), in its own units."""
-    from xylarium.kernel import biosphere, realms, reputation, staples, strategy, sustenance
+def field(kernel: Any, rec: Dict[str, Any]) -> Dict[str, Fraction]:
+    """Its dominion as a signed field: each book's need less what it has (positive: a deficit), exactly, in its own
+    units - before any treaty is drained from it."""
+    return {book: v for (_, book), v in _measure(kernel, rec).items()} | \
+        {b: Fraction(0) for b in BOOKS if (SELF, b) not in _measure(kernel, rec)}
+
+
+def _measure(kernel: Any, rec: Dict[str, Any]) -> mc.Chain:
+    from xylarium.kernel import biosphere, reputation, staples, strategy, sustenance
+    from xylarium.kernel import cache
+    key = f"{rec['id']}:{kernel.cycle_count}"
+
+    def build() -> mc.Chain:
+        realm = _polities(kernel).get(rec["realm"])
+        worlds = _worlds(kernel, realm) if realm else []
+        q = _quarter()
+        need: List[Tuple[str, str, Any]] = []
+        have: List[Tuple[str, str, Any]] = []
+        for w in worlds:
+            staple = staples.of(kernel, w)
+            ss = mc.q(w.society.get("self_sufficiency", 1.0) or 1.0)
+            lack = 1 - ss if ss < 1 else 0
+            need.append((SELF, "food", mc.q(biosphere.consumption(w) * q) * lack))
+            have.append((SELF, "food", staples.surplus(kernel, w, staple)))
+            need.append((SELF, "room", w.population))
+            have.append((SELF, "room", biosphere.carrying_capacity(kernel, w)))
+            have.append((SELF, "security", sustenance._strength(w)))
+            need.append((SELF, "wealth", (w.citadel_level + 1) * q * 100))
+            have.append((SELF, "wealth", w.treasury))
+        struck = set(attackers(kernel, rec))
+        for oid in sorted(rec["heard"]):
+            other = sovereigns(kernel).get(oid)
+            if other is None or other.get("ended"):
+                continue
+            if other["people"] in struck or \
+                    strategy.hostility(kernel, other["people"]) > strategy.hostility(kernel, rec["people"]):
+                need.append((SELF, "security", sum(sustenance._strength(w) for w in _worlds_of(kernel, other))))
+            r = reputation.read(kernel, other["people"], rec["people"])
+            if r is not None:
+                need.append((SELF, "standing", mc.q(max(0.0, -r))))
+                have.append((SELF, "standing", mc.q(max(0.0, r))))
+        return mc.residual(mc.measure(need), mc.measure(have))
+    if not hasattr(kernel, "caches"):
+        return build()
+    return cache.memo(kernel, "polity_measure", key, build, max_age=1)
+
+
+def _worlds_of(kernel: Any, rec: Dict[str, Any]) -> List[Any]:
     realm = _polities(kernel).get(rec["realm"])
-    worlds = _worlds(kernel, realm) if realm else []
-    q = _quarter()
-    food = room = arms = keep = vault = 0.0
-    for w in worlds:
-        staple = staples.of(kernel, w)
-        ss = float(w.society.get("self_sufficiency", 1.0) or 1.0)
-        food += biosphere.consumption(w) * q * max(0.0, 1.0 - ss) - staples.surplus(kernel, w, staple)
-        room += w.population - biosphere.carrying_capacity(kernel, w)
-        arms += sustenance._strength(w)
-        keep += float(w.citadel_level + 1) * q * 100.0
-        vault += float(w.treasury)
-    hostile = 0.0
-    dark = bright = 0.0
-    struck = set(attackers(kernel, rec))
-    for oid in rec["heard"]:
-        other = sovereigns(kernel).get(oid)
-        if other is None or other.get("ended"):
+    return _worlds(kernel, realm) if realm else []
+
+
+def delivered(kernel: Any, rec: Dict[str, Any], fields: Dict[str, Dict[str, Fraction]]) -> mc.Chain:
+    """What its treaties deliver, per book, exactly: a trade partner's surplus of what it lacks, an ally's arms,
+    the arms a peace takes off those that strike it. (A war delivers nothing.)"""
+    from xylarium.kernel import sustenance
+    out: List[Tuple[str, str, Any]] = []
+    for t in treaties_of(kernel, rec["id"]):
+        oid = t["b"] if t["a"] == rec["id"] else t["a"]
+        o = sovereigns(kernel).get(oid)
+        if o is None or o.get("ended"):
             continue
-        orealm = _polities(kernel).get(other["realm"])
-        oworlds = _worlds(kernel, orealm) if orealm else []
-        if other["people"] in struck or \
-                strategy.hostility(kernel, other["people"]) > strategy.hostility(kernel, rec["people"]):
-            hostile += sum(sustenance._strength(w) for w in oworlds)
-        r = reputation.read(kernel, other["people"], rec["people"])
-        if r is not None:
-            dark += max(0.0, -r)
-            bright += max(0.0, r)
-    return {"food": food, "room": room, "security": hostile - arms, "wealth": keep - vault, "standing": dark - bright}
+        of = fields.get(oid) or field(kernel, o)
+        if t["kind"] == "trade":
+            for book in ("food", "wealth"):
+                if of.get(book, 0) < 0:
+                    out.append((SELF, book, -of[book]))
+        elif t["kind"] in ("defense", "peace"):
+            out.append((SELF, "security", sum(sustenance._strength(w) for w in _worlds_of(kernel, o))))
+            if t["kind"] == "peace":
+                out.append((SELF, "standing", 1))
+    return mc.measure(out)
 
 
-def covered(kernel: Any, rec: Dict[str, Any], book: str) -> bool:
-    """Is this book already served by a treaty it holds?"""
-    want = SERVES.get(book)
-    return any(t["kind"] == want for t in treaties_of(kernel, rec["id"]))
+def chain(kernel: Any, rec: Dict[str, Any], fields: Dict[str, Dict[str, Fraction]]) -> mc.Chain:
+    """Its residual: the field, less what its treaties deliver - the lesser captured, the rest carried."""
+    f = mc.measure((SELF, b, v) for b, v in fields[rec["id"]].items())
+    got = delivered(kernel, rec, fields)
+    out: mc.Chain = {}
+    for k, v in f.items():
+        d = got.get(k, Fraction(0))
+        left = v - min(v, d) if v > 0 else v
+        if left:
+            out[k] = left
+    return out
 
 
-def residual(kernel: Any, rec: Dict[str, Any], f: Optional[Dict[str, float]] = None) -> List[str]:
-    """The books still in deficit once its treaties are drained from the field, in the order needs are met."""
-    f = f if f is not None else field(kernel, rec)
-    return [b for b in BOOKS if f[b] > 0 and not covered(kernel, rec, b)]
-
-
-def signature(f: Dict[str, float]) -> str:
-    """The field's shape: the sign of each book (what a crystal is keyed by)."""
-    return "".join("+" if f[b] > 0 else ("-" if f[b] < 0 else "0") for b in BOOKS)
+def residual(kernel: Any, rec: Dict[str, Any], f: Optional[Dict[str, Fraction]] = None) -> List[str]:
+    """The books still in deficit once its treaties are drained, in the order needs are met."""
+    fields = {rec["id"]: f if f is not None else field(kernel, rec)}
+    res = chain(kernel, rec, fields)
+    return [b for b in BOOKS if res.get((SELF, b), 0) > 0]
 
 
 # ---------------------------------------------------------------------- treaties and conduct
@@ -257,19 +303,22 @@ def treaty(kernel: Any, a: str, b: str) -> Optional[Dict[str, Any]]:
     return stats(kernel)["treaties"].get(_pair(a, b))
 
 
-def _book(rec: Dict[str, Any], other: str) -> Dict[str, List[float]]:
-    return rec["books"].setdefault(other, {b: [0.0, 0.0] for b in BOOKS})
+CONDUCT_OF = {"trade": (("integrity", 1, 0), ("bond", 1, 0)), "defense": (("bond", 1, 0),),
+              "peace": (("compassion", 1, 0),), "war": (("compassion", 0, 1), ("morality", 0, 1)),
+              "broken": (("integrity", 0, 1),)}
 
 
-def _conduct(kernel: Any, giver: Dict[str, Any], taker: Dict[str, Any], book: str, given: float = 0.0,
-             taken: float = 0.0) -> None:
-    """Both sides write it: what one gave or took, on which book."""
-    g = _book(giver, taker["id"])[book]
-    g[0] += given
-    g[1] += taken
-    t = _book(taker, giver["id"])[book]
-    t[0] += taken
-    t[1] += given
+def _conduct(kernel: Any, a: Dict[str, Any], b: Dict[str, Any], deed: str) -> None:
+    """Both write what one did the other, on the axes the deed touches."""
+    for axis, syn, ent in CONDUCT_OF.get(deed, ()):
+        mc.record(a["books"], b["books"], a["id"], b["id"], axis, syntropic=syn, entropic=ent)
+
+
+def trusts(o: Dict[str, Any], rec: Dict[str, Any]) -> bool:
+    """Would `o` treat with `rec`? Unless what has passed between them shows more broken than kept (its integrity
+    read as more entropic than syntropic) - or nothing has passed yet."""
+    r = mc.reading(o["books"], rec["id"])["integrity"]
+    return r is None or r >= Fraction(1, 2)
 
 
 def at_peace(kernel: Any, a: Optional[str], b: Optional[str]) -> bool:
@@ -288,10 +337,11 @@ def at_peace(kernel: Any, a: Optional[str], b: Optional[str]) -> bool:
 def _make(kernel: Any, a: Dict[str, Any], b: Dict[str, Any], kind: str, why: str) -> Dict[str, Any]:
     from xylarium.kernel import history, relations
     old = treaty(kernel, a["id"], b["id"])
-    if old is not None and old["kind"] != kind and old["kind"] in ("peace", "trade", "defense") and kind == "war":
-        _conduct(kernel, b, a, "standing", taken=1.0)          # a treaty broken: written against the breaker
+    if old is not None and old["kind"] in ("peace", "trade", "defense") and kind == "war":
+        _conduct(kernel, a, b, "broken")                       # a treaty broken: written against the breaker
     t = {"a": a["id"], "b": b["id"], "kind": kind, "since": kernel.cycle_count, "by": a["id"], "why": why}
     stats(kernel)["treaties"][_pair(a["id"], b["id"])] = t
+    _conduct(kernel, a, b, kind)
     if kind in ("trade", "defense", "peace") and a["people"] != b["people"]:
         relations.pacts(kernel).setdefault(relations._pair(a["people"], b["people"]),
                                            {"since": kernel.cycle_count, "by": "sovereigns"})
@@ -304,8 +354,9 @@ def _make(kernel: Any, a: Dict[str, Any], b: Dict[str, Any], kind: str, why: str
 
 
 def _hears(kernel: Any, rec: Dict[str, Any], other: Dict[str, Any]) -> str:
-    """A first meeting: it hears what the other tells of itself, as far as it can understand it."""
-    from xylarium.kernel import alignment, contact, realms, reputation
+    """A first meeting: it hears what the other tells of itself, as far as it can understand it - and one of the
+    other's crystals (the first it holds), reduced against its own."""
+    from xylarium.kernel import alignment, contact, reputation
     understood = contact.intelligibility(kernel, rec["people"], other["people"])
     orealm = _polities(kernel).get(other["realm"])
     cap = kernel.get_planet(orealm["capital"]) if orealm else None
@@ -315,39 +366,46 @@ def _hears(kernel: Any, rec: Dict[str, Any], other: Dict[str, Any]) -> str:
         reputation.witness(kernel, rec["people"], other["people"], light=max(0.0, told) * understood,
                            dark=max(0.0, -told) * understood)
     rec["heard"][other["id"]] = round(float(understood), 4)
-    _book(rec, other["id"])
-    return "understood" if understood >= 0.5 else "learned"
+    mc.conduct(rec["books"], other["id"])
+    theirs = mc.crystals(other["mind"])
+    if theirs:
+        key = sorted(theirs)[0]
+        return mc.hear(rec["mind"], key, theirs[key], understood)
+    return "unheard"
 
 
-# ---------------------------------------------------------------------- the season
-def _mirror(kernel: Any, rec: Dict[str, Any], book: str, fields: Dict[str, Dict[str, float]]) -> Optional[Dict[str, Any]]:
-    """The sovereign it has met whose field mirrors its own on this book (a surplus where it lacks) and whose own
-    residual this book's treaty would drain too: mutual interest. The deepest mirror first (it gives the most)."""
-    want = SERVES[book]
+# ---------------------------------------------------------------------- the deed
+VOCABULARY = {"food": ("trade", "war"), "room": ("peace", "war"), "security": ("defense", "peace"),
+              "wealth": ("trade", "war"), "standing": ("peace",)}
+
+
+def _mirror(kernel: Any, rec: Dict[str, Any], book: str, deed: str,
+            fields: Dict[str, Dict[str, Fraction]]) -> Optional[Dict[str, Any]]:
+    """The difference supplies the candidate: among those it has met, the one whose own field holds a surplus where
+    it lacks (the deepest first), who trusts it, and whose own residual the treaty drains too (both are served)."""
     best = None
-    for oid in rec["heard"]:
+    for oid in sorted(rec["heard"]):
         o = sovereigns(kernel).get(oid)
-        if o is None or o.get("ended") or oid not in fields:
+        if o is None or o.get("ended") or oid not in fields or fields[oid].get(book, 0) >= 0 or not trusts(o, rec):
             continue
-        of = fields[oid]
-        if of[book] >= 0:
-            continue                                           # it has no surplus of what this one lacks
-        theirs = [b for b in BOOKS if of[b] > 0 and SERVES.get(b) == want]
-        if not theirs and want != "trade":
-            continue                                           # the treaty would serve only one side
-        if best is None or of[book] < fields[best["id"]][book]:
+        theirs = chain(kernel, o, fields)
+        served = [b for (_, b), v in theirs.items() if v > 0 and deed in VOCABULARY.get(b, ())]
+        if not served and deed != "trade":
+            continue
+        if best is None or fields[oid][book] < fields[best["id"]][book]:
             best = o
     return best
 
 
-def _weaker_holder(kernel: Any, rec: Dict[str, Any], book: str, fields: Dict[str, Dict[str, float]]) -> Optional[Dict[str, Any]]:
-    """A sovereign it has met that holds what it lacks and whose arms are less than its own (measured, not dialled)."""
-    from xylarium.kernel import realms, stewardship, sustenance
-    mine = sum(sustenance._strength(w) for w in _worlds(kernel, _polities(kernel).get(rec["realm"], {"worlds": []})))
+def _weaker_holder(kernel: Any, rec: Dict[str, Any], book: str,
+                   fields: Dict[str, Dict[str, Fraction]]) -> Optional[Dict[str, Any]]:
+    """A sovereign it has met that holds what it lacks and whose arms are less than its own (measured)."""
+    from xylarium.kernel import stewardship, sustenance
+    mine = sum(sustenance._strength(w) for w in _worlds_of(kernel, rec))
     best = None
-    for oid in rec["heard"]:
+    for oid in sorted(rec["heard"]):
         o = sovereigns(kernel).get(oid)
-        if o is None or o.get("ended") or oid not in fields or fields[oid][book] >= 0:
+        if o is None or o.get("ended") or oid not in fields or fields[oid].get(book, 0) >= 0:
             continue
         if o["people"] == rec["people"] and _kin_cooperate(kernel, rec):
             continue                                           # a people that leans to the Light does not prey on its own
@@ -355,7 +413,7 @@ def _weaker_holder(kernel: Any, rec: Dict[str, Any], book: str, fields: Dict[str
             if book == "food":                                 # its people's hunger, barred: it goes up the chain
                 stewardship.appeal(kernel, rec, o["people"])
             continue                                           # a steward's ruling stands between them
-        theirs = sum(sustenance._strength(w) for w in _worlds(kernel, _polities(kernel).get(o["realm"], {"worlds": []})))
+        theirs = sum(sustenance._strength(w) for w in _worlds_of(kernel, o))
         if theirs < mine and (best is None or fields[oid][book] < fields[best["id"]][book]):
             best = o
     return best
@@ -363,104 +421,87 @@ def _weaker_holder(kernel: Any, rec: Dict[str, Any], book: str, fields: Dict[str
 
 def _kin_cooperate(kernel: Any, rec: Dict[str, Any]) -> bool:
     """Kin sovereigns stand together as far as their people's character leans to the Light (its whole history)."""
-    from xylarium.kernel import alignment, realms
+    from xylarium.kernel import alignment
     realm = _polities(kernel).get(rec["realm"])
     cap = kernel.get_planet(realm["capital"]) if realm else None
     civ = getattr(cap, "civilization", None) if cap is not None else None
     return civ is not None and alignment.character(civ) > 0
 
 
-def _learn(kernel: Any, rec: Dict[str, Any], f: Dict[str, float]) -> None:
-    """What last year's deed did: the book it named drained (a crystal) or not (a wall for that signature)."""
-    last = rec.get("last")
-    if not last or not last.get("deed"):
-        return
-    book, deed, sig = last["book"], last["deed"], last["signature"]
-    if f[book] < last["field"][book]:
-        rec["crystals"].setdefault(sig, {})[book] = deed
-    else:
-        walls = rec["walls"].setdefault(sig, [])
-        if deed not in walls:
-            walls.append(deed)
-
-
-def think(kernel: Any, rec: Dict[str, Any], fields: Dict[str, Dict[str, float]]) -> Optional[str]:
-    """One deed a year: the first book its residual leaves in deficit names it - recalled from a crystal if it has one,
-    else the mirror's treaty, else war on a weaker holder, else nothing. A seated player's sovereign is not thought
-    for: its player chooses."""
-    f = fields[rec["id"]]
-    _learn(kernel, rec, f)
-    sig = signature(f)
-    left = residual(kernel, rec, f)
-    rec["last"] = {"field": f, "signature": sig, "deed": None, "book": left[0] if left else None}
-    if rec.get("player") or not left:
+def think(kernel: Any, rec: Dict[str, Any], fields: Dict[str, Dict[str, Fraction]]) -> Optional[str]:
+    """One deed a year, by the mind core: last year's deed is sealed (crystal or wall); the residual (the field less
+    what treaties deliver) leads with its first deficit; a crystal recalls its deed, a new shape takes its book's
+    vocabulary in order, walls skipped; the difference supplies the partner. A seated player's sovereign is read but
+    not thought for: its player chooses."""
+    res = chain(kernel, rec, fields)
+    mc.seal(rec["mind"], res)
+    entry = mc.lead(res, BOOKS)
+    if rec.get("player") or entry is None:
         return None
-    book = left[0]
-    recalled = rec["crystals"].get(sig, {}).get(book)
-    walls = rec["walls"].get(sig, [])
-    want = SERVES[book]
-    if recalled is not None:
-        want = recalled
-    if book == "security" and recalled is None:
-        return _secure(kernel, rec, fields, walls)
-    partner = _mirror(kernel, rec, book, fields) if want != "war" and want not in walls else None
-    if partner is not None:
-        t = treaty(kernel, rec["id"], partner["id"])
-        if t is None or t["kind"] != want:
-            _make(kernel, rec, partner, want, f"its {book} in deficit, the other's in surplus: both are served")
-            _conduct(kernel, rec, partner, book, given=1.0)
-            rec["last"]["deed"] = want
-            return want
-    if "war" not in walls and book in ("food", "room", "wealth"):
-        prey = _weaker_holder(kernel, rec, book, fields)
-        if prey is not None:
-            t = treaty(kernel, rec["id"], prey["id"])
-            if t is None or t["kind"] != "war":
-                _make(kernel, rec, prey, "war", f"its {book} in deficit and no one to trade it: it takes it")
-                _conduct(kernel, rec, prey, book, taken=1.0)
-                _wage(kernel, rec, prey)
-                rec["last"]["deed"] = "war"
-                return "war"
+    book, owed = entry[1], res[entry]
+    key = mc.shape(entry, owed)
+    barred = mc.walls(rec["mind"], key)
+    recalled = mc.recall(rec["mind"], entry, owed)
+    order = ([recalled] if recalled else []) + [d for d in VOCABULARY[book] if d != recalled]
+    for deed in order:
+        if deed in barred:
+            continue
+        done = _deed(kernel, rec, book, deed, fields)
+        if done is not None:
+            mc.intend(rec["mind"], entry, owed, done)
+            return done
     return None
 
 
-def _secure(kernel: Any, rec: Dict[str, Any], fields: Dict[str, Dict[str, float]], walls: List[str]) -> Optional[str]:
-    """Its security leads: stand with one struck by the same hand (a defense treaty - both are served), else make
-    peace with the one that strikes it, if peace serves that one too (its own standing or security in deficit).
-    Failing both, it bears it - and its steward hears the dispute."""
+def _deed(kernel: Any, rec: Dict[str, Any], book: str, deed: str,
+          fields: Dict[str, Dict[str, Fraction]]) -> Optional[str]:
+    if deed == "war":
+        prey = _weaker_holder(kernel, rec, book, fields)
+        if prey is None:
+            return None
+        t = treaty(kernel, rec["id"], prey["id"])
+        if t is None or t["kind"] != "war":
+            _make(kernel, rec, prey, "war", f"its {book} in deficit and no one to answer it: it takes it")
+            _wage(kernel, rec, prey)
+        return "war"
+    if book == "security":
+        return _secure(kernel, rec, deed, fields)
+    partner = _mirror(kernel, rec, book, deed, fields)
+    if partner is None:
+        return None
+    t = treaty(kernel, rec["id"], partner["id"])
+    if t is None or t["kind"] != deed:
+        _make(kernel, rec, partner, deed, f"its {book} in deficit, the other's in surplus: both are served")
+    return deed
+
+
+def _secure(kernel: Any, rec: Dict[str, Any], deed: str, fields: Dict[str, Dict[str, Fraction]]) -> Optional[str]:
+    """Its security leads: defense beside one struck by the same hand (both served), or peace with the one that
+    strikes it, if peace serves that one too (its own standing or security in deficit) and it trusts it."""
     struck_me = set(attackers(kernel, rec))
-    if "defense" not in walls:
-        for oid in rec["heard"]:
-            o = sovereigns(kernel).get(oid)
-            if o is None or o.get("ended") or oid not in fields or o["people"] in struck_me:
-                continue
+    for oid in sorted(rec["heard"]):
+        o = sovereigns(kernel).get(oid)
+        if o is None or o.get("ended") or oid not in fields or not trusts(o, rec):
+            continue
+        theirs = residual(kernel, o, fields[oid])
+        if deed == "defense" and o["people"] not in struck_me:
             shared = struck_me & set(attackers(kernel, o))
-            if shared and "security" in residual(kernel, o, fields[oid]):
+            if shared and "security" in theirs:
                 t = treaty(kernel, rec["id"], oid)
                 if t is None or t["kind"] != "defense":
                     _make(kernel, rec, o, "defense", f"struck by the same hand ({sorted(shared)[0].split(':', 1)[-1]})")
-                    _conduct(kernel, rec, o, "security", given=1.0)
-                    rec["last"]["deed"] = "defense"
-                    return "defense"
-    if "peace" not in walls:
-        for oid in rec["heard"]:
-            o = sovereigns(kernel).get(oid)
-            if o is None or o.get("ended") or oid not in fields or o["people"] not in struck_me:
-                continue
-            theirs = residual(kernel, o, fields[oid])
-            if "standing" in theirs or "security" in theirs:
-                t = treaty(kernel, rec["id"], oid)
-                if t is None or t["kind"] != "peace":
-                    _make(kernel, rec, o, "peace", "the struck and the striker: peace serves them both")
-                    _conduct(kernel, rec, o, "standing", given=1.0)
-                    rec["last"]["deed"] = "peace"
-                    return "peace"
+                return "defense"
+        if deed == "peace" and o["people"] in struck_me and ("standing" in theirs or "security" in theirs):
+            t = treaty(kernel, rec["id"], oid)
+            if t is None or t["kind"] != "peace":
+                _make(kernel, rec, o, "peace", "the struck and the striker: peace serves them both")
+            return "peace"
     return None
 
 
 def _wage(kernel: Any, rec: Dict[str, Any], prey: Dict[str, Any]) -> None:
     """War is fought by the laws that fight it: the aggressor's capital raises its levy and raids."""
-    from xylarium.kernel import realms, society, sustenance
+    from xylarium.kernel import society, sustenance
     realm = _polities(kernel).get(rec["realm"])
     cap = kernel.get_planet(realm["capital"]) if realm else None
     if cap is None or cap.population <= 0:
@@ -523,7 +564,7 @@ def season(kernel: Any) -> List[str]:
     live = _attend(kernel)
     logs = _meet(kernel, live)
     _bend(kernel)
-    fields = {s["id"]: field(kernel, s) for s in live}
+    fields = {s["id"]: field(kernel, s) for s in live}         # each read once, exactly
     for s in live:
         deed = think(kernel, s, fields)
         if deed is not None:
