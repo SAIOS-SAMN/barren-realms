@@ -364,6 +364,19 @@ def prompt_progress(cli: Any) -> None:
     _ask("Enter to return > ")
 
 
+def prompt_publish(cli: Any) -> None:
+    """The press: this universe's annals as books, a volume per people, each one's genre read from its record."""
+    import os
+    from xylarium.kernel import press
+    k = cli.kernel
+    out = os.path.join("runs", "annals", f"seed{getattr(k, 'seed', 0)}-year{k.cycle_count // 100}")
+    cat = press.publish(press.of_kernel(k), out, f"The Annals, as of year {k.cycle_count // 100:,}")
+    print(c_gray(f"  {len(cat)} volumes written to {out}/ (index.md is the catalogue)."))
+    for c in cat[:10]:
+        print(f"  {c['genre']:<16} {c['volume']:<28} {c['events']:>5} events")
+    _ask("Enter to return > ")
+
+
 def prompt_realm(cli: Any) -> None:
     """The ruler's dashboard: every world it governs, how near each is to rising, and how it is governed."""
     from xylarium.kernel import roles
@@ -400,6 +413,7 @@ def prompt_realm(cli: Any) -> None:
 SCREENS: Dict[str, Callable[[Any], None]] = {
     "ADVISOR": prompt_advisor,
     "REALM": prompt_realm,
+    "PUBLISH": prompt_publish,
     "PROGRESS": prompt_progress,
     "REALMS": prompt_realms,
     "WORKBENCH": prompt_workbench,

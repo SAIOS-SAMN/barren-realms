@@ -357,3 +357,36 @@ class TestTiersAndOffices(unittest.TestCase):
         two = zones._ring(k, [here], 2) - zones._ring(k, [here], 1)
         if two:
             self.assertTrue(any(zones.open_at(k, s) for s in two))      # it sees a lane further than a trader
+
+
+class TestPress(unittest.TestCase):
+    def _e(self, i, kind, who="civ:Aru", mag=0, cause="", title=None):
+        return {"id": f"H-{i:06d}", "cycle": i * 100, "year": float(i), "kind": kind, "title": title or kind.title(),
+                "actors": [who], "magnitude": mag, "cause": cause, "age": "the long age"}
+
+    def test_a_records_shape_makes_its_genre(self):
+        from xylarium.kernel import press
+        rise_fall = [self._e(1, "FARMING"), self._e(2, "STATEHOOD"), self._e(3, "ASCENT", mag=10 ** 6),
+                     self._e(4, "STRIFE", mag=10 ** 6, cause="40% would rise"),
+                     self._e(5, "ABANDONED", mag=10 ** 6, cause="could have carried them and did not")]
+        self.assertEqual(press.genre(rise_fall)["genre"], "tragedy")
+        fall_rescue = [self._e(1, "FARMING"), self._e(2, "EPIDEMIC", mag=10 ** 5), self._e(3, "PERISHED", mag=10 ** 5),
+                       self._e(4, "RESCUE", mag=10 ** 5), self._e(5, "PACT"), self._e(6, "ERA")]
+        self.assertEqual(press.genre(fall_rescue)["genre"], "comedy")
+        found = [self._e(i, k) for i, k in enumerate(("FIRST", "CAPABILITY", "PROVEN", "FIRST_SIGNAL"), 1)]
+        self.assertEqual(press.genre(found)["genre"], "science fact")
+        told = [self._e(i, "MYTH") for i in range(1, 5)]
+        self.assertEqual(press.genre(told)["genre"], "science fiction")
+
+    def test_every_line_of_a_published_volume_cites_the_record(self):
+        import tempfile, os, re
+        from xylarium.kernel import press
+        evs = [self._e(i, k) for i, k in enumerate(("FARMING", "STATEHOOD", "FIRST", "MYTH", "PACT"), 1)]
+        with tempfile.TemporaryDirectory() as d:
+            cat = press.publish(evs, d, "Test Annals")
+            self.assertEqual([c["volume"] for c in cat], ["Aru"])
+            book = open(os.path.join(d, cat[0]["file"])).read()
+            for line in book.splitlines():
+                if line.startswith("- "):
+                    self.assertTrue(re.search(r"\[H-\d{6}", line), line)
+            self.assertIn("Aru", open(os.path.join(d, "index.md")).read())
