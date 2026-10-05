@@ -63,6 +63,44 @@ def place_rate(kernel: Any, sector_id: int) -> Optional[float]:
     return float(rec["segs"][-1][2]) if rec is not None else None
 
 
+# ---------------------------------------------------------------------- the three clocks, kept in step
+# A span stated in a place's own years (a steward's term, a generation, a people's memory) is lived at that place's
+# pace: its own years per clock year. On the clock it is years / pace; the engine lives it a frame (a clock year of
+# seasons) at a time, so nothing it integrates is shorter than one frame. The settled board keeps one clock for all.
+def pace(kernel: Any, sector_id: Optional[int]) -> float:
+    """Own years per clock year at a place: its clock's pace, the galaxy's where it keeps none (1 on the board)."""
+    from xylarium.kernel import cosmos
+    if kernel is None or not cosmos.is_cosmic(kernel):
+        return 1.0
+    got = place_rate(kernel, sector_id) if sector_id is not None else None
+    return float(got) if got else float(cosmos.ruler(kernel))
+
+
+def cycles_of(kernel: Any, years: float, sector_id: Optional[int] = None, who: Optional[str] = None) -> float:
+    """A span of own years at a place (or a people's home) on the clock, in cycles - unfloored."""
+    from xylarium.kernel.clock import CYCLES_PER_YEAR
+    sid = sector_id if sector_id is not None else home_of(kernel, who)
+    return float(years) / pace(kernel, sid) * CYCLES_PER_YEAR
+
+
+def years_of(kernel: Any, cycles: float, sector_id: Optional[int] = None, who: Optional[str] = None) -> float:
+    """Clock cycles as own years lived at a place (or a people's home)."""
+    from xylarium.kernel.clock import CYCLES_PER_YEAR
+    sid = sector_id if sector_id is not None else home_of(kernel, who)
+    return float(cycles) / CYCLES_PER_YEAR * pace(kernel, sid)
+
+
+def frame_cycles() -> int:
+    """The engine's lived frame: one clock year of seasons."""
+    from xylarium.kernel.clock import CYCLES_PER_YEAR
+    return CYCLES_PER_YEAR
+
+
+def lived_span(kernel: Any, years: float, sector_id: Optional[int] = None, who: Optional[str] = None) -> float:
+    """A span of own years as the engine lives it: on the clock, never shorter than one frame."""
+    return max(float(frame_cycles()), cycles_of(kernel, years, sector_id, who))
+
+
 def _ensure_place(kernel: Any, sector_id: int) -> Dict[str, Any]:
     """A place begins keeping its own time where it stands: at the reading it had (cosmic time) - no jump."""
     from xylarium.kernel import cosmos
@@ -138,6 +176,17 @@ def begin(kernel: Any, who: str, home: Any) -> None:
     _ensure_place(kernel, home.sector_id)
     st["peoples"][who] = {"home": home.sector_id, "h": 0, "links": {}}
     _set_place_rate(kernel, home.sector_id, _pace(kernel, tempo.wait_years(kernel, who, home)))
+
+
+def receipts(rec: Dict[str, Any], here: float) -> int:
+    """A people's year's receipts: one for each of its own years lived since the last (its home's clock, Gyr), the
+    fraction carried - at least one a frame. Returns how many were written."""
+    lived = (here - float(rec.get("at", here))) * 1e9 + float(rec.get("carry", 0.0))
+    n = max(1, int(lived)) if "at" in rec else 1
+    rec["h"] = int(rec["h"]) + n
+    rec["carry"] = max(0.0, lived - n) if "at" in rec else 0.0
+    rec["at"] = here
+    return n
 
 
 def link(kernel: Any, a: str, b: str, why: str) -> None:
@@ -288,7 +337,7 @@ def season(kernel: Any) -> List[str]:
             if rec is None:
                 continue
         rec["home"] = home.sector_id
-        rec["h"] = int(rec["h"]) + 1                          # the year's receipt
+        receipts(rec, now(kernel, who))                       # one receipt for each of its own years lived
         pace = _pace(kernel, tempo.wait_years(kernel, who, home))
         for w in worlds:
             _ensure_place(kernel, w.sector_id)

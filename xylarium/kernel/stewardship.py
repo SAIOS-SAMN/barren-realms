@@ -58,13 +58,28 @@ def term_years(kernel: Any, realm: Optional[str]) -> float:
     return spheres.term_years(kernel, realm) if realm else 1.0
 
 
+def _seat(kernel: Any, realm: str) -> Optional[int]:
+    from xylarium.kernel import spheres
+    r = spheres.stats(kernel)["realms"].get(realm)
+    return r["seat"] if r else None
+
+
+def term_cycles(kernel: Any, realm: str) -> float:
+    """A steward's term on the clock: its years, lived at its seat's own pace (clocks.cycles_of) - unfloored, so a
+    seat whose clock runs fast sees several terms within one of the engine's frames."""
+    from xylarium.kernel import clocks
+    return clocks.cycles_of(kernel, term_years(kernel, realm), _seat(kernel, realm))
+
+
 def span_cycles(kernel: Any, realm: Optional[str] = None) -> int:
-    """The span a steward's memory and rulings cover, in clock cycles: its realm's term - or, across realms, the
-    longest term any keeps (from the beginning, before any realm is founded)."""
+    """The span a steward's memory and rulings cover, in clock cycles: its realm's term, lived at its seat's pace and
+    never shorter than one of the engine's frames - or, across realms, the longest any keeps (from the beginning,
+    before any realm is founded)."""
+    from xylarium.kernel import clocks
     if realm is not None:
-        return int(100 * term_years(kernel, realm))
+        return math.ceil(clocks.lived_span(kernel, term_years(kernel, realm), _seat(kernel, realm)))
     rs = realms(kernel)
-    return int(100 * max(term_years(kernel, r) for r in rs)) if rs else kernel.cycle_count
+    return max(span_cycles(kernel, r) for r in rs) if rs else kernel.cycle_count
 
 
 def peoples_of(kernel: Any, realm: str) -> Dict[str, List[Any]]:
@@ -478,7 +493,8 @@ def _succeed_envoy(kernel: Any, m: Dict[str, Any]) -> None:
     if m.get("player") is None and kernel.cycle_count - m.get("term_since", m["since"]) >= span_cycles(kernel, m["realm"]):
         from xylarium.kernel import history
         old = m["name"]
-        m["generation"] += 1
+        terms = (kernel.cycle_count - m.get("term_since", m["since"])) / max(1e-9, term_cycles(kernel, m["realm"]))
+        m["generation"] += max(1, int(terms))                 # every term its seat's clock ran, not one per frame
         m["name"] = _steward_name(kernel, m["realm"] + m["sender"], m["generation"])
         m["term_since"] = kernel.cycle_count
         history.event(kernel, "SUCCESSION", f"{m['name']} succeeds {old} as steward of {realm_name(m['realm'])}",

@@ -27,6 +27,18 @@ of the galaxy and is 300 years old - or so many of its own years as its world ha
 judged on that, never on deep time. Its intelligence ladders are climbed once a universal year, on a year's
 thinking - not on its local year, which runs from days to centuries across worlds.
 
+## Keeping the clocks in step (clocks.pace, cycles_of, years_of, lived_span)
+
+In a cosmic universe every peopled place keeps its own proper time, running at its own pace: its own years per clock
+year, set by its watchers (tempo, clocks.season). One clock year is twelve own years at one seat and a hundred and
+ten at another. Any span stated in a place's or a people's own years - a steward's term (its sender's generation), a
+sovereign's memory of who struck it (a generation of its people), a ruling's standing - is converted to the clock
+through that place's pace: `cycles = years / pace x 100`. The engine lives every place a frame at a time (a clock
+year of seasons), so a span is never shorter than one frame (`lived_span`, the same Courant rule tempo keeps) - and
+what turns over within a frame is counted, not dropped: a steward's line succeeds once for every term its seat's
+clock ran (`stewardship.term_cycles`). A people's ledger takes one receipt for each of its own years lived
+(`clocks.receipts`), not one per clock year. On the settled board one clock serves all (pace 1).
+
 ## Three kinds of motion
 
 | Kind | What | How it advances | Where |
