@@ -404,7 +404,12 @@ def _light(kernel: Any, sid: int, slot: Dict[str, Any]) -> None:
 _ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]
 
 
-@matter.declared("star_formation")
+def _none_due(kernel: Any) -> bool:
+    now = deep_gyr(kernel)
+    return not any(born <= now for born in stats(kernel)["unborn"].values())
+
+
+@matter.declared("star_formation", idle=_none_due)
 def _ignite(kernel: Any) -> List[str]:
     """Charted gas whose date has come: its star is born (systems emerge over deep time, each on the date the
     Big Bang fixed for it)."""
@@ -457,7 +462,7 @@ def _lanes_within(kernel: Any, cell: Tuple[int, int]) -> None:
         kernel.sectors[sb].warps = sorted(set(kernel.sectors[sb].warps) | {sa})
 
 
-@matter.declared("cluster_genesis")
+@matter.declared("cluster_genesis", idle=lambda kernel, cell, why: materialised(kernel, cell))
 def materialise(kernel: Any, cell: Tuple[int, int], why: str) -> Optional[str]:
     """A cell is charted: every sector it carries is laid out as the Big Bang made it, its own lanes drawn, and it
     is joined to whatever neighbours are already charted."""

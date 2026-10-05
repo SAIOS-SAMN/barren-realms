@@ -87,55 +87,60 @@ def key(commodity: str) -> str:
 
 def census(kernel: Any) -> Dict[str, Dict[str, int]]:
     """Every stock of every commodity: {commodity: {holder_kind: units, "total": units}}."""
-    out: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    raw: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))     # where -> raw name -> units
 
-    def add(comm: str, where: str, qty: Any) -> None:
-        q = int(qty or 0)
-        if q:
-            k = key(comm)
-            out[k][where] += q
-            out[k]["total"] += q
+    def put(where: Dict[str, int], items: Any) -> None:
+        for comm, n in items:
+            q = int(n or 0)
+            if q:
+                where[comm] += q
 
     from xylarium.kernel.propulsion import fuel_of
+    bunkers, holds = raw["bunkers"], raw["holds"]
     for cap in kernel.captains.values():
-        add(fuel_of(cap.ship) or "H", "bunkers", getattr(cap.ship, "fuel", 0))
+        bunkers[fuel_of(cap.ship) or "H"] += int(getattr(cap.ship, "fuel", 0) or 0)
         cg = cap.ship.cargo
-        add("ORE", "holds", cg.ore)
-        add("ORGANICS", "holds", cg.organics)
-        add("EQUIPMENT", "holds", cg.equipment)
-        for el, n in cg.elements.items():
-            add(el, "holds", n)
+        holds["ORE"] += int(cg.ore or 0)
+        holds["ORGANICS"] += int(cg.organics or 0)
+        holds["EQUIPMENT"] += int(cg.equipment or 0)
+        put(holds, cg.elements.items())
+    ports, silos, reserves, ground = raw["ports"], raw["silos"], raw["reserves"], raw["in_ground"]
+    native, tithes, belts, gas, debris = (raw["native_tribute"], raw["tithes"], raw["belts"], raw["sector_gas"],
+                                          raw["debris"])
     for sec in kernel.sectors.values():
         if sec.port is not None:
-            for comm, n in sec.port.stock.items():
-                add(comm, "ports", n)
+            put(ports, sec.port.stock.items())
         for p in sec.planets:
-            add("ORE", "silos", p.ore_silo)
-            add("ORGANICS", "silos", p.organics_silo)
-            for el, n in p.element_reserves.items():
-                add(el, "reserves", n)
-            for el, n in p.element_deposits.items():
-                add(el, "in_ground", n)
-            for comm, n in ((getattr(p, "natives", None) or {}).get("tribute") or {}).items():
-                add(comm, "native_tribute", n)
-            for comm, n in getattr(p, "tithe_manifest", {}).items():
-                if comm != "MANPOWER":                     # drafted people are not matter
-                    add(comm, "tithes", n)
-        for b in getattr(sec, "belts", []):
-            add("BELT_ROCK", "belts", b.get("reserve", 0))
-        add("H", "sector_gas", getattr(sec, "gas", 0))
-        for d in getattr(sec, "debris", []):
-            for comm, n in d.get("cargo", {}).items():
-                add(comm, "debris", n)
+            silos["ORE"] += int(p.ore_silo or 0)
+            silos["ORGANICS"] += int(p.organics_silo or 0)
+            put(reserves, p.element_reserves.items())
+            put(ground, p.element_deposits.items())
+            nat = getattr(p, "natives", None)
+            if nat:
+                put(native, (nat.get("tribute") or {}).items())
+            tm = getattr(p, "tithe_manifest", None)
+            if tm:
+                put(tithes, ((c, n) for c, n in tm.items() if c != "MANPOWER"))   # drafted people are not matter
+        for bl in getattr(sec, "belts", ()):
+            belts["BELT_ROCK"] += int(bl.get("reserve", 0) or 0)
+        gas["H"] += int(getattr(sec, "gas", 0) or 0)
+        for d in getattr(sec, "debris", ()):
+            put(debris, d.get("cargo", {}).items())
     banking = getattr(kernel, "banking", None)
     for bank in (getattr(banking, "banks", {}) or {}).values():
-        for comm, n in getattr(bank, "warehouse", {}).items():
-            add(comm, "bank_warehouses", n)
+        put(raw["bank_warehouses"], getattr(bank, "warehouse", {}).items())
     mm = getattr(kernel, "market_manager", None)
     if mm is not None:
         for h in getattr(mm, "trade_haulers", {}).values():
-            for comm, n in getattr(h, "cargo", {}).items():
-                add(comm, "haulers", n)
+            put(raw["haulers"], getattr(h, "cargo", {}).items())
+    out: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for where, stock in raw.items():
+        for comm, n in stock.items():
+            q = int(n)
+            if q:
+                k = key(comm)
+                out[k][where] += q
+                out[k]["total"] += q
     return {k: dict(v) for k, v in out.items()}
 
 
@@ -165,16 +170,18 @@ def consume(obj: Any, attr: str, commodity: str, qty: int, kind: str) -> int:
     return take
 
 
-def declared(kind: str):
+def declared(kind: str, idle: Optional[Any] = None):
     """For rare events that bring matter into or out of the galaxy (a cluster charted, a ship commissioned,
     a reward found, a respawn kit issued): whatever the event creates or consumes beyond what it already
-    declares is booked under ``kind``. Frequent processes declare their own flows explicitly instead."""
+    declares is booked under ``kind``. Frequent processes declare their own flows explicitly instead.
+    ``idle(*args)`` says when the event will do nothing (a cell already charted, no star due): then no census
+    is taken - there is nothing to count."""
     def deco(fn):
         @functools.wraps(fn)
         def wrapper(*a, **kw):
             from xylarium.kernel import ledger
             k = ledger.active_kernel()
-            if k is None or ACTIVE is None:
+            if k is None or ACTIVE is None or (idle is not None and idle(*a, **kw)):
                 return fn(*a, **kw)
             before, n0 = totals(k), ACTIVE.net()
             try:
