@@ -251,3 +251,29 @@ class TestZones(unittest.TestCase):
                 self.assertLessEqual(pace, ahead / tempo.FRAMES * 1.0001)   # its people get their seasons
             elif sid not in zones.peopled(k):
                 self.assertGreater(pace, 1e8)                              # nothing to watch: the span runs on
+
+
+class TestHistoryStreams(unittest.TestCase):
+    def _people(self):
+        from xylarium.kernel import annals, knowledge
+        random.seed(3)
+        k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        who = knowledge.holder_of_planet(ages.homeworld(k, "player_1"))
+        k.cycle_count -= k.cycle_count % 100                 # an annals season
+        annals.season(k)                                     # its record begins
+        return k, who, annals.stats(k)["of"][who]
+
+    def test_however_its_time_is_cut_a_people_lives_the_same_history(self):
+        from xylarium.kernel import annals
+        k1, who1, rec1 = self._people()
+        rec1["advanced"] -= 2e5
+        annals.season(k1)                                    # one stretch of 200,000 years
+        k2, who2, rec2 = self._people()
+        for _ in range(10):
+            rec2["advanced"] -= 2e4
+            annals.season(k2)                                # ten stretches of 20,000
+        self.assertEqual(who1, who2)
+        self.assertEqual(rec1["passed"], rec2["passed"])
+        self.assertAlmostEqual(rec1["hist"]["P"], rec2["hist"]["P"], places=6)
+        self.assertAlmostEqual(rec1["hist"]["H"], rec2["hist"]["H"], places=6)
+        self.assertEqual(rec1["hist"]["T"], rec2["hist"]["T"])

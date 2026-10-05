@@ -164,6 +164,65 @@ def _fall(kernel: Any, who: str, worlds: List[Any], epoch: float) -> str:
     return f"[ANNALS] The {name} fall; their ruins lie on {home.name}."
 
 
+def _history(kernel: Any, who: str, rec: Dict[str, Any], stage: str, lived: float, gen: float, speed: float,
+             fall_rate: float) -> Dict[str, Any]:
+    """A people's own history at the level of history: its progress in its own (minds-paced) generations, P, counted
+    over all its years - lived year by year in the engine or carried here; the hazard it has run, H, against the
+    threshold its own stream set for its fall, E; and, for each turning, the point its wait is counted from. Every
+    draw is keyed to the people and the turning, never to the clock: however its time is cut - watched or not, one
+    look-away or ten - the same seed gives it the same history."""
+    from xylarium.kernel import scheduler
+    h = rec.get("hist")
+    if h is None:
+        h = rec["hist"] = {"P": 0.0, "H": 0.0, "since": 0.0, "T": {}, "stage": stage, "lived": lived,
+                           "E": scheduler.rng(kernel, "annals", who, "fall").expovariate(1.0)}
+    h.setdefault("rate", fall_rate)                           # its hazard, as it stood at its last turning
+    h.setdefault("W", float(rec.get("dominion", 1)))          # its dominion, unrounded (the record keeps it whole)
+    if int(rec.get("dominion", 1)) > int(h["W"]):             # worlds the engine settled beyond the witnessed
+        h["W"] += int(rec["dominion"]) - int(h["W"])
+    seen = max(0.0, lived - float(h.get("lived", lived))) / max(1.0, gen)
+    if seen > 0:                                              # the years the engine lived it count for its history too
+        h["P"] += speed * seen
+        h["H"] += h["rate"] * seen
+    h["lived"] = lived
+    if h.get("stage") != stage:                               # it turned in the engine: its next wait counts from now
+        h["stage"] = stage
+        h["since"] = h["P"]
+        h["rate"] = fall_rate
+        h["T"] = {k: v for k, v in h["T"].items() if k not in STAGES or STAGES.index(k) > STAGES.index(stage)}
+    return h
+
+
+def _dominion_hazard(rate: float, w0: float, gens: float) -> float:
+    """The hazard a dominion of w0 worlds runs over `gens` generations as it settles: each world's hazard shared over
+    its worlds, which grow e^(g t) up to DOMINION_MAX and hold there - f/(w0 g)(1 - e^-g t) while it grows, f/MAX
+    a generation after."""
+    g, w0 = DOMINION_PER_GENERATION, max(1.0, w0)
+    full = max(0.0, math.log(DOMINION_MAX / w0) / g)          # generations until it holds all it can
+    grow = min(gens, full)
+    return rate / (w0 * g) * (1.0 - math.exp(-g * grow)) + rate / DOMINION_MAX * max(0.0, gens - full)
+
+
+def _dominion_until(rate: float, w0: float, need: float) -> float:
+    """The generations until a dominion of w0 worlds has run `need` of hazard (the inverse of _dominion_hazard)."""
+    g, w0 = DOMINION_PER_GENERATION, max(1.0, w0)
+    full = max(0.0, math.log(DOMINION_MAX / w0) / g)
+    at_full = rate / (w0 * g) * (1.0 - math.exp(-g * full))
+    if need < at_full:
+        return -math.log(1.0 - need * w0 * g / rate) / g
+    return full + (need - at_full) * DOMINION_MAX / rate
+
+
+def _threshold(kernel: Any, who: str, h: Dict[str, Any], kind: str, span: float) -> float:
+    """Where in its own progress a people makes this turning: from the point its wait began, its own stream's
+    draw for this turning (an exponential wait, its mean the bridge's span) - drawn once, kept."""
+    from xylarium.kernel import scheduler
+    if kind not in h["T"]:
+        draw = scheduler.rng(kernel, "annals", who, "turn", kind).expovariate(1.0)
+        h["T"][kind] = h["since"] + draw * span
+    return h["T"][kind]
+
+
 def season(kernel: Any) -> List[str]:
     """Once a year every people lives the deep years it has not yet lived."""
     from xylarium.kernel import cosmos, fertility, history, knowledge, scheduler, sustenance, syntropy
@@ -189,82 +248,85 @@ def season(kernel: Any) -> List[str]:
         if gens < MIN_GENERATIONS:
             continue
         rec["advanced"] += deficit
-        rng = scheduler.rng(kernel, "annals", who, kernel.cycle_count)
         speed = _speed(kernel, home)
         fall_rate = FALL_PER_GENERATION / resilience(kernel, who)
         stage = _stage(kernel, who, home)
+        hist = _history(kernel, who, rec, stage, lived, gen, speed, fall_rate)
+        fall_rate = hist["rate"]                              # set at its last turning: its knowledge since counts at
+                                                              # its next one, so its hazard does not depend on the cut
         t = 0.0                                               # generations lived in this stretch
         epoch_of = lambda tt: own_now - (gens - tt) * gen / 1e9   # noqa: E731
         fell = None
+        crossed_at = 0.0 if stage == "crossed" else None
         ruled_from = 0.0 if STAGES.index(stage) >= STAGES.index("state") else None   # since when it has had a few
         while t < gens:
+            left = gens - t
             nxt = STAGES.index(stage) + 1
             if nxt >= len(STAGES):
                 # among the stars a people falls only if all its worlds do: its hazard is the one-world hazard over
                 # its dominion, which grows as it settles - H = f / (W0 g) (1 - e^-g T) over what is left of T
-                left = gens - t
-                g, w0 = DOMINION_PER_GENERATION, max(1, rec["dominion"])
-                hazard = fall_rate / (w0 * g) * (1.0 - math.exp(-g * left))
-                if rng.expovariate(1.0) < hazard:
-                    fell = t + left * rng.random()
+                need = hist["E"] - hist["H"]
+                ran = _dominion_hazard(fall_rate, hist["W"], left)
+                if need < ran:
+                    fell = t + _dominion_until(fall_rate, hist["W"], need)
+                    hist["H"] = hist["E"]
+                else:
+                    hist["H"] += ran
+                hist["P"] += speed * left
                 break
             from xylarium.kernel import mastery as _mastery, technology as _tech
+            kind: Optional[str] = STAGES[nxt]
+            span = SPANS.get(STAGES[nxt], 0.0)
             if STAGES[nxt] == "works" and not _tech.embodied(kernel, who, home):
-                wait_body = rng.expovariate(speed / EMBODIMENT_SPAN)
-                wait_fall = rng.expovariate(fall_rate)
-                if wait_fall <= wait_body and t + wait_fall < gens:
-                    fell = t + wait_fall
-                    break
-                if t + wait_body >= gens:
-                    break
-                t += wait_body
-                _tech.stats(kernel)["of"].setdefault(who, {})["embodiment"] = kernel.cycle_count
-                continue                                      # it has hands now; its works can begin
-            if STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
-                nxt_blocked = True                            # its gravity holds it: it lives on, on its world
+                kind, span = "embodiment", EMBODIMENT_SPAN
+            elif STAGES[nxt] == "yards" and not _can_reach_orbit(kernel, who, home):
+                kind = None                                   # its gravity holds it: it lives on, on its world
             elif STAGES[nxt] == "crossed" and not _mastery.genome_ready(kernel, who, worlds):
-                if _tech.genomeless(kernel, home):
-                    nxt_blocked = True                        # its vessel came with its works; nothing else stands
-                else:
-                    wait_gene = rng.expovariate(speed / GENETICS_SPAN)
-                    wait_fall = rng.expovariate(fall_rate)
-                    if wait_fall <= wait_gene and t + wait_fall < gens:
-                        fell = t + wait_fall
-                        break
-                    if t + wait_gene >= gens:
-                        break
-                    t += wait_gene
-                    _tech.stats(kernel)["of"].setdefault(who, {})["genetics"] = kernel.cycle_count
-                    continue                                  # it can rewrite itself now; the crossing can come
-            else:
-                nxt_blocked = False
-            wait_up = float("inf") if nxt_blocked else rng.expovariate(speed / SPANS[STAGES[nxt]])
-            wait_fall = rng.expovariate(fall_rate)
-            if nxt_blocked and t + wait_fall >= gens:
+                kind = None if _tech.genomeless(kernel, home) else "genetics"   # a vessel needs no genome of its own
+                span = GENETICS_SPAN
+            to_fall = (hist["E"] - hist["H"]) / fall_rate     # generations until its hazard comes due
+            to_turn = float("inf") if kind is None else \
+                max(0.0, (_threshold(kernel, who, hist, kind, span) - hist["P"]) / speed)
+            if to_fall <= to_turn and to_fall < left:
+                fell = t + to_fall
+                hist["H"] = hist["E"]
+                hist["P"] += speed * to_fall
                 break
-            if wait_fall <= wait_up and t + wait_fall < gens:
-                fell = t + wait_fall
+            if to_turn >= left:
+                hist["P"] += speed * left
+                hist["H"] += fall_rate * left
                 break
-            if t + wait_up >= gens:
-                break
-            t += wait_up
-            stage = STAGES[nxt]
+            t += to_turn
+            hist["P"] += speed * to_turn
+            hist["H"] += fall_rate * to_turn
+            hist["since"] = hist["P"]                         # the next wait is counted from here
+            fall_rate = hist["rate"] = FALL_PER_GENERATION / resilience(kernel, who)
+            if kind in ("embodiment", "genetics"):
+                _tech.stats(kernel)["of"].setdefault(who, {})[kind] = kernel.cycle_count
+                speed = _speed(kernel, home)                  # it has hands, or can rewrite itself, now
+                continue
+            stage = kind
+            hist["stage"] = stage
             if stage == "state":
                 ruled_from = t
             _grant(kernel, who, home, nxt)                    # what that stage brings, it holds from then on
+            speed = _speed(kernel, home)
             rec["passed"].append(stage)
-            kind = "ASCENT" if stage == "crossed" else "ERA"
+            if stage == "crossed":
+                crossed_at = t
+            kind_ev = "ASCENT" if stage == "crossed" else "ERA"
             text = {"farm": "takes up farming", "state": "founds a state", "works": "raises its first great works",
                     "yards": "builds yards that can launch to orbit", "crossed": "folds space and crosses to the stars"}
-            history.event(kernel, kind, f"The {who.split(':', 1)[-1]} {text[stage]}", actors=[who], planet=home,
+            history.event(kernel, kind_ev, f"The {who.split(':', 1)[-1]} {text[stage]}", actors=[who], planet=home,
                           cause=f"at the level of history, {epoch_of(t):.4f} Gyr after the Big Bang",
                           data={"epoch": round(epoch_of(t), 6), "stage": stage})
         from xylarium.kernel import biosphere
         grown_from = max(1, rec["dominion"]) * max(1, biosphere.carrying_capacity(kernel, home))
         if fell is None:
             if stage == "crossed":
-                since = max(0.0, gens - (t if "crossed" in rec["passed"][-1:] else 0.0))
-                rec["dominion"] = int(min(DOMINION_MAX, rec["dominion"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since))))
+                since = max(0.0, gens - (crossed_at or 0.0))
+                hist["W"] = min(float(DOMINION_MAX), hist["W"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since)))
+                rec["dominion"] = int(hist["W"])
                 rec["reach"] = min(40.0, rec["reach"] + REACH_KPC_PER_GENERATION * since)
             _apply(kernel, who, home, stage)
         # its history as it lived its ages: its own work, and - once it has a state - what its few took of it, weighed
@@ -286,10 +348,17 @@ def season(kernel: Any) -> List[str]:
             logs.append(_fall(kernel, who, worlds, epoch_of(fell)))
             st["falls"] += 1
             continue
-        for d in knowledge.DOMAINS:                           # what it knows has grown with its ages
-            have = knowledge.experience(kernel, who, d)
-            if have > 0:
-                knowledge.learn(kernel, who, d, have * min(10.0, gens / 100.0), why="annals")
+        # what it knows has grown with its ages: its thinkers' effort a year (knowledge.effort, as the engine counts
+        # it) over the years carried, shared among what it already studies as it studies it - summed, never
+        # compounded, so however its time is cut it learns the same
+        known = {d: knowledge.stocks(kernel, who).get(d, 0.0) for d in knowledge.DOMAINS}
+        total = sum(v for v in known.values() if v > 0)
+        if total > 0:
+            years = gens * gen
+            per_year = knowledge.effort(kernel, home)
+            for d, v in known.items():
+                if v > 0:
+                    knowledge.learn(kernel, who, d, per_year * years * v / total, why="annals")
     logs += _meetings(kernel, now)
     return logs
 
