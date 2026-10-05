@@ -733,6 +733,11 @@ class MarketManager:
                 upkeep_ore = CITADEL_UPKEEP.get(planet.citadel_level, {}).get("ore", 0)
                 if upkeep_ore and planet.ore_silo < upkeep_ore * 25:
                     needs.append(("ORE", min(60, max(15, upkeep_ore * 10))))
+                from xylarium.kernel import demand as _demand, supply as _supply
+                for comm_w, n_w in sorted(_demand.wants(planet).items()):
+                    if n_w > 0 and not any(c == comm_w for c, _ in needs):
+                        lot = max(1, int(_supply._hold(kernel)))      # a trip is a ship's: a typical hold's lot
+                        needs.append((comm_w, lot))                  # what it cannot get at home (demand.py)
                 for t, unmet_q in (planet.society.get("luxury_unmet_quarters") or {}).items():
                     if unmet_q >= 3 and planet.element_reserves.get(t, 0) < 10:
                         # two seasons of the world's want, in a hauler-sized lot
@@ -757,7 +762,14 @@ class MarketManager:
                     hops = max(1, dist_to[1][origin_sec.id])
                     hazard_mult = {"BORDERLAND": 1.3, "ANARCHY": 1.8}.get(sec.security.value, 1.0)
                     base = COMMODITY_CONFIG.get(comm, {}).get("base_price", 20)
-                    sol_value = (base * COLONY_IMPORT_UNIT_PREMIUM * amount + hops * COLONY_IMPORT_HOP_FEE) * hazard_mult
+                    from xylarium.kernel import supply as _supply
+                    if comm in _supply.goods():              # landed: the source's price plus the haul
+                        src_unit = _supply._source_price(kernel, origin_sec.port, comm)
+                        from xylarium.kernel import transit as _transit
+                        haul = max(hops * _supply.per_hop(kernel, comm) * amount, hops * _transit._typical_hop(kernel))
+                        sol_value = (src_unit * amount + haul) * hazard_mult
+                    else:
+                        sol_value = (base * COLONY_IMPORT_UNIT_PREMIUM * amount + hops * COLONY_IMPORT_HOP_FEE) * hazard_mult
                     payout = int(sol_value * self._local_price_level(planet.currency))
                     if planet.treasury - payout < COLONY_IMPORT_MIN_VAULT // 2:
                         continue
@@ -1471,6 +1483,8 @@ class MarketManager:
                 if cargo.elements[key] <= 0:
                     cargo.elements.pop(key, None)
                 planet.element_reserves[contract.commodity] = planet.element_reserves.get(contract.commodity, 0) + contract.amount
+                from xylarium.kernel import demand as _demand
+                _demand.answered(planet, contract.commodity, contract.amount)
             comm = None
         bond_key = comm if comm in ("ORE", "ORGANICS", "EQUIPMENT") else (
             next((k for k in captain.ship.cargo.bonded if k.lower() == comm.lower()), comm) if comm else "")

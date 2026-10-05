@@ -185,6 +185,24 @@ def landed(kernel: Any, comm: str) -> Dict[int, Tuple[float, int]]:
     return best
 
 
+def best(kernel: Any, comm: str, sector_id: int) -> Optional[Tuple[float, int, float]]:
+    """A good's cheapest delivery to any system (ported or not): (landed SOL, source sector, source SOL) - read from
+    this year's routes (kept in memory, not in the save)."""
+    from xylarium.kernel import cache
+
+    def build() -> Dict[int, Tuple[float, int]]:
+        return landed(kernel, comm)
+    if hasattr(kernel, "caches"):
+        got = cache.memo(kernel, "supply_landed", comm, build, epoch=kernel.cycle_count // 100)
+    else:
+        got = build()
+    rec = got.get(sector_id)
+    if rec is None:
+        return None
+    src = got.get(rec[1])
+    return rec[0], rec[1], (src[0] if src else rec[0])
+
+
 def exotic(kernel: Any, port: Any, comm: str) -> Optional[float]:
     """A good's exotic index at a port: landed cost there over what it costs at its source."""
     rec = (getattr(port, "landed", None) or {}).get(comm)

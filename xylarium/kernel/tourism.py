@@ -143,6 +143,8 @@ def _water_resorts(kernel: Any, planet: Any) -> None:
         planet.society.pop("resort_dry", None)
     else:
         planet.society["resort_dry"] = True
+        from xylarium.kernel import demand
+        demand.want(planet, "H2O", need - have)                # a dry dome wants water brought
 
 
 def station(planet: Any) -> Optional[Dict[str, Any]]:
@@ -162,7 +164,13 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
         raise ValueError("Stations are built over peopled worlds (their guests need somewhere to go).")
     sec = kernel.sectors[planet.sector_id]
     port = sec.port
-    if port is None or any(port.stock.get(m, 0) < q for m, q in STATION_METAL.items()):
+    if port is None:
+        raise ValueError("A station needs a system with yards.")
+    held = {m: port.stock.get(m, 0) + planet.element_reserves.get(m, 0) for m in STATION_METAL}
+    if any(held[m] < q for m, q in STATION_METAL.items()):
+        from xylarium.kernel import demand
+        for m, q in STATION_METAL.items():
+            demand.want(planet, m, q - held[m])               # the yards want the metal brought
         raise ValueError("The system's yards lack the hull metal (Fe, Ti) for a station.")
     from xylarium.kernel import fx
     cost_local = station_cost(planet)
@@ -175,7 +183,10 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
     planet.household_purse += local // 2
     port.treasury += _convert(kernel, planet.currency, port.currency, local - local // 2)
     for m, q in STATION_METAL.items():
-        port.stock[m] -= q
+        own = min(q, planet.element_reserves.get(m, 0))       # metal brought to the world first, then the yards'
+        if own:
+            planet.element_reserves[m] -= own
+        port.stock[m] -= q - own
         matter.sink("construction", m, q)
     planet.society["station"] = {"owner": investor.id, "berths": ORBITAL_BERTHS_PER_STATION,
                                  "built": kernel.cycle_count, "receipts": 0, "booked": 0}
