@@ -200,7 +200,7 @@ def read(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------- relief and raids
 def _targets(kernel: Any, planet: Any, food: str) -> List[Tuple[float, Any, Any, int]]:
     """(score, holder planet or None, port or None, seizable units) within the world's reach."""
-    from xylarium.kernel import stewardship
+    from xylarium.kernel import polity, stewardship
     me = people_of(planet)
     hops = topology.hops(kernel, planet.sector_id, reach(kernel, planet))
     out = []
@@ -209,8 +209,8 @@ def _targets(kernel: Any, planet: Any, food: str) -> List[Tuple[float, Any, Any,
         for w in sec.planets:
             if w is planet or people_of(w) == me or getattr(w, "natives", None) or relations.family(kernel, me, people_of(w)):
                 continue                          # nor its patron, its tributaries, or anyone under the same root
-            if stewardship.binds(kernel, me, people_of(w)):
-                continue                          # a steward's ceasefire stands between them
+            if stewardship.binds(kernel, me, people_of(w)) or polity.at_peace(kernel, me, people_of(w)):
+                continue                          # a steward's ceasefire, or its sovereigns' treaty, stands between them
             n = staples.surplus(kernel, w, food)
             if n > 0:
                 out.append((n / (1.0 + d), w, None, n))

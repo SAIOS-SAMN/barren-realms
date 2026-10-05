@@ -488,3 +488,79 @@ class TestStewardship(unittest.TestCase):
         self.assertTrue(rec["sealed"])
         self.k.cycle_count += 100 * (self.st.RULING_YEARS + 5)
         self.assertIsNotNone(self.st.binds(self.k, self.peoples[0], far))       # sealed: it stands for good
+
+
+class TestSovereignMinds(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        cls.k = GameKernel(seed=42)
+        for _ in range(12 * 100):
+            cls.k.tick_simulation()                           # twelve years of a settled galaxy
+
+    def test_every_polity_has_a_sovereign_and_peoples_can_have_many(self):
+        from xylarium.kernel import polity
+        live = [s for s in polity.sovereigns(self.k).values() if not s.get("ended")]
+        self.assertEqual(len(live), len(polity._polities(self.k)))
+        for s in live:
+            self.assertTrue(s["people"].startswith(("civ:", "captain:")))
+            self.assertIn(s["realm"], polity._polities(self.k))
+
+    def test_sovereigns_meet_and_treaties_serve_both_sides(self):
+        from xylarium.kernel import history, polity
+        kinds = {e["kind"] for e in history.stats(self.k)["recent"]}
+        self.assertIn("SOVEREIGNS_MEET", kinds)
+        ts = list(polity.stats(self.k)["treaties"].values())
+        self.assertTrue(ts)
+        for t in ts:
+            self.assertIn(t["kind"], polity.TREATIES)
+            a, b = polity.sovereigns(self.k)[t["a"]], polity.sovereigns(self.k)[t["b"]]
+            self.assertIn(t["b"], a["books"])                   # both keep the other in their conduct books
+            self.assertIn(t["a"], b["books"])
+
+    def test_a_sovereigns_line_goes_on(self):
+        from xylarium.kernel import polity
+        s = next(iter(polity.sovereigns(self.k).values()))
+        crystals, line = dict(s["crystals"]), s["line"]
+        polity._succeed(self.k, s)
+        self.assertEqual(s["line"], line)
+        self.assertEqual(s["crystals"], crystals)               # the chronicle inherited, never edited
+        self.assertGreaterEqual(s["generation"], 2)
+
+    def test_the_realms_own_stewards_rule_and_keep_their_lines(self):
+        from xylarium.kernel import stewardship
+        minds = stewardship.stats(self.k)["minds"]
+        self.assertEqual(sorted(minds), stewardship.realms(self.k))
+        rulings = list(stewardship.stats(self.k)["rulings"].values())
+        for r in rulings:
+            self.assertIn(r["kind"], stewardship.RULINGS)
+        pairs = [frozenset((r["a"], r["b"])) | {r["kind"]} for r in stewardship.stats(self.k)["appeals"]]
+        self.assertEqual(len(pairs), len(set(pairs)))           # each dispute goes up once
+
+
+class TestRealmOverTheBridge(unittest.TestCase):
+    def test_a_remote_steward_reads_its_realm_and_rules(self):
+        from bridge.websocket_server import WebSocketGateway
+        from xylarium.kernel.engine import GameKernel
+        k = GameKernel(seed=42)
+        gw = WebSocketGateway(k, host="127.0.0.1", port=0)
+        sent = []
+
+        class Client:
+            player_id = None
+
+            async def send_json(self, data):
+                sent.append(data)
+        c = Client()
+        asyncio.run(gw._process_client_message(c, {"action": "REGISTER", "name": "Keeper", "role": "steward",
+                                                   "realm": "0.1"}))
+        c.player_id = sent[-1].get("player_id") or next(pid for pid, r in roles.stats(k)["of"].items() if r == "steward")
+        asyncio.run(gw._process_client_message(c, {"action": "REALM"}))
+        self.assertEqual(sent[-1]["realm"]["realm"], "0.1")
+        peoples = [r["people"] for r in sent[-1]["realm"]["peoples"]]
+        asyncio.run(gw._process_client_message(c, {"action": "RULE", "kind": "ceasefire", "a": peoples[0],
+                                                   "b": peoples[1]}))
+        self.assertEqual(sent[-1]["status"], "ok")
+        asyncio.run(gw._process_client_message(c, {"action": "SOVEREIGNS"}))
+        self.assertIn("sovereigns", sent[-1])

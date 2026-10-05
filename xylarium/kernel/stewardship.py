@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 QUADRANTS = ("Alpha", "Beta", "Gamma", "Delta")
 RULINGS = ("ceasefire", "release", "pact")
+CONTESTED = ("WAR", "RAID", "CONQUEST", "SUBJUGATION", "REVOLT", "REBELLION")
 FRONTIER_FROM = 201             # where charted frontier clusters' sector ids begin (research.mint_frontier_cluster)
 RULING_YEARS = 25                # clock years an unsealed ruling stands (declared: a generation of a steward's term)
 
@@ -110,17 +111,23 @@ def disputes(kernel: Any, realm: str) -> List[Dict[str, Any]]:
         if sub in mine or tie["patron"] in mine:
             out.append({"kind": "hold", "a": tie["patron"], "b": sub, "terms": tie.get("kind"),
                         "tribute_sol": tie.get("tribute_sol")})
-    seen = set()
+    seen: Dict[Tuple[str, str], Dict[str, Any]] = {}
     horizon = kernel.cycle_count - 100 * RULING_YEARS
     for e in reversed(history.stats(kernel)["recent"]):
         if e.get("cycle", 0) < horizon:
             break
-        if e["kind"] not in ("WAR", "CONQUEST", "SUBJUGATION", "REVOLT", "REBELLION"):
+        if e["kind"] not in CONTESTED:
             continue
         ps = sorted({party(kernel, a) for a in e.get("actors", []) if a})
-        if len(ps) == 2 and (ps[0] in mine or ps[1] in mine) and tuple(ps) not in seen:
-            seen.add(tuple(ps))
-            out.append({"kind": e["kind"].lower(), "a": ps[0], "b": ps[1], "event": e["id"], "title": e["title"]})
+        if len(ps) != 2 or not (ps[0] in mine or ps[1] in mine):
+            continue
+        key = tuple(ps)
+        if key in seen:
+            seen[key]["stake"] += float(e.get("magnitude") or 0) + 1.0
+            continue
+        seen[key] = {"kind": e["kind"].lower(), "a": ps[0], "b": ps[1], "event": e["id"], "title": e["title"],
+                     "stake": float(e.get("magnitude") or 0) + 1.0}
+        out.append(seen[key])
     return out
 
 
@@ -157,10 +164,14 @@ def _key(a: str, b: str) -> str:
 def rule(kernel: Any, player_id: str, kind: str, a: str, b: str) -> Dict[str, Any]:
     """A steward rules between two parties. Within its realm the ruling binds at once; a party beyond it makes the
     dispute one for the progenitors: the ruling waits, appealed, until one seals it."""
-    from xylarium.kernel import history
     realm = realm_held(kernel, player_id)
     if realm is None:
         return {"ok": False, "why": "You keep no realm."}
+    return _rule(kernel, realm, player_id, kind, a, b)
+
+
+def _rule(kernel: Any, realm: str, player_id: str, kind: str, a: str, b: str) -> Dict[str, Any]:
+    from xylarium.kernel import history
     if kind not in RULINGS:
         return {"ok": False, "why": f"A steward rules a {', a '.join(RULINGS)}."}
     a, b = party(kernel, a), party(kernel, b)
@@ -171,6 +182,8 @@ def rule(kernel: Any, player_id: str, kind: str, a: str, b: str) -> Dict[str, An
            "cycle": kernel.cycle_count, "until": kernel.cycle_count + 100 * RULING_YEARS, "sealed": False}
     if a not in mine or b not in mine:
         rec["appealed"] = True                             # beyond one steward: up the chain
+        if any({r["a"], r["b"]} == {a, b} and r["kind"] == kind for r in st["appeals"]):
+            return {"ok": True, "ruling": rec, "appealed": True}      # already before the progenitors
         st["appeals"].append(rec)
         history.event(kernel, "APPEAL", f"A dispute between the {a.split(':', 1)[-1]} and the {b.split(':', 1)[-1]} "
                       f"goes up to the progenitors", actors=[a, b], cause=f"it reaches beyond {realm_name(realm)}",
@@ -267,6 +280,11 @@ def _folded(kernel: Any, who: str) -> bool:
     return who in zones.folded_peoples(kernel)
 
 
+def kernel_ref() -> Any:
+    from xylarium.kernel import ledger
+    return ledger.active_kernel()
+
+
 def render(o: Dict[str, Any]) -> str:
     lines = [f"=== {o['name'].upper()} ({o['realm']}) - steward: {o['steward'] or 'none'} ===",
              f"  Balance (made against destroyed, all its peoples): "
@@ -281,6 +299,16 @@ def render(o: Dict[str, Any]) -> str:
         for i, d in enumerate(o["disputes"], 1):
             lines.append(f"   [{i}] {d['kind']}: {d['a'].split(':', 1)[-1]} / {d['b'].split(':', 1)[-1]}"
                          + (f" - {d['title']}" if d.get("title") else ""))
+    if o.get("sovereigns"):
+        from xylarium.kernel import polity
+        lines.append("  Sovereigns:")
+        for s in o["sovereigns"][:12]:
+            recs = polity.of_people(kernel_ref(), s["people"]) if kernel_ref() is not None else []
+            for r in recs:
+                ts = polity.treaties_of(kernel_ref(), r["id"])
+                held = ", ".join(sorted({t["kind"] for t in ts})) or "no treaties"
+                lines.append(f"   {r['name']} of the {r['polity']} (gen {r['generation']}): {held}"
+                             + (" [seated]" if r.get("player") else ""))
     if o["rulings"]:
         lines.append("  Rulings:")
         for r in o["rulings"]:
@@ -289,9 +317,108 @@ def render(o: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------- the stewards' minds
+def mind(kernel: Any, realm: str) -> Dict[str, Any]:
+    """A realm's steward as a line: a player where one keeps the seat (the line's own mind yields to it), else the
+    realm's own steward-mind - named, serving a term, succeeded, its rulings its memory."""
+    st = stats(kernel)
+    m = st["minds"].get(realm)
+    if m is None:
+        st["next"] += 1
+        m = st["minds"][realm] = {"id": f"W-{st['next']:05d}", "name": _steward_name(kernel, realm, 1),
+                                  "since": kernel.cycle_count, "generation": 1, "realm": realm, "ruled": 0}
+    seated = st["stewards"].get(realm)
+    m["player"] = seated
+    if seated is None and kernel.cycle_count - m["since"] >= 100 * RULING_YEARS:
+        from xylarium.kernel import history
+        old = m["name"]
+        m["generation"] += 1
+        m["name"] = _steward_name(kernel, realm, m["generation"])
+        m["since"] = kernel.cycle_count
+        history.event(kernel, "SUCCESSION", f"{m['name']} succeeds {old} as steward of {realm_name(realm)}",
+                      cause="a steward's term is over; the realm's line goes on", data={"steward": m["id"]})
+    return m
+
+
+def _steward_name(kernel: Any, realm: str, generation: int) -> str:
+    from xylarium.kernel import scheduler
+    from xylarium.kernel.natives import _name
+    return _name(scheduler.rng(kernel, "steward", realm, generation))
+
+
+def _shape(kernel: Any, d: Dict[str, Any]) -> Optional[str]:
+    """What a dispute's own shape names: a hold one side bears as a taking (it reads its patron dark) is released;
+    lives taken between two whose books mirror (one has what the other lacks) are bound by a pact; lives taken
+    otherwise are stopped by a ceasefire. A hold borne willingly names nothing."""
+    from xylarium.kernel import polity, reputation
+    if d["kind"] == "hold":
+        r = reputation.read(kernel, d["b"], d["a"])
+        return "release" if r is not None and r < 0 else None
+    sa, sb = polity.of_people(kernel, d["a"]), polity.of_people(kernel, d["b"])
+    if sa and sb:
+        fa, fb = polity.field(kernel, sa[0]), polity.field(kernel, sb[0])
+        if any((fa[k] > 0 > fb[k]) or (fb[k] > 0 > fa[k]) for k in polity.BOOKS):
+            return "pact"
+    return "ceasefire"
+
+
+def season(kernel: Any) -> List[str]:
+    """Once a year each realm's steward-mind hears its realm: of the disputes no ruling yet stands over, the one where
+    the most is at stake (lives taken, holds borne) comes first, and its shape names the ruling. One ruling a year:
+    a steward's attention is the bound. A realm a player keeps is the player's to rule."""
+    if (kernel.cycle_count // 25) % 4:
+        return []
+    logs: List[str] = []
+    for realm in realms(kernel):
+        m = mind(kernel, realm)
+        if m.get("player"):
+            continue
+        mine = set(peoples_of(kernel, realm))
+        pending = {frozenset((r["a"], r["b"])) for r in stats(kernel)["appeals"]}
+        open_ = [d for d in disputes(kernel, realm)
+                 if d["a"] in mine and d["b"] in mine and frozenset((d["a"], d["b"])) not in pending
+                 and not binds(kernel, d["a"], d["b"]) and not binds(kernel, d["a"], d["b"], "pact")
+                 and not binds(kernel, d["a"], d["b"], "release")]
+        beyond = [d for d in disputes(kernel, realm)                # what reaches past its realm goes up, once
+                  if not (d["a"] in mine and d["b"] in mine) and frozenset((d["a"], d["b"])) not in pending
+                  and not binds(kernel, d["a"], d["b"])]
+        if beyond and not open_:
+            d = max(beyond, key=lambda d: float(d.get("stake") or 0.0))
+            _rule(kernel, realm, m["id"], "ceasefire", d["a"], d["b"])
+        open_.sort(key=lambda d: -float(d.get("stake") or d.get("tribute_sol") or 0.0))
+        for d in open_:
+            kind = _shape(kernel, d)
+            if kind is None:
+                continue
+            res = _rule(kernel, realm, m["id"], kind, d["a"], d["b"])
+            if res.get("ok"):
+                m["ruled"] += 1
+                logs.append(f"[STEWARD] {m['name']} of {realm_name(realm)} rules a {kind} between the "
+                            f"{d['a'].split(':', 1)[-1]} and the {d['b'].split(':', 1)[-1]}.")
+            break
+    return logs
+
+
+def appeal(kernel: Any, sovereign: Dict[str, Any], against: str) -> Optional[Dict[str, Any]]:
+    """A sovereign whose people's need a ruling blocks takes it up the chain: the ruling stands, appealed, until a
+    progenitor seals or the ancients' laws let it lapse (its span runs)."""
+    from xylarium.kernel import history
+    st = stats(kernel)
+    rec = next((r for r in st["rulings"].values() if {r["a"], r["b"]} == {party(kernel, sovereign["people"]),
+                                                                          party(kernel, against)}), None)
+    if rec is None or rec.get("sealed") or any(r["id"] == rec["id"] for r in st["appeals"]):
+        return None
+    st["appeals"].append(dict(rec, appealed_by=sovereign["id"]))
+    history.event(kernel, "APPEAL", f"{sovereign['name']} of the {sovereign['polity']} appeals the {rec['kind']} "
+                  f"to the progenitors", actors=[sovereign["people"], against], cause="its people's need is barred",
+                  data={"ruling": rec["id"]})
+    return rec
+
+
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    return {"stewards": dict(st["stewards"]), "rulings": len(st["rulings"]), "appeals": len(st["appeals"])}
+    return {"stewards": dict(st["stewards"]), "rulings": len(st["rulings"]), "appeals": len(st["appeals"]),
+            "minds": {r: m["name"] for r, m in st.get("minds", {}).items()}}
 
 
 from xylarium.kernel import state  # noqa: E402
@@ -299,6 +426,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="stewardship",
-    state=lambda: {"stewards": {}, "rulings": {}, "appeals": [], "next": 0},
+    state=lambda: {"stewards": {}, "rulings": {}, "appeals": [], "next": 0, "minds": {}},
+    season=season,
     summary=summary,
 ))

@@ -276,6 +276,30 @@ class WebSocketGateway:
             p_id = payload.get("player_id", client.player_id)
             await client.send_json({"status": "ok", "action": "PROGRESS", "progress": roles.progress(self.kernel, p_id)})
 
+        elif action == "REALM":
+            from xylarium.kernel import stewardship
+            p_id = payload.get("player_id", client.player_id)
+            realm = payload.get("realm") or stewardship.realm_held(self.kernel, p_id) or stewardship.realms(self.kernel)[0]
+            await client.send_json({"status": "ok", "action": "REALM", "realm": stewardship.overview(self.kernel, realm),
+                                    "steward": stewardship.mind(self.kernel, realm)})
+
+        elif action == "SOVEREIGNS":
+            from xylarium.kernel import polity
+            live = [{k: s[k] for k in ("id", "name", "people", "polity", "realm", "generation", "line", "player")}
+                    for s in polity.sovereigns(self.kernel).values() if not s.get("ended")]
+            await client.send_json({"status": "ok", "action": "SOVEREIGNS", "sovereigns": live,
+                                    "treaties": list(polity.stats(self.kernel)["treaties"].values())})
+
+        elif action in ("RULE", "SEAL"):
+            from xylarium.kernel import stewardship
+            p_id = payload.get("player_id", client.player_id)
+            if action == "RULE":
+                res = stewardship.rule(self.kernel, p_id, str(payload.get("kind", "ceasefire")),
+                                       str(payload.get("a", "")), str(payload.get("b", "")))
+            else:
+                res = stewardship.seal(self.kernel, p_id, str(payload.get("ruling", "")))
+            await client.send_json({"status": "ok" if res.get("ok") else "error", "action": action, **res})
+
         elif action == "VIEW":
             p_id = payload.get("player_id", client.player_id)
             if not p_id:
