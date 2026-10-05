@@ -184,9 +184,9 @@ HURTS = ("WAR", "RAID", "CONQUEST", "SUBJUGATION", "GALACTIC_WAR")
 
 
 def attackers(kernel: Any, rec: Dict[str, Any]) -> List[str]:
-    """The peoples that have struck its people within a steward's ruling span (the ledger, its people's index)."""
-    from xylarium.kernel import history, stewardship
-    since = kernel.cycle_count - 100 * stewardship.RULING_YEARS
+    """The peoples that have struck its people within a generation of its own (the ledger, its people's index)."""
+    from xylarium.kernel import history, spheres
+    since = kernel.cycle_count - int(100 * spheres.generation(kernel, rec["people"]))
     out = []
     for e in history.of_people(kernel, rec["people"]):
         if e.get("kind") in HURTS and e.get("cycle", 0) >= since:

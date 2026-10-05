@@ -1,11 +1,12 @@
 """
 Xylarium stewardship: the realms of the 3-sphere, and the stewards (T2) who keep the balance between their peoples.
 
-REALMS. The universe is a closed 3-sphere (sphere.py); a realm is a quadrant of it - a partition laid by the
-architects that needs no knowledge of what lives below. A cluster's quadrant is the angle of its point in the
-sphere's first plane (home stands at its pole, quadrant 0); inside the home galaxy each cluster-quadrant is cut again
-into the galaxy's own four quadrants (Alpha, Beta, Gamma, Delta) by the angle of the disc cell a system was born in
-- fixed in the disc's own frame, so a system never changes realm. A realm is named by both cuts.
+REALMS. A realm is a shell of a sphere of influence (spheres.py): the systems a people's network of folded passages
+reached in one steward's term - founded where its passages first arrive, never laid in advance. Realms emerge where
+peoples cross to the stars, and grow as their networks grow; a people no network reaches is kept by no steward.
+Each realm's own steward is its network people's (the ancients' are their progenitors'); a federation sends each
+partner's steward into the other's realms. A steward's term, and the span a ruling stands, is its sender's generation
+read in the realm's own clock (spheres.term_years) - no span is laid down by the architects.
 
 THE HIERARCHY. A sovereign (T3) serves one people, by its people's own lights. A steward (T2) serves no people: it
 keeps its realm's balance and adjudicates between the sovereigns of the peoples there. Its rulings are authority:
@@ -25,11 +26,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
 
-QUADRANTS = ("Alpha", "Beta", "Gamma", "Delta")
 RULINGS = ("ceasefire", "release", "pact")
 CONTESTED = ("WAR", "RAID", "CONQUEST", "SUBJUGATION", "REVOLT", "REBELLION")
-FRONTIER_FROM = 201             # where charted frontier clusters' sector ids begin (research.mint_frontier_cluster)
-RULING_YEARS = 25                # clock years an unsealed ruling stands (declared: a generation of a steward's term)
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -37,49 +35,61 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------- the realms
-def sphere_quadrant(point: List[float]) -> int:
-    """A point of the 3-sphere's quadrant: the angle in its first plane, in quarters (home's pole is quadrant 0)."""
-    a = math.atan2(float(point[1]), float(point[0])) % (2 * math.pi)
-    return int(a // (math.pi / 2)) % 4
+def realm_of(kernel: Any, sector_id: int) -> Optional[str]:
+    """The realm a system lies in: the first network that reached it (spheres.py) - or none yet."""
+    from xylarium.kernel import spheres
+    return spheres.owner(kernel, sector_id) if hasattr(kernel, "state") else None
 
 
-def galactic_quadrant(kernel: Any, sector_id: int) -> int:
-    """The home galaxy's quadrant a system was born in: the angle of its disc cell (fixed in the disc's frame). A
-    settled galaxy, which has no disc, is cut once into four blocks of the systems it was laid with; space charted
-    after joins a quadrant by the cluster it came in (forty systems each) - so no system ever changes realm."""
-    from xylarium.kernel import cosmos
-    cell = cosmos.cell_of_sector(kernel, sector_id) if "cosmos" in getattr(kernel, "state", {}) else None
-    if cell is not None:
-        return int(cosmos.cell_theta(*cell) // (math.pi / 2)) % 4
-    if sector_id < FRONTIER_FROM:                         # the galaxy as laid: its systems cut into four blocks
-        laid = [i for i in kernel.sectors if i < FRONTIER_FROM] or [1]
-        return min(3, (sector_id - 1) * 4 // max(1, max(laid)))
-    return ((sector_id - FRONTIER_FROM) // 40) % 4         # a charted frontier cluster (forty systems each)
-
-
-def realm_of(kernel: Any, sector_id: int) -> str:
-    """The realm a system lies in: '<sphere quadrant>.<galactic quadrant>' (the home galaxy is in sphere quadrant 0)."""
-    return f"0.{galactic_quadrant(kernel, sector_id)}"
-
-
-def realm_name(key: str) -> str:
-    s, g = key.split(".")
-    return f"the {QUADRANTS[int(g)]} Quadrant" + ("" if s == "0" else f" of the {QUADRANTS[int(s)]} sphere-quadrant")
+def realm_name(key: Optional[str]) -> str:
+    from xylarium.kernel import spheres
+    return spheres.realm_name(key) if key else "no realm"
 
 
 def realms(kernel: Any) -> List[str]:
-    return [f"0.{g}" for g in range(4)]
+    from xylarium.kernel import spheres
+    return spheres.realms(kernel)
+
+
+def term_years(kernel: Any, realm: Optional[str]) -> float:
+    """A realm's steward's term in its own years (spheres.term_years)."""
+    from xylarium.kernel import spheres
+    return spheres.term_years(kernel, realm) if realm else 1.0
+
+
+def span_cycles(kernel: Any, realm: Optional[str] = None) -> int:
+    """The span a steward's memory and rulings cover, in clock cycles: its realm's term - or, across realms, the
+    longest term any keeps (from the beginning, before any realm is founded)."""
+    if realm is not None:
+        return int(100 * term_years(kernel, realm))
+    rs = realms(kernel)
+    return int(100 * max(term_years(kernel, r) for r in rs)) if rs else kernel.cycle_count
 
 
 def peoples_of(kernel: Any, realm: str) -> Dict[str, List[Any]]:
     """The peoples whose capital (largest world) lies in the realm, with their worlds."""
-    from xylarium.kernel import relations
-    out = {}
-    for who, worlds in relations._peoples(kernel).items():
-        home = max(worlds, key=lambda w: (w.population, w.id))
-        if realm_of(kernel, home.sector_id) == realm:
-            out[who] = worlds
-    return out
+    return dict(_by_realm(kernel).get(realm, {}))
+
+
+def _by_realm(kernel: Any) -> Dict[Optional[str], Dict[str, List[Any]]]:
+    """Every people by the realm its capital lies in, read once a cycle."""
+    from xylarium.kernel import cache, relations
+
+    def build() -> Dict[Optional[str], Dict[str, List[Any]]]:
+        out: Dict[Optional[str], Dict[str, List[Any]]] = {}
+        for who, worlds in relations._peoples(kernel).items():
+            home = max(worlds, key=lambda w: (w.population, w.id))
+            out.setdefault(realm_of(kernel, home.sector_id), {})[who] = worlds
+        return out
+    if not hasattr(kernel, "caches"):
+        return build()
+    return cache.stamped(kernel, "stewardship_by_realm", "all",
+                         (kernel.cycle_count, stats_of_spheres(kernel).get("v", 0)), build)
+
+
+def stats_of_spheres(kernel: Any) -> Dict[str, Any]:
+    from xylarium.kernel import spheres
+    return spheres.stats(kernel) if hasattr(kernel, "state") else {"owner": {}}
 
 
 def party(kernel: Any, holder: Optional[str]) -> Optional[str]:
@@ -115,7 +125,7 @@ def disputes(kernel: Any, realm: str) -> List[Dict[str, Any]]:
             out.append({"kind": "hold", "a": tie["patron"], "b": sub, "terms": tie.get("kind"),
                         "tribute_sol": tie.get("tribute_sol")})
     seen: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    horizon = kernel.cycle_count - 100 * RULING_YEARS
+    horizon = kernel.cycle_count - span_cycles(kernel, realm)
     for e in reversed(history.stats(kernel)["recent"]):
         if e.get("cycle", 0) < horizon:
             break
@@ -182,7 +192,7 @@ def _rule(kernel: Any, realm: str, player_id: str, kind: str, a: str, b: str) ->
     st = stats(kernel)
     st["next"] += 1
     rec = {"id": f"R-{st['next']:05d}", "kind": kind, "a": a, "b": b, "by": player_id, "realm": realm,
-           "cycle": kernel.cycle_count, "until": kernel.cycle_count + 100 * RULING_YEARS, "sealed": False}
+           "cycle": kernel.cycle_count, "until": kernel.cycle_count + span_cycles(kernel, realm), "sealed": False}
     if a not in mine or b not in mine:
         rec["appealed"] = True                             # beyond one steward: up the chain
         if any({r["a"], r["b"]} == {a, b} and r["kind"] == kind for r in st["appeals"]):
@@ -196,7 +206,7 @@ def _rule(kernel: Any, realm: str, player_id: str, kind: str, a: str, b: str) ->
     st["rulings"][_key(a, b) + "|" + kind] = rec
     history.event(kernel, "RULING", f"The steward of {realm_name(realm)} rules a {kind} between the "
                   f"{a.split(':', 1)[-1]} and the {b.split(':', 1)[-1]}", actors=[a, b],
-                  cause=f"for {RULING_YEARS} years, binding their sovereigns", data={"ruling": rec["id"]})
+                  cause=f"for {term_years(kernel, realm):.0f} years (its steward's term), binding their sovereigns", data={"ruling": rec["id"]})
     return {"ok": True, "ruling": rec, "appealed": False}
 
 
@@ -351,45 +361,46 @@ def render(o: Dict[str, Any]) -> str:
 
 # ---------------------------------------------------------------------- the stewards' minds
 def envoys(kernel: Any, realm: str) -> List[Dict[str, Any]]:
-    """The stewards in a realm: envoys, each sent by a progenitor line whose reach covers the realm (any of its
-    peoples within the line's reach of its ancients' home) - so a realm may hold several, of different ancients and
-    different alignments. A settled universe's elders send one to every realm. An envoy whose line has ended stays,
-    its grant lapsed: it holds only the authority it has earned and grown."""
+    """The stewards in a realm: its own - sent by the people whose network reached it (the ancients' by their
+    progenitor line) - and, for each federation that people has made, its partner's. A player's progenitor line sends
+    only whom its player chooses (command.py). A steward whose people has fallen stays, its grant lapsed: it holds only
+    the authority it has earned and grown."""
     from xylarium.kernel import board
     st = stats(kernel)
     env = st.setdefault("envoys", {})
     if not isinstance(st["minds"].get(realm, ""), str):
         st["minds"].pop(realm)                               # a save from before envoys: its steward is sent anew
-    senders = board.progenitors(kernel)
-    people = list(peoples_of(kernel, realm))
-    for who, line in senders.items():
-        key = f"{who}@{realm}"
-        if key in env or line.get("player"):
-            continue                                         # a player's line sends whom it chooses (command.py)
-        if not covers(kernel, line, people):
+    lines = board.progenitors(kernel)
+    for who in senders_of(kernel, realm):
+        line = lines.get(who)
+        if f"{who}@{realm}" in env or (line is not None and line.get("player")):
             continue
-        send(kernel, who, line, realm)
+        send(kernel, who, line or {"name": f"the {who.split(':', 1)[-1]}", "ancient": None}, realm)
     out = [r for r in env.values() if r["realm"] == realm]
     for r in out:
-        _authority(kernel, r, senders)
+        _authority(kernel, r, lines)
     out.sort(key=lambda r: (r["since"], r["id"]))
     if out:
         st["minds"][realm] = next(k for k, v in env.items() if v is out[0])   # the senior envoy: of record
     return out
 
 
-def covers(kernel: Any, line: Dict[str, Any], people: List[str]) -> bool:
-    """A progenitor line's reach covers a realm when any of its peoples lies within it of its ancients' home (the
-    elders, who have no home of their own, cover every realm)."""
-    from xylarium.kernel import board
-    if line.get("ancient") is None:
-        return True
-    reach = line.get("reach_kpc", 0.0)
-    for p in people:
-        home = board._home_sector(kernel, p)
-        if home is not None and board._distance(kernel, line["ancient"], home) <= reach:
-            return True
-    return False
+def senders_of(kernel: Any, realm: str) -> List[str]:
+    """Who keeps a steward in a realm by right: its network's people, and that people's federation partners."""
+    from xylarium.kernel import spheres
+    who = spheres.presence(kernel, realm)
+    if who is None:
+        return []
+    out = [who]
+    for b in spheres.stats(kernel)["bonds"].values():
+        if b["kind"] == "federation" and who in (b["a"], b["b"]):
+            out.append(b["b"] if b["a"] == who else b["a"])
+    return out
+
+
+def covers(kernel: Any, who: str, realm: str) -> bool:
+    """May a people's line keep a steward in a realm: its own network's, or a federation partner's."""
+    return who in senders_of(kernel, realm)
 
 
 def send(kernel: Any, who: str, line: Dict[str, Any], realm: str, taken: bool = False) -> Dict[str, Any]:
@@ -407,7 +418,8 @@ def send(kernel: Any, who: str, line: Dict[str, Any], realm: str, taken: bool = 
                   f"{rec['name']} {'takes a seat in' if taken else 'is sent to keep'} {realm_name(realm)}",
                   actors=[who] if who.startswith("civ:") else [],
                   cause=("by war" if taken else f"by {line['name']}, progenitor of the {who.split(':', 1)[-1]}")
-                  if line.get("ancient") else ("by war" if taken else "by the elders"),
+                  if line.get("ancient") else ("by war" if taken else "by the elders" if who == "elders"
+                                               else f"by the {who.split(':', 1)[-1]} themselves"),
                   data={"steward": rec["id"], "realm": realm})
     return rec
 
@@ -444,7 +456,9 @@ def _authority(kernel: Any, rec: Dict[str, Any], senders: Dict[str, Any]) -> Non
     from fractions import Fraction
     from xylarium.kernel import mindcore as _mc
     a = rec.setdefault("authority", {"granted": "1", "earned": "0", "grown": "0", "taken": "0"})
-    a["granted"] = "1" if rec["sender"] in senders and not rec.get("taken_seat") else "0"
+    from xylarium.kernel import relations
+    alive = rec["sender"] in senders or rec["sender"] in relations._peoples(kernel)
+    a["granted"] = "1" if alive and not rec.get("taken_seat") else "0"
     a["earned"] = str(sum((Fraction(c["delivers"]) for c in _mc.crystals(rec.get("mind") or {}).values()), Fraction(0)))
     a["grown"] = str(Fraction(kernel.cycle_count - rec["since"], 100))
 
@@ -460,7 +474,7 @@ def mind(kernel: Any, realm: str) -> Optional[Dict[str, Any]]:
 
 
 def _succeed_envoy(kernel: Any, m: Dict[str, Any]) -> None:
-    if m.get("player") is None and kernel.cycle_count - m.get("term_since", m["since"]) >= 100 * RULING_YEARS:
+    if m.get("player") is None and kernel.cycle_count - m.get("term_since", m["since"]) >= span_cycles(kernel, m["realm"]):
         from xylarium.kernel import history
         old = m["name"]
         m["generation"] += 1

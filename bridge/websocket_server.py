@@ -290,6 +290,12 @@ class WebSocketGateway:
             await client.send_json({"status": "ok", "action": "SOVEREIGNS", "sovereigns": live,
                                     "treaties": list(polity.stats(self.kernel)["treaties"].values())})
 
+        elif action == "SPHERES":
+            from xylarium.kernel import spheres
+            await client.send_json({"status": "ok", "action": "SPHERES", "summary": spheres.summary(self.kernel),
+                                    "fronts": spheres.fronts(self.kernel),
+                                    "bonds": list(spheres.stats(self.kernel)["bonds"].values())})
+
         elif action == "COMMAND":
             from xylarium.kernel import command
             p_id = payload.get("player_id", client.player_id)

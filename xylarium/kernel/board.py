@@ -47,8 +47,8 @@ def watcher_books(kernel: Any) -> mc.Chain:
     from xylarium.kernel import stewardship
     need: List[Tuple[str, str, Any]] = []
     have: List[Tuple[str, str, Any]] = []
-    span = 100 * stewardship.RULING_YEARS
     for realm in stewardship.realms(kernel):
+        span = stewardship.span_cycles(kernel, realm)
         res = stewardship.books(kernel, realm)
         taken = sum((v for (s, b), v in res.items() if b in ("lives", "young") and v > 0), Fraction(0))
         need.append((realm, "lives", taken))
@@ -72,7 +72,7 @@ def progenitor_books(kernel: Any) -> mc.Chain:
     if cosmos.is_cosmic(kernel):
         need.append(("board", "minds", mc.q(cosmos.expected_by(kernel, cosmos.deep_gyr(kernel)))))
         have.append(("board", "minds", cosmos.stats(kernel).get("arisen", 0)))
-    since = kernel.cycle_count - 100 * stewardship.RULING_YEARS
+    since = kernel.cycle_count - stewardship.span_cycles(kernel)
     lost = sum(float(e.get("magnitude") or 0) for e in history.stats(kernel)["recent"]
                if e.get("kind") in SHELTER_KINDS and e.get("cycle", 0) >= since)
     carried = sum(float(e.get("magnitude") or 0) for e in history.stats(kernel)["recent"]
@@ -105,10 +105,10 @@ def ancient_peoples(kernel: Any) -> Dict[str, Any]:
 
 def progenitors(kernel: Any) -> Dict[str, Dict[str, Any]]:
     """The progenitor lines: an ancient people that has crossed to the stars - staying near its own worlds, as the
-    old do - raises a class of its own to do its bidding across them. Each line's reach is its people's (the annals:
-    how far its dominion has grown); a line whose people falls ends. In a settled universe, which has no Big Bang of
+    old do - raises a class of its own to do its bidding across them. Each line's reach is its people's network of
+    folded passages (spheres.py: as far as its power has paid for); a line whose people falls ends. In a settled universe, which has no Big Bang of
     its own, the elders of its prehistory hold the progenitors' place."""
-    from xylarium.kernel import annals, mastery
+    from xylarium.kernel import annals, mastery, spheres
     st = stats(kernel)
     lines = st.setdefault("progenitors", {})
     anc = ancient_peoples(kernel)
@@ -124,7 +124,7 @@ def progenitors(kernel: Any) -> Dict[str, Dict[str, Any]]:
                           data={"line": lines[who]["name"]})
     for who, rec in lines.items():
         rec["ended"] = None if who in anc else (rec.get("ended") or kernel.cycle_count)
-        rec["reach_kpc"] = float((annals.stats(kernel)["of"].get(who) or {}).get("reach", 0.0))
+        rec["reach_kpc"] = spheres.radius(kernel, who)       # its network's reach (spheres.py)
     if not anc and not lines:
         elders = _line(kernel, "progenitor", "progenitor")
         elders.setdefault("ancient", None)

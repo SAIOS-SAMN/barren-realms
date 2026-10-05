@@ -12,9 +12,8 @@ minds think: laws.cognition's speed). Peoples also fall: a hazard per generation
 
 What a people lives in its annals it keeps: its way, its works, its yards, its knowledge, its crossing - and its
 people grows to what its world now feeds. Once across, its dominion grows (worlds settled per generation, as far as
-its reach), and where two dominions meet, their doctrines (federation.preferred_card of their alignments, which
-drift as peoples live) decide between a pact and a war - the GALACTIC_WAR, won by the larger dominion as often as
-its share of the two. A fallen people leaves ruins on its homeworld (archaeology.py: the deep strata of an ANCIENT
+its network's reach: spheres.py, paid in passages by its power), and where two networks meet the style of the one
+arriving decides between a bond and a realm war (spheres.py, realmwars.py). A fallen people leaves ruins on its homeworld (archaeology.py: the deep strata of an ANCIENT
 culture) and its name in the galaxy's chronicle. The galaxy's lore is these annals: every era, crossing, war and
 fall, dated in deep time (history.py: ERA, ASCENT, DOMINION, GALACTIC_WAR, FALL).
 """
@@ -39,8 +38,6 @@ FALL_PER_GENERATION = 2.0e-4    # a one-world people's hazard of falling, per ge
                                 # generations); among the stars it is shared out over the worlds it holds
 DOMINION_PER_GENERATION = 0.01  # worlds a crossed people settles per generation, per world it holds (declared)
 DOMINION_MAX = 10000            # worlds one dominion can hold together
-REACH_KPC_PER_GENERATION = 0.002   # how far a crossed people's reach grows a generation (declared)
-WAR_PER_MEETING = 0.5           # chance two dominions of opposed doctrines go to war when they meet
 MIN_GENERATIONS = 1.0           # gaps shorter than a generation are left to the full engine
 
 
@@ -382,7 +379,8 @@ def season(kernel: Any) -> List[str]:
                 since = max(0.0, gens - (crossed_at or 0.0))
                 hist["W"] = min(float(DOMINION_MAX), hist["W"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since)))
                 rec["dominion"] = int(hist["W"])
-                rec["reach"] = min(40.0, rec["reach"] + REACH_KPC_PER_GENERATION * since)
+                from xylarium.kernel import spheres
+                rec["reach"] = spheres.radius(kernel, who)       # its network's reach, paid in passages (spheres.py)
             _apply(kernel, who, home, stage)
         # its history as it lived its ages: its own work, and - once it has a state - what its few took of it, weighed
         # against the growth it made in the stretch (its worlds and its land's room, a year)
@@ -414,74 +412,6 @@ def season(kernel: Any) -> List[str]:
             for d, v in known.items():
                 if v > 0:
                     knowledge.learn(kernel, who, d, per_year * years * v / total, why="annals")
-    logs += _meetings(kernel, now)
-    return logs
-
-
-def _meetings(kernel: Any, now: float) -> List[str]:
-    """Where two crossed dominions' reaches meet: a pact or, between opposed doctrines, a war."""
-    from xylarium.config import POLICY_ORDER
-    from xylarium.kernel import cosmos, federation, history, scheduler, syntropy
-    st = stats(kernel)
-    peoples = syntropy._peoples(kernel)
-    crossed = [w for w, r in st["of"].items() if w in peoples                 # however it crossed: by its own
-               and _stage(kernel, w, max(peoples[w], key=lambda p: p.population)) == "crossed"]   # mathematics too
-    logs = []
-    for i, a in enumerate(crossed):
-        for b in crossed[i + 1:]:
-            key = f"{a}|{b}"
-            if key in st["met"]:
-                continue
-            ha = max(peoples[a], key=lambda p: p.population)
-            hb = max(peoples[b], key=lambda p: p.population)
-            d = cosmos.distance_kpc(kernel, ha.sector_id, hb.sector_id)
-            if d is None or d > st["of"][a]["reach"] + st["of"][b]["reach"]:
-                continue
-            st["met"][key] = kernel.cycle_count
-            from xylarium.kernel import alignment as _al, reputation
-            def _card(me, home, other, other_home):      # what it holds to, against what it reads in the other
-                own = _al.doctrine(home.civilization) if home.civilization is not None else 0.0
-                seen = reputation.read(kernel, me, other)
-                if seen is None:
-                    seen = _al.doctrine(other_home.civilization) if other_home.civilization is not None else 0.0
-                return federation.preferred_card(own), federation.preferred_card(seen)
-            ca, cb_seen = _card(a, ha, b, hb)
-            cb, ca_seen = _card(b, hb, a, ha)
-            rng = scheduler.rng(kernel, "meeting", a, b)
-            opposed = any(abs(POLICY_ORDER.index(x) - POLICY_ORDER.index(y)) >= 2 or "DELTA" in (x, y)
-                          for x, y in ((ca, cb_seen), (cb, ca_seen)))        # either sees an enemy in the other
-            na, nb = a.split(":", 1)[-1], b.split(":", 1)[-1]
-            from xylarium.kernel import stewardship
-            ruled = stewardship.binds(kernel, a, b) or stewardship.binds(kernel, a, b, "pact")
-            if opposed and not ruled and rng.random() < WAR_PER_MEETING:
-                da, db = st["of"][a]["dominion"], st["of"][b]["dominion"]
-                win, lose = (a, b) if rng.random() < da / max(1, da + db) else (b, a)
-                taken = st["of"][lose]["dominion"] - max(1, st["of"][lose]["dominion"] // 2)
-                st["of"][lose]["dominion"] -= taken
-                st["of"][win]["dominion"] += taken // 2
-                hw, hl = (ha, hb) if win == a else (hb, ha)
-                # the worlds change hands: a transfer in the truth (what a war destroys is its own count), never
-                # forgotten by those who lost them
-                reputation.witness(kernel, lose, win, dark=taken * float(hl.population))
-                st["wars"] += 1
-                history.event(kernel, "GALACTIC_WAR", f"War between the {na} and the {nb}", actors=[a, b],
-                              cause=f"their dominions met {d * 3261.56:,.0f} light years apart; "
-                                    f"{POLICY_CARDS_NAME(ca)} against {POLICY_CARDS_NAME(cb)}",
-                              text=f"The {win.split(':', 1)[-1]} prevailed; the {lose.split(':', 1)[-1]} lost half "
-                                   f"their dominion.", data={"winner": win, "loser": lose})
-                logs.append(f"[ANNALS] War between the {na} and the {nb}: the {win.split(':', 1)[-1]} prevail.")
-            elif opposed:
-                history.event(kernel, "DOMINION", f"The {na} and the {nb} meet among the stars", actors=[a, b],
-                              cause=f"{POLICY_CARDS_NAME(ca)} against {POLICY_CARDS_NAME(cb)}: an uneasy truce, "
-                                    f"no pact")
-            else:
-                # peoples whose doctrines agree make a pact of the ages: the bloc a federation can be founded from
-                from xylarium.kernel import relations
-                relations.pacts(kernel)[relations._pair(a, b)] = {"since": kernel.cycle_count, "annals": True}
-                st["pacts"] += 1
-                history.event(kernel, "DOMINION", f"The {na} and the {nb} meet among the stars", actors=[a, b],
-                              cause=f"{POLICY_CARDS_NAME(ca)} and {POLICY_CARDS_NAME(cb)}: they keep the peace and "
-                                    f"bind themselves by a pact")
     return logs
 
 

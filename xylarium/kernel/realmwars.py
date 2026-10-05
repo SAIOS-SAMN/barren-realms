@@ -1,31 +1,20 @@
 """
-Xylarium realm wars: when a steward does its sender's bidding beyond its realm - and what that can draw in.
+Xylarium realm wars: what comes of a contact that is not a bond - and what that can draw in.
 
-A steward keeps its realm's books (stewardship.py). It also carries its sender's will - the ancient people whose
-progenitors sent it, Light or Dark as that people's whole history makes it (a steward with no living people behind
-it is of the realm it keeps). That will reads the other realms in a book of its own, REACH, by the will's own side:
+When one people's network of folded passages reaches a system another's already holds (spheres.py), the style of the
+one arriving decides how they meet; when it means to take what it found, it is a REALM WAR. The war is the two
+peoples' - fought by the laws that fight wars: the taker's senior house (dynasties.py; else its senior sovereign)
+makes war on the holder's, its levies raised and its raids run, unless a steward's ruling binds them, which holds it.
+What the war takes (the ledger: each blow's magnitude, by who struck it) is the taker's authority, TAKEN: once it has
+taken more than the holder took back, the contested system is its - the system passes into the taker's present realm (spheres.transfer). A war that takes nothing in a full term
+of its taker's steward is spent and ends. A steward a player seats may press a claim of its own (command.py), fought
+the same way.
 
-  Light   a realm darker than its own is a deficit: its own balance less theirs (order made against destroyed)
-  Dark    a realm richer than its own is a deficit: their peoples less its own
-
-Its realm comes first: only a steward whose own mind accounts for its realm's books (every deficit there drained by
-a deed it has learned answers it) turns to that will - expansion is what a realm in order does, never a reflex.
-Then its deepest reach deficit leads, and the deed is a CLAIM: a galactic war between realms, fought by the laws that fight
-wars - its realm's senior house (dynasties.py; else its largest people's sovereign) makes war on the claimed realm's
-(the darkest people's, for the Light; the richest's, for the Dark), its levies raised and its raids run - once the
-two have met (a war cannot reach between peoples that cannot reach each other), and unless a steward's ruling binds
-them, which holds it. What the war takes (lives, by the ledger) is the claimant's
-authority there, TAKEN: once it has taken any, its sender's steward is seated in the claimed realm by war.
-
-Each year the claim is sealed in the steward's own mind like any deed: if the deficit it named shrank, a crystal;
-if not, a wall - and a walled claim is not made again. Expansion ends by learning, not by any cap.
-
-When the claimed realm is kept by a steward sent by another progenitor line, the war goes up: the two lines' wills
-contradict, and the PROGENITORS are drawn in. Each folds - seals the war its own way into space and time (the
-claim to stand, or to be undone). Two folds over one war cannot both stand; the law that decides is causal: the fold
-from the ancients nearer the contested realm reaches it first and is sealed; the farther arrives into a sealed past.
-That line's mind reads its fold delivered nothing - a wall - and it yields. A line that ends leaves the other's
-will standing. The elders, who have no ancients' home, fight no fold wars.
+When both peoples are ancients - each with a progenitor line - their wills contradict above every steward, and the
+PROGENITORS are drawn in. Each folds - seals the war its own way into space and time (the claim to stand, or to be
+undone). Two folds over one war cannot both stand; the law that decides is causal: the fold from the ancients nearer
+the contested system reaches it first and is sealed; the farther arrives into a sealed past. That line's mind reads its
+fold delivered nothing - a wall - and it yields. A line that ends leaves the other's will standing.
 """
 
 from fractions import Fraction
@@ -33,7 +22,6 @@ from typing import Any, Dict, List, Optional
 
 from xylarium.kernel import mindcore as mc
 
-REACH_BOOKS = ("reach",)
 FOLD_VOCABULARY = ("fold", "yield")
 
 
@@ -41,45 +29,8 @@ def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "realmwars")
 
 
-def _people(kernel: Any, realm: str) -> int:
-    from xylarium.kernel import stewardship
-    return sum(w.population for ws in stewardship.peoples_of(kernel, realm).values() for w in ws)
-
-
-def reach(kernel: Any, envoy: Dict[str, Any]) -> mc.Chain:
-    """Its sender's will, read against the other realms: signed, per realm, never summed."""
-    from xylarium.kernel import stewardship
-    b = stewardship.bent(kernel, envoy)
-    if not b:
-        return {}
-    mine = envoy["realm"]
-    out: mc.Chain = {}
-    for other in stewardship.realms(kernel):
-        if other == mine:
-            continue
-        if b > 0:
-            need, have = stewardship.realm_balance(kernel, mine), stewardship.realm_balance(kernel, other)
-            if need is None or have is None:
-                continue
-        else:
-            need, have = _people(kernel, other), _people(kernel, mine)
-        d = mc.q(need) - mc.q(have)
-        if d:
-            out[(other, "reach")] = d
-    return out
-
-
-def settled(kernel: Any, e: Dict[str, Any]) -> bool:
-    """Need orders: a steward turns to its sender's will only when its own mind accounts for its realm's books - every
-    deficit there drained by a deed it knows answers it."""
-    from xylarium.kernel import stewardship
-    own = stewardship.books(kernel, e["realm"])
-    roles = {site: ("people" if book == "power" else "pair") for site, book in own}
-    return mc.verdict(e.get("mind") or mc.new_mind(), own, roles)["reading"] == mc.ACCOUNTED
-
-
-def war_of(kernel: Any, envoy_key: str) -> Optional[Dict[str, Any]]:
-    return next((w for w in stats(kernel)["wars"].values() if w["by"] == envoy_key and w["status"] == "open"), None)
+def war_of(kernel: Any, by: str) -> Optional[Dict[str, Any]]:
+    return next((w for w in stats(kernel)["wars"].values() if w["by"] == by and w["status"] == "open"), None)
 
 
 def _end(kernel: Any, war: Dict[str, Any], status: str, why: str) -> None:
@@ -89,115 +40,106 @@ def _end(kernel: Any, war: Dict[str, Any], status: str, why: str) -> None:
                   cause=why, data={"war": war["id"]})
 
 
-def _bidding(kernel: Any, key: str, e: Dict[str, Any], logs: List[str]) -> None:
-    """One steward's beat for its sender: last year's claim sealed; the deepest reach deficit claimed."""
-    from xylarium.kernel import history, stewardship
-    bm = e.setdefault("bidding", mc.new_mind())
-    res = reach(kernel, e)
-    mc.seal(bm, res)
-    open_war = war_of(kernel, key)
-    entry = mc.lead(res, REACH_BOOKS, deepest=True)
-    if open_war is not None and open_war.get("escalated"):
-        return                                               # it is in the progenitors' hands now
-    if entry is None or "claim" in mc.walls(bm, mc.shape(entry, res[entry], "realm")):
-        if open_war is not None:
-            _end(kernel, open_war, "withdrawn", "its claim no longer delivers what its sender wills")
-        return
-    if open_war is None and not settled(kernel, e):
-        return                                               # its realm's own books come first
-    if open_war is not None and open_war["against"] != entry[0]:
-        _end(kernel, open_war, "withdrawn", "its sender's will turns elsewhere")
-        open_war = None
-    if open_war is None:
-        st = stats(kernel)
-        st["next"] += 1
-        wid = f"G-{st['next']:05d}"
-        side = "light" if (stewardship.bent(kernel, e) or 0) > 0 else "dark"
-        st["wars"][wid] = open_war = {"id": wid, "by": key, "sender": e["sender"], "from": e["realm"],
-                                      "against": entry[0], "side": side, "since": kernel.cycle_count,
-                                      "status": "open", "taken": "0"}
-        history.event(kernel, "GALACTIC_WAR", f"{e['name']} of {stewardship.realm_name(e['realm'])} claims "
-                      f"{stewardship.realm_name(entry[0])}",
-                      cause=(f"its sender's Light: the {stewardship.realm_name(entry[0])} is darker than its own"
-                             if side == "light" else
-                             f"its sender's Dark: the {stewardship.realm_name(entry[0])} holds more than its own"),
-                      data={"war": wid, "from": e["realm"], "against": entry[0]})
-        logs.append(f"[GALACTIC WAR] {e['name']} of {stewardship.realm_name(e['realm'])} claims "
-                    f"{stewardship.realm_name(entry[0])} ({side}).")
-    mc.intend(bm, entry, res[entry], "claim", "realm")
+def declare(kernel: Any, from_realm: str, against: str, taker: str, sector: Optional[int],
+            by: Optional[str] = None, sender: Optional[str] = None) -> Dict[str, Any]:
+    """A realm war: the taker's realm against the holder's, over one system."""
+    from xylarium.kernel import alignment, history, polity, spheres, stewardship
+    st = stats(kernel)
+    st["next"] += 1
+    wid = f"G-{st['next']:05d}"
+    home = spheres._home(kernel, taker)
+    civ = getattr(home, "civilization", None) if home is not None else None
+    side = "light" if civ is not None and alignment.character(civ) > 0 else "dark"
+    holder = spheres.presence(kernel, against)
+    st["wars"][wid] = war = {"id": wid, "by": by or from_realm, "sender": sender or taker, "taker": taker,
+                             "holder": holder, "from": from_realm, "against": against, "sector": sector,
+                             "side": side, "since": kernel.cycle_count, "status": "open", "taken": "0"}
+    a, d = _champion(kernel, taker), _champion(kernel, holder)
+    if a is not None and d is not None and d["id"] not in a.get("heard", {}):
+        polity._hears(kernel, a, d)                          # they have met: the passage brought them face to face
+        polity._hears(kernel, d, a)
+    history.event(kernel, "GALACTIC_WAR", f"The {taker.split(':', 1)[-1]} make war for {stewardship.realm_name(against)}",
+                  actors=[taker] + ([holder] if holder else []),
+                  cause=f"their passages reached a system the {str(holder).split(':', 1)[-1]} hold, and they mean "
+                        f"to take it", data={"war": wid, "from": from_realm, "against": against, "sector": sector})
+    return war
 
 
-def _champion(kernel: Any, realm: str, pick: str) -> Optional[Dict[str, Any]]:
-    """The sovereign a realm fights with: its senior house's senior seat - else, among its peoples' sovereigns, the
-    darkest people's (pick 'dark'), the richest's (pick 'rich'), or the largest's."""
-    from xylarium.kernel import alignment, dynasties, polity, stewardship
-    if pick == "senior" and "dynasties" in kernel.state:
-        hs = sorted((h for h in dynasties.standing(kernel).values() if h["realm"] == realm),
+def _champion(kernel: Any, who: Optional[str]) -> Optional[Dict[str, Any]]:
+    """The sovereign a people fights with: its senior house's senior seat, else its own senior sovereign."""
+    from xylarium.kernel import dynasties, polity
+    if who is None or "polity" not in kernel.state:
+        return None
+    if "dynasties" in kernel.state:
+        hs = sorted((h for h in dynasties.standing(kernel).values() if h["people"] == who),
                     key=lambda h: (h["founded"], h["line"]))
         for h in hs:
             recs = [polity.sovereigns(kernel)[s] for s in h["polities"] if s in polity.sovereigns(kernel)]
             if recs:
                 return min(recs, key=lambda s: (s["since"], s["id"]))
-    peoples = stewardship.peoples_of(kernel, realm)
+    recs = polity.of_people(kernel, who)
+    return min(recs, key=lambda s: (s["since"], s["id"])) if recs else None
 
-    def key(who: str) -> Any:
-        ws = peoples[who]
-        if pick == "dark":
-            civ = getattr(max(ws, key=lambda w: (w.population, w.id)), "civilization", None)
-            return (alignment.character(civ) if civ is not None else 0.0, who)
-        return (-sum(w.population for w in ws), who)
-    for who in sorted(peoples, key=key):
-        recs = polity.of_people(kernel, who)
-        if recs:
-            return min(recs, key=lambda s: (s["since"], s["id"]))
-    return None
+
+TAKING = ("WAR", "RAID", "CONQUEST", "SUBJUGATION")
+
+
+def _took(kernel: Any, by: str, from_: str, since: int) -> Fraction:
+    """What one people's own blows took from another since a cycle (the ledger: the striker is the first actor)."""
+    from xylarium.kernel import history
+    out = Fraction(0)
+    for e in history.of_people(kernel, by):
+        acts = e.get("actors") or []
+        if e.get("kind") in TAKING and e.get("cycle", 0) >= since and acts and acts[0] == by and from_ in acts[1:]:
+            out += mc.q(e.get("magnitude") or 0)
+    return out
 
 
 def _fight(kernel: Any, war: Dict[str, Any], logs: List[str]) -> None:
     """A year of a realm war: its champions' war, by the sovereigns' own laws - held where a ruling binds them -
-    and what it has taken read from the ledger."""
-    from xylarium.kernel import board, polity, stewardship
-    a = _champion(kernel, war["from"], "senior")
-    d = _champion(kernel, war["against"], "dark" if war["side"] == "light" else "rich")
+    and what it has taken read from the ledger; taking wins the system, a term of nothing spends the war."""
+    from xylarium.kernel import polity, spheres, stewardship
+    a, d = _champion(kernel, war["taker"]), _champion(kernel, war.get("holder"))
     if a is None or d is None or a["people"] == d["people"]:
         return
     war["champions"] = [a["id"], d["id"]]
-    if d["id"] not in a.get("heard", {}):
-        return                                               # they have never met: no war can reach between them
-    if stewardship.binds(kernel, a["people"], d["people"]):
-        return                                               # a steward's ruling holds it
-    t = polity.treaty(kernel, a["id"], d["id"])
-    if t is None or t["kind"] != "war":
-        polity._make(kernel, a, d, "war", f"the realm war for {stewardship.realm_name(war['against'])}")
-    polity._wage(kernel, a, d)
-    taken = mc.q(stewardship._stake_since(kernel, a["people"], d["people"], war["since"]))
-    war["taken"] = str(taken)
-    env = stewardship.stats(kernel)["envoys"]
-    seat = f"{war['sender']}@{war['against']}"
-    if taken > 0 and seat not in env and not war["sender"].startswith("seat:"):
-        lines = board.progenitors(kernel)
-        line = lines.get(war["sender"]) or {"name": env[war["by"]]["line"], "ancient": None}
-        stewardship.send(kernel, war["sender"], line, war["against"], taken=True)
-        logs.append(f"[GALACTIC WAR] {env[seat]['name']} is seated in {stewardship.realm_name(war['against'])} by war.")
-    if seat in env and env[seat].get("taken_seat"):
-        env[seat]["authority"]["taken"] = str(taken)
-    _escalate(kernel, war, logs)
+    if not stewardship.binds(kernel, a["people"], d["people"]):
+        t = polity.treaty(kernel, a["id"], d["id"])
+        if t is None or t["kind"] != "war":
+            polity._make(kernel, a, d, "war", f"the realm war for {stewardship.realm_name(war['against'])}")
+        polity._wage(kernel, a, d)
+    taken = _took(kernel, a["people"], d["people"], war["since"])
+    resisted = _took(kernel, d["people"], a["people"], war["since"])
+    war["taken"], war["resisted"] = str(taken), str(resisted)
+    if taken > resisted:
+        mine = stewardship.stats(kernel).get("envoys", {}).get(f"{war['taker']}@{war['from']}")
+        if mine is not None:
+            mine["authority"]["taken"] = str(Fraction(mine["authority"].get("taken", "0")) + taken)
+        if war.get("sector") is not None:
+            spheres.transfer(kernel, war["sector"], war["taker"])
+        _escalate(kernel, war, logs)
+        if not war.get("escalated"):
+            _end(kernel, war, "taken", f"the {war['taker'].split(':', 1)[-1]} took what they came for")
+            logs.append(f"[GALACTIC WAR] The {war['taker'].split(':', 1)[-1]} take their prize in "
+                        f"{stewardship.realm_name(war['against'])}.")
+        return
+    if kernel.cycle_count - war["since"] >= stewardship.span_cycles(kernel, war["from"]):
+        _end(kernel, war, "spent", "a steward's term of war took nothing")
 
 
 def _escalate(kernel: Any, war: Dict[str, Any], logs: List[str]) -> None:
     """Contradicting wills of two progenitor lines: the war goes up to them."""
     from xylarium.kernel import board, history, stewardship
-    if war.get("escalated") or war["sender"] == "elders":
+    if war.get("escalated"):
         return
     lines = board.progenitors(kernel)
-    others = sorted((e for e in stewardship.envoys(kernel, war["against"])
-                     if e["sender"] not in (war["sender"], "elders") and e["sender"] in lines
-                     and not e.get("taken_seat")), key=lambda e: (e["since"], e["id"]))
-    if not others or war["sender"] not in lines:
+    others = [s for s in stewardship.senders_of(kernel, war["against"]) if s != war["taker"] and s in lines
+              and lines[s].get("ancient") is not None]
+    if war["taker"] not in lines or lines[war["taker"]].get("ancient") is None or not others:
         return
     war["escalated"] = kernel.cycle_count
-    war["lines"] = [war["sender"], others[0]["sender"]]
-    war["wills"] = {war["sender"]: "stands", others[0]["sender"]: "undone"}
+    war["lines"] = [war["taker"], others[0]]
+    war["wills"] = {war["taker"]: "stands", others[0]: "undone"}
     a, b = lines[war["lines"][0]], lines[war["lines"][1]]
     history.event(kernel, "PROGENITORS_AT_WAR", f"{a['name']} and {b['name']} are drawn into the war for "
                   f"{stewardship.realm_name(war['against'])}", actors=list(war["lines"]),
@@ -207,6 +149,8 @@ def _escalate(kernel: Any, war: Dict[str, Any], logs: List[str]) -> None:
 
 def _contested(kernel: Any, war: Dict[str, Any]) -> Optional[int]:
     from xylarium.kernel import board, stewardship
+    if war.get("sector") is not None:
+        return war["sector"]
     peoples = stewardship.peoples_of(kernel, war["against"])
     if not peoples:
         return None
@@ -272,15 +216,15 @@ def _fold(kernel: Any, war: Dict[str, Any], logs: List[str]) -> None:
 
 
 def _resolve(kernel: Any, war: Dict[str, Any], winner: str, why: str, logs: List[str]) -> None:
-    """The fold war is over: the winner's will is sealed - the claim stands, or it is undone (the claimant's seat
-    taken by war is unseated, and what it took is no one's authority)."""
-    from xylarium.kernel import board, stewardship
+    """The fold war is over: the winner's will is sealed - the claim stands (the system is the taker's), or it is
+    undone (it goes back to the realm it was taken from)."""
+    from xylarium.kernel import board, spheres, stewardship
     will = war["wills"][winner]
     lines = board.progenitors(kernel)
     if winner in lines:
         lines[winner]["taken"] = lines[winner].get("taken", 0) + 1
-    if will == "undone":
-        stewardship.stats(kernel)["envoys"].pop(f"{war['sender']}@{war['against']}", None)
+    if war.get("sector") is not None and war.get("holder"):
+        spheres.transfer(kernel, war["sector"], war["taker"] if will == "stands" else war["holder"])
     _end(kernel, war, "sealed" if will == "stands" else "undone", why)
     war["sealed_by"] = winner
     logs.append(f"[FOLD WAR] The claim on {stewardship.realm_name(war['against'])} is "
@@ -288,17 +232,12 @@ def _resolve(kernel: Any, war: Dict[str, Any], winner: str, why: str, logs: List
 
 
 def season(kernel: Any) -> List[str]:
-    """Once a year, after the stewards rule: each AI steward does its sender's bidding; each open war is fought;
-    each war in the progenitors' hands is folded."""
-    from xylarium.kernel import polity, stewardship
+    """Once a year, after the stewards rule: each open war is fought; each war in the progenitors' hands is folded."""
+    from xylarium.kernel import polity, relations, stewardship
     if (kernel.cycle_count // polity._quarter()) % 4:
         return []
     logs: List[str] = []
     st = stewardship.stats(kernel)
-    for key, e in sorted(st.get("envoys", {}).items()):
-        if st["stewards"].get(e["realm"]):
-            continue                                         # a realm a player keeps: its player claims, or not
-        _bidding(kernel, key, e, logs)
     for war in sorted(stats(kernel)["wars"].values(), key=lambda w: w["id"]):
         if war["status"] != "open":
             continue
@@ -307,8 +246,8 @@ def season(kernel: Any) -> List[str]:
                 _end(kernel, war, "withdrawn", "its steward has left the seat")
             else:
                 _fight(kernel, war, logs)
-        elif war["by"] not in st.get("envoys", {}):
-            _end(kernel, war, "withdrawn", "its steward is gone")
+        elif war["taker"] not in relations._peoples(kernel):
+            _end(kernel, war, "withdrawn", "its people is gone")
         elif war.get("escalated"):
             _fold(kernel, war, logs)
         else:

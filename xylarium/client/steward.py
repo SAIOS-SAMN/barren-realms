@@ -118,7 +118,8 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             continue
         if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B", "O", "S"):
             if cmd == "S":
-                from xylarium.kernel import command, realmwars, stewardship
+                from xylarium.kernel import command, realmwars, spheres, stewardship
+                print(spheres.render(kernel))
                 held = command.line_of(kernel, pid)
                 if held is None:
                     print(c_gray("  Your people has not yet raised its progenitors."))

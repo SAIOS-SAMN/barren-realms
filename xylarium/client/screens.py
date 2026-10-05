@@ -377,6 +377,13 @@ def prompt_publish(cli: Any) -> None:
     _ask("Enter to return > ")
 
 
+def prompt_spheres(cli: Any) -> None:
+    """The spheres of influence: who folds space, how far, and where the networks have met."""
+    from xylarium.kernel import spheres
+    print(spheres.render(cli.kernel))
+    _ask("Enter to return > ")
+
+
 def prompt_house(cli: Any) -> None:
     """The houses: a captain swears to one or keeps a ronin's way; a sovereign orders its house and commissions."""
     from xylarium.kernel import command
@@ -442,6 +449,7 @@ SCREENS: Dict[str, Callable[[Any], None]] = {
     "REALM": prompt_realm,
     "PUBLISH": prompt_publish,
     "HOUSE": prompt_house,
+    "SPHERES": prompt_spheres,
     "PROGRESS": prompt_progress,
     "REALMS": prompt_realms,
     "WORKBENCH": prompt_workbench,

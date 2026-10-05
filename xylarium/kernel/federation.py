@@ -110,24 +110,26 @@ def _gain(kernel: Any, people: str, members: List[str], by: Dict[str, List[Any]]
     """A member's yearly gain from common law: its trade with its fellows, as safe as their joint arm makes it."""
     from xylarium.kernel import contact, relations
     from xylarium.kernel.sustenance import _strength
+    from xylarium.kernel import spheres
     others = dict(contact.contacts(kernel, by).get(people, {}))
-    met = (getattr(kernel, "state", {}).get("annals") or {}).get("met", {})
-    for b in members:                                     # dominions that met at the level of history trade across
-        if b != people and b in by and (f"{people}|{b}" in met or f"{b}|{people}" in met):   # their border
+
+    def met(x: str, y: str) -> bool:                    # networks bonded where they met (spheres.py)
+        return spheres.bond(kernel, x, y) is not None
+    for b in members:                                     # networks that met and bonded trade across their border
+        if b != people and b in by and met(people, b):
             others[b] = others.get(b, 0) + 1
     total = sum(others.values())
     if total <= 0:
         return 0.0
     where = relations._capital(by[people]).sector_id
-    annals_of = (getattr(kernel, "state", {}).get("annals") or {}).get("of", {})
 
     def arm(m: str) -> float:
         """What member m brings to bear where this people lives: its ships' reach, or - for a dominion that met it
-        at the level of history - its capital's strength across the gap its reach spans (falling as (1 + d/reach)^2,
-        as projection falls with hops)."""
+        through their networks - its capital's strength across the gap its network's reach spans (falling as
+        (1 + d/reach)^2, as projection falls with hops)."""
         got = relations.projected(kernel, by[m], where)
-        if got <= 0 and m != people and (f"{people}|{m}" in met or f"{m}|{people}" in met):
-            reach = float((annals_of.get(m) or {}).get("reach", 0.0))
+        if got <= 0 and m != people and met(people, m):
+            reach = spheres.radius(kernel, m)
             from xylarium.kernel import cosmos
             d = cosmos.distance_kpc(kernel, relations._capital(by[m]).sector_id, where)
             if reach > 0 and d is not None:

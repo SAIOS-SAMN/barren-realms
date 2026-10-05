@@ -19,8 +19,8 @@ def _ask(prompt: str, default: str = "") -> str:
 
 def choose_realm(kernel: Any) -> str:
     print(bold(c_cyan("\n=== WHICH REALM WILL YOU KEEP? ===")))
-    print(c_gray("The universe is cut into quadrants; this galaxy into its own four. A steward keeps one, for none of "
-                 "its peoples."))
+    print(c_gray("Realms are the shells of the spheres the peoples who fold space have grown - one steward's term of "
+                 "a network's reach each. A steward keeps one, for none of its peoples."))
     keys = stewardship.realms(kernel)
     for i, r in enumerate(keys, 1):
         o = stewardship.overview(kernel, r)
@@ -47,6 +47,9 @@ def run(kernel: Any, pid: str, save: Optional[Callable[[], Any]] = None) -> None
         elif cmd == "Y":
             for _ in range(100):
                 kernel.tick_simulation()
+        elif cmd == "S":
+            from xylarium.kernel import spheres
+            print(spheres.render(kernel))
         elif cmd in ("C", "W", "G"):
             from xylarium.kernel import command
             if cmd == "C":

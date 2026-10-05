@@ -126,8 +126,9 @@ class TestBridgeSeats(unittest.TestCase):
         asyncio.run(gw._process_client_message(c, {"action": "REGISTER", "name": "Remote Ruler", "role": "sovereign",
                                                    "rule": "commonwealth"}))
         self.assertEqual(sent[-1]["seat"]["role"], "sovereign")
+        from xylarium.kernel import stewardship
         asyncio.run(gw._process_client_message(Client(), {"action": "REGISTER", "name": "Keeper", "role": "steward",
-                                                          "realm": "0.1"}))
+                                                          "realm": stewardship.realms(k)[0]}))
         self.assertEqual(sent[-1]["seat"]["role"], "steward")
         asyncio.run(gw._process_client_message(Client(), {"action": "REGISTER", "name": "Remote Pilot"}))
         self.assertEqual(sent[-1]["seat"]["role"], "captain")
@@ -450,16 +451,23 @@ class TestStewardship(unittest.TestCase):
         self.realm = next(r for r in stewardship.realms(self.k) if len(stewardship.peoples_of(self.k, r)) >= 2)
         self.peoples = sorted(stewardship.peoples_of(self.k, self.realm))
 
-    def test_realms_partition_the_galaxy_and_never_move(self):
+    def test_realms_are_held_by_first_arrival_and_move_only_by_war(self):
+        from xylarium.kernel import realmwars, spheres
         seen = {}
-        for sid in self.k.sectors:
-            r = self.st.realm_of(self.k, sid)
-            self.assertIn(r, self.st.realms(self.k))
-            seen[sid] = r
-        for _ in range(50):
-            self.k.tick_simulation()                                            # the map grows; realms stay put
-        self.assertEqual({sid: self.st.realm_of(self.k, sid) for sid in seen}, seen)
-        self.assertEqual(self.st.sphere_quadrant([1.0, 0.0, 0.0, 0.0]), 0)        # home at the sphere's pole
+        for r in self.st.realms(self.k):
+            for sid in spheres.stats(self.k)["realms"][r]["sectors"]:
+                self.assertEqual(self.st.realm_of(self.k, sid), r)
+                seen[sid] = r
+            self.assertTrue(spheres.crossed(self.k, spheres.presence(self.k, r)))   # only those who fold space
+        self.assertTrue(seen)
+        for _ in range(2 * 100):
+            self.k.tick_simulation()                                            # the networks grow
+        self.assertGreaterEqual(len(spheres.stats(self.k)["owner"]), len(seen))
+        taken = {w.get("sector") for w in realmwars.stats(self.k)["wars"].values()}
+        for sid, r in seen.items():
+            now = self.st.realm_of(self.k, sid)
+            if now != r:
+                self.assertIn(sid, taken)                                       # a held system changes hands by war
 
     def test_a_stewards_ceasefire_binds_raids_holds_and_a_sovereigns_guns(self):
         from xylarium.kernel import relations
@@ -491,7 +499,7 @@ class TestStewardship(unittest.TestCase):
         self.assertTrue(self.st.seal(self.k, "player_0", rid)["ok"])
         rec = self.st.binds(self.k, self.peoples[0], far)
         self.assertTrue(rec["sealed"])
-        self.k.cycle_count += 100 * (self.st.RULING_YEARS + 5)
+        self.k.cycle_count += self.st.span_cycles(self.k, self.realm) + 500
         self.assertIsNotNone(self.st.binds(self.k, self.peoples[0], far))       # sealed: it stands for good
 
 
@@ -536,7 +544,7 @@ class TestSovereignMinds(unittest.TestCase):
     def test_the_realms_own_stewards_rule_and_keep_their_lines(self):
         from xylarium.kernel import stewardship
         minds = stewardship.stats(self.k)["minds"]
-        self.assertEqual(sorted(minds), stewardship.realms(self.k))
+        self.assertLessEqual(set(stewardship.realms(self.k)), set(minds))     # every held realm has its steward
         rulings = list(stewardship.stats(self.k)["rulings"].values())
         for r in rulings:
             self.assertIn(r["kind"], stewardship.RULINGS)
@@ -558,11 +566,13 @@ class TestRealmOverTheBridge(unittest.TestCase):
             async def send_json(self, data):
                 sent.append(data)
         c = Client()
+        from xylarium.kernel import stewardship
+        realm = next(r for r in stewardship.realms(k) if len(stewardship.peoples_of(k, r)) >= 2)
         asyncio.run(gw._process_client_message(c, {"action": "REGISTER", "name": "Keeper", "role": "steward",
-                                                   "realm": "0.1"}))
+                                                   "realm": realm}))
         c.player_id = sent[-1].get("player_id") or next(pid for pid, r in roles.stats(k)["of"].items() if r == "steward")
         asyncio.run(gw._process_client_message(c, {"action": "REALM"}))
-        self.assertEqual(sent[-1]["realm"]["realm"], "0.1")
+        self.assertEqual(sent[-1]["realm"]["realm"], realm)
         peoples = [r["people"] for r in sent[-1]["realm"]["peoples"]]
         asyncio.run(gw._process_client_message(c, {"action": "RULE", "kind": "ceasefire", "a": peoples[0],
                                                    "b": peoples[1]}))
@@ -594,35 +604,46 @@ class TestStewardBooks(unittest.TestCase):
 
 
 class TestEnvoys(unittest.TestCase):
-    def test_stewards_are_sent_by_progenitor_lines_and_hold_authority_by_its_sources(self):
-        from fractions import Fraction
-        from xylarium.kernel import board, stewardship
+    @classmethod
+    def setUpClass(cls):
         from xylarium.kernel.engine import GameKernel
         random.seed(5)
-        k = GameKernel(seed=42)
+        cls.k = GameKernel(seed=42)
         for _ in range(2 * 100):
-            k.tick_simulation()
-        lines = board.progenitors(k)
-        env = stewardship.stats(k)["envoys"]
+            cls.k.tick_simulation()
+
+    def test_a_realms_stewards_are_its_networks_people_and_its_federation_partners(self):
+        from fractions import Fraction
+        from xylarium.kernel import spheres, stewardship
+        env = stewardship.stats(self.k)["envoys"]
         self.assertTrue(env)
         for key, e in env.items():
             self.assertEqual(key, f"{e['sender']}@{e['realm']}")    # one per sender per realm
-            self.assertIn(e["sender"], lines)                       # every steward was sent by a standing line
+            self.assertIn(e["sender"], stewardship.senders_of(self.k, e["realm"]))
             self.assertEqual(set(e["authority"]), {"granted", "earned", "grown", "taken"})
-            self.assertEqual(Fraction(e["authority"]["granted"]), 1)
-        for realm in stewardship.realms(k):
-            senior = stewardship.mind(k, realm)
-            if senior is not None:
-                self.assertEqual(stewardship.stats(k)["minds"][realm], f"{senior['sender']}@{realm}")
+        for realm in stewardship.realms(self.k):
+            senior = stewardship.mind(self.k, realm)
+            self.assertEqual(senior["sender"], spheres.presence(self.k, realm))   # the network's own steward first
+            self.assertEqual(Fraction(senior["authority"]["granted"]), 1)
+        for b in spheres.stats(self.k)["bonds"].values():
+            if b["kind"] == "federation":                           # partners keep stewards in each other's realms
+                for r in stewardship.realms(self.k):
+                    if spheres.presence(self.k, r) == b["a"]:
+                        self.assertIn(b["b"], stewardship.senders_of(self.k, r))
 
-    def test_a_steward_whose_line_ended_keeps_only_what_it_earned_and_grew(self):
+    def test_a_terms_span_is_its_senders_generation(self):
+        from xylarium.kernel import spheres, stewardship
+        for r in stewardship.realms(self.k):
+            who = spheres.presence(self.k, r)
+            self.assertAlmostEqual(stewardship.term_years(self.k, r),
+                                   spheres.stats(self.k)["nets"][who]["gen"])   # one clock on the settled board
+
+    def test_a_steward_whose_people_fell_keeps_only_what_it_earned_and_grew(self):
         from fractions import Fraction
         from xylarium.kernel import stewardship
-        rec = {"sender": "civ:Gone", "since": 0, "mind": {"crystals": {"a|b|+": {"deed": "pact", "delivers": "3"}}}}
-
-        class K:
-            cycle_count = 250
-        stewardship._authority(K(), rec, {})
+        rec = {"sender": "civ:Gone", "since": self.k.cycle_count - 250,
+               "mind": {"crystals": {"a|b|+": {"deed": "pact", "delivers": "3"}}}}
+        stewardship._authority(self.k, rec, {})
         self.assertEqual(rec["authority"]["granted"], "0")
         self.assertEqual(Fraction(rec["authority"]["earned"]), 3)
         self.assertEqual(Fraction(rec["authority"]["grown"]), Fraction(5, 2))
@@ -685,61 +706,75 @@ class TestDynasties(unittest.TestCase):
                 st["serves"][cap.id] = was
 
 
-class TestRealmWars(unittest.TestCase):
+class TestSpheres(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from xylarium.kernel.engine import GameKernel
         random.seed(5)
         cls.k = GameKernel(seed=42)
-        for _ in range(2 * 100):
+        for _ in range(3 * 100):
             cls.k.tick_simulation()
 
-    def test_a_steward_claims_only_when_its_own_realm_is_accounted(self):
-        from xylarium.kernel import mindcore as mc, realmwars, stewardship
-        e = dict(stewardship.mind(self.k, "0.0"), bidding=mc.new_mind())
-        key = f"{e['sender']}@test"
-        before = len(realmwars.stats(self.k)["wars"])
-        with mock.patch.object(realmwars, "settled", return_value=False):
-            realmwars._bidding(self.k, key, e, [])
-        self.assertEqual(len(realmwars.stats(self.k)["wars"]), before)     # its realm's books come first
-        with mock.patch.object(realmwars, "settled", return_value=True), \
-                mock.patch.object(stewardship, "bent", return_value=-0.5):
-            res = realmwars.reach(self.k, e)
-            realmwars._bidding(self.k, key, e, [])
-        w = realmwars.war_of(self.k, key)
-        if any(v > 0 for v in res.values()):                 # a richer realm: the Dark claims it
-            self.assertIsNotNone(w)
-            self.assertEqual(w["side"], "dark")
-            realmwars._end(self.k, w, "withdrawn", "test")
+    def test_networks_grow_by_the_power_that_pays_for_their_passages(self):
+        from xylarium.kernel import mastery, relations, spheres
+        st = spheres.stats(self.k)
+        for who, net in st["nets"].items():
+            self.assertTrue(spheres.crossed(self.k, who))
+            for sid in net["held"]:
+                self.assertEqual(spheres.presence(self.k, spheres.owner(self.k, sid)), who)
+        by = relations._peoples(self.k)
+        big = max(st["nets"], key=lambda w: mastery.power_w(self.k, by.get(w, [])))
+        small = min(st["nets"], key=lambda w: mastery.power_w(self.k, by.get(w, [])) if w in by else float("inf"))
+        self.assertGreater(len(st["nets"][big]["held"]), len(st["nets"][small]["held"]))   # power reaches farther
+        self.assertGreater(spheres.radius(self.k, big), 0)
 
-    def test_a_stewards_sender_will_claims_realms_and_learning_ends_it(self):
-        from xylarium.kernel import realmwars, stewardship
-        wars = realmwars.stats(self.k)["wars"]
-        for w in wars.values():
-            self.assertNotEqual(w["from"], w["against"])
-            self.assertIn(w["side"], ("light", "dark"))
-            self.assertIn(w["status"], ("open", "withdrawn", "sealed", "undone", "lost"))
-            e = stewardship.stats(self.k)["envoys"].get(w["by"])
-            if w["status"] == "withdrawn" and e is not None:   # it learned its claim did not deliver
-                self.assertIn("claim", [d for ws in e["bidding"]["walls"].values() for d in ws])
+    def test_contact_is_a_bond_or_a_war_by_the_arrivals_style(self):
+        from xylarium.kernel import realmwars, spheres
+        st = spheres.stats(self.k)
+        self.assertTrue(st["contacts"])
+        for c in st["contacts"]:
+            self.assertIn(c["kind"], spheres.BONDS + ("war",))
+            if c["kind"] != "war":
+                self.assertEqual(spheres.bond(self.k, c["a"], c["b"])["kind"], c["kind"])
+        for w in realmwars.stats(self.k)["wars"].values():
+            self.assertNotEqual(w["taker"], w["holder"])
+            self.assertIn(w["status"], ("open", "taken", "spent", "withdrawn", "sealed", "undone", "lost"))
 
-    def test_reach_reads_by_the_wills_own_side(self):
-        from xylarium.kernel import realmwars, stewardship
-        e = dict(stewardship.mind(self.k, "0.0"))
-        with mock.patch.object(stewardship, "bent", return_value=-0.5):
-            res = realmwars.reach(self.k, e)                   # the Dark: richer realms are its deficits
-        for (other, book), v in res.items():
-            self.assertEqual(v, realmwars._people(self.k, other) - realmwars._people(self.k, "0.0"))
-        with mock.patch.object(stewardship, "bent", return_value=0.0):
-            self.assertEqual(realmwars.reach(self.k, e), {})   # no will, no reach
+    def test_the_fronts_and_their_seam_are_read_by_kind(self):
+        from xylarium.kernel import spheres
+        f = spheres.fronts(self.k)
+        self.assertEqual(len(f["progenitor"]) + len(f["young"]), len(spheres.stats(self.k)["nets"]))
+        self.assertEqual(f["progenitor"], [])                  # a settled board has no ancients' networks
+        for c in f["seam"]:
+            self.assertIn(c["met"], spheres.BONDS + ("war",))
+        self.assertIn("THE SPHERES", spheres.render(self.k))
+
+    def test_realms_are_shells_of_a_term_and_names_say_whose(self):
+        from xylarium.kernel import spheres
+        self.assertEqual(spheres.realm_name("Terran Federation#2"), "the Second Reach of the Terran Federation")
+        for rid, r in spheres.stats(self.k)["realms"].items():
+            self.assertEqual(rid, spheres.realm_id(r["presence"], r["ring"]))
+
+    def test_a_war_that_takes_more_than_it_loses_wins_the_system(self):
+        from xylarium.kernel import polity, realmwars, spheres
+        st = spheres.stats(self.k)
+        live = [w for w in st["nets"] if polity.of_people(self.k, w) and st["nets"][w]["held"]]
+        taker, holder = live[0], live[1]
+        sid = st["nets"][holder]["held"][0]
+        mine = next(r for r in spheres.realms(self.k) if spheres.presence(self.k, r) == taker)
+        w = realmwars.declare(self.k, mine, spheres.owner(self.k, sid), taker, sid)
+        with mock.patch.object(realmwars, "_took", side_effect=lambda k, by, fr, since: 5 if by == taker else 1):
+            realmwars._fight(self.k, w, [])
+        self.assertEqual(spheres.presence(self.k, spheres.owner(self.k, sid)), taker)
+        self.assertEqual(w["status"], "taken")
 
     def test_a_fold_war_is_settled_by_which_fold_arrives_first_then_the_other_yields(self):
         from xylarium.kernel import board, realmwars
         lines = {"civ:Near": {"name": "Nearline", "ancient": "civ:Near"},
                  "civ:Far": {"name": "Farline", "ancient": "civ:Far"}}
-        war = {"id": "G-T", "by": "civ:Far@0.1", "sender": "civ:Far", "from": "0.2", "against": "0.1",
-               "side": "dark", "since": 0, "status": "open", "taken": "1", "escalated": 1,
-               "lines": ["civ:Far", "civ:Near"], "wills": {"civ:Far": "stands", "civ:Near": "undone"}}
+        war = {"id": "G-T", "by": "Far#1", "sender": "civ:Far", "taker": "civ:Far", "from": "Far#1",
+               "against": "Near#1", "sector": 1, "side": "dark", "since": 0, "status": "open", "taken": "1",
+               "escalated": 1, "lines": ["civ:Far", "civ:Near"], "wills": {"civ:Far": "stands", "civ:Near": "undone"}}
         dist = {"civ:Near": 1.0, "civ:Far": 9.0}
         with mock.patch.object(board, "progenitors", return_value=lines), \
                 mock.patch.object(board, "_distance", side_effect=lambda k, a, b: dist[a]):
@@ -762,12 +797,13 @@ class TestCommand(unittest.TestCase):
             cls.k.tick_simulation()
 
     def test_a_steward_claims_withdraws_and_grants(self):
-        from xylarium.kernel import command, dynasties, realmwars, stewardship
+        from xylarium.kernel import command, dynasties, realmwars, spheres, stewardship
         k = self.k
-        h = next(iter(dynasties.standing(k).values()))
+        h = next(h for h in dynasties.standing(k).values() if h["realm"] in stewardship.realms(k))
         stewardship.seat_steward(k, "keeper", "Keeper", h["realm"])
         try:
-            other = next(r for r in stewardship.realms(k) if r != h["realm"])
+            mine = spheres.presence(k, h["realm"])
+            other = next(r for r in stewardship.realms(k) if spheres.presence(k, r) != mine)
             res = command.claim(k, "keeper", other)
             self.assertTrue(res["ok"])
             w = realmwars.stats(k)["wars"][res["war"]]
@@ -821,21 +857,24 @@ class TestCommand(unittest.TestCase):
         self.assertEqual(dynasties.stats(k)["ronin"]["drifter"]["way"], "pirate")   # its choice is kept
 
     def test_a_progenitor_sends_and_recalls_its_lines_stewards(self):
-        from xylarium.kernel import command, roles, stewardship
+        from xylarium.kernel import board, command, roles, spheres, stewardship
         k = self.k
         roles.stats(k).setdefault("of", {})["elder"] = "progenitor"
         try:
-            who, line = command.line_of(k, "elder")
             realm = stewardship.realms(k)[0]
-            self.assertTrue(command.recall(k, "elder", realm)["ok"])
-            stewardship.envoys(k, realm)
-            self.assertNotIn(f"{who}@{realm}", stewardship.stats(k)["envoys"])   # a player's line sends by choice
-            self.assertTrue(command.send(k, "elder", realm)["ok"])
-            self.assertFalse(command.send(k, "elder", realm)["ok"])
-            self.assertFalse(command.fold(k, "elder", "G-none")["ok"])
+            self.assertFalse(command.send(k, "elder", realm)["ok"])   # the elders hold no network of their own
+            who = spheres.presence(k, realm)
+            line = {"name": "Testline", "ancient": who, "player": "elder"}
+            with mock.patch.object(command, "line_of", return_value=(who, line)), \
+                    mock.patch.object(board, "progenitors", return_value={who: line}):
+                self.assertTrue(command.recall(k, "elder", realm)["ok"])
+                stewardship.envoys(k, realm)
+                self.assertNotIn(f"{who}@{realm}", stewardship.stats(k)["envoys"])   # a player's line sends by choice
+                self.assertTrue(command.send(k, "elder", realm)["ok"])
+                self.assertFalse(command.send(k, "elder", realm)["ok"])
+                self.assertFalse(command.fold(k, "elder", "G-none")["ok"])
         finally:
             roles.stats(k)["of"].pop("elder", None)
-            line["player"] = None
 
 
 class TestBoard(unittest.TestCase):

@@ -53,8 +53,8 @@ def send(kernel: Any, pid: str, realm: str) -> Dict[str, Any]:
         return _no(f"no realm {realm}")
     if f"{who}@{realm}" in stewardship.stats(kernel).setdefault("envoys", {}):
         return _no("your line already keeps a steward there")
-    if not stewardship.covers(kernel, line, list(stewardship.peoples_of(kernel, realm))):
-        return _no("your line's reach does not cover that realm")
+    if not stewardship.covers(kernel, who, realm):
+        return _no("that realm is neither your network's nor a federation partner's")
     rec = stewardship.send(kernel, who, line, realm)
     return {"ok": True, "steward": rec["name"], "realm": realm}
 
@@ -94,7 +94,7 @@ def fold(kernel: Any, pid: str, war_id: str, deed: str = "fold") -> Dict[str, An
 
 # ---------------------------------------------------------------------- the steward
 def claim(kernel: Any, pid: str, against: str) -> Dict[str, Any]:
-    from xylarium.kernel import history, realmwars, stewardship
+    from xylarium.kernel import realmwars, stewardship
     realm = stewardship.realm_held(kernel, pid)
     if realm is None:
         return _no("you keep no realm")
@@ -103,16 +103,13 @@ def claim(kernel: Any, pid: str, against: str) -> Dict[str, Any]:
     by = f"seat:{realm}"
     if realmwars.war_of(kernel, by) is not None:
         return _no("you already press a claim")
-    st = realmwars.stats(kernel)
-    st["next"] += 1
-    wid = f"G-{st['next']:05d}"
-    b = stewardship.realm_balance(kernel, realm) or 0.0
-    st["wars"][wid] = {"id": wid, "by": by, "sender": f"seat:{pid}", "from": realm, "against": against,
-                       "side": "light" if b > 0 else "dark", "since": kernel.cycle_count, "status": "open",
-                       "taken": "0"}
-    history.event(kernel, "GALACTIC_WAR", f"The steward of {stewardship.realm_name(realm)} claims "
-                  f"{stewardship.realm_name(against)}", cause="its steward's own will", data={"war": wid})
-    return {"ok": True, "war": wid}
+    from xylarium.kernel import spheres
+    taker = spheres.presence(kernel, realm)
+    target = spheres.stats(kernel)["realms"].get(against, {})
+    if taker is None or spheres.presence(kernel, against) in (None, taker):
+        return _no("no people of another network holds that realm")
+    w = realmwars.declare(kernel, realm, against, taker, target.get("seat"), by=by, sender=f"seat:{pid}")
+    return {"ok": True, "war": w["id"]}
 
 
 def withdraw(kernel: Any, pid: str) -> Dict[str, Any]:

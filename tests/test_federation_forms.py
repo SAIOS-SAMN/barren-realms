@@ -5,7 +5,7 @@ each of them crossed.
 
 import unittest
 
-from xylarium.kernel import annals, cosmos, federation, mastery, relations, technology
+from xylarium.kernel import annals, cosmos, federation, mastery, relations, spheres, technology
 from xylarium.kernel.engine import GameKernel
 
 
@@ -21,12 +21,15 @@ class TestFederationForms(unittest.TestCase):
         a, b = sorted(by)[:2]
         for who in (a, b):
             mastery.stats(k)["crossed"][who] = k.cycle_count               # crossed by their own mathematics
-            annals.stats(k)["of"].setdefault(who, {"advanced": 0.0, "passed": [], "dominion": 50, "reach": 40.0})
+            annals.stats(k)["of"].setdefault(who, {"advanced": 0.0, "passed": [], "dominion": 50, "reach": 0.0})
             home = max(by[who], key=lambda p: p.population)
             home.civilization.alignment = 0.6                              # peoples of the Light: their doctrines agree
             home.fighters, home.shields = 200, 200                         # arms enough to make law worth having
-        annals._meetings(k, cosmos.deep_gyr(k))
-        self.assertTrue(any(a in key and b in key for key in annals.stats(k)["met"]))
+        spheres.ensure(k)                                                  # each begins its network at home
+        for who in (a, b):
+            spheres.stats(k)["nets"][who]["radius"] = 40.0                 # networks grown wide (as if long held)
+        spheres._contact(k, a, max(by[b], key=lambda p: p.population).sector_id, [])   # a's passage reaches b
+        self.assertIn(spheres.bond(k, a, b)["kind"], spheres.BONDS)       # doctrines agree: they bond
         self.assertEqual(relations.bloc(k, a), relations.bloc(k, b))       # the pact binds them into one bloc
         self.assertGreater(federation._gain(k, a, [a, b], by), 0.0)        # common law is worth something to them
         founded = 0

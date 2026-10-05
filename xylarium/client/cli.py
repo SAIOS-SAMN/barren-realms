@@ -222,6 +222,7 @@ class TerminalClient:
         **{w: "REALM" for w in ["REALM", "THRONE", "COURT", "DASHBOARD"]},
         **{w: "PUBLISH" for w in ["PUBLISH", "PRESS", "ANNALS", "BOOKS"]},
         **{w: "HOUSE" for w in ["HOUSE", "DYNASTY", "RONIN", "SWEAR", "COMMISSION"]},
+        **{w: "SPHERES" for w in ["SPHERES", "NETWORKS", "FRONTS"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -262,7 +263,7 @@ class TerminalClient:
         print(c_gray("  Archaeology: RUINS (survey) │ DIG │ SHORE (dig + shoring) │ ARTIFACTS │ PERMIT (at Sol)"))
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))
         print(c_gray("  Lineage: [E]mpire mode │ FLEET │ STOCK │ BANKS │ CLONE (Sol vats) │ RETIRE"))
-        print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALM (if you rule) │ HOUSE │ PUBLISH │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
+        print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALM (if you rule) │ HOUSE │ SPHERES │ PUBLISH │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
         try:
             from xylarium.kernel import advisor
             tip = advisor.best(self.kernel, self.player_id)
