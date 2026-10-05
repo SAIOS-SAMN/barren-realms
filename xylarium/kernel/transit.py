@@ -157,11 +157,14 @@ def at_war(kernel: Any, x: Optional[str], y: Optional[str]) -> bool:
 
 def blocks(kernel: Any, payer: Optional[str], a: int, b: int) -> bool:
     """A blockade: a lane's holder turns back the ships of a people it is at war with - and an embargo: a holder
-    whose doctrine forbids taking turns back a people waging a war of taking (borders.py)."""
+    whose doctrine forbids taking turns back a people waging a war of taking (borders.py); and a realm's sanction:
+    a people caught at covert work is turned back by every lane its keeper's web holds (covert.py)."""
     holder = owner(kernel, a, b)
     if holder is None or not payer or holder == payer:
         return False
-    return at_war(kernel, holder, payer) or (aggressor(kernel, payer) and _abhorrent_to(kernel, holder))
+    from xylarium.kernel import covert
+    return at_war(kernel, holder, payer) or (aggressor(kernel, payer) and _abhorrent_to(kernel, holder)) \
+        or covert.sanctioned(kernel, payer, holder)
 
 
 def aggressor(kernel: Any, who: Optional[str]) -> bool:

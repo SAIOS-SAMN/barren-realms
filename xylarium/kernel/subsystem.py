@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 SEASON = [
     "tempo", "clocks", "cosmos", "annals", "climate", "cluster", "sphere", "blackhole", "exodus", "guidance", "monetary_policy", "federal_reserve", "banking", "fx_reanchor", "prices", "liquidity", "regimes", "alignment", "natives", "sieges",
     "credit", "geology", "propulsion", "crime", "law", "fibres", "physics", "demography",
-    "fertility", "lifespan", "contact", "institutions", "sustenance", "relations", "kinship", "federation", "occupation", "society", "memory", "culture", "syntropy", "reputation", "strategy", "steward_ai", "learning", "cohabit", "knowledge", "ways", "chemistry", "harvest", "energy", "waste", "skies", "intellect", "technology", "relics", "mastery", "signals", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "observation", "realms", "polity", "dynasties", "spheres", "stewardship", "ascendance", "borders", "realmwars", "transit", "hypha", "board", "government",
+    "fertility", "lifespan", "contact", "institutions", "sustenance", "relations", "kinship", "federation", "occupation", "society", "memory", "culture", "syntropy", "reputation", "strategy", "steward_ai", "learning", "cohabit", "knowledge", "ways", "chemistry", "harvest", "energy", "waste", "skies", "intellect", "technology", "relics", "mastery", "signals", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "observation", "realms", "polity", "dynasties", "spheres", "stewardship", "ascendance", "borders", "commerce", "covert", "realmwars", "transit", "hypha", "board", "government",
 ]
 
 

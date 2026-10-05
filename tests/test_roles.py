@@ -600,8 +600,14 @@ class TestStewardBooks(unittest.TestCase):
         envoys = list(stewardship.stats(k)["envoys"].values())
         ruled = sum(m["ruled"] for m in envoys)
         learned = sum(len(m["mind"]["crystals"]) + len(m["mind"]["walls"]) for m in envoys)
-        self.assertGreater(ruled, 0)
-        self.assertGreater(learned, 0)                         # what its rulings did is in its memory
+        if ruled:
+            self.assertGreater(learned, 0)                     # what its rulings did is in its memory
+        else:                                                  # a quiet realm: nothing a ruling could answer
+            for realm in stewardship.realms(k):
+                for (site, book), v in stewardship.books(k, realm).items():
+                    if v > 0:
+                        self.assertEqual(book, "power")
+                        self.assertIsNone(stewardship._victim(k, site, realm))
 
 
 class TestEnvoys(unittest.TestCase):

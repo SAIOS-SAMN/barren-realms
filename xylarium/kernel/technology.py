@@ -86,10 +86,19 @@ def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "technology")
 
 
-def has(kernel: Any, holder: Optional[str], cap: str) -> bool:
+def found(kernel: Any, holder: Optional[str], cap: str) -> bool:
+    """Has this people found the capability (whether or not it may use it)?"""
     if not holder or kernel is None or "technology" not in getattr(kernel, "state", {}):
         return False
     return cap in stats(kernel)["of"].get(holder, {})
+
+
+def has(kernel: Any, holder: Optional[str], cap: str) -> bool:
+    """Can this people use the capability: found, and not interdicted by a steward (ascendance.stopped)."""
+    if not found(kernel, holder, cap):
+        return False
+    from xylarium.kernel import ascendance
+    return cap not in ascendance.stopped(kernel, holder)
 
 
 def chemical_exhaust_kms(laws: Any = None) -> float:

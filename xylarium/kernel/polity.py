@@ -260,6 +260,13 @@ def delivered(kernel: Any, rec: Dict[str, Any], fields: Dict[str, Dict[str, Frac
             continue
         of = fields.get(oid) or field(kernel, o)
         if t["kind"] == "trade":
+            from xylarium.kernel import commerce
+            moved = commerce.delivered(kernel, rec["id"], oid) if kernel.cycle_count - t["since"] > 4 * _quarter() \
+                else None
+            if moved is not None:                              # a year of trade measured: what moved, not the promise
+                out.append((SELF, "food", moved["food"]))
+                out.append((SELF, "wealth", moved["earned"]))
+                continue
             for book in ("food", "wealth"):
                 if of.get(book, 0) < 0:
                     out.append((SELF, book, -of[book]))
@@ -516,7 +523,7 @@ def _wage(kernel: Any, rec: Dict[str, Any], prey: Dict[str, Any]) -> None:
 
 def _meet(kernel: Any, live: List[Dict[str, Any]]) -> List[str]:
     """New meetings, from contact (who the peoples' ships reach) - only the pairs that have just met."""
-    from xylarium.kernel import contact, relations
+    from xylarium.kernel import ascendance, contact, relations
     by = relations._peoples(kernel)
     met = contact.contacts(kernel, by)
     by_people: Dict[str, List[Dict[str, Any]]] = {}
@@ -526,6 +533,8 @@ def _meet(kernel: Any, live: List[Dict[str, Any]]) -> List[str]:
     for s in live:
         neighbours = set(met.get(s["people"], {})) | {s["people"]} | set(attackers(kernel, s))
         for people in neighbours:
+            if ascendance.isolated(kernel, s["people"], people):
+                continue                                       # a quarantined people makes no open contact
             for o in by_people.get(people, []):
                 if o["id"] != s["id"] and o["id"] not in s["heard"]:
                     heard = _hears(kernel, s, o)
@@ -542,14 +551,17 @@ def _meet(kernel: Any, live: List[Dict[str, Any]]) -> List[str]:
 
 
 def _bend(kernel: Any) -> None:
-    """Sovereigns bend to stewards: a war a steward has ruled down ends."""
-    from xylarium.kernel import stewardship
+    """Sovereigns bend to stewards: a war a steward has ruled down ends; an open treaty with a people the steward
+    holds at home lapses (it makes no open contact)."""
+    from xylarium.kernel import ascendance, stewardship
     for key, t in list(stats(kernel)["treaties"].items()):
-        if t["kind"] != "war":
-            continue
         a, b = sovereigns(kernel).get(t["a"]), sovereigns(kernel).get(t["b"])
         if a is None or b is None or a.get("ended") or b.get("ended"):
             stats(kernel)["treaties"].pop(key, None)
+            continue
+        if t["kind"] != "war":
+            if ascendance.isolated(kernel, a["people"], b["people"]):
+                stats(kernel)["treaties"].pop(key, None)
             continue
         if stewardship.binds(kernel, a["people"], b["people"]) or stewardship.binds(kernel, a["people"], b["people"], "pact"):
             t["kind"] = "peace"

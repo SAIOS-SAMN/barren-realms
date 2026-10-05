@@ -22,7 +22,11 @@ keeper alone where it has no others), signed - a deficit where it falls short of
 
 All books in balance: the steward CHARTERS it - it ascends, its network grows, it may bond and trade. Any in deficit:
 QUARANTINE - its ships go no further than its own system, its network does not grow, and no one may make war on it
-(the steward shields the young). The steward reads it again every term and rules again: a people earns its way out
+(the steward shields the young). It makes no OPEN CONTACT: no new meeting with any other people, no treaty, no trade
+beyond its own kin - whatever reaches it reaches it covertly (covert.py: exploiters of its resources, dark hands that
+would keep it down, smugglers - and the steward's counter-watch). Where a book in deficit makes its works a danger to
+the realm's order - minds it cannot read (MINDS: transfer, cyber, robotics), a history of destroying (ORDER: the atom,
+cyber) - the steward INTERDICTS them: found, but stopped (technology.has reads them as absent) until it is chartered. The steward reads it again every term and rules again: a people earns its way out
 book by book, but only a steward's ruling lets it out. A player who keeps the realm rules for it (command.py).
 
 CO-ASCENSION. A people that rises on a world others already hold - natives reaching their First Flight beside
@@ -39,6 +43,7 @@ from xylarium.kernel import mindcore as mc
 
 BOOKS = ("sufficiency", "restraint", "order", "self", "history", "minds", "money", "cooperation")
 MIND_MAKING = ("transfer", "cyber", "robotics")
+STOPS = {"minds": MIND_MAKING, "order": ("fission", "cyber")}   # the works a book in deficit makes a danger to others
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -70,7 +75,7 @@ def measures(kernel: Any, who: str) -> Dict[str, float]:
     out["self"] = 1.0 - max(0.0, min(1.0, skill))
     recs = memory.records(kernel, who) if "memory" in kernel.state else []
     out["history"] = 1.0 - (sum(memory.truth(r) for r in recs) / len(recs) if recs else 0.0)
-    held = sum(1 for cap in MIND_MAKING if technology.has(kernel, who, cap))
+    held = sum(1 for cap in MIND_MAKING if technology.found(kernel, who, cap))
     out["minds"] = held * out["self"]
     out["money"] = _debasement(kernel, home.currency)
     out["cooperation"] = _broken(kernel, who)
@@ -222,6 +227,38 @@ def free(kernel: Any, who: Optional[str]) -> bool:
     return ruling(kernel, who) in (None, "chartered")
 
 
+def isolated(kernel: Any, a: Optional[str], b: Optional[str]) -> bool:
+    """No open contact between two peoples: either is held at home (quarantined or still pending) - kin excepted."""
+    if not a or not b or a == b:
+        return False
+    return any(ruling(kernel, x) in ("quarantine", "pending") for x in (a, b))
+
+
+def stopped(kernel: Any, who: Optional[str]) -> List[str]:
+    """The works a steward has interdicted for this people: found, but stopped."""
+    if not who or "ascendance" not in getattr(kernel, "state", {}):
+        return []
+    rec = stats(kernel)["of"].get(who)
+    return list(rec.get("stopped") or []) if rec else []
+
+
+def _interdict(kernel: Any, who: str, rec: Dict[str, Any], logs: Optional[List[str]]) -> None:
+    """Quarantined: the works its books in deficit make a danger are stopped; chartered: all are free again."""
+    from xylarium.kernel import history, technology
+    stop: List[str] = []
+    if rec["ruling"] == "quarantine":
+        for book, caps in STOPS.items():
+            if Fraction((rec.get("books") or {}).get(book, "0")) > 0:
+                stop += [c for c in caps if technology.found(kernel, who, c) and c not in stop]
+    new = sorted(set(stop) - set(rec.get("stopped") or []))
+    rec["stopped"] = sorted(stop)
+    if new:
+        history.event(kernel, "INTERDICTED", f"The {who.split(':', 1)[-1]}'s {', '.join(new)} stopped by their steward",
+                      actors=[who], cause="works its own books make a danger to the realm's order")
+        if logs is not None:
+            logs.append(f"[ASCENDANCE] The {who.split(':', 1)[-1]}: {', '.join(new)} interdicted.")
+
+
 def confined(kernel: Any, who: Optional[str], a: int, b: int) -> bool:
     """Is a passage from a to b barred to this people's ships: quarantined, and leaving its own system."""
     if ruling(kernel, who) not in ("quarantine", "pending"):
@@ -239,6 +276,7 @@ def rule(kernel: Any, who: str, verdict: str, by: str, logs: Optional[List[str]]
     old = rec["ruling"]
     rec.update(ruling=verdict, ruled=kernel.cycle_count, by=by)
     rec["rulings"] += 1
+    _interdict(kernel, who, rec, logs)
     name, realm = who.split(":", 1)[-1], stewardship.realm_name(rec["realm"])
     if verdict != old:
         history.event(kernel, "ASCENDED" if verdict == "chartered" else "QUARANTINED",

@@ -27,7 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from xylarium.kernel import mindcore as mc
 
 RULINGS = ("ceasefire", "release", "pact")
-CONTESTED = ("WAR", "RAID", "CONQUEST", "SUBJUGATION", "REVOLT", "REBELLION")
+CONTESTED = ("WAR", "RAID", "CONQUEST", "SUBJUGATION", "REVOLT", "REBELLION",
+             "COVERT_EXPOSED")                         # a covert work the watch caught: heard; one unseen is not
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -596,7 +597,11 @@ def _envoy_deed(kernel: Any, realm: str, m: Dict[str, Any], logs: List[str]) -> 
     mm = m.setdefault("mind", _mc.new_mind())
     res = books(kernel, realm)
     _mc.seal(mm, res)
-    entry = _mc.lead(res, STEWARD_BOOKS, deepest=True)
+    left = dict(res)
+    entry = _mc.lead(left, STEWARD_BOOKS, deepest=True)
+    while entry is not None and entry[1] == "power" and _victim(kernel, entry[0], realm) is None:
+        left.pop(entry)                                      # power that has struck no one: no ruling answers it -
+        entry = _mc.lead(left, STEWARD_BOOKS, deepest=True)  # carried; the steward attends the next deficit
     if entry is not None:
         site, book = entry
         owed = res[entry]
