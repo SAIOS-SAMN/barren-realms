@@ -78,6 +78,7 @@ def _menu(kernel: Any, pid: str, seat: Optional[str] = None) -> None:
     if seat == "progenitor":
         opts += [("T", "Look away: let an age pass (a thousand to a billion years)"),
                  ("B", "Seal what is appealed to you (fold space and time)"),
+                 ("O", "Read the board (the watcher's and the progenitors' books)"),
                  ("Y", "Counsel seeding young worlds"), ("V", "Counsel uplifting younger minds"),
                  ("H", "Write into your chronicle")]
     if kernel.get_player(pid) is not None:
@@ -114,8 +115,11 @@ def run(kernel: Any, pid: str, name: str, save: Optional[Any] = None, aboard: bo
             from xylarium.kernel import roles
             print(roles.render_progress(roles.progress(kernel, pid)))
             continue
-        if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B"):
-            if cmd == "B":
+        if seat == "progenitor" and cmd in ("T", "Y", "V", "H", "B", "O"):
+            if cmd == "O":
+                from xylarium.kernel import board
+                print(board.render(kernel))
+            elif cmd == "B":
                 from xylarium.kernel import stewardship
                 ap = stewardship.appeals(kernel)
                 for r in ap:

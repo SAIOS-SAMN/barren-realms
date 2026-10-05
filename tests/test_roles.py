@@ -586,3 +586,28 @@ class TestStewardBooks(unittest.TestCase):
                       for m in stewardship.stats(k)["minds"].values())
         self.assertGreater(ruled, 0)
         self.assertGreater(learned, 0)                         # what its rulings did is in its memory
+
+
+class TestBoard(unittest.TestCase):
+    def test_the_watcher_brings_appeals_up_and_the_ancients_seal_them(self):
+        from xylarium.kernel import board, mindcore as mc, stewardship
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        k = GameKernel(seed=42)
+        for _ in range(10 * 100):
+            k.tick_simulation()
+        sealed = [r for r in stewardship.stats(k)["rulings"].values() if r.get("sealed")]
+        self.assertTrue(sealed)                                  # what no steward could settle, settled
+        for r in sealed:
+            self.assertTrue(str(r["sealed_by"]).startswith("ancients:"))
+        for (site, book), v in board.progenitor_books(k).items():
+            self.assertIsInstance(v, mc.Fraction)
+        self.assertIn("THE BOARD", board.render(k))
+        self.assertIn("watcher", board.summary(k))
+
+    def test_a_seated_progenitor_decides_for_itself(self):
+        from xylarium.kernel import board
+        from xylarium.kernel.engine import GameKernel
+        k = GameKernel(seed=42)
+        roles.stats(k)["of"]["player_0"] = "progenitor"
+        self.assertEqual(board.seated_progenitor(k), "player_0")

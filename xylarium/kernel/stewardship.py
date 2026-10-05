@@ -232,9 +232,14 @@ def appeals(kernel: Any) -> List[Dict[str, Any]]:
 def seal(kernel: Any, progenitor_id: str, ruling_id: str) -> Dict[str, Any]:
     """A progenitor folds space and time to settle a ruling for good: it binds whatever realms its parties live in,
     stands without end, and joins the parties' worldlines (clocks.link)."""
-    from xylarium.kernel import clocks, history, roles
+    from xylarium.kernel import roles
     if roles.role_of(kernel, progenitor_id) != "progenitor":
         return {"ok": False, "why": "Only a progenitor seals what is appealed."}
+    return _seal(kernel, progenitor_id, ruling_id)
+
+
+def _seal(kernel: Any, progenitor_id: str, ruling_id: str) -> Dict[str, Any]:
+    from xylarium.kernel import clocks, history
     st = stats(kernel)
     rec = next((r for r in st["appeals"] if r["id"] == ruling_id), None) or \
         next((r for r in st["rulings"].values() if r["id"] == ruling_id), None)
@@ -242,6 +247,7 @@ def seal(kernel: Any, progenitor_id: str, ruling_id: str) -> Dict[str, Any]:
         return {"ok": False, "why": f"No ruling {ruling_id}."}
     rec["sealed"] = True
     rec["sealed_by"] = progenitor_id
+    rec["sealed_at"] = kernel.cycle_count
     st["appeals"] = [r for r in st["appeals"] if r["id"] != ruling_id]
     _apply(kernel, rec)
     st["rulings"][_key(rec["a"], rec["b"]) + "|" + rec["kind"]] = rec
@@ -460,8 +466,7 @@ def season(kernel: Any) -> List[str]:
                     logs.append(f"[STEWARD] {m['name']} of {realm_name(realm)} rules a {kind} between the "
                                 f"{a.split(':', 1)[-1]} and the {b.split(':', 1)[-1]} ({book}).")
                     break
-            continue
-        mine = set(peoples_of(kernel, realm))
+        mine = set(peoples_of(kernel, realm))                  # sending up is not a ruling: it is done every year
         pending = {frozenset((r["a"], r["b"])) for r in stats(kernel)["appeals"]}
         beyond = [d for d in disputes(kernel, realm)                # what reaches past its realm goes up, once
                   if not (d["a"] in mine and d["b"] in mine) and frozenset((d["a"], d["b"])) not in pending
