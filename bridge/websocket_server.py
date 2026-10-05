@@ -242,7 +242,7 @@ class WebSocketGateway:
                     captain = self.kernel.get_player(p_id)
                 else:
                     captain = self.kernel.register_player(p_id, name)
-                    seat = roles.seat_captain(self.kernel, p_id)
+                    seat = roles.seat_captain(self.kernel, p_id, str(payload.get("office") or "trader"))
             pers = payload.get("personality")
             if pers:
                 try:

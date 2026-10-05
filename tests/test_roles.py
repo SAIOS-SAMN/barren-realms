@@ -341,3 +341,19 @@ class TestWhoDecidesTurnings(unittest.TestCase):
         random.seed(5)
         k = roles.start_steward(42, "Queen", pick=0, rule="council")
         self.assertFalse(annals.history_decides(k, "civ:anyone"))
+
+
+class TestTiersAndOffices(unittest.TestCase):
+    def test_offices_are_the_sovereigns_specializations_and_each_sees_as_its_office_does(self):
+        from xylarium.kernel import zones
+        self.assertEqual([o["tier"] for o in roles.OFFICES], ["T4", "T5", "T6", "T7", "T8", "T9"])
+        random.seed(3)
+        k = roles.start_captain(42, "Spy", office="intelligence")
+        self.assertEqual(roles.tier_of(k, "player_1"), "T8")
+        self.assertEqual(roles.office_of(k, "player_1")["name"], "Intelligence")
+        p = roles.progress(k, "player_1")
+        self.assertIn("INTELLIGENCE (T8)", roles.render_progress(p))
+        here = k.get_player("player_1").sector_id
+        two = zones._ring(k, [here], 2) - zones._ring(k, [here], 1)
+        if two:
+            self.assertTrue(any(zones.open_at(k, s) for s in two))      # it sees a lane further than a trader

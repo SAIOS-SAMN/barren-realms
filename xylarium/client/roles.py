@@ -29,6 +29,19 @@ def choose_role() -> str:
     return "captain"
 
 
+def choose_office() -> str:
+    """Which office below the sovereign - a specialization of its work, played from a ship."""
+    print(bold(c_cyan("\n=== WHICH OFFICE WILL YOU HOLD? ===")))
+    for i, o in enumerate(roles.OFFICES, 1):
+        print(f"  {c_gold(f'[{i}]')} {bold(o['name'])} ({o['tier']})  {c_gray(o['blurb'])}")
+        print(f"      {c_gray('commands: ' + ', '.join(o['levers']))}")
+    try:
+        raw = input(c_gold("Office [1] > ")).strip()
+    except (KeyboardInterrupt, EOFError):
+        raw = ""
+    return roles.OFFICES[int(raw) - 1]["key"] if raw.isdigit() and 1 <= int(raw) <= len(roles.OFFICES) else "trader"
+
+
 def announce_tradewards(kernel, player_id: str) -> Optional[str]:
     tw = roles.tradewards(kernel)
     if not tw:

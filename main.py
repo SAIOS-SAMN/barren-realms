@@ -63,7 +63,7 @@ def main():
                 from xylarium.client.cli import lineage_genesis
                 from xylarium.kernel import roles
                 kernel, player_id = lineage_genesis(args.seed, args.name)
-                roles.seat_captain(kernel, player_id)
+                roles.seat_captain(kernel, player_id, roles_ui.choose_office())
                 roles_ui.announce_tradewards(kernel, player_id)
             elif seat == "steward":
                 from xylarium.client import ruler as ruler_ui

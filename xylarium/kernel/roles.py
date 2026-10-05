@@ -1,32 +1,81 @@
 """
-Xylarium roles: the three seats a new player - human or AI - can take in a universe.
+Xylarium roles: the seats a player - human or AI - can take in the realm the architects laid.
 
-  PROGENITOR   start from the Big Bang as one of the first minds the universe raises near its galaxy's core: shape
-               that ancient people, carry it through what deep time throws at it, seed the young worlds that come
-               after it, and write its chronicle.
-  STEWARD      rule an established polity on the brink of interstellar travel: say how it is governed, raise its
-               defences, make war, settle new worlds (Barren Realms Elite).
-  CAPTAIN      a fleet manager in an established civilization, starting at Tradewards - the settled galaxy's
-               densest cluster of docks: trade, haul, dodge pirates, answer to the police, hunt bounties.
+The tiers (as in /opt/netstratum and /opt/xylarium): T0 Progenitor, T1 Watcher, T2 Observer, T3 Sovereign, and below
+the sovereign the offices T4-T9 - each a specialization of the sovereign's work played in the realm:
 
-A role is a starting seat, not a different universe: every seat plays under the same laws. The terminal client
-(xylarium/client/roles.py) and the bridge (REGISTER with a role) start a seat through the functions here.
+  T0 PROGENITOR   start from the Big Bang as one of the first minds the universe raises near its galaxy's core: shape
+                  that ancient people, carry it through deep time, seed the young worlds after it, write its chronicle.
+  T1 WATCHER, T2 OBSERVER   see far and seal what they see into the chart (seats still to be opened).
+  T3 SOVEREIGN    rule an established polity on the brink of interstellar travel: how it is governed, its defences,
+                  its wars, its settlements (Barren Realms Elite). Its seat key is "steward".
+  T4-T9 OFFICES   a ship and a specialization, starting at Tradewards - the settled galaxy's densest cluster of
+                  docks (TradeWars). Its seat key is "captain"; the office is its specialization (OFFICES).
+
+A seat is a place to stand, never a different law: every seat acts through the same doors as the realm's own minds,
+and its status decides its levers and how far the realm unfolds around it (zones.ASPECT), never what is true.
+The terminal client (xylarium/client/roles.py) and the bridge (REGISTER with a role) take seats through here.
 """
 
 from typing import Any, Dict, List, Optional
 
 ROLES: List[Dict[str, str]] = [
-    {"key": "progenitor", "name": "Progenitor",
+    {"key": "progenitor", "name": "Progenitor (T0)", "tier": "T0",
      "blurb": "Start from the Big Bang as one of the first minds near the galactic core. Shape your ancient people, "
               "carry it through what deep time throws at it, seed young worlds, and write its chronicle."},
-    {"key": "steward", "name": "Steward",
+    {"key": "steward", "name": "Sovereign (T3)", "tier": "T3",
      "blurb": "Rule an established polity on the brink of interstellar travel. Choose how it is governed, then build "
               "its planetary defences, make war, and settle new worlds (Barren Realms Elite)."},
-    {"key": "captain", "name": "Captain",
-     "blurb": "Command a ship in an established civilization, starting at Tradewards, where docks are everywhere. "
-              "Trade, haul freight, dodge pirates, answer to the police, and hunt bounties (TradeWars)."},
+    {"key": "captain", "name": "Office (T4-T9)", "tier": "T4-T9",
+     "blurb": "Take a ship and an office - trader, developer, financier, defender, intelligence or logistics - "
+              "starting at Tradewards, where docks are everywhere (TradeWars)."},
 ]
 KEYS = tuple(r["key"] for r in ROLES)
+
+TIERS: List[Dict[str, str]] = [
+    {"tier": "T0", "name": "Progenitor", "seat": "progenitor", "holds": "the board: genomes, seeding, uplift, deep time"},
+    {"tier": "T1", "name": "Watcher", "seat": "", "holds": "far sight over a galaxy (to be opened)"},
+    {"tier": "T2", "name": "Observer", "seat": "", "holds": "sealing what is seen into the chart (to be opened)"},
+    {"tier": "T3", "name": "Sovereign", "seat": "steward", "holds": "a realm: rule, defence, war, settlement"},
+]
+
+# the offices below the sovereign: each a specialization of its work, played from a ship (the "captain" seat)
+OFFICES: List[Dict[str, Any]] = [
+    {"key": "trader", "tier": "T4", "name": "Trader",
+     "blurb": "Trade runs and arbitrage between ports: buy low, sell high, find the routes that pay.",
+     "levers": ["TRADE", "MARKETS", "ADVISOR", "FX"]},
+    {"key": "developer", "tier": "T5", "name": "Developer",
+     "blurb": "Business development: stations, refineries, extraction and export, the corporate machinery.",
+     "levers": ["STATION", "CHARTER", "MINE", "EXCHANGE"]},
+    {"key": "financier", "tier": "T6", "name": "Financier",
+     "blurb": "Money itself: forex arbitrage, the ISSE's markets, credit and the banks.",
+     "levers": ["FX", "EXCHANGE", "BANK", "BANKS"]},
+    {"key": "defender", "tier": "T7", "name": "Defender",
+     "blurb": "Route protection and fortification: escorts, sentries, fighters and mines where the lanes need them.",
+     "levers": ["SENTRY", "FLEET", "SURFACE"]},
+    {"key": "intelligence", "tier": "T8", "name": "Intelligence",
+     "blurb": "Covert operations: operatives, what others hide, and what they do not yet know about you.",
+     "levers": ["SPY", "SCAN", "PROFILE"]},
+    {"key": "logistics", "tier": "T9", "name": "Logistics",
+     "blurb": "Haulers and the network: optimised routes, freight contracts, the traders you hire.",
+     "levers": ["FLEET", "EXCHANGE", "MAP"]},
+]
+OFFICE_KEYS = tuple(o["key"] for o in OFFICES)
+
+
+def office_of(kernel: Any, player_id: str) -> Optional[Dict[str, Any]]:
+    """The office a captain's seat holds (None for other seats)."""
+    if role_of(kernel, player_id) != "captain":
+        return None
+    key = stats(kernel).setdefault("office", {}).get(player_id, "trader")
+    return next((o for o in OFFICES if o["key"] == key), OFFICES[0])
+
+
+def tier_of(kernel: Any, player_id: str) -> Optional[str]:
+    role = role_of(kernel, player_id)
+    if role == "captain":
+        return (office_of(kernel, player_id) or OFFICES[0])["tier"]
+    return {"progenitor": "T0", "steward": "T3"}.get(role or "")
 TRADEWARDS_REACH = 2            # jumps: the docks a captain can reach from a hub without ranging far
 
 
@@ -75,27 +124,31 @@ def place(kernel: Any, player_id: str, sector_id: int) -> None:
         kernel.sectors[sector_id].captains.append(player_id)
 
 
-def seat_captain(kernel: Any, player_id: str) -> Dict[str, Any]:
-    """A registered captain takes the Captain's seat: berthed at Tradewards, unless its origin musters elsewhere."""
+def seat_captain(kernel: Any, player_id: str, office: str = "trader") -> Dict[str, Any]:
+    """A registered captain takes an office's seat (T4-T9, `office` its specialization): berthed at Tradewards,
+    unless its origin musters elsewhere."""
     from xylarium.config import PLAYER_STARTING_SECTOR, STARTING_BACKGROUNDS
     cap = kernel.get_player(player_id)
     stats(kernel)["of"][player_id] = "captain"
+    stats(kernel).setdefault("office", {})[player_id] = office if office in OFFICE_KEYS else "trader"
     tw = tradewards(kernel)
     bg = STARTING_BACKGROUNDS.get((cap.background or "").lower()) if cap is not None and cap.background else None
     own_muster = bg is not None and bg.get("start_sector", PLAYER_STARTING_SECTOR) != PLAYER_STARTING_SECTOR
     if tw is not None and cap is not None and not own_muster and cap.sector_id == PLAYER_STARTING_SECTOR:
         place(kernel, player_id, tw["sector"])
-    return {"role": "captain", "tradewards": tw, "sector": cap.sector_id if cap is not None else None}
+    off = office_of(kernel, player_id) or OFFICES[0]
+    return {"role": "captain", "office": off["key"], "tier": off["tier"], "tradewards": tw,
+            "sector": cap.sector_id if cap is not None else None}
 
 
 def start_captain(seed: int, name: str, clade: Optional[str] = None, background: Optional[str] = None,
-                  player_id: str = "player_1") -> Any:
+                  player_id: str = "player_1", office: str = "trader") -> Any:
     """A new settled universe with one captain at Tradewards. Returns the kernel."""
     from xylarium.kernel.engine import GameKernel
     k = GameKernel(seed=seed)
     k.single_lineage = True
     k.register_player(player_id, name, clade=clade, background=background, bind_lineage=True)
-    seat_captain(k, player_id)
+    seat_captain(k, player_id, office)
     return k
 
 
@@ -387,7 +440,9 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
     others read it, and the measures of its own seat."""
     from xylarium.kernel import ages, cosmos, mastery, relations, syntropy
     role = role_of(kernel, player_id) or ("steward" if ages.stats(kernel)["stewards"].get(player_id) else "captain")
-    out: Dict[str, Any] = {"role": role, "year": kernel.cycle_count // 100}
+    out: Dict[str, Any] = {"role": role, "year": kernel.cycle_count // 100, "tier": tier_of(kernel, player_id)}
+    if role == "captain" and office_of(kernel, player_id):
+        out["office"] = office_of(kernel, player_id)["name"]
     cap = kernel.get_player(player_id)
     if role == "captain" and cap is not None:
         out.update(credits=cap.credits, score=cap.score, rank=cap.rank_tier, bounty=cap.bounty,
@@ -434,7 +489,8 @@ def progress(kernel: Any, player_id: str) -> Dict[str, Any]:
 
 def render_progress(p: Dict[str, Any]) -> str:
     """The progress screen, as text."""
-    lines = [f"=== PROGRESS: {p['role'].upper()} - year {p['year']:,} ==="]
+    seat = {"steward": "SOVEREIGN", "captain": (p.get("office") or "OFFICE").upper()}.get(p["role"], p["role"].upper())
+    lines = [f"=== PROGRESS: {seat}{' (' + p['tier'] + ')' if p.get('tier') else ''} - year {p['year']:,} ==="]
     for key, label in (("polity", "Polity"), ("rule", "Rule"), ("people", "People"), ("worlds", "Worlds"), ("dominion", "Worlds held (history's scale)"),
                        ("own_years", "Years your people has lived"),
                        ("population", "Population"), ("treasury", "Treasury"), ("credits", "Credits"),

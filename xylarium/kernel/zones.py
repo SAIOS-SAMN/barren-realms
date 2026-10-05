@@ -31,6 +31,7 @@ ASPECT: Dict[str, Dict[int, int]] = {
     "progenitor": {WORLD: 0},                 # its people's worlds; the rest of the board it reads charted
     "sovereign": {WORLD: 1, SURFACE: 0},      # its realm and the borders it guards; its own worlds' grounds
     "office": {WORLD: 1},                     # a ship: its sector and the lanes it can take next
+    "intelligence": {WORLD: 2},               # the intelligence office: what lies a lane further, unseen
     "people": {WORLD: 0},                     # a people lives on its worlds
     "station": {WORLD: 0},                    # a port's people, the sector it stands in
 }
@@ -68,6 +69,7 @@ def observers(kernel: Any) -> Dict[str, Set[int]]:
         pass
     seats = roles.stats(kernel)["of"] if "roles" in getattr(kernel, "state", {}) else {}
     realms = roles.stats(kernel).get("realms", {}) if seats else {}
+    offices = roles.stats(kernel).get("office", {}) if seats else {}
     for cid, cap in getattr(kernel, "captains", {}).items():
         seat = seats.get(cid)
         if seat == "steward" and cid in realms:
@@ -76,6 +78,8 @@ def observers(kernel: Any) -> Dict[str, Set[int]]:
                 w = kernel.get_planet(wid)
                 if w is not None:
                     out["sovereign"].add(w.sector_id)
+        elif offices.get(cid) in ASPECT:
+            out[offices[cid]].add(cap.sector_id)          # an office that sees further than a ship's next lanes
         else:
             out["office"].add(cap.sector_id)
     if "ages" in getattr(kernel, "state", {}):
