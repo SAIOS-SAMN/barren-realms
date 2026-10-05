@@ -170,8 +170,8 @@ def worm_cost(kernel: Any, a: int, b: int) -> Optional[float]:
 def _around(kernel: Any, a: int, b: int) -> float:
     """The cheapest way from a to b without the lane between them (fibres' costs), memoized per cost version."""
     from xylarium.kernel import cache, fibres
-    st = fibres.state(kernel)
-    version = (st.get("version", 0), st.get("seasons", 0), len(kernel.sectors),
+    st = fibres.state(kernel)                                 # lanes develop over years: read once a year, and anew
+    version = (st.get("version", 0), st.get("seasons", 0) // 4, len(kernel.sectors),   # when the map or space changes
                sum(len(sec.warps) for sec in kernel.sectors.values()))
 
     def build() -> float:
@@ -264,9 +264,10 @@ def _pay_owner(kernel: Any, who: str, amount: int) -> None:
         from xylarium.kernel import ledger
         ledger.pay_service(amount, institution="transit")
         return
-    from xylarium.kernel.fx import ACTIVE_FX
-    if home.currency != "SOL" and ACTIVE_FX is not None:
-        home.treasury += ACTIVE_FX.swap_sol_to(home.currency, amount)
+    fx = getattr(kernel, "fx_market", None)
+    if home.currency != "SOL" and fx is not None:
+        got, _ = fx.convert("SOL", home.currency, amount)    # a money no exchange lists yet is listed, or held
+        home.treasury += got
     else:
         home.treasury += amount
 
@@ -618,8 +619,53 @@ def _forging(kernel: Any, logs: List[str]) -> None:
             mc.intend(m, entry, res[entry], "forge", "system")
 
 
+def _heirs(kernel: Any, logs: List[str]) -> None:
+    """A throat whose keeper's people is gone passes to whoever can keep it - the living master whose network holds
+    one of its mouths (the centre's to the first living master) - or, with no one to pay its upkeep, it collapses:
+    the bounce is not held open by no one."""
+    from xylarium.kernel import history, relations, spheres, topology
+    st = stats(kernel)
+    living = relations._peoples(kernel)
+    for who in [w for w in st["masters"] if w not in living]:
+        st["masters"].pop(who)
+        history.event(kernel, "BOUNCE_LOST", f"The {who.split(':', 1)[-1]}'s mastery of the bounce dies with them",
+                      cause="its people has fallen")
+    for k, w in sorted(st["worms"].items()):
+        if w["owner"] in living:
+            continue
+        heir = None
+        for end in (w["a"], w["b"]):
+            holder = spheres.presence(kernel, spheres.owner(kernel, end))
+            if holder in st["masters"]:
+                heir = holder
+                break
+        if heir is None and MOUTH_BASE in (w["a"], w["b"]) and st["masters"]:
+            heir = min(st["masters"], key=lambda m: (st["masters"][m], m))
+        old = w["owner"]
+        if heir is not None:
+            w["owner"], w["handling"] = heir, handling_of(kernel, heir)
+            history.event(kernel, "WORMHOLE_INHERITED", f"The {heir.split(':', 1)[-1]} keep the throat the "
+                          f"{old.split(':', 1)[-1]} kept", actors=[heir], sector_id=w["a"] if w["a"] in kernel.sectors
+                          else None, cause="its keeper's people is gone; the mouth lies in their network",
+                          data={"throat": k})
+            logs.append(f"[WORMHOLE] The {heir.split(':', 1)[-1]} inherit the {old.split(':', 1)[-1]}'s throat.")
+            continue
+        for x, y in ((w["a"], w["b"]), (w["b"], w["a"])):
+            if x in kernel.sectors and y in kernel.sectors[x].warps:
+                kernel.sectors[x].warps.remove(y)
+        st["worms"].pop(k)
+        st["collapsed"] = st.get("collapsed", 0) + 1
+        topology.changed(kernel)
+        history.event(kernel, "WORMHOLE_COLLAPSE", f"The throat between {_name(kernel, w['a'])} and "
+                      f"{_name(kernel, w['b'])} collapses", sector_id=w["a"] if w["a"] in kernel.sectors else None,
+                      cause=f"the {old.split(':', 1)[-1]} who kept it are gone, and no one else can hold the bounce",
+                      data={"throat": k})
+        logs.append(f"[WORMHOLE] With the {old.split(':', 1)[-1]} gone, the throat {k} collapses.")
+
+
 def season(kernel: Any) -> List[str]:
-    """Once a year: each lane's year of traffic closes; masters of the bounce arise; throats open; lines forge."""
+    """Once a year: each lane's year of traffic closes; a fallen keeper's throats pass on or collapse; masters of the
+    bounce arise; throats open; lines forge."""
     from xylarium.kernel import polity
     if (kernel.cycle_count // polity._quarter()) % 4:
         return []
@@ -627,6 +673,7 @@ def season(kernel: Any) -> List[str]:
     for rec in st["lanes"].values():
         rec["last_year"], rec["year"] = rec["year"], 0
     logs: List[str] = []
+    _heirs(kernel, logs)
     _masters(kernel, logs)
     _natural(kernel, logs)
     _forging(kernel, logs)
@@ -654,8 +701,10 @@ def summary(kernel: Any) -> Dict[str, Any]:
     kinds: Dict[str, int] = {}
     for w in st["worms"].values():
         kinds[w["kind"]] = kinds.get(w["kind"], 0) + 1
-    return {"paid_cr": round(st["paid"]), "tolled_lanes": sum(1 for r in st["lanes"].values() if r["collected"] > 0),
-            "masters": sorted(st["masters"]), "throats": kinds, "forged": st["forged"]}
+    return {"paid_cr": round(st["paid"]), "tithed_cr": round(st.get("tithed", 0.0)),
+            "tolled_lanes": sum(1 for r in st["lanes"].values() if r["collected"] > 0),
+            "masters": sorted(st["masters"]), "throats": kinds, "forged": st["forged"],
+            "collapsed": st.get("collapsed", 0)}
 
 
 from xylarium.kernel import state  # noqa: E402

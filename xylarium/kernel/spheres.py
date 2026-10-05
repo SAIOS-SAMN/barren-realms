@@ -344,10 +344,33 @@ def season(kernel: Any) -> List[str]:
     logs: List[str] = []
     ensure(kernel, logs)
     st = stats(kernel)
+    living = relations._peoples(kernel)
     for who in sorted(st["nets"]):
-        if who in relations._peoples(kernel):
+        if who in living:
             grow(kernel, who, st["nets"][who], logs)
+        elif st["nets"][who]["held"]:
+            lapse(kernel, who, logs)
     return logs
+
+
+def lapse(kernel: Any, who: str, logs: List[str]) -> None:
+    """A people that has fallen holds nothing: its passages close, its realms lapse, its systems are no one's - the
+    next network to reach them holds them (no war is fought with the dead)."""
+    from xylarium.kernel import history
+    st = stats(kernel)
+    net = st["nets"][who]
+    for sid in list(net["held"]):
+        rid = st["owner"].pop(str(sid), None)
+        if rid in st["realms"] and sid in st["realms"][rid]["sectors"]:
+            st["realms"][rid]["sectors"].remove(sid)
+    n = len(net["held"])
+    net["held"] = []
+    st["v"] = st.get("v", 0) + 1
+    for k in [k for k, b in st["bonds"].items() if who in (b["a"], b["b"])]:
+        st["bonds"].pop(k)
+    history.event(kernel, "REALM_LAPSES", f"The realms of the {who.split(':', 1)[-1]} lapse",
+                  cause=f"its people has fallen: its passages close and its {n} systems are no one's")
+    logs.append(f"[SPHERES] The {who.split(':', 1)[-1]} are gone: {n} systems are no one's.")
 
 
 def ensure(kernel: Any, logs: Optional[List[str]] = None) -> None:

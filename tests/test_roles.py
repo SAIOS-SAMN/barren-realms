@@ -464,10 +464,11 @@ class TestStewardship(unittest.TestCase):
             self.k.tick_simulation()                                            # the networks grow
         self.assertGreaterEqual(len(spheres.stats(self.k)["owner"]), len(seen))
         taken = {w.get("sector") for w in realmwars.stats(self.k)["wars"].values()}
+        lapsed = {w for w, n in spheres.stats(self.k)["nets"].items() if not n["held"]}
         for sid, r in seen.items():
             now = self.st.realm_of(self.k, sid)
-            if now != r:
-                self.assertIn(sid, taken)                                       # a held system changes hands by war
+            if now != r:                                                        # by war - or its people fell
+                self.assertTrue(sid in taken or spheres.presence(self.k, r) in lapsed)
 
     def test_a_stewards_ceasefire_binds_raids_holds_and_a_sovereigns_guns(self):
         from xylarium.kernel import relations
@@ -736,10 +737,24 @@ class TestSpheres(unittest.TestCase):
         for c in st["contacts"]:
             self.assertIn(c["kind"], spheres.BONDS + ("war",))
             if c["kind"] != "war":
-                self.assertEqual(spheres.bond(self.k, c["a"], c["b"])["kind"], c["kind"])
+                b = spheres.bond(self.k, c["a"], c["b"])
+                if b is None:                                     # a party has since fallen: its bonds lapsed
+                    self.assertTrue(any(not st["nets"][w]["held"] for w in (c["a"], c["b"]) if w in st["nets"]))
+                else:
+                    self.assertEqual(b["kind"], c["kind"])
         for w in realmwars.stats(self.k)["wars"].values():
             self.assertNotEqual(w["taker"], w["holder"])
             self.assertIn(w["status"], ("open", "taken", "spent", "withdrawn", "sealed", "undone", "lost"))
+
+    def test_a_fallen_peoples_realms_lapse_and_no_war_is_fought_with_the_dead(self):
+        from xylarium.kernel import spheres
+        st = spheres.stats(self.k)
+        who = next(w for w, n in st["nets"].items() if n["held"])
+        held = list(st["nets"][who]["held"])
+        spheres.lapse(self.k, who, [])
+        for sid in held:
+            self.assertIsNone(spheres.owner(self.k, sid))         # no one's: the next passage simply holds it
+        self.assertFalse(any(who in (b["a"], b["b"]) for b in st["bonds"].values()))
 
     def test_the_fronts_and_their_seam_are_read_by_kind(self):
         from xylarium.kernel import spheres

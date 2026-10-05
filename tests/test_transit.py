@@ -135,6 +135,23 @@ class TestThroats(unittest.TestCase):
         self.assertIn(heart, self.k.sectors)                   # the passage is the observation
         self.assertIn(self.a, self.k.sectors[heart].warps)
 
+    def test_a_fallen_keepers_throat_passes_to_a_living_master_or_collapses(self):
+        transit.open_throat(self.k, self.a, self.b, "civ:Gone", "forged", 1.0, "test")
+        transit.stats(self.k)["masters"]["civ:Gone"] = 0
+        transit._heirs(self.k, [])
+        self.assertIsNone(transit.worm(self.k, self.a, self.b))          # no one to hold the bounce open
+        self.assertNotIn(self.b, self.k.sectors[self.a].warps)
+        self.assertNotIn("civ:Gone", transit.stats(self.k)["masters"])
+        spheres.ensure(self.k)
+        heir = spheres.presence(self.k, spheres.owner(self.k, next(iter(sorted(
+            int(s) for s in spheres.stats(self.k)["owner"])))))
+        end = next(s for s in sorted(int(x) for x in spheres.stats(self.k)["owner"])
+                   if spheres.presence(self.k, spheres.owner(self.k, s)) == heir)
+        transit.open_throat(self.k, end, self.b, "civ:Gone", "forged", 1.0, "test")
+        transit.stats(self.k)["masters"][heir] = 1
+        transit._heirs(self.k, [])
+        self.assertEqual(transit.worm(self.k, end, self.b)["owner"], heir)   # its mouth lies in the heir's network
+
     def test_mouths_are_black_holes(self):
         sid = sorted(self.k.sectors)[3]
         self.k.sectors[sid].star_type = "Black hole remnant"
