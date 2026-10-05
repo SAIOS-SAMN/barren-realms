@@ -20,7 +20,7 @@ reach. Every order returns {"ok": bool, "why"/...} and is written in the history
 from typing import Any, Dict, Optional, Tuple
 
 ORDERS = {"progenitor": ("send", "recall", "fold", "handle", "forge"), "steward": ("claim", "withdraw", "grant"),
-          "steward_ascent": ("charter", "quarantine"),
+          "steward_ascent": ("charter", "quarantine", "fortify"),
           "sovereign": ("order", "commission", "dismiss"), "captain": ("swear", "forswear", "way")}
 
 
@@ -188,6 +188,16 @@ def charter(kernel: Any, pid: str, who: str, verdict: str = "chartered") -> Dict
     return ascendance.rule(kernel, who, verdict, pid)
 
 
+def fortify(kernel: Any, pid: str, sector: int, units: float) -> Dict[str, Any]:
+    """A player who keeps a realm orders works at one of its borders, paid from its keeper's treasury."""
+    from xylarium.kernel import borders, spheres, stewardship
+    realm = stewardship.realm_held(kernel, pid)
+    if realm is None or spheres.owner(kernel, sector) != realm:
+        return _no("that system is not of your realm")
+    built = borders._fortify(kernel, realm, sector, units, [])
+    return {"ok": built > 0, "built": built} if built > 0 else _no("the keeper would not, or could not, build it")
+
+
 def _house_named(kernel: Any, name: str) -> Optional[Dict[str, Any]]:
     from xylarium.kernel import dynasties
     if "dynasties" not in kernel.state:
@@ -335,6 +345,7 @@ def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
           "grant": lambda: grant(kernel, pid, str(kw.get("house", ""))),
           "charter": lambda: charter(kernel, pid, str(kw.get("people", "")), "chartered"),
           "quarantine": lambda: charter(kernel, pid, str(kw.get("people", "")), "quarantine"),
+          "fortify": lambda: fortify(kernel, pid, int(kw.get("sector", 0) or 0), float(kw.get("units", 0) or 0)),
           "order": lambda: order(kernel, pid, kw.get("book")),
           "commission": lambda: commission(kernel, pid, str(kw.get("captain", ""))),
           "dismiss": lambda: dismiss(kernel, pid, str(kw.get("captain", ""))),

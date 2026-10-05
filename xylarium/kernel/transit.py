@@ -156,9 +156,25 @@ def at_war(kernel: Any, x: Optional[str], y: Optional[str]) -> bool:
 
 
 def blocks(kernel: Any, payer: Optional[str], a: int, b: int) -> bool:
-    """A blockade: a lane's holder turns back the ships of a people it is at war with."""
+    """A blockade: a lane's holder turns back the ships of a people it is at war with - and an embargo: a holder
+    whose doctrine forbids taking turns back a people waging a war of taking (borders.py)."""
     holder = owner(kernel, a, b)
-    return holder is not None and at_war(kernel, holder, payer)
+    if holder is None or not payer or holder == payer:
+        return False
+    return at_war(kernel, holder, payer) or (aggressor(kernel, payer) and _abhorrent_to(kernel, holder))
+
+
+def aggressor(kernel: Any, who: Optional[str]) -> bool:
+    """Is a people waging a war of taking (an open realm war, as the taker)?"""
+    if not who or "realmwars" not in getattr(kernel, "state", {}):
+        return False
+    from xylarium.kernel import realmwars
+    return any(w["status"] == "open" and w.get("taker") == who for w in realmwars.stats(kernel)["wars"].values())
+
+
+def _abhorrent_to(kernel: Any, holder: str) -> bool:
+    from xylarium.kernel import realmwars
+    return realmwars._abhors(kernel, holder)
 
 
 def refuses(kernel: Any, captain: Any, a: int, b: int) -> bool:

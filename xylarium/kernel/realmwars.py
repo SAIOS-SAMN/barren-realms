@@ -114,6 +114,8 @@ def weigh(kernel: Any, who: str, other: str, sector: int, fighting: bool = False
               if other in (b["a"], b["b"]) and b["kind"] in ("alliance", "federation")]
     defend = (_strength(theirs) + relations.shield(kernel, theirs) + sum(
         _strength(spheres._home(kernel, a)) for a in allies if spheres._home(kernel, a) is not None)) / (1 + their_hops)
+    from xylarium.kernel import borders                     # the works at the border stand at the front, in full
+    defend += borders.fortification(kernel, sector)
     understood = max(0.05, contact.intelligibility(kernel, who, other, by))
     defend = defend / understood                            # what it cannot read, it cannot rule out: the worst case
     if attack <= 0:
@@ -253,7 +255,10 @@ def _attrition(kernel: Any, war: Dict[str, Any], r: Dict[str, Any]) -> None:
     """A year's engagement, Lanchester's linear law: each capital loses a tenth of the other's effective strength -
     so a people that fights on every front bleeds out, and its next reckoning is worse."""
     from xylarium.kernel import spheres
+    from xylarium.kernel import borders
     for who, lost in ((war["taker"], 0.1 * r.get("defend", 0.0)), (war.get("holder"), 0.1 * r.get("attack", 0.0))):
+        if who == war.get("holder") and war.get("sector") is not None:
+            lost = borders.wear(kernel, war["sector"], lost)       # the blows fall on the works first
         home = spheres._home(kernel, who) if who else None
         if home is None or lost <= 0:
             continue
