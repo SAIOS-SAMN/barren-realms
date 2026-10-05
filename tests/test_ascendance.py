@@ -71,5 +71,40 @@ class TestAscendance(unittest.TestCase):
         self.assertTrue(ascendance.free(self.k, self.who))
 
 
+class TestCoAscension(unittest.TestCase):
+    def setUp(self):
+        random.seed(5)
+        self.k = GameKernel(seed=42)
+        spheres.ensure(self.k)
+        self.realm = next(r for r in stewardship.realms(self.k) if len(stewardship.peoples_of(self.k, r)) >= 2)
+        self.who, self.host = sorted(stewardship.peoples_of(self.k, self.realm))[:2]   # one system, two peoples
+        self.rec = {"realm": self.realm, "hosts": [self.host]}
+
+    def test_a_host_that_held_it_down_is_bound_and_the_newcomer_shielded(self):
+        with mock.patch.object(ascendance, "_suppressed", return_value=True):
+            ascendance.coascend(self.k, self.who, self.rec, chartered=False)
+        self.assertEqual(self.rec["coascension"][self.host], "protection")
+        self.assertIsNotNone(stewardship.binds(self.k, self.host, self.who))
+
+    def test_peoples_who_can_live_together_share_a_charter_else_stand_apart_under_a_pact(self):
+        from xylarium.kernel import federation
+        with mock.patch.object(ascendance, "_suppressed", return_value=False), \
+                mock.patch.object(federation, "preferred_card", return_value="BETA"):
+            ascendance.coascend(self.k, self.who, self.rec, chartered=True)
+        self.assertEqual(self.rec["coascension"][self.host], "shared")
+        self.assertEqual(spheres.bond(self.k, self.who, self.host)["kind"], "federation")
+        cards = iter(["ALPHA", "DELTA"] * 4)
+        with mock.patch.object(ascendance, "_suppressed", return_value=False), \
+                mock.patch.object(federation, "preferred_card", side_effect=lambda a: next(cards)):
+            rec = {"realm": self.realm, "hosts": [self.host]}
+            ascendance.coascend(self.k, self.who, rec, chartered=True)
+        self.assertEqual(rec["coascension"][self.host], "standing")
+
+    def test_its_ascension_is_its_own_not_its_hosts(self):
+        ascendance.petition(self.k, self.who, self.realm)
+        self.assertEqual(ascendance.ruling(self.k, self.who), "pending")
+        self.assertIsNone(ascendance.ruling(self.k, "civ:Nobody"))      # its host's standing gives it nothing
+
+
 if __name__ == "__main__":
     unittest.main()

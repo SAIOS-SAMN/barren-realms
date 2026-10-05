@@ -24,6 +24,12 @@ All books in balance: the steward CHARTERS it - it ascends, its network grows, i
 QUARANTINE - its ships go no further than its own system, its network does not grow, and no one may make war on it
 (the steward shields the young). The steward reads it again every term and rules again: a people earns its way out
 book by book, but only a steward's ruling lets it out. A player who keeps the realm rules for it (command.py).
+
+CO-ASCENSION. A people that rises on a world others already hold - natives reaching their First Flight beside
+colonists, a herd outgrowing its keepers, a second people of a shared system - ascends on its own books, never on its
+hosts'. What the steward settles at the same reading is how they stand to each other (coascend): a host that held it
+down is bound by a ceasefire; peoples whose doctrines can live together stand under a shared charter; otherwise each
+keeps its own standing, bound by a pact.
 """
 
 from fractions import Fraction
@@ -126,10 +132,81 @@ def petition(kernel: Any, who: str, realm: str) -> None:
     if who in st["of"]:
         return
     st["of"][who] = {"realm": realm, "ruling": "pending", "since": kernel.cycle_count, "ruled": None,
-                     "rulings": 0, "mind": mc.new_mind()}
+                     "rulings": 0, "mind": mc.new_mind(), "hosts": hosts(kernel, who)}
     history.event(kernel, "PETITION", f"The {who.split(':', 1)[-1]} ask to go among the stars of "
                   f"{stewardship.realm_name(realm)}", actors=[who],
                   cause="they have crossed inside a realm another keeps; its steward will read them")
+
+
+def hosts(kernel: Any, who: str) -> List[str]:
+    """Who a newcomer shares its home with: peoples holding worlds in its home system, the colonist owning its
+    world, and any community keeping it as a herd - each of whom its ascension unsettles."""
+    from xylarium.kernel import cohabit, sustenance
+    home = _home(kernel, who)
+    if home is None:
+        return []
+    out = set()
+    for w in kernel.sectors[home.sector_id].planets:
+        p = sustenance.people_of(w) if w.population > 0 else None
+        if p and p != who:
+            out.add(p)
+    if home.owner_id:
+        out.add(f"captain:{home.owner_id}")
+    for c in cohabit.communities(home):
+        if c.get("prey") == who or c.get("people"):
+            out.add(c["people"])
+    out.discard(who)
+    return sorted(out)
+
+
+def _suppressed(kernel: Any, who: str, host: str) -> bool:
+    """Has a host held a newcomer down: set it back, raided, conquered or exploited it (the record)."""
+    from xylarium.kernel import history
+    kinds = ("RESET", "RAID", "WAR", "CONQUEST", "SUBJUGATION", "EXPLOITED", "STRIPPED")
+    return any(e.get("kind") in kinds and (e.get("actors") or [None])[0] == host
+               for e in history.of_people(kernel, who))
+
+
+def coascend(kernel: Any, who: str, rec: Dict[str, Any], chartered: bool, logs: Optional[List[str]] = None) -> None:
+    """The co-ascension hearing: one world, two peoples - each one's ascension is its own; what the steward settles is
+    how they stand to each other. A host that held the newcomer down is bound by a ceasefire (protection); peoples
+    whose doctrines can live together stand under a shared charter (a federation of the one world); else each has
+    its own standing, bound by a pact - so a world's two peoples do not settle it by civil war."""
+    from xylarium.config import POLICY_ORDER
+    from xylarium.kernel import alignment, federation, history, spheres, stewardship
+    out = {}
+    for host in rec.get("hosts") or hosts(kernel, who):
+        if host.startswith("captain:") and not stewardship.party(kernel, host).startswith("civ:"):
+            kind = "protection" if _suppressed(kernel, who, host) else "standing"
+        elif _suppressed(kernel, who, host):
+            kind = "protection"
+        elif not chartered:
+            continue
+        else:
+            def card(p: str) -> str:
+                h = spheres._home(kernel, p)
+                c = getattr(h, "civilization", None) if h is not None else None
+                return federation.preferred_card(alignment.doctrine(c) if c is not None else 0.0)
+            far = abs(POLICY_ORDER.index(card(who)) - POLICY_ORDER.index(card(host)))
+            kind = "shared" if far < 2 else "standing"
+        a, b = stewardship.party(kernel, host), who
+        sent = stewardship.mind(kernel, rec["realm"])
+        by = sent["id"] if sent else "realm"
+        if kind == "protection":
+            stewardship._rule(kernel, rec["realm"], by, "ceasefire", a, b)
+        elif kind == "standing":
+            stewardship._rule(kernel, rec["realm"], by, "pact", a, b)
+        else:
+            spheres.stats(kernel)["bonds"]["|".join(sorted((a, b)))] = {
+                "kind": "federation", "a": a, "b": b, "since": kernel.cycle_count, "sector": None, "charter": True}
+        out[host] = kind
+        history.event(kernel, "COASCENSION", f"The {who.split(':', 1)[-1]} and the {host.split(':', 1)[-1]}: "
+                      f"{ {'protection': 'the newcomer shielded', 'shared': 'a shared charter', 'standing': 'each its own standing, bound by a pact'}[kind]}",
+                      actors=[who] + ([a] if a.startswith("civ:") else []),
+                      cause="one world, two peoples: the steward settles how they stand to each other")
+        if logs is not None:
+            logs.append(f"[ASCENDANCE] Co-ascension: the {who.split(':', 1)[-1]} and the {host.split(':', 1)[-1]} - {kind}.")
+    rec["coascension"] = out
 
 
 def ruling(kernel: Any, who: Optional[str]) -> Optional[str]:
@@ -204,7 +281,10 @@ def season(kernel: Any) -> List[str]:
         if lead is not None:
             mc.intend(rec["mind"], lead, res[lead], "quarantine", "candidate")
         sent = stewardship.mind(kernel, rec["realm"])
+        was = rec["ruling"]
         rule(kernel, who, verdict, sent["name"] if sent else "the realm", logs)
+        if (verdict != was or rec.get("coascension") is None) and (rec.get("hosts") or hosts(kernel, who)):
+            coascend(kernel, who, rec, verdict == "chartered", logs)
     return logs
 
 
