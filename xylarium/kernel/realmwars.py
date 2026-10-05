@@ -65,6 +65,94 @@ def declare(kernel: Any, from_realm: str, against: str, taker: str, sector: Opti
     return war
 
 
+def weigh(kernel: Any, who: str, other: str, sector: int, fighting: bool = False) -> Dict[str, Any]:
+    """Whether a people means to take - or, at war, to keep fighting for - a system another holds: what the war would
+    gain against all it would cost, as its own council judges it (decide.choose, as a raid is weighed - misread as
+    far as it does not understand the other). Nothing here says war; the reckoning does:
+
+      GAIN      the system's yield over the council's horizon - its worlds' output and the tolls its lanes took last
+                year - times the odds of taking it (Lanchester's linear law, as a raid: attack over attack and defence)
+      POSITION  each side's strength worn by its supply line: the hops from its capital to the front (the defender
+                fights on interior lines when the front is at its door)
+      FRONTS    a people already at war has its strength split across every front it holds
+      ALLIES    the defence is the holder's capital, its patron's shield, and its allies' and federation partners' arms
+      UNKNOWN   what it cannot read of the other (contact.intelligibility) it cannot rule out: the defence is weighed
+                at its worst, over how well it understands them - strangers are not invaded; the known are reckoned
+      LIVES     each side loses a tenth of the other's strength an engagement, over as many engagements as the
+                defence outweighs the attack - its own troops at their price, and its own dead, whatever it is
+      FUEL      its fleet burns reaction mass every hop to the front, every engagement, at the market's price
+      SUPPLY    and pays each lane's toll and tithe on the way
+      LEVY      the economy it forgoes while levied, a share a year for the war's expected years
+      TRADE     the share of its output riding on its contracts with the other, lost while they are at war
+      ORDER     the other side's dead, a life's work each (alignment.lives_of_sol), weighed by its own whole-history
+                character: the Light count them as their own loss, the Dark discount them - but no people, however
+                dark, fights at no cost: its own dead, its fuel and its position are counted by all
+    Returns the reckoning and whether its council chose war."""
+    from xylarium.config import PRICE_LEVEL, SURFACE_TROOP_RECRUIT_COST
+    from xylarium.kernel import alignment, contact, decide, polity, relations, spheres, transit
+    from xylarium.kernel.sustenance import _strength
+    by = relations._peoples(kernel)
+    mine, theirs = spheres._home(kernel, who), spheres._home(kernel, other)
+    if mine is None or theirs is None or sector not in kernel.sectors:
+        return {"war": False, "why": "no capital to fight from"}
+    fronts = (0 if fighting else 1) + sum(1 for w in stats(kernel)["wars"].values() if w["status"] == "open"
+                                          and who in (w.get("taker"), w.get("holder")))
+    path = kernel.find_path(mine.sector_id, sector) or []
+    theirs_path = kernel.find_path(theirs.sector_id, sector) or []
+    hops, their_hops = max(0, len(path) - 1), max(0, len(theirs_path) - 1)
+    attack = _strength(mine) / max(1, fronts) / (1 + hops)
+    allies = [b["b"] if b["a"] == other else b["a"] for b in spheres.stats(kernel)["bonds"].values()
+              if other in (b["a"], b["b"]) and b["kind"] in ("alliance", "federation")]
+    defend = (_strength(theirs) + relations.shield(kernel, theirs) + sum(
+        _strength(spheres._home(kernel, a)) for a in allies if spheres._home(kernel, a) is not None)) / (1 + their_hops)
+    understood = max(0.05, contact.intelligibility(kernel, who, other, by))
+    defend = defend / understood                            # what it cannot read, it cannot rule out: the worst case
+    if attack <= 0:
+        return {"war": False, "why": "nothing to fight with"}
+    odds = attack / (attack + defend)
+    engagements = max(1.0, defend / attack)
+    level = PRICE_LEVEL.get(mine.currency, 1.0)
+    m = decide.mind_of_planet(kernel, mine)                 # its own judgement; the unknown is in the defence above
+    worlds = [w for w in kernel.sectors[sector].planets if w.population > 0]
+    tolls = sum(transit.charge_cr(kernel, x, sector)[1] * (transit.stats(kernel)["lanes"].get(transit.key(x, sector))
+                                                           or {}).get("last_year", 0)
+                for x in kernel.sectors[sector].warps if x in kernel.sectors) / 4.0
+    gain = odds * decide.worth(kernel, relations._output_sol(kernel, worlds) + tolls, m)
+    own_lost = 0.1 * defend * engagements                     # its own troops, lost to the other's strength
+    their_lost = 0.1 * attack * engagements
+    troops = own_lost * SURFACE_TROOP_RECRUIT_COST * level
+    hulls = max(1.0, attack * (1 + hops) / max(1.0, _fleet_strength(kernel)))   # the ships its force fills
+    fuel = engagements * hops * hulls * transit._typical_hop(kernel)
+    supply = engagements * hulls * sum(sum(transit.charge_cr(kernel, x, y)[1:]) for x, y in zip(path, path[1:]))
+    out_q = relations._output_sol(kernel, by.get(who, []))
+    levy = laws_pv(kernel, out_q / len(polity.BOOKS), 4.0 * engagements, m, mine.currency)
+    talks = contact.contacts(kernel, by).get(who, {})
+    trade = decide.worth(kernel, out_q * talks.get(other, 0) / max(1, sum(talks.values())), m)
+    life = 1.0 / max(1e-12, alignment.lives_of_sol(kernel, 1.0, mine))            # a life's work, in its money
+    per = SURFACE_TROOP_RECRUIT_COST * level
+    own_dead = alignment.lives_of_sol(kernel, own_lost * per, mine) * life     # every people counts its own dead
+    civ = getattr(mine, "civilization", None)
+    light = (1.0 + alignment.character(civ)) / 2.0 if civ is not None else 0.5   # 1 the Light, 0 absolute darkness
+    order = light * alignment.lives_of_sol(kernel, their_lost * per, mine) * life
+    cost = troops + own_dead + fuel + supply + levy + trade + order
+    pick = decide.choose(kernel, [decide.option("war", cost, gain)], m, who, other, "realm_war", int(fighting))
+    return {"war": pick is not None, "gain": gain, "odds": odds, "troops": troops, "own_dead": own_dead, "fuel": fuel,
+            "supply": supply, "levy": levy, "trade": trade, "order": order, "fronts": fronts, "hops": hops,
+            "their_hops": their_hops, "allies": allies, "attack": attack, "defend": defend}
+
+
+def _fleet_strength(kernel: Any) -> float:
+    """What one ship carries into a fight, on the mean: the crews' own fighters."""
+    ships = [float(getattr(c.ship, "fighters", 0) or 0) for c in kernel.captains.values()]
+    ships = [x for x in ships if x > 0]
+    return sum(ships) / len(ships) if ships else 1.0
+
+
+def laws_pv(kernel: Any, flow_q: float, quarters: float, m: Dict[str, float], currency: str) -> float:
+    from xylarium.kernel import decide, laws
+    return laws.present_value(flow_q, min(quarters, decide.horizon(m)), decide.rate(kernel, currency))
+
+
 def _champion(kernel: Any, who: Optional[str]) -> Optional[Dict[str, Any]]:
     """The sovereign a people fights with: its senior house's senior seat, else its own senior sovereign."""
     from xylarium.kernel import dynasties, polity
@@ -82,6 +170,22 @@ def _champion(kernel: Any, who: Optional[str]) -> Optional[Dict[str, Any]]:
 
 
 TAKING = ("WAR", "RAID", "CONQUEST", "SUBJUGATION")
+
+
+def _attrition(kernel: Any, war: Dict[str, Any], r: Dict[str, Any]) -> None:
+    """A year's engagement, Lanchester's linear law: each capital loses a tenth of the other's effective strength -
+    so a people that fights on every front bleeds out, and its next reckoning is worse."""
+    from xylarium.kernel import spheres
+    for who, lost in ((war["taker"], 0.1 * r.get("defend", 0.0)), (war.get("holder"), 0.1 * r.get("attack", 0.0))):
+        home = spheres._home(kernel, who) if who else None
+        if home is None or lost <= 0:
+            continue
+        take = int(min(home.garrison_troops or 0, lost))
+        home.garrison_troops = max(0, int(home.garrison_troops or 0) - take)
+        rest = int(lost) - take
+        if rest > 0:
+            home.fighters = max(0, int(home.fighters or 0) - rest)
+    war["years"] = war.get("years", 0) + 1
 
 
 def _took(kernel: Any, by: str, from_: str, since: int) -> Fraction:
@@ -103,6 +207,15 @@ def _fight(kernel: Any, war: Dict[str, Any], logs: List[str]) -> None:
     if a is None or d is None or a["people"] == d["people"]:
         return
     war["champions"] = [a["id"], d["id"]]
+    if war.get("sector") is not None and war["by"] == war["from"]:      # each year its council weighs it again
+        r = weigh(kernel, war["taker"], war["holder"], war["sector"], fighting=True)
+        if not r["war"]:
+            _end(kernel, war, "exhausted", f"the {war['taker'].split(':', 1)[-1]} sue for peace: the war is no "
+                                           f"longer worth its dead, its fuel and its levies")
+            logs.append(f"[GALACTIC WAR] The {war['taker'].split(':', 1)[-1]} sue for peace over "
+                        f"{stewardship.realm_name(war['against'])}.")
+            return
+        _attrition(kernel, war, r)
     if not stewardship.binds(kernel, a["people"], d["people"]):
         t = polity.treaty(kernel, a["id"], d["id"])
         if t is None or t["kind"] != "war":

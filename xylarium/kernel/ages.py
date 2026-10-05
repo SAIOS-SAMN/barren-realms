@@ -379,7 +379,9 @@ def sleep(kernel: Any, player_id: str, deep_years: float) -> List[str]:
 
 
 GALAXY_KINDS = ("ASCENT", "EMERGENCE", "GALACTIC_WAR", "FALL", "DOMINION", "FEDERATION_FOUNDED", "CONTACT",
-                "FIRST_SIGNAL", "EXTINCTION", "UPLIFT", "PACT")
+                "FIRST_SIGNAL", "EXTINCTION", "UPLIFT", "PACT", "FEDERATION", "ALLIANCE", "CONGLOMERATE",
+                "PROGENITOR_CLASS", "BOUNCE_MASTERED", "BOUNCE_LOST", "WORMHOLE_DORMANT", "WORMHOLE_SALVAGED",
+                "WORMHOLE_COLLAPSE", "THROAT_TAMPERED", "REALM_LAPSES", "RELIC_FOUND", "GALAXY_REACHED", "FOLD_WAR")
 
 
 def _since(logs: Any, last: Any) -> List[str]:

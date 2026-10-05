@@ -135,27 +135,88 @@ class TestThroats(unittest.TestCase):
         self.assertIn(heart, self.k.sectors)                   # the passage is the observation
         self.assertIn(self.a, self.k.sectors[heart].warps)
 
-    def test_a_fallen_keepers_throat_passes_to_a_living_master_or_collapses(self):
+    def test_a_fallen_keepers_throat_lies_dormant_until_a_master_salvages_it(self):
         transit.open_throat(self.k, self.a, self.b, "civ:Gone", "forged", 1.0, "test")
         transit.stats(self.k)["masters"]["civ:Gone"] = 0
         transit._heirs(self.k, [])
-        self.assertIsNone(transit.worm(self.k, self.a, self.b))          # no one to hold the bounce open
-        self.assertNotIn(self.b, self.k.sectors[self.a].warps)
+        w = transit.worm(self.k, self.a, self.b)
+        self.assertTrue(w["dormant"] is not None and w["owner"] is None)   # unused, it holds - no one keeps it
+        self.assertTrue(transit.refuses(self.k, self.cap, self.a, self.b))
         self.assertNotIn("civ:Gone", transit.stats(self.k)["masters"])
         spheres.ensure(self.k)
-        heir = spheres.presence(self.k, spheres.owner(self.k, next(iter(sorted(
-            int(s) for s in spheres.stats(self.k)["owner"])))))
-        end = next(s for s in sorted(int(x) for x in spheres.stats(self.k)["owner"])
-                   if spheres.presence(self.k, spheres.owner(self.k, s)) == heir)
+        end, heir = next((int(s), spheres.presence(self.k, r)) for s, r in sorted(spheres.stats(self.k)["owner"].items()))
         transit.open_throat(self.k, end, self.b, "civ:Gone", "forged", 1.0, "test")
         transit.stats(self.k)["masters"][heir] = 1
         transit._heirs(self.k, [])
-        self.assertEqual(transit.worm(self.k, end, self.b)["owner"], heir)   # its mouth lies in the heir's network
+        self.assertEqual(transit.worm(self.k, end, self.b)["owner"], heir)  # salvaged: its mouth is in their network
+
+    def test_an_unready_hand_on_a_dormant_mouth_collapses_the_string_through_it(self):
+        a, m, c = sorted(self.k.sectors)[:3]
+        for x, y in ((a, m), (m, c)):
+            w = transit.open_throat(self.k, x, y, "civ:Gone", "forged", 1.0, "test")
+            w.update(owner=None, keeper="civ:Gone", dormant=0, handling="closed")
+        n = transit.collapse_mouth(self.k, a, "test")
+        self.assertEqual(n, 2)                                    # a-m fell, and m's only other throat was dormant
+        self.assertIsNone(transit.worm(self.k, m, c))
 
     def test_mouths_are_black_holes(self):
         sid = sorted(self.k.sectors)[3]
         self.k.sectors[sid].star_type = "Black hole remnant"
         self.assertEqual(transit.mouths(self.k)[sid]["kind"], "stellar")
+
+
+class TestHypha(unittest.TestCase):
+    def setUp(self):
+        self.k = GameKernel(seed=42)
+
+    def test_the_chain_answers_for_itself_and_a_changed_receipt_breaks_it(self):
+        from xylarium.kernel import hypha
+        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 120, "SOL", ref="1-3")
+        hypha.append(self.k, "SOL", "pouw", "captain:c", "civ:B", 30, "SOL", ref="1-3")
+        self.assertTrue(hypha.verify(self.k, "SOL"))
+        hypha.stats(self.k)["chains"]["SOL"]["rows"][0]["amount"] = "1"
+        self.assertFalse(hypha.verify(self.k, "SOL"))
+
+    def test_a_fold_writes_each_identitys_net_and_the_chain_goes_on(self):
+        from fractions import Fraction
+        from xylarium.kernel import hypha
+        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 120, "SOL")
+        hypha.append(self.k, "SOL", "pouw", "civ:B", "captain:a", 20, "SOL")
+        head = hypha.stats(self.k)["chains"]["SOL"]["head"]
+        rec = hypha.fold(self.k, "SOL")
+        c = hypha.stats(self.k)["chains"]["SOL"]
+        self.assertEqual(rec["ref"], head)                        # the fold cites the prefix it closed
+        self.assertEqual(Fraction(c["net"]["civ:B"]), 100)        # closed circulation vanishes in the net
+        self.assertEqual(Fraction(c["net"]["captain:a"]), -100)
+        self.assertEqual(c["height"], 3)
+        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 5, "SOL")
+        self.assertTrue(hypha.verify(self.k, "SOL"))
+
+    def test_a_settlement_is_a_proof_of_useful_work_on_the_keepers_reserve(self):
+        from xylarium.kernel import hypha
+        spheres.ensure(self.k)
+        who = next(iter(spheres.stats(self.k)["nets"]))
+        a = spheres.stats(self.k)["nets"][who]["home"]
+        b = next(w for w in self.k.sectors[a].warps if w in self.k.sectors)
+        transit.settle(self.k, who, "captain:x", a, b, 50.0, 10.0)
+        cur = spheres._home(self.k, who).currency
+        rows = hypha.stats(self.k)["chains"][cur]["rows"]
+        self.assertEqual((rows[-1]["kind"], rows[-1]["payee"], rows[-1]["ref"]), ("pouw", who, transit.key(a, b)))
+
+
+class TestAllTrafficPays(unittest.TestCase):
+    def test_flows_pay_what_a_lane_charges_and_a_war_blockades_it(self):
+        k = GameKernel(seed=42)
+        spheres.ensure(k)
+        a = sorted(k.sectors)[0]
+        b = next(w for w in k.sectors[a].warps if w in k.sectors)
+        with mock.patch.object(transit, "charge_cr", return_value=("civ:Keeper", 7.0, 3.0)):
+            self.assertEqual(transit.flow_passage(k, "captain:x", a, b, transits=4), 40.0)
+            self.assertEqual(transit.flow_passage(k, "civ:Keeper", a, b), 0.0)     # its own pass free
+        with mock.patch.object(transit, "owner", return_value="civ:Keeper"), \
+                mock.patch.object(transit, "at_war", side_effect=lambda kk, x, y: {x, y} == {"civ:Keeper", "civ:Foe"}):
+            self.assertTrue(transit.blocks(k, "civ:Foe", a, b))
+            self.assertFalse(transit.blocks(k, "civ:Friend", a, b))
 
 
 if __name__ == "__main__":

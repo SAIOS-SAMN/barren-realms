@@ -174,6 +174,10 @@ class BankingSystem:
         """Double-entry STAMP claim: ``debtor`` owes ``creditor``. The union's accounts always net to zero."""
         self.stamp[debtor] = self.stamp.get(debtor, 0.0) - stamp_value
         self.stamp[creditor] = self.stamp.get(creditor, 0.0) + stamp_value
+        from xylarium.kernel import hypha, ledger                 # every claim uplinks to the hypha ledger (agnostic)
+        k = getattr(ledger, "ACTIVE_KERNEL", None)
+        if k is not None and stamp_value:
+            hypha.append(k, "STAMP", "stamp", debtor, creditor, round(float(stamp_value), 6), "STAMP")
 
     @staticmethod
     def stamp_value(cur: str, amount: float) -> float:

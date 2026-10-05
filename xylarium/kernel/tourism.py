@@ -332,8 +332,21 @@ def _travel(kernel: Any, planet: Any, st: Dict[str, Any]) -> None:
         dest_sid = place.sector_id
         path = kernel.find_path(planet.sector_id, dest_sid) if dest_sid != planet.sector_id else []
         spend_sol = _sol(planet.currency, bill)
+        from xylarium.kernel import sustenance, transit
+        travellers = sustenance.people_of(planet)
         for a, b in zip(path, path[1:]):
             fibres.record_flow(kernel, a, b, spend_sol)
+            owed = transit.flow_passage(kernel, travellers, a, b, trips)   # the lanes' tolls ride on the fares
+            if owed > 0:
+                rate = _sol(planet.currency, 1.0) or 1.0              # a quote, not a trade: what a unit is worth
+                local = int(min(max(0, planet.household_purse), owed / rate))
+                paid = _sol(planet.currency, local)
+                if paid > 0:
+                    planet.household_purse -= local
+                    holder, toll, tithe = transit.charge_cr(kernel, a, b)
+                    share = paid / owed
+                    transit.settle(kernel, holder, f"passengers:{planet.id}", a, b, toll * trips * share,
+                                   tithe * trips * share, transits=trips, paid=(local, planet.currency))
         st["trips"] += trips
         st["spend_sol"] += spend_sol
         st["fares_sol"] += _sol(planet.currency, fare)

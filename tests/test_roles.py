@@ -661,14 +661,14 @@ class TestDynasties(unittest.TestCase):
 
     def test_houses_emerge_from_lines_that_outgrow_one_reign(self):
         from fractions import Fraction
-        from xylarium.kernel import dynasties, polity, stewardship
+        from xylarium.kernel import dynasties, polity, stewardship, spheres
         hs = dynasties.standing(self.k)
         self.assertTrue(hs)
         for line, h in hs.items():
             a = h["authority"]
             self.assertEqual(set(a), {"granted", "earned", "grown", "taken"})
             self.assertTrue(Fraction(a["grown"]) > 1 or Fraction(a["taken"]) or Fraction(a["granted"]))
-            self.assertIn(h["realm"], stewardship.realms(self.k))
+            self.assertIn(h["realm"], spheres.stats(self.k)["realms"])   # founded there (war may since have emptied it)
             for sid in h["polities"]:
                 self.assertEqual(polity.sovereigns(self.k)[sid]["line"], line)
 
@@ -727,7 +727,8 @@ class TestSpheres(unittest.TestCase):
         by = relations._peoples(self.k)
         big = max(st["nets"], key=lambda w: mastery.power_w(self.k, by.get(w, [])))
         small = min(st["nets"], key=lambda w: mastery.power_w(self.k, by.get(w, [])) if w in by else float("inf"))
-        self.assertGreater(len(st["nets"][big]["held"]), len(st["nets"][small]["held"]))   # power reaches farther
+        reach = lambda w: len(st["nets"][w]["held"]) + int(st["nets"][w].get("beyond", 0))
+        self.assertGreater(reach(big), reach(small))                                     # power reaches farther
         self.assertGreater(spheres.radius(self.k, big), 0)
 
     def test_contact_is_a_bond_or_a_war_by_the_arrivals_style(self):
@@ -744,7 +745,7 @@ class TestSpheres(unittest.TestCase):
                     self.assertEqual(b["kind"], c["kind"])
         for w in realmwars.stats(self.k)["wars"].values():
             self.assertNotEqual(w["taker"], w["holder"])
-            self.assertIn(w["status"], ("open", "taken", "spent", "withdrawn", "sealed", "undone", "lost"))
+            self.assertIn(w["status"], ("open", "taken", "spent", "withdrawn", "sealed", "undone", "lost", "exhausted"))
 
     def test_a_fallen_peoples_realms_lapse_and_no_war_is_fought_with_the_dead(self):
         from xylarium.kernel import spheres
@@ -755,6 +756,35 @@ class TestSpheres(unittest.TestCase):
         for sid in held:
             self.assertIsNone(spheres.owner(self.k, sid))         # no one's: the next passage simply holds it
         self.assertFalse(any(who in (b["a"], b["b"]) for b in st["bonds"].values()))
+
+    def test_growth_beyond_the_charts_holds_no_more_stars_than_the_galaxy_has(self):
+        from xylarium.kernel import cluster, spheres
+        st = spheres.stats(self.k)
+        who = next(w for w, n in st["nets"].items() if n["held"])
+        net = st["nets"][who]
+        stars = cluster.HOME_MASS / spheres._mean_star()
+        others = sum(len(x["held"]) + int(x.get("beyond", 0)) for x in st["nets"].values())
+        before_bank = float(net.get("bank_j", 0.0))
+        spheres.beyond(self.k, who, net, int(stars - others) + 10)
+        self.assertLessEqual(sum(len(x["held"]) + int(x.get("beyond", 0)) for x in st["nets"].values()), stars)
+        self.assertGreater(float(net["bank_j"]), before_bank)            # what found no star is kept as energy
+        net["beyond"] = 0
+
+    def test_a_war_is_a_reckoning_that_counts_its_own_dead_whatever_its_alignment(self):
+        from xylarium.kernel import alignment, realmwars, spheres
+        st = spheres.stats(self.k)
+        live = [w for w in st["nets"] if spheres._home(self.k, w) is not None and st["nets"][w]["held"]]
+        who, other = live[0], live[1]
+        sid = st["nets"][other]["held"][0]
+        civ = spheres._home(self.k, who).civilization
+        with mock.patch.object(alignment, "character", return_value=-1.0):        # absolute darkness
+            dark = realmwars.weigh(self.k, who, other, sid)
+        with mock.patch.object(alignment, "character", return_value=1.0):
+            light = realmwars.weigh(self.k, who, other, sid)
+        if "gain" in dark:
+            self.assertEqual(dark["order"], 0.0)                                  # the other's dead count nothing to it
+            self.assertGreater(dark["own_dead"] + dark["troops"], 0.0)            # but its own still do
+            self.assertGreaterEqual(light["order"], dark["order"])
 
     def test_the_fronts_and_their_seam_are_read_by_kind(self):
         from xylarium.kernel import spheres
@@ -779,7 +809,8 @@ class TestSpheres(unittest.TestCase):
         sid = st["nets"][holder]["held"][0]
         mine = next(r for r in spheres.realms(self.k) if spheres.presence(self.k, r) == taker)
         w = realmwars.declare(self.k, mine, spheres.owner(self.k, sid), taker, sid)
-        with mock.patch.object(realmwars, "_took", side_effect=lambda k, by, fr, since: 5 if by == taker else 1):
+        with mock.patch.object(realmwars, "_took", side_effect=lambda k, by, fr, since: 5 if by == taker else 1), \
+                mock.patch.object(realmwars, "weigh", return_value={"war": True, "attack": 1.0, "defend": 1.0}):
             realmwars._fight(self.k, w, [])
         self.assertEqual(spheres.presence(self.k, spheres.owner(self.k, sid)), taker)
         self.assertEqual(w["status"], "taken")

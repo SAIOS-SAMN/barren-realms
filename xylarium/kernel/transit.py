@@ -2,8 +2,9 @@
 Xylarium transit: the lanes the networks hold open, what passing them costs, and the wormholes of the Einstein-Cartan
 fabric - the spacing guild's trade.
 
-LANES AND THEIR TOLLS. A lane whose two ends one network holds (spheres.py) is that network's: its people opened the
-passage, and its people take a toll from those who pass. No fee is laid down. What a passage is worth is set by the
+LANES AND THEIR TOLLS. A passage into a system a network holds (spheres.py) is that network's to charge - inside its
+sphere, its own lanes; across a border, the crossing pays the network it enters - and its people take a toll from
+those who pass. No fee is laid down. What a passage is worth is set by the
 economies at stake:
 
   FLOOR     what holding the passage open cost its owner and has not yet been paid back: the energy of a passage
@@ -39,6 +40,10 @@ tithe.
             dilation its clock, the ship's mass undistorted - and the throat is held open again by the folds it
             stands in for: every passer pays the progenitors who keep it, for their ancients, a passage's energy for
             each lane's length the throat spans (time as distance), at energy's price
+  DORMANCY  a throat needs upkeep only when a mass passes (its tithe): when its keeper's people falls it does not
+            collapse but lies dormant, closed, until a master reaching one of its mouths salvages it - or a people
+            that folds space without the bounce tries its mouth and destabilises it, collapsing every throat strung
+            through it, on through every mouth whose throats were all dormant (_heirs, collapse_mouth)
   FORGING   a progenitor line may punch a stabilised throat of its own from a mouth its network holds to the
             busiest system of the galaxy it can reach (time as distance: where the most traffic loses the most hops
             going round). It costs a passage held open for each hop it replaces, every year of one of its stewards'
@@ -76,8 +81,8 @@ def price(kernel: Any, commodity: str) -> float:
         got = []
         for sec in kernel.sectors.values():
             port = getattr(sec, "port", None)
-            if port is None:
-                continue
+            if port is None or len(getattr(port, "stock", None) or {}) < len(COMMODITY_CONFIG):
+                continue                                     # a reading never charters a port's inventory
             try:
                 buy, sell = EconomyManager.get_unit_prices(port, commodity)
             except Exception:
@@ -119,14 +124,13 @@ def worm(kernel: Any, a: int, b: int) -> Optional[Dict[str, Any]]:
 
 
 def owner(kernel: Any, a: int, b: int) -> Optional[str]:
-    """A throat's holder; a lane's - the network holding both its ends - or no one."""
+    """Who a passage from a into b pays: a throat's keeper; else the network that holds b - the system it arrives in
+    (inside a network, its own; across a border, the one it enters: a crossing pays where it lands) - or no one."""
     w = worm(kernel, a, b)
     if w is not None:
-        return w["owner"]
+        return w.get("owner")
     from xylarium.kernel import spheres
-    pa = spheres.presence(kernel, spheres.owner(kernel, a))
-    pb = spheres.presence(kernel, spheres.owner(kernel, b))
-    return pa if pa is not None and pa == pb else None
+    return spheres.presence(kernel, spheres.owner(kernel, b))
 
 
 def _payer(kernel: Any, captain: Any) -> Optional[str]:
@@ -142,8 +146,26 @@ def _free(kernel: Any, payer: Optional[str], holder: str) -> bool:
     return b is not None and b["kind"] in FREE_BONDS
 
 
+def at_war(kernel: Any, x: Optional[str], y: Optional[str]) -> bool:
+    """Are two peoples at war (a realm war between them, open)?"""
+    if not x or not y or x == y or "realmwars" not in getattr(kernel, "state", {}):
+        return False
+    from xylarium.kernel import realmwars
+    return any(w["status"] == "open" and {w.get("taker"), w.get("holder")} == {x, y}
+               for w in realmwars.stats(kernel)["wars"].values())
+
+
+def blocks(kernel: Any, payer: Optional[str], a: int, b: int) -> bool:
+    """A blockade: a lane's holder turns back the ships of a people it is at war with."""
+    holder = owner(kernel, a, b)
+    return holder is not None and at_war(kernel, holder, payer)
+
+
 def refuses(kernel: Any, captain: Any, a: int, b: int) -> bool:
-    """A guarded throat turns back all but its holder's own and its bonded; a closed one, everyone."""
+    """A guarded throat turns back all but its holder's own and its bonded; a closed one, everyone; and any lane
+    held by a people at war turns back its enemy's ships (a blockade)."""
+    if blocks(kernel, _payer(kernel, captain), a, b):
+        return True
     w = worm(kernel, a, b)
     if w is None:
         return False
@@ -152,7 +174,7 @@ def refuses(kernel: Any, captain: Any, a: int, b: int) -> bool:
     if w.get("handling") == "guarded":
         from xylarium.kernel import spheres
         payer = _payer(kernel, captain)
-        return not (payer == w["owner"] or (payer and spheres.bond(kernel, payer, w["owner"]) is not None))
+        return not (payer == w.get("owner") or (payer and spheres.bond(kernel, payer, w.get("owner")) is not None))
     return False
 
 
@@ -232,23 +254,11 @@ def on_passage(kernel: Any, captain: Any, a: int, b: int) -> int:
     q = quote(kernel, captain, a, b)
     if not q["owner"]:
         return 0
-    rec = lane(kernel, a, b)
-    rec["transits"] += 1
-    rec["year"] += 1
-    st = stats(kernel)
     tithe = int(min(q["tithe"], max(0, captain.credits)))       # the bounce's upkeep first: the throat must hold
-    if tithe > 0:
-        captain.credits -= tithe
-        _pay_owner(kernel, q["owner"], tithe)
-        st.setdefault("tithes", {})[q["owner"]] = st["tithes"].get(q["owner"], 0.0) + tithe
-        st["tithed"] = st.get("tithed", 0.0) + tithe
+    captain.credits -= tithe
     amt = int(min(q["toll"], max(0, captain.credits)))
-    if amt > 0:
-        captain.credits -= amt
-        _pay_owner(kernel, q["owner"], amt)
-        rec["collected"] += amt
-        st["revenue"][q["owner"]] = st["revenue"].get(q["owner"], 0.0) + amt
-        st["paid"] += amt
+    captain.credits -= amt
+    settle(kernel, q["owner"], f"captain:{captain.id}", a, b, amt, tithe)
     if (amt or tithe) and hasattr(kernel, "action_logs"):
         kernel.action_logs.append(f"[TRANSIT] {captain.name} pays the {q['owner'].split(':', 1)[-1]} {amt:,} Cr "
                                   f"toll" + (f" and {tithe:,} Cr tithe for the bounce" if tithe else "")
@@ -256,20 +266,92 @@ def on_passage(kernel: Any, captain: Any, a: int, b: int) -> int:
     return amt + tithe
 
 
-def _pay_owner(kernel: Any, who: str, amount: int) -> None:
+def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, tithe: float = 0.0,
+           transits: int = 1, paid: Optional[Tuple[int, str]] = None) -> None:
+    """A passage paid for (by a ship, a hauler, or a flow of passengers): the lane's traffic counted, the money into
+    its keeper's treasury in the keeper's own money (the reserve its lane is paid in - converted through the
+    exchanges), and the receipt on the hypha ledger: the passage delivered, a proof of useful work."""
+    from xylarium.kernel import hypha, spheres
+    rec = lane(kernel, a, b)
+    rec["transits"] += transits
+    rec["year"] += transits
+    st = stats(kernel)
+    if tithe > 0:
+        st.setdefault("tithes", {})[holder] = st["tithes"].get(holder, 0.0) + tithe
+        st["tithed"] = st.get("tithed", 0.0) + tithe
+    if toll > 0:
+        rec["collected"] += toll
+        st["revenue"][holder] = st["revenue"].get(holder, 0.0) + toll
+        st["paid"] += toll
+    total = int(toll + tithe)
+    if total <= 0 and not paid:
+        return
+    got, cur = _pay_owner(kernel, holder, *(paid if paid else (total, "SOL")))   # the payer's own money, exchanged
+    hypha.append(kernel, cur, "pouw", payer, holder, got, cur, ref=key(a, b))
+
+
+def reserves(kernel: Any) -> Dict[str, str]:
+    """The reserve currencies: the ancients' own moneys (each living progenitor line's people's), which every passage
+    through a progenitor's lane or throat settles in - federations convert into them at the exchanges. A settled
+    board's elders keep SOL. -> {currency: people}."""
+    from xylarium.kernel import board, spheres
+    out: Dict[str, str] = {}
+    for who, line in board.progenitors(kernel).items():
+        home = spheres._home(kernel, who) if line.get("ancient") else None
+        if home is not None:
+            out[home.currency] = who
+    return out or {"SOL": "elders"}
+
+
+def charge_cr(kernel: Any, a: int, b: int) -> Tuple[Optional[str], float, float]:
+    """What a passer from outside the holder's bonds pays to pass a lane, in SOL: (holder, toll, tithe) - priced for
+    a typical passer (the median crew's hop)."""
+    w = worm(kernel, a, b)
+    holder = w.get("owner") if w is not None else owner(kernel, a, b)
+    if holder is None:
+        return None, 0.0, 0.0
+    from xylarium.kernel import fibres
+    hv = _typical_hop(kernel)
+    rec = stats(kernel)["lanes"].get(key(a, b))
+    cost_cr = rec["cost_cr"] if rec else (float(w["cost_cr"]) if w else passage_cr(kernel))
+    floor = max(0.0, cost_cr - (rec["collected"] if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
+    around = _around(kernel, a, b)
+    saving = (float("inf") if around == float("inf") else
+              max(0.0, around - fibres.base_lane_cost(kernel, a, b)) * hv)
+    if saving == float("inf"):
+        toll = floor
+    elif w is not None and w.get("handling") == "open":
+        toll = min(floor, saving)
+    else:
+        toll = min(saving, floor + max(0.0, saving - floor) / 2.0)
+    return holder, toll, tithe_cr(kernel, a, b)
+
+
+def flow_passage(kernel: Any, payer: Optional[str], a: int, b: int, transits: int = 1) -> float:
+    """What a flow pays to pass a lane (haulers, passengers): its charge per passage times the passages - nothing
+    for the keeper's own and its free bonds. Returns the SOL owed (the caller takes it from whoever pays)."""
+    holder, toll, tithe = charge_cr(kernel, a, b)
+    if holder is None or _free(kernel, payer, holder):
+        return 0.0
+    return (toll + tithe) * transits
+
+
+def _pay_owner(kernel: Any, who: str, amount: int, currency: str = "SOL") -> Tuple[int, str]:
     """Into the holder's capital world's treasury, in its money."""
     from xylarium.kernel import spheres
     home = spheres._home(kernel, who)
+    fx = getattr(kernel, "fx_market", None)
     if home is None:
         from xylarium.kernel import ledger
-        ledger.pay_service(amount, institution="transit")
-        return
-    fx = getattr(kernel, "fx_market", None)
-    if home.currency != "SOL" and fx is not None:
-        got, _ = fx.convert("SOL", home.currency, amount)    # a money no exchange lists yet is listed, or held
+        sol = amount if currency == "SOL" or fx is None else fx.convert(currency, "SOL", amount)[0]
+        ledger.pay_service(sol, institution="transit")
+        return sol, "SOL"
+    if home.currency != currency and fx is not None:
+        got, _ = fx.convert(currency, home.currency, amount)  # a money no exchange lists yet is listed, or held
         home.treasury += got
-    else:
-        home.treasury += amount
+        return got, home.currency
+    home.treasury += amount
+    return amount, currency
 
 
 # ---------------------------------------------------------------------- the bounce's upkeep, and what routes see
@@ -344,27 +426,11 @@ def charge_hops(kernel: Any, a: int, b: int) -> float:
     that money would buy a typical passer: the weight a route gives what a lane charges."""
     if not hasattr(kernel, "state"):
         return 0.0
-    w = worm(kernel, a, b)
-    holder = w["owner"] if w is not None else owner(kernel, a, b)
-    if holder is None:
+    holder, toll, tithe = charge_cr(kernel, a, b)
+    if holder is None or toll + tithe <= 0:
         return 0.0
-    from xylarium.kernel import fibres
     hv = _typical_hop(kernel)
-    if hv <= 0:
-        return 0.0
-    rec = stats(kernel)["lanes"].get(key(a, b))
-    cost_cr = rec["cost_cr"] if rec else (float(w["cost_cr"]) if w else passage_cr(kernel))
-    floor = max(0.0, cost_cr - (rec["collected"] if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
-    around = _around(kernel, a, b)
-    saving = (float("inf") if around == float("inf") else
-              max(0.0, around - fibres.base_lane_cost(kernel, a, b)) * hv)
-    if saving == float("inf"):
-        toll = floor
-    elif w is not None and w.get("handling") == "open":
-        toll = min(floor, saving)
-    else:
-        toll = min(saving, floor + max(0.0, saving - floor) / 2.0)
-    return (toll + tithe_cr(kernel, a, b)) / hv
+    return (toll + tithe) / hv if hv > 0 else 0.0
 
 
 def drain_revenue(kernel: Any, who: str) -> Fraction:
@@ -620,10 +686,12 @@ def _forging(kernel: Any, logs: List[str]) -> None:
 
 
 def _heirs(kernel: Any, logs: List[str]) -> None:
-    """A throat whose keeper's people is gone passes to whoever can keep it - the living master whose network holds
-    one of its mouths (the centre's to the first living master) - or, with no one to pay its upkeep, it collapses:
-    the bounce is not held open by no one."""
-    from xylarium.kernel import history, relations, spheres, topology
+    """A throat needs upkeep only when a mass passes it (its tithe): unkept, it does not collapse - it goes DORMANT,
+    impassable, holding until someone comes. A living master whose network reaches one of its mouths (any master, at
+    the centre) SALVAGES it. A people that folds space but has not mastered the bounce, finding a dormant mouth in
+    its network, tries it - and, not knowing how to ride the bounce, destabilises the mouth: every throat strung
+    through it collapses, and the collapse runs on through every mouth whose remaining throats were all dormant."""
+    from xylarium.kernel import history, relations, spheres
     st = stats(kernel)
     living = relations._peoples(kernel)
     for who in [w for w in st["masters"] if w not in living]:
@@ -631,36 +699,72 @@ def _heirs(kernel: Any, logs: List[str]) -> None:
         history.event(kernel, "BOUNCE_LOST", f"The {who.split(':', 1)[-1]}'s mastery of the bounce dies with them",
                       cause="its people has fallen")
     for k, w in sorted(st["worms"].items()):
-        if w["owner"] in living:
+        if w.get("owner") and w["owner"] not in living:
+            w["keeper"], w["owner"], w["handling"], w["dormant"] = w["owner"], None, "closed", kernel.cycle_count
+            history.event(kernel, "WORMHOLE_DORMANT", f"The throat between {_name(kernel, w['a'])} and "
+                          f"{_name(kernel, w['b'])} falls dormant", cause=f"the {w['keeper'].split(':', 1)[-1]} who "
+                          f"kept it are gone; unused, it holds - impassable until someone comes", data={"throat": k})
+    for k, w in sorted(st["worms"].items()):
+        if k not in st["worms"] or w.get("dormant") is None:
             continue
         heir = None
+        tamperer = None
         for end in (w["a"], w["b"]):
             holder = spheres.presence(kernel, spheres.owner(kernel, end))
             if holder in st["masters"]:
                 heir = holder
-                break
+            elif holder is not None and holder in living and end != MOUTH_BASE and end in mouths(kernel):
+                tamperer = tamperer or (holder, end)
         if heir is None and MOUTH_BASE in (w["a"], w["b"]) and st["masters"]:
             heir = min(st["masters"], key=lambda m: (st["masters"][m], m))
-        old = w["owner"]
         if heir is not None:
             w["owner"], w["handling"] = heir, handling_of(kernel, heir)
-            history.event(kernel, "WORMHOLE_INHERITED", f"The {heir.split(':', 1)[-1]} keep the throat the "
-                          f"{old.split(':', 1)[-1]} kept", actors=[heir], sector_id=w["a"] if w["a"] in kernel.sectors
-                          else None, cause="its keeper's people is gone; the mouth lies in their network",
+            w.pop("dormant", None)
+            history.event(kernel, "WORMHOLE_SALVAGED", f"The {heir.split(':', 1)[-1]} salvage the throat the "
+                          f"{w.get('keeper', '?').split(':', 1)[-1]} kept", actors=[heir],
+                          cause="a dormant throat, its mouth in their network, and they know the bounce",
                           data={"throat": k})
-            logs.append(f"[WORMHOLE] The {heir.split(':', 1)[-1]} inherit the {old.split(':', 1)[-1]}'s throat.")
+            logs.append(f"[WORMHOLE] The {heir.split(':', 1)[-1]} salvage a throat of the "
+                        f"{w.get('keeper', '?').split(':', 1)[-1]}.")
+        elif tamperer is not None:
+            who, mouth = tamperer
+            history.event(kernel, "THROAT_TAMPERED", f"The {who.split(':', 1)[-1]} try the dormant mouth at "
+                          f"{_name(kernel, mouth)}", actors=[who],
+                          cause="they fold space but have not mastered the bounce: the mouth destabilises")
+            n = collapse_mouth(kernel, mouth, f"the {who.split(':', 1)[-1]}, unready, destabilised it")
+            logs.append(f"[WORMHOLE] The {who.split(':', 1)[-1]} try a dormant mouth; {n} throats collapse.")
+
+
+def collapse_mouth(kernel: Any, mouth: int, why: str, seen: Optional[set] = None) -> int:
+    """A destabilised mouth: every throat through it collapses; the collapse runs on through each other mouth whose
+    remaining throats were all dormant (strung together, nothing holding them). Returns how many fell."""
+    from xylarium.kernel import history, topology
+    st = stats(kernel)
+    seen = seen if seen is not None else set()
+    if mouth in seen:
+        return 0
+    seen.add(mouth)
+    fallen = 0
+    others = []
+    for k, w in sorted(st["worms"].items()):
+        if mouth not in (w["a"], w["b"]):
             continue
         for x, y in ((w["a"], w["b"]), (w["b"], w["a"])):
             if x in kernel.sectors and y in kernel.sectors[x].warps:
                 kernel.sectors[x].warps.remove(y)
         st["worms"].pop(k)
         st["collapsed"] = st.get("collapsed", 0) + 1
-        topology.changed(kernel)
+        fallen += 1
+        others.append(w["b"] if w["a"] == mouth else w["a"])
         history.event(kernel, "WORMHOLE_COLLAPSE", f"The throat between {_name(kernel, w['a'])} and "
                       f"{_name(kernel, w['b'])} collapses", sector_id=w["a"] if w["a"] in kernel.sectors else None,
-                      cause=f"the {old.split(':', 1)[-1]} who kept it are gone, and no one else can hold the bounce",
-                      data={"throat": k})
-        logs.append(f"[WORMHOLE] With the {old.split(':', 1)[-1]} gone, the throat {k} collapses.")
+                      cause=why, data={"throat": k})
+    topology.changed(kernel)
+    for o in others:
+        rest = [w for w in st["worms"].values() if o in (w["a"], w["b"])]
+        if rest and all(w.get("dormant") is not None for w in rest):
+            fallen += collapse_mouth(kernel, o, "the collapse ran on along a string of dormant throats", seen)
+    return fallen
 
 
 def season(kernel: Any) -> List[str]:
@@ -682,13 +786,15 @@ def season(kernel: Any) -> List[str]:
 
 def render(kernel: Any) -> str:
     st = stats(kernel)
-    lines = ["=== TRANSIT ===", f"  Tolls paid: {st['paid']:,.0f} Cr; a passage's energy is worth "
-                                 f"{passage_cr(kernel):,.1f} Cr now"]
+    lines = ["=== TRANSIT ===", f"  Tolls paid: {st['paid']:,.0f} Cr; tithes {st.get('tithed', 0.0):,.0f} Cr; a "
+                                 f"passage's energy is worth {passage_cr(kernel):,.1f} Cr now",
+             "  Reserve currencies: " + ", ".join(f"{c} (the {w.split(':', 1)[-1]})" for c, w in reserves(kernel).items())]
     for who, c in sorted(st["masters"].items(), key=lambda kv: kv[1]):
         lines.append(f"  Masters of the bounce: the {who.split(':', 1)[-1]} ({handling_of(kernel, who)})")
     for w in st["worms"].values():
         lines.append(f"  {w['kind']} throat {_name(kernel, w['a'])} <-> {_name(kernel, w['b'])}: "
-                     f"the {w['owner'].split(':', 1)[-1]}'s, {w['handling']}")
+                     + (f"the {w['owner'].split(':', 1)[-1]}'s, {w['handling']}" if w.get("owner") else
+                        f"dormant (the {str(w.get('keeper', '?')).split(':', 1)[-1]}'s)"))
     busiest = sorted(st["lanes"].items(), key=lambda kv: -kv[1]["collected"])[:5]
     for k, rec in busiest:
         if rec["collected"] > 0:
@@ -701,6 +807,7 @@ def summary(kernel: Any) -> Dict[str, Any]:
     kinds: Dict[str, int] = {}
     for w in st["worms"].values():
         kinds[w["kind"]] = kinds.get(w["kind"], 0) + 1
+    kinds["dormant"] = sum(1 for w in st["worms"].values() if w.get("dormant") is not None)
     return {"paid_cr": round(st["paid"]), "tithed_cr": round(st.get("tithed", 0.0)),
             "tolled_lanes": sum(1 for r in st["lanes"].values() if r["collected"] > 0),
             "masters": sorted(st["masters"]), "throats": kinds, "forged": st["forged"],

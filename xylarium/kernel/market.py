@@ -3058,6 +3058,23 @@ class MarketManager:
             # Waypoint Navigation along current_path
             if hauler.current_path:
                 next_sec = hauler.current_path.pop(0)
+                from xylarium.kernel import fibres as _fib, transit as _transit
+                owner_c = kernel.captains.get(hauler.owner_id)
+                payer = _transit._payer(kernel, owner_c) if owner_c is not None else None
+                if _transit.blocks(kernel, payer, hauler.sector_id, next_sec):
+                    hauler.current_path.insert(0, next_sec)       # a blockade: the lane's keeper is at war with its owner
+                    hauler.status = "BLOCKADED"
+                    logs.append(f"BLOCKADE: {hauler.name} is turned back at Sector {next_sec:03d}.")
+                    continue
+                owed = _transit.flow_passage(kernel, payer, hauler.sector_id, next_sec)
+                if owed > 0 and owner_c is not None:              # its owner pays the lane's keeper, what it can
+                    paid = int(min(owed, max(0, owner_c.credits)))
+                    if paid > 0:
+                        owner_c.credits -= paid
+                        holder, toll, tithe = _transit.charge_cr(kernel, hauler.sector_id, next_sec)
+                        _transit.settle(kernel, holder, f"captain:{owner_c.id}", hauler.sector_id, next_sec,
+                                        toll * paid / owed, tithe * paid / owed, paid=(paid, "SOL"))
+                _fib.record_flow(kernel, hauler.sector_id, next_sec, _fib.SHIP_TRAFFIC)   # the lane remembers it
                 hauler.sector_id = next_sec
                 hauler.status = "IN_TRANSIT"
 
