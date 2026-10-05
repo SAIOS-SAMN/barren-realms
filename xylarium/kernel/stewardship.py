@@ -22,6 +22,8 @@ pact (the parties are bound by a pact, relations.py) - each for a span of clock 
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
+from xylarium.kernel import mindcore as mc
+
 QUADRANTS = ("Alpha", "Beta", "Gamma", "Delta")
 RULINGS = ("ceasefire", "release", "pact")
 CONTESTED = ("WAR", "RAID", "CONQUEST", "SUBJUGATION", "REVOLT", "REBELLION")
@@ -346,26 +348,85 @@ def _steward_name(kernel: Any, realm: str, generation: int) -> str:
     return _name(scheduler.rng(kernel, "steward", realm, generation))
 
 
-def _shape(kernel: Any, d: Dict[str, Any]) -> Optional[str]:
-    """What a dispute's own shape names: a hold one side bears as a taking (it reads its patron dark) is released;
-    lives taken between two whose books mirror (one has what the other lacks) are bound by a pact; lives taken
-    otherwise are stopped by a ceasefire. A hold borne willingly names nothing."""
-    from xylarium.kernel import polity, reputation
-    if d["kind"] == "hold":
-        r = reputation.read(kernel, d["b"], d["a"])
-        return "release" if r is not None and r < 0 else None
-    sa, sb = polity.of_people(kernel, d["a"]), polity.of_people(kernel, d["b"])
-    if sa and sb:
-        fa, fb = polity.field(kernel, sa[0]), polity.field(kernel, sb[0])
-        if any((fa[k] > 0 > fb[k]) or (fb[k] > 0 > fa[k]) for k in polity.BOOKS):
-            return "pact"
-    return "ceasefire"
+STEWARD_BOOKS = ("young", "lives", "holds", "power")       # the order a steward attends to them
+STEWARD_VOCABULARY = {"young": ("ceasefire", "pact"), "lives": ("pact", "ceasefire"), "holds": ("release",),
+                      "power": ("ceasefire",)}
+
+
+def _pair_site(a: str, b: str) -> str:
+    return "|".join(sorted((a, b)))
+
+
+def books(kernel: Any, realm: str) -> mc.Chain:
+    """A realm as its steward measures it, exactly, per book (never summed), its sites the realm's peoples and pairs:
+      young  lives taken from a people not yet among the stars, by another (per pair)
+      lives  lives taken between two peoples (per pair)
+      holds  how dark a tributary reads its patron / how bright (per patron and tributary)
+      power  a people's arms / its fair share of the realm's arms (per people)
+    What a standing ruling already answers is drained: a pair it binds is answered."""
+    from xylarium.kernel import annals, relations, reputation, sustenance
+    from xylarium.kernel import mindcore as _mc
+    mine = peoples_of(kernel, realm)
+    need: List[Tuple[str, str, Any]] = []
+    have: List[Tuple[str, str, Any]] = []
+    for d in disputes(kernel, realm):
+        if d["kind"] == "hold" or d["a"] not in mine or d["b"] not in mine:
+            continue
+        ruled = binds(kernel, d["a"], d["b"]) or binds(kernel, d["a"], d["b"], "pact")
+        stake = _stake_since(kernel, d["a"], d["b"], ruled["cycle"]) if ruled else (d.get("stake") or 1)
+        if stake:                                              # a ruling answers only what it stops
+            young = [p for p in (d["a"], d["b"]) if _young(kernel, p, mine)]
+            need.append((_pair_site(d["a"], d["b"]), "young" if young else "lives", stake))
+    for sub, tie in relations.ties(kernel).items():
+        sup = tie["patron"]
+        if sub in mine and sup in mine and not binds(kernel, sub, sup, "release"):
+            r = reputation.read(kernel, sub, sup)
+            if r is not None:
+                need.append((_pair_site(sup, sub), "holds", _mc.q(max(0.0, -r))))
+                have.append((_pair_site(sup, sub), "holds", _mc.q(max(0.0, r))))
+    arms = {who: sum(sustenance._strength(w) for w in worlds) for who, worlds in mine.items()}
+    if arms:
+        fair = _mc.q(sum(arms.values())) / len(arms)
+        for who, a in arms.items():
+            need.append((who, "power", a))
+            have.append((who, "power", fair))
+    return _mc.residual(_mc.measure(need), _mc.measure(have))
+
+
+def _stake_since(kernel: Any, a: str, b: str, since: int) -> float:
+    """Lives taken between two peoples since a cycle (the ledger): what a ruling has not stopped."""
+    from xylarium.kernel import history
+    out = 0.0
+    for e in history.of_people(kernel, a):
+        if e.get("kind") in CONTESTED and e.get("cycle", 0) >= since and \
+                b in {party(kernel, x) for x in e.get("actors", [])}:
+            out += float(e.get("magnitude") or 0) + 1.0
+    return out
+
+
+def _young(kernel: Any, people: str, worlds_by: Dict[str, List[Any]]) -> bool:
+    from xylarium.kernel import mastery
+    return people in worlds_by and not mastery.crossed(kernel, people)
+
+
+def _victim(kernel: Any, hegemon: str, realm: str) -> Optional[str]:
+    """The people in its realm a hegemon has most lately struck."""
+    from xylarium.kernel import history
+    mine = set(peoples_of(kernel, realm))
+    for e in reversed(history.of_people(kernel, hegemon)):
+        if e.get("kind") in CONTESTED:
+            for a in e.get("actors", []):
+                p = party(kernel, a)
+                if p != hegemon and p in mine:
+                    return p
+    return None
 
 
 def season(kernel: Any) -> List[str]:
-    """Once a year each realm's steward-mind hears its realm: of the disputes no ruling yet stands over, the one where
-    the most is at stake (lives taken, holds borne) comes first, and its shape names the ruling. One ruling a year:
-    a steward's attention is the bound. A realm a player keeps is the player's to rule."""
+    """Once a year each realm's steward-mind measures its realm (books), seals what its last ruling delivered,
+    and rules on the residual's lead - one ruling a year: a steward's attention is the bound. What reaches beyond
+    its realm goes up once. A realm a player keeps is the player's to rule."""
+    from xylarium.kernel import mindcore as _mc
     if (kernel.cycle_count // 25) % 4:
         return []
     logs: List[str] = []
@@ -373,29 +434,41 @@ def season(kernel: Any) -> List[str]:
         m = mind(kernel, realm)
         if m.get("player"):
             continue
+        mm = m.setdefault("mind", _mc.new_mind())
+        res = books(kernel, realm)
+        _mc.seal(mm, res)
+        entry = _mc.lead(res, STEWARD_BOOKS, deepest=True)
+        if entry is not None:
+            site, book = entry
+            owed = res[entry]
+            role = "people" if book == "power" else "pair"
+            recalled = _mc.recall(mm, entry, owed, role)
+            barred = _mc.walls(mm, _mc.shape(entry, owed, role))
+            order = ([recalled] if recalled else []) + [d for d in STEWARD_VOCABULARY[book] if d != recalled]
+            if book == "power":
+                victim = _victim(kernel, site, realm)
+                a, b = (site, victim) if victim else (None, None)
+            else:
+                a, b = site.split("|", 1)
+            for kind in order:
+                if kind in barred or a is None:
+                    continue
+                res_r = _rule(kernel, realm, m["id"], kind, a, b)
+                if res_r.get("ok"):
+                    _mc.intend(mm, entry, owed, kind, role)
+                    m["ruled"] += 1
+                    logs.append(f"[STEWARD] {m['name']} of {realm_name(realm)} rules a {kind} between the "
+                                f"{a.split(':', 1)[-1]} and the {b.split(':', 1)[-1]} ({book}).")
+                    break
+            continue
         mine = set(peoples_of(kernel, realm))
         pending = {frozenset((r["a"], r["b"])) for r in stats(kernel)["appeals"]}
-        open_ = [d for d in disputes(kernel, realm)
-                 if d["a"] in mine and d["b"] in mine and frozenset((d["a"], d["b"])) not in pending
-                 and not binds(kernel, d["a"], d["b"]) and not binds(kernel, d["a"], d["b"], "pact")
-                 and not binds(kernel, d["a"], d["b"], "release")]
         beyond = [d for d in disputes(kernel, realm)                # what reaches past its realm goes up, once
                   if not (d["a"] in mine and d["b"] in mine) and frozenset((d["a"], d["b"])) not in pending
                   and not binds(kernel, d["a"], d["b"])]
-        if beyond and not open_:
+        if beyond:
             d = max(beyond, key=lambda d: float(d.get("stake") or 0.0))
             _rule(kernel, realm, m["id"], "ceasefire", d["a"], d["b"])
-        open_.sort(key=lambda d: -float(d.get("stake") or d.get("tribute_sol") or 0.0))
-        for d in open_:
-            kind = _shape(kernel, d)
-            if kind is None:
-                continue
-            res = _rule(kernel, realm, m["id"], kind, d["a"], d["b"])
-            if res.get("ok"):
-                m["ruled"] += 1
-                logs.append(f"[STEWARD] {m['name']} of {realm_name(realm)} rules a {kind} between the "
-                            f"{d['a'].split(':', 1)[-1]} and the {d['b'].split(':', 1)[-1]}.")
-            break
     return logs
 
 

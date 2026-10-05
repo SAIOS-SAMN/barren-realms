@@ -564,3 +564,25 @@ class TestRealmOverTheBridge(unittest.TestCase):
         self.assertEqual(sent[-1]["status"], "ok")
         asyncio.run(gw._process_client_message(c, {"action": "SOVEREIGNS"}))
         self.assertIn("sovereigns", sent[-1])
+
+
+class TestStewardBooks(unittest.TestCase):
+    def test_a_steward_measures_its_realm_in_books_and_its_rulings_are_its_memory(self):
+        from xylarium.kernel import mindcore as mc, stewardship
+        from xylarium.kernel.engine import GameKernel
+        random.seed(5)
+        k = GameKernel(seed=42)
+        for _ in range(8 * 100):
+            k.tick_simulation()
+        for realm in stewardship.realms(k):
+            res = stewardship.books(k, realm)
+            for (site, book), v in res.items():
+                self.assertIn(book, stewardship.STEWARD_BOOKS)
+                self.assertIsInstance(v, mc.Fraction)
+            m = stewardship.stats(k)["minds"][realm]
+            self.assertIn("mind", m)
+        ruled = sum(m["ruled"] for m in stewardship.stats(k)["minds"].values())
+        learned = sum(len(m["mind"]["crystals"]) + len(m["mind"]["walls"])
+                      for m in stewardship.stats(k)["minds"].values())
+        self.assertGreater(ruled, 0)
+        self.assertGreater(learned, 0)                         # what its rulings did is in its memory

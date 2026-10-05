@@ -121,16 +121,20 @@ def verdict(mind: Dict[str, Any], res: Chain, roles: Optional[Dict[str, str]] = 
             "deficits": deficits}
 
 
-def lead(res: Chain, order: Tuple[str, ...], sites: Optional[Tuple[str, ...]] = None) -> Optional[Entry]:
-    """The residual's first deficit in the layer's own order of books (then of sites): need orders."""
+def lead(res: Chain, order: Tuple[str, ...], sites: Optional[Tuple[str, ...]] = None,
+         deepest: bool = False) -> Optional[Entry]:
+    """The residual's first deficit in the layer's own order of books: need orders. Within that book, the sites in
+    the order given - or, `deepest`, the largest deficit first (an order within one book, never across books)."""
     best: Optional[Entry] = None
     rank = {b: i for i, b in enumerate(order)}
     srank = {s: i for i, s in enumerate(sites or ())}
+
+    def key(e: Entry) -> tuple:
+        return (rank[e[1]], -res[e] if deepest else 0, srank.get(e[0], len(srank)), e[0])
     for (site, book), v in res.items():
         if v <= 0 or book not in rank:
             continue
-        key = (rank[book], srank.get(site, len(srank)), site)
-        if best is None or key < (rank[best[1]], srank.get(best[0], len(srank)), best[0]):
+        if best is None or key((site, book)) < key(best):
             best = (site, book)
     return best
 
