@@ -599,7 +599,12 @@ class ColonyManager:
         - Population growth.
         - Civilization intelligence loop: tension δ = demand - supply, civic projects, and periodic table research.
         - Planetary spaceflight (Civiligenesis) when citadel tier >= 2, pop >= 10k, vault >= 15k Cr.
+        A folded people's world is not ticked: its history carries it (zones.folded_peoples).
         """
+        if kernel is not None:
+            from xylarium.kernel import zones
+            if zones.is_folded(kernel, planet):
+                return {}
         civ_intel = None
         if (planet.population > 0 and not planet.owner_id and getattr(planet, "civilization", None) is None
                 and not getattr(planet, "natives", None)):

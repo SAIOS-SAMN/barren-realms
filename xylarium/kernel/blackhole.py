@@ -146,11 +146,10 @@ def quarter(kernel: Any) -> List[str]:
                 continue
             st["reservoir"][el] -= out
             from xylarium.kernel import zones
-            for w in worlds:
-                zones.touch(kernel, w)                         # a folded world is brought to now before it is given to
             for j, w in enumerate(worlds):
                 part = out // len(worlds) + (1 if j < out % len(worlds) else 0)
                 if part:
+                    zones.touch(kernel, w)                     # a folded world is brought to now before it is given to
                     w.element_deposits[el] = w.element_deposits.get(el, 0) + part
                     matter.source("central_engine", el, part)
             st["returned"] += out

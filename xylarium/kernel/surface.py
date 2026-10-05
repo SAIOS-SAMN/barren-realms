@@ -618,6 +618,10 @@ class SurfaceManager:
         2. Catalyzes periodic element reserves: H2O/C boost organics; Fe/Ti boost ore.
         3. Autonomous colony governor zones critical infrastructure when treasury > 10,000 Cr.
         """
+        from xylarium.kernel import ledger, zones
+        k = ledger.active_kernel()
+        if k is not None and zones.is_folded(k, planet):
+            return                                        # a folded people's grounds wait with its history
         grid = SurfaceManager.ensure_surface_grid(planet)
         yields = grid.calculate_yields(planet)
 

@@ -47,16 +47,28 @@ def get(name: str) -> Optional[Subsystem]:
 
 def run_season(kernel: Any) -> None:
     """One fiscal quarter: every registered seasonal hook, in SEASON order; their lines go to the action log."""
-    for name in SEASON:
-        sub = REGISTRY.get(name)
-        if sub is None or sub.season is None:
-            continue
-        if name == "federal_reserve" and not institutions.reserve_founded(kernel):
-            continue                                     # no Reserve has been founded yet (institutions.py)
-        scheduler.lock(kernel, "season", name, kernel.cycle_count)    # each season its own stream
-        for line in sub.season(kernel) or []:
-            kernel.action_logs.append(line)
-
+    from xylarium.kernel import zones
+    shut = None                                          # folded worlds are off the map for the engine's own laws
+    try:
+        for name in SEASON:
+            sub = REGISTRY.get(name)
+            if sub is None or sub.season is None:
+                continue
+            if (name in zones.SEES_FOLDED) == (shut is not None):
+                if shut is None:
+                    shut = zones.hidden(kernel)
+                    shut.__enter__()
+                else:
+                    shut.__exit__(None, None, None)
+                    shut = None
+            if name == "federal_reserve" and not institutions.reserve_founded(kernel):
+                continue                                 # no Reserve has been founded yet (institutions.py)
+            scheduler.lock(kernel, "season", name, kernel.cycle_count)    # each season its own stream
+            for line in sub.season(kernel) or []:
+                kernel.action_logs.append(line)
+    finally:
+        if shut is not None:
+            shut.__exit__(None, None, None)
 
 from xylarium.kernel import institutions, scheduler  # noqa: E402
 

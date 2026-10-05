@@ -390,3 +390,44 @@ class TestPress(unittest.TestCase):
                 if line.startswith("- "):
                     self.assertTrue(re.search(r"\[H-\d{6}", line), line)
             self.assertIn("Aru", open(os.path.join(d, "index.md")).read())
+
+
+class TestFoldedPeoples(unittest.TestCase):
+    def setUp(self):
+        from xylarium.kernel import relations, zones
+        random.seed(5)
+        self.k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
+        ages.sleep(self.k, "player_1", 1e9)                      # a galaxy of peoples
+        self.folded = sorted(zones.folded_peoples(self.k))
+        self.by = relations._peoples(self.k)
+
+    def test_peoples_no_seat_reaches_are_folded_and_the_engines_laws_do_not_see_them(self):
+        from xylarium.kernel import zones
+        self.assertTrue(self.folded)
+        who = next(w for w in self.folded if w in self.by)
+        world = self.by[who][0]
+        sec = self.k.sectors[world.sector_id]
+        before = list(sec.planets)
+        with zones.hidden(self.k):
+            self.assertNotIn(world, sec.planets)                 # off the map the engine's laws walk
+        self.assertEqual(sec.planets, before)                     # put back as it was, in its place
+        self.assertIs(sec.planets[before.index(world)], world)
+        self.assertEqual(ColonyStub.tick(self.k, world), {})      # its colony is not ticked
+
+    def test_a_seat_coming_near_unfolds_a_people(self):
+        from xylarium.kernel import zones
+        who = next(w for w in self.folded if w in self.by)
+        world = self.by[who][0]
+        self.k.register_player("player_9", "Visitor")
+        roles.seat_captain(self.k, "player_9", "intelligence")
+        roles.place(self.k, "player_9", world.sector_id)
+        self.k.caches.pop("zones", None)                          # the next quarter reads the realm afresh
+        self.assertNotIn(who, zones.folded_peoples(self.k))
+        self.assertFalse(zones.is_folded(self.k, world))
+
+
+class ColonyStub:
+    @staticmethod
+    def tick(kernel, planet):
+        from xylarium.kernel.colony import ColonyManager
+        return ColonyManager.tick_colony(planet, kernel=kernel)

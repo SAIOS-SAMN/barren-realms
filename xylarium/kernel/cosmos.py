@@ -531,15 +531,22 @@ def star_life(kernel: Any, sector_id: int) -> Optional[Tuple[float, float]]:
         return None
     if "remnant" in (getattr(sec, "star_type", "") or "").lower():
         return (0.0, 0.0)
-    try:
-        st = physics.star(sec)
-        m, lum = float(st["mass"]), float(st["luminosity"])
-    except Exception:
-        return None
-    born = float(g.get("born", formed_gyr(g["r"])))
-    from xylarium.kernel import fundamental
-    nuclear = fundamental.of(cosmos_seed(kernel)).nuclear
-    return born, born + SUN_MS_GYR * nuclear * m / max(1e-9, lum)     # its fuel over its burn
+
+    def compute() -> Optional[Tuple[float, float]]:
+        try:
+            st = physics.star(sec)
+            m, lum = float(st["mass"]), float(st["luminosity"])
+        except Exception:
+            return None
+        born = float(g.get("born", formed_gyr(g["r"])))
+        from xylarium.kernel import fundamental
+        nuclear = fundamental.of(cosmos_seed(kernel)).nuclear
+        return born, born + SUN_MS_GYR * nuclear * m / max(1e-9, lum)     # its fuel over its burn
+    if not hasattr(kernel, "caches"):
+        return compute()
+    from xylarium.kernel import cache                    # it changes only with its star (a death replaces it)
+    stamp = (getattr(sec, "star_type", None), id(getattr(sec, "star", None)), g.get("born"), g.get("r"))
+    return cache.stamped(kernel, "star_life", sector_id, stamp, compute)
 
 
 def death_kind(kernel: Any, sector_id: int) -> str:

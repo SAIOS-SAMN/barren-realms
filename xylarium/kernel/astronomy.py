@@ -94,16 +94,32 @@ class AstronomyManager:
         self._sectors = sectors
         from xylarium.kernel import physics
         seen = self._seen(sectors)
-        for p in planets:
-            sec = sectors.get(p.sector_id) if sectors else None
-            if sec is not None and getattr(p, "body", None):
-                # a world with exact physics is a closed-form function of time: computed where someone is there to
-                # see it, and on demand anywhere else (compute_position) - the sky is not redrawn every cycle
-                if p.sector_id in seen:
-                    p.orbital_angle = physics.orbital_angle(sec, p, self.cycle_count)
-                continue
+        if sectors:
+            # a world with exact physics is a closed-form function of time: computed where someone is there to see
+            # it, and on demand anywhere else (compute_position) - the sky is not redrawn every cycle
+            for sid in seen:
+                sec = sectors.get(sid)
+                for p in (sec.planets if sec is not None else ()):
+                    if getattr(p, "body", None):
+                        p.orbital_angle = physics.orbital_angle(sec, p, self.cycle_count)
+        for p in self._stepped(planets, sectors):         # worlds without an exact orbit step by 360 / period
             period = max(1, p.orbital_period)
             p.orbital_angle = (p.orbital_angle + 360.0 / period) % 360.0
+
+    @staticmethod
+    def _stepped(planets: List[Planet], sectors: Optional[Dict[int, Any]]) -> List[Planet]:
+        """The worlds with no exact orbit (they keep a stepped angle), read once a quarter."""
+        from xylarium.kernel import ledger
+        k = ledger.active_kernel()
+
+        def scan() -> List[Planet]:
+            return [p for p in planets
+                    if not ((sectors.get(p.sector_id) if sectors else None) is not None and getattr(p, "body", None))]
+        if k is None or getattr(k, "sectors", None) is not sectors or not hasattr(k, "caches"):
+            return scan()
+        from xylarium.kernel import cache
+        from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+        return cache.memo(k, "astronomy", "stepped", scan, epoch=(k.cycle_count // FISCAL_QUARTER_CYCLES, len(planets)))
 
     @staticmethod
     def _seen(sectors: Optional[Dict[int, Any]]) -> Any:

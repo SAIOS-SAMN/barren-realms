@@ -53,18 +53,20 @@ def _ring(kernel: Any, anchors: Iterable[int], lanes: int) -> Set[int]:
     return seen
 
 
-def observers(kernel: Any) -> Dict[str, Set[int]]:
-    """Each seat's anchors: the sectors it stands in or holds."""
+def observers(kernel: Any, seated: bool = False) -> Dict[str, Set[int]]:
+    """Each seat's anchors: the sectors it stands in or holds. `seated`: only the players' seats (human or AI) -
+    the observers a people unfolds for; its own worlds, its stations and the realm's roaming crews do not count."""
     from xylarium.kernel import ages, roles
     out: Dict[str, Set[int]] = {k: set() for k in ASPECT}
-    for sid, sec in kernel.sectors.items():
+    for sid, sec in ({} if seated else kernel.sectors).items():
         if getattr(sec, "port", None) is not None:
             out["station"].add(sid)
         if any(q.population > 0 or q.owner_id or getattr(q, "natives", None) for q in sec.planets):
             out["people"].add(sid)
     try:
-        from xylarium.kernel import harvest
-        out["station"] |= {int(s) for s in harvest.stats(kernel).get("shade", {})}   # arrays stand round a star
+        if not seated:
+            from xylarium.kernel import harvest
+            out["station"] |= {int(s) for s in harvest.stats(kernel).get("shade", {})}   # arrays stand round a star
     except Exception:
         pass
     seats = roles.stats(kernel)["of"] if "roles" in getattr(kernel, "state", {}) else {}
@@ -72,6 +74,8 @@ def observers(kernel: Any) -> Dict[str, Set[int]]:
     offices = roles.stats(kernel).get("office", {}) if seats else {}
     for cid, cap in getattr(kernel, "captains", {}).items():
         seat = seats.get(cid)
+        if seated and seat is None:
+            continue                                      # a crew of the realm, not a player's seat
         if seat == "steward" and cid in realms:
             out["sovereign"].add(cap.sector_id)
             for wid in realms[cid]["worlds"]:
@@ -90,14 +94,20 @@ def observers(kernel: Any) -> Dict[str, Set[int]]:
     return out
 
 
-def _levels(kernel: Any) -> Dict[int, int]:
+def _levels(kernel: Any, seated: bool = False) -> Dict[int, int]:
     lv: Dict[int, int] = {}
-    for seat, anchors in observers(kernel).items():
+    for seat, anchors in observers(kernel, seated).items():
         for level, lanes in ASPECT[seat].items():
             for sid in _ring(kernel, anchors, lanes):
                 if lv.get(sid, CHARTED) < level:
                     lv[sid] = level
     return lv
+
+
+def _quarter_of(kernel: Any) -> int:
+    """The zones are read once a quarter (the season's laws see the realm as it was opened at its start)."""
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
+    return kernel.cycle_count // FISCAL_QUARTER_CYCLES
 
 
 def _memo(kernel: Any) -> Dict[str, Any]:
@@ -115,7 +125,7 @@ def _memo(kernel: Any) -> Dict[str, Any]:
     if not hasattr(kernel, "caches"):
         return scan()
     from xylarium.kernel import cache
-    return cache.memo(kernel, "zones", "all", scan, epoch=kernel.cycle_count)
+    return cache.memo(kernel, "zones", "all", scan, epoch=_quarter_of(kernel))
 
 
 def peopled(kernel: Any) -> FrozenSet[int]:
@@ -160,6 +170,93 @@ def settle_all(kernel: Any) -> None:
     """Bring every folded world to now (a save, an audit, a test)."""
     for sid in list(kernel.sectors):
         touch_sector(kernel, sid)
+
+
+# ---------------------------------------------------------------------- folded peoples
+# The laws that carry or catch up what is folded see folded worlds; every other seasonal law runs without them.
+SEES_FOLDED = {"tempo", "clocks", "cosmos", "annals", "blackhole", "exodus", "geology"}
+
+
+def folded_peoples(kernel: Any) -> FrozenSet[str]:
+    """Peoples held folded this cycle: in a universe begun at its Big Bang, every people whose own history decides its
+    turnings (annals.history_decides: no seat guides it) and none of whose worlds lies where a player's seat - human
+    or AI, of any tier - holds the realm open to the worlds. A folded people lives at the level of history alone:
+    the annals carry its years, its turnings, its falls and its dominion; when a seat comes near it opens, its worlds
+    as its history has made them, and the engine takes up its seasons."""
+    if ALL_OPEN or not hasattr(kernel, "caches"):
+        return frozenset()
+    from xylarium.kernel import cache
+
+    def scan() -> FrozenSet[str]:
+        from xylarium.kernel import annals, cosmos, relations
+        if not cosmos.is_cosmic(kernel):
+            return frozenset()
+        open_ = {sid for sid, lv in _levels(kernel, seated=True).items() if lv >= WORLD}
+        out = set()
+        for who, worlds in relations._peoples(kernel).items():
+            if annals.history_decides(kernel, who) and not any(w.sector_id in open_ for w in worlds):
+                out.add(who)
+        return frozenset(out)
+    return cache.memo(kernel, "zones", "folded_peoples", scan, epoch=_quarter_of(kernel))
+
+
+def folded_worlds(kernel: Any) -> FrozenSet[str]:
+    if ALL_OPEN or not hasattr(kernel, "caches"):
+        return frozenset()
+    from xylarium.kernel import cache
+
+    def scan() -> FrozenSet[str]:
+        from xylarium.kernel import relations
+        peoples = folded_peoples(kernel)
+        by = relations._peoples(kernel)
+        return frozenset(w.id for who in peoples for w in by.get(who, []))
+    return cache.memo(kernel, "zones", "folded_worlds", scan, epoch=_quarter_of(kernel))
+
+
+def is_folded(kernel: Any, planet: Any) -> bool:
+    return planet is not None and planet.id in folded_worlds(kernel)
+
+
+class hidden:
+    """While the engine's own seasonal laws run, folded worlds are not on the map they walk; they are put back as
+    they were (worlds a law adds or removes meanwhile are kept or dropped)."""
+
+    def __init__(self, kernel: Any) -> None:
+        self.kernel = kernel
+        self.saved: Dict[int, Any] = {}
+
+    CACHES = ("relations_peoples", "planet_index", "peopled_worlds")   # read from the map: read again
+
+    def _forget(self) -> None:
+        for name in self.CACHES:
+            getattr(self.kernel, "caches", {}).pop(name, None)
+
+    def __enter__(self) -> "hidden":
+        _memo(self.kernel)                                # the quarter's zones are read from the whole map
+        fw = folded_worlds(self.kernel)
+        if not fw:
+            return self
+        self._forget()
+        for sid, sec in self.kernel.sectors.items():
+            if any(p.id in fw for p in sec.planets):
+                orig = sec.planets
+                self.saved[sid] = (orig, [p for p in orig if p.id in fw])
+                sec.planets = [p for p in orig if p.id not in fw]
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        for sid, (orig, folded) in self.saved.items():
+            sec = self.kernel.sectors.get(sid)
+            if sec is None:
+                continue
+            shown = sec.planets
+            keep = set(id(p) for p in shown) | set(id(p) for p in folded)
+            merged = [p for p in orig if id(p) in keep] + [p for p in shown if all(p is not q for q in orig)]
+            orig[:] = merged
+            sec.planets = orig
+        if self.saved:
+            self._forget()
+        self.saved = {}
 
 
 def summary(kernel: Any) -> Dict[str, Any]:
