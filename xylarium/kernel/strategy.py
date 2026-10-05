@@ -17,14 +17,15 @@ neighbours - and weighs five ways to stand over its planning horizon (decide.cho
   REACH     everything toward the stars (worth: the room beyond its system, if its mathematics is near the
             crossing - its fourth-axis crystals held - and it has not crossed)
 
-Each worth is then weighed by what the council has learned: every posture it has held is scored by how its own
-syntropy index moved while it held it (syntropy.py), against how it moved under the others - so a people whose
-growth failed it turns from growing, and one that prospered by securing itself keeps doing so. Its memory fades as
-its knowledge does (its depreciation), so old lessons give way to new ones.
+Each worth is a book in the council's field, in its own measure, never weighed against another (the mind core,
+mindcore.py): the posture is the first aim with something to answer, in the order needs are met - hold, secure,
+grow, deepen, reach - with the aims it has learned pay recalled first and those walled last. What holding a posture
+did is sealed each year from its syntropy index (syntropy.py): a rise seals a crystal, none a wall; the remembered
+slopes still fade as its knowledge does.
 
-What a posture does: every choice its council makes afterwards (decide.choose) weighs the options that serve its
-posture - each option says what it serves (its "aim") - by one plus the posture's share of all it judged worth
-doing. It does not forbid anything; it is where a people puts its weight.
+What a posture does: every choice its council makes afterwards (decide.choose) weighs first the options that serve
+its posture - each option says what it serves (its "aim") - among themselves only, and the rest only if none of
+those is worth doing. It forbids nothing; it is where a people puts its weight.
 """
 
 import math
@@ -123,22 +124,15 @@ def season(kernel: Any) -> List[str]:
             old = rec["learned"].get(rec["posture"], {"slope": 0.0, "weight": 0.0})
             w = old["weight"] * keep + 1.0
             rec["learned"][rec["posture"]] = {"slope": (old["slope"] * old["weight"] * keep + slope) / w, "weight": w}
+            _seal(rec, rec["posture"], slope)                 # what holding it did: a crystal, or a wall
         rec["s_then"], rec["read_at"] = s_now, kernel.cycle_count
         gen = max(1.0, fertility.generation_of(kernel, home))
         if rec["posture"] and (kernel.cycle_count - rec["since"]) / 100.0 < gen:
             continue                                          # a council keeps its course a generation
         worths = _worths(kernel, who, worlds, by)
-        slopes = [v["slope"] for v in rec["learned"].values()] or [0.0]
-        mean = sum(slopes) / len(slopes)
-        opts = []
-        for p in ("grow", "deepen", "secure", "hold", "reach"):
-            learned = rec["learned"].get(p)
-            lesson = math.exp(max(-3.0, min(3.0, (learned["slope"] - mean) * gen))) if learned else 1.0
-            opts.append(decide.option(p, 0.0, worths[p] * lesson))
-        pick = decide.choose(kernel, opts, decide.mind_of_planet(kernel, home), who, "posture")
+        pick = _lead(kernel, rec, worths)                     # the mind core: need orders, crystals and walls
         if pick is None:
             continue
-        total = sum(max(0.0, o["value"]) for o in opts) or 1.0
         if pick["name"] != rec["posture"]:
             was = rec["posture"]
             rec["posture"], rec["since"] = pick["name"], kernel.cycle_count
@@ -148,8 +142,37 @@ def season(kernel: Any) -> List[str]:
                               actors=[who], planet=home,
                               cause=f"its council read its standing and what {was} had brought it",
                               data={"from": was, "to": pick["name"]})
-        rec["focus"] = round(max(0.0, pick["value"]) / total, 4)
+        rec["focus"] = 1.0
     return logs
+
+
+COUNCIL_BOOKS = ("hold", "secure", "grow", "deepen", "reach")   # the order needs are met: keep, guard, grow, deepen, reach
+
+
+def _seal(rec: Dict[str, Any], posture: str, slope: float) -> None:
+    from fractions import Fraction
+    from xylarium.kernel import mindcore as mc
+    m = rec.setdefault("mind", mc.new_mind())
+    entry = ("self", posture)
+    mc.intend(m, entry, Fraction(1), posture)
+    mc.seal(m, {entry: Fraction(1) - (mc.q(slope) if slope > 0 else Fraction(0))})
+
+
+def _lead(kernel: Any, rec: Dict[str, Any], worths: Dict[str, float]) -> Optional[Dict[str, Any]]:
+    """A council's posture by the mind core: each aim is a book (what acting on it is worth, in its own measure,
+    never weighed against the others); the aims it has learned pay come first, those walled last, the rest in the
+    order needs are met; the first with something to answer leads."""
+    from fractions import Fraction
+    from xylarium.kernel import mindcore as mc
+    m = rec.setdefault("mind", mc.new_mind())
+    paid = [b for b in COUNCIL_BOOKS if mc.recall(m, ("self", b), Fraction(1)) is not None]
+    walled = [b for b in COUNCIL_BOOKS if b in mc.walls(m, mc.shape(("self", b), Fraction(1)))]
+    order = paid + [b for b in COUNCIL_BOOKS if b not in paid and b not in walled] + \
+        [b for b in COUNCIL_BOOKS if b in walled and b not in paid]
+    for aim in order:
+        if worths.get(aim, 0.0) > 0:
+            return {"name": aim, "value": worths[aim], "cost": 0.0}
+    return None
 
 
 def weight(m: Dict[str, Any], option: Dict[str, Any]) -> float:

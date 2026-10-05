@@ -151,17 +151,25 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
     # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
     swing = 1.0 + mood(kernel, holder)                 # what its minds, hearing each other, all feel this season
-    nets = [o["value"] * swing * strategy.weight(m, o) * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
+    nets = [o["value"] * swing * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
                                             o.get("currency", "SOL")) if o.get("cash") else 0.0)
             for o, lz in zip(options, lesson)]
     scale = max(abs(n) for n in nets) or 1.0
     from xylarium.kernel import scheduler
     rng = scheduler.rng(kernel, "decide", kernel.cycle_count, *salt)     # this universe's own misjudgements
+    seen = [n + rng.gauss(0.0, JUDGEMENT_ERROR * m["noise"] * scale) for n in nets]
+    # need orders: the options serving the book its council leads with (its posture, strategy.py) are weighed first,
+    # among themselves only; the rest only if none of those is worth doing - worth against cost within one book,
+    # never one book's worth against another's
+    posture = m.get("posture")
     best, best_seen = None, 0.0
-    for o, n in zip(options, nets):
-        seen = n + rng.gauss(0.0, JUDGEMENT_ERROR * m["noise"] * scale)
-        if seen > best_seen:
-            best, best_seen = o, seen
+    for group in ([i for i, o in enumerate(options) if posture and o.get("aim") == posture],
+                  [i for i, o in enumerate(options) if not (posture and o.get("aim") == posture)]):
+        for i in group:
+            if seen[i] > best_seen:
+                best, best_seen = options[i], seen[i]
+        if best is not None:
+            break
     if best is not None:
         st = stats(kernel)
         st["chosen"][best["name"]] = st["chosen"].get(best["name"], 0) + 1
