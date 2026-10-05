@@ -375,15 +375,17 @@ start_steward = start_sovereign          # the older name of the sovereign's sea
 
 
 # ---------------------------------------------------------------------- progenitor: an ancient
-ANCIENTS = 7                    # the first minds the universe raises: the ancient class a progenitor may take
 
 
 def ancients(kernel: Any) -> List[Dict[str, Any]]:
-    """The first minds this universe will raise (cosmos.py's schedule), earliest first: when each wakes (Gyr after
-    the Big Bang), what its life is made of, and how far out its home lies (its ring of the galaxy, from the core)."""
+    """The ancients this universe will raise: the minds that wake on the first set of stars the galactic core made -
+    inside its bulge, born in the first e-fold of its star formation (cosmos.first_generation). Their number is the
+    seed's, not chosen. Earliest first: when each wakes (Gyr after the Big Bang), what its life is made of, and how
+    far out its home lies (its ring of the galaxy)."""
     from xylarium.kernel import cosmos
     out = []
-    for i, m in enumerate(cosmos.stats(kernel)["minds"][:ANCIENTS]):
+    firsts = [m for m in cosmos.stats(kernel)["minds"] if cosmos.first_generation(kernel, tuple(m["cell"]), m["k"])]
+    for i, m in enumerate(firsts):
         out.append({"index": i, "dawn_gyr": round(float(m["epoch"]), 4), "metabolism": m.get("metab") or "biotic",
                     "ring": int(m["cell"][0]), "cell": list(m["cell"]), "k": int(m["k"]), "w": int(m.get("w", 0)),
                     "star_mass": m.get("mass")})

@@ -171,6 +171,18 @@ def abundance(element: str, r: float) -> float:
     return math.exp(-(r - R0_KPC) / scatter_length(element))
 
 
+def first_generation(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
+    """Is this slot's star of the first set the core raised - orbiting inside its bulge, and born within the first
+    e-fold of the bulge's star formation (its infall timescale after the first stars)? The ancients rise on these."""
+    from xylarium.kernel import creation
+    r = ring_radius(int(cell[0]))
+    if r >= R_BULGE_KPC:
+        return False
+    s = cosmos_seed(kernel)
+    slot = creation.cell(s, int(cell[0]), int(cell[1]))[int(k)]
+    return slot["born"] - creation.first_stars(s) <= creation.infall_gyr(s, r)
+
+
 def omega(r: float) -> float:
     """rad per deep Myr on the flat rotation curve."""
     return V_FLAT_KMS * KPC_PER_MYR_AT_1KMS / max(0.05, r)

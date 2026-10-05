@@ -67,7 +67,7 @@ def progenitor_books(kernel: Any) -> mc.Chain:
         if r.get("before"):
             need.append((r["id"], "appeals", stewardship._stake_since(kernel, r["a"], r["b"], r["cycle"]) + 1))
     for r in stewardship.stats(kernel)["rulings"].values():
-        if str(r.get("sealed_by", "")).startswith("ancients:"):          # what its seals have not stopped
+        if str(r.get("sealed_by", "")).startswith(("ancients:", "progenitor:")):   # what seals have not stopped
             need.append((r["id"], "sealed", stewardship._stake_since(kernel, r["a"], r["b"], r["sealed_at"])))
     if cosmos.is_cosmic(kernel):
         need.append(("board", "minds", mc.q(cosmos.expected_by(kernel, cosmos.deep_gyr(kernel)))))
@@ -87,9 +87,88 @@ def seated_progenitor(kernel: Any) -> Optional[str]:
     return next((pid for pid, r in roles.stats(kernel).get("of", {}).items() if r == "progenitor"), None)
 
 
+# ---------------------------------------------------------------------- the progenitors: an ancients' own class
+def ancient_peoples(kernel: Any) -> Dict[str, Any]:
+    """The living peoples that are ancients: their home world's star is of the core's first set
+    (cosmos.first_generation). -> {holder: home world}."""
+    from xylarium.kernel import cosmos, relations
+    if not cosmos.is_cosmic(kernel):
+        return {}
+    out = {}
+    for who, worlds in relations._peoples(kernel).items():
+        home = max(worlds, key=lambda w: (w.population, w.id))
+        g = cosmos.stats(kernel)["place"].get(str(home.sector_id)) or {}
+        if "cell" in g and cosmos.first_generation(kernel, tuple(g["cell"]), g.get("k", 0)):
+            out[who] = home
+    return out
+
+
+def progenitors(kernel: Any) -> Dict[str, Dict[str, Any]]:
+    """The progenitor lines: an ancient people that has crossed to the stars - staying near its own worlds, as the
+    old do - raises a class of its own to do its bidding across them. Each line's reach is its people's (the annals:
+    how far its dominion has grown); a line whose people falls ends. In a settled universe, which has no Big Bang of
+    its own, the elders of its prehistory hold the progenitors' place."""
+    from xylarium.kernel import annals, mastery
+    st = stats(kernel)
+    lines = st.setdefault("progenitors", {})
+    anc = ancient_peoples(kernel)
+    for who, home in anc.items():
+        crossed = mastery.crossed(kernel, who) or "crossed" in (annals.stats(kernel)["of"].get(who) or {}).get("passed", [])
+        if crossed and who not in lines:
+            from xylarium.kernel import history, scheduler
+            from xylarium.kernel.natives import _name
+            lines[who] = {"name": _name(scheduler.rng(kernel, "progenitor", who)), "ancient": who,
+                          "since": kernel.cycle_count, "mind": mc.new_mind(), "acts": 0, "seat": None}
+            history.event(kernel, "PROGENITOR_CLASS", f"The {who.split(':', 1)[-1]} raise their progenitors",
+                          actors=[who], planet=home, cause="an ancient people, near its own worlds, sends others out",
+                          data={"line": lines[who]["name"]})
+    for who, rec in lines.items():
+        rec["ended"] = None if who in anc else (rec.get("ended") or kernel.cycle_count)
+        rec["reach_kpc"] = float((annals.stats(kernel)["of"].get(who) or {}).get("reach", 0.0))
+    if not anc and not lines:
+        elders = _line(kernel, "progenitor", "progenitor")
+        elders.setdefault("ancient", None)
+        return {"elders": elders}
+    return {w: r for w, r in lines.items() if not r.get("ended")}
+
+
+def _distance(kernel: Any, a_holder: str, b_sector: int) -> float:
+    from xylarium.kernel import cosmos, geometry, relations
+    worlds = relations._peoples(kernel).get(a_holder) or []
+    if not worlds:
+        return float("inf")
+    home = max(worlds, key=lambda w: (w.population, w.id))
+    pa, pb = cosmos.position(kernel, home.sector_id), cosmos.position(kernel, b_sector)
+    if not pa or not pb:
+        return 0.0
+    return float(geometry.proper_kpc([pa["x"], pa["y"], pa["z"]], [pb["x"], pb["y"], pb["z"]]))
+
+
+def _home_sector(kernel: Any, holder: str) -> Optional[int]:
+    from xylarium.kernel import relations
+    worlds = relations._peoples(kernel).get(holder) or []
+    return max(worlds, key=lambda w: (w.population, w.id)).sector_id if worlds else None
+
+
+def answerable(kernel: Any, line: Dict[str, Any], appeal: Dict[str, Any]) -> Optional[float]:
+    """Can this progenitor line reach both parties of an appeal? Its distance to the farther, if so."""
+    if line.get("ancient") is None:
+        return 0.0                                           # the elders of a settled universe reach all of it
+    far = 0.0
+    for p in (appeal["a"], appeal["b"]):
+        sid = _home_sector(kernel, p)
+        if sid is None:
+            return None
+        d = _distance(kernel, line["ancient"], sid)
+        if d > line.get("reach_kpc", 0.0):
+            return None
+        far = max(far, d)
+    return far
+
+
 def season(kernel: Any) -> List[str]:
-    """Once a year: the watcher brings the deepest appeal before the progenitors; where no player holds the
-    progenitor's seat, the ancients' line seals the deepest appeal before it, and reads what its last seal did."""
+    """Once a year: the watcher brings the deepest appeal before the progenitors; each progenitor line not held by a
+    player seals one appeal it can reach - the nearest of those before it - and reads what its last seal did."""
     from xylarium.kernel import stewardship
     if (kernel.cycle_count // 25) % 4 or "stewardship" not in getattr(kernel, "state", {}):
         return []
@@ -104,20 +183,30 @@ def season(kernel: Any) -> List[str]:
             w["acts"] += 1
             logs.append(f"[WATCHER] {w['name']} brings {rec['id']} ({rec['kind']}: {rec['a'].split(':', 1)[-1]} / "
                         f"{rec['b'].split(':', 1)[-1]}) before the progenitors.")
-    if seated_progenitor(kernel) is not None:
-        return logs                                            # a seated progenitor decides for itself
-    p = _line(kernel, "progenitor", "progenitor")
-    pres = progenitor_books(kernel)
-    mc.seal(p["mind"], pres)
-    entry = mc.lead(pres, PROGENITOR_BOOKS, deepest=True)
-    if entry is not None and entry[1] == "appeals":
-        res = stewardship._seal(kernel, f"ancients:{p['name']}", entry[0])
+    seated = seated_progenitor(kernel)
+    seated_people = None
+    if seated is not None:
+        from xylarium.kernel import ages, knowledge
+        home = ages.homeworld(kernel, seated)
+        seated_people = knowledge.holder_of_planet(home) if home is not None else None
+    for who, p in progenitors(kernel).items():
+        if who == seated_people:
+            continue                                         # a player's progenitors are its own to command
+        pres = progenitor_books(kernel)
+        mc.seal(p["mind"], pres)
+        before = [r for r in stewardship.stats(kernel)["appeals"] if r.get("before")]
+        reach = [(answerable(kernel, p, r), r) for r in before]
+        reach = [(d, r) for d, r in reach if d is not None]
+        if not reach:
+            continue
+        d, r = min(reach, key=lambda x: (x[0], x[1]["id"]))  # the nearest of what it can reach
+        res = stewardship._seal(kernel, f"progenitor:{p['name']}", r["id"])
         if res.get("ok"):
-            mc.intend(p["mind"], (entry[0], "sealed"), pres[entry], "seal", "appeal")   # read next year
+            mc.intend(p["mind"], (r["id"], "sealed"), pres.get((r["id"], "appeals"), mc.q(1)), "seal", "appeal")
             p["acts"] += 1
-            r = res["ruling"]
-            logs.append(f"[PROGENITOR] {p['name']} of the ancients seals the {r['kind']} between the "
-                        f"{r['a'].split(':', 1)[-1]} and the {r['b'].split(':', 1)[-1]}.")
+            logs.append(f"[PROGENITOR] {p['name']}" + (f" of the {who.split(':', 1)[-1]}" if p.get("ancient") else
+                                                      " of the elders") +
+                        f" seals the {r['kind']} between the {r['a'].split(':', 1)[-1]} and the {r['b'].split(':', 1)[-1]}.")
     return logs
 
 
@@ -136,7 +225,10 @@ def render(kernel: Any) -> str:
 
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    return {k: {"name": v["name"], "acts": v["acts"]} for k, v in st.items() if isinstance(v, dict) and "name" in v}
+    out = {k: {"name": v["name"], "acts": v["acts"]} for k, v in st.items() if isinstance(v, dict) and "name" in v}
+    out["progenitors"] = {w: {"name": v["name"], "acts": v["acts"], "ended": v.get("ended")}
+                          for w, v in st.get("progenitors", {}).items()}
+    return out
 
 
 from xylarium.kernel import state  # noqa: E402

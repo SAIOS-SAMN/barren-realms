@@ -85,8 +85,12 @@ class TestProgenitorSeat(unittest.TestCase):
         k = GameKernel(seed=7, genesis="cosmic:neighbourly")
         k.activate()
         anc = roles.ancients(k)
-        self.assertEqual(len(anc), roles.ANCIENTS)
+        self.assertTrue(anc)                                      # the seed's own number of them
         self.assertEqual([a["dawn_gyr"] for a in anc], sorted(a["dawn_gyr"] for a in anc))
+        from xylarium.kernel import cosmos
+        for a in anc:                                             # each on the core's first set of stars
+            self.assertLess(cosmos.ring_radius(a["ring"]), cosmos.R_BULGE_KPC)
+            self.assertTrue(cosmos.first_generation(k, tuple(a["cell"]), a["k"]))
 
 
 class TestOpeningMenu(unittest.TestCase):
@@ -599,7 +603,7 @@ class TestBoard(unittest.TestCase):
         sealed = [r for r in stewardship.stats(k)["rulings"].values() if r.get("sealed")]
         self.assertTrue(sealed)                                  # what no steward could settle, settled
         for r in sealed:
-            self.assertTrue(str(r["sealed_by"]).startswith("ancients:"))
+            self.assertTrue(str(r["sealed_by"]).startswith("progenitor:"))
         for (site, book), v in board.progenitor_books(k).items():
             self.assertIsInstance(v, mc.Fraction)
         self.assertIn("THE BOARD", board.render(k))
@@ -611,3 +615,17 @@ class TestBoard(unittest.TestCase):
         k = GameKernel(seed=42)
         roles.stats(k)["of"]["player_0"] = "progenitor"
         self.assertEqual(board.seated_progenitor(k), "player_0")
+
+
+class TestAncientsAndProgenitors(unittest.TestCase):
+    def test_ancients_raise_their_own_progenitors_once_they_cross(self):
+        from xylarium.kernel import board
+        random.seed(7)
+        k = roles.start_progenitor(7, "Architect", pick=0, pace="neighbourly")
+        ages.sleep(k, "player_1", 1e8)
+        anc = board.ancient_peoples(k)
+        lines = board.progenitors(k)
+        self.assertTrue(anc)
+        for who in lines:
+            self.assertIn(who, anc)                             # every progenitor line is an ancient people's
+        self.assertIn("civ:Turenol", lines)
