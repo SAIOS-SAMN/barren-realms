@@ -164,8 +164,10 @@ def blocks(kernel: Any, payer: Optional[str], a: int, b: int) -> bool:
 def refuses(kernel: Any, captain: Any, a: int, b: int) -> bool:
     """A guarded throat turns back all but its holder's own and its bonded; a closed one, everyone; and any lane
     held by a people at war turns back its enemy's ships (a blockade)."""
-    if blocks(kernel, _payer(kernel, captain), a, b):
-        return True
+    from xylarium.kernel import ascendance
+    payer = _payer(kernel, captain)
+    if blocks(kernel, payer, a, b) or ascendance.confined(kernel, payer, a, b):
+        return True                                          # a blockade; or a people a steward holds at home
     w = worm(kernel, a, b)
     if w is None:
         return False

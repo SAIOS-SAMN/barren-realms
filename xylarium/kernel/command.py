@@ -20,6 +20,7 @@ reach. Every order returns {"ok": bool, "why"/...} and is written in the history
 from typing import Any, Dict, Optional, Tuple
 
 ORDERS = {"progenitor": ("send", "recall", "fold", "handle", "forge"), "steward": ("claim", "withdraw", "grant"),
+          "steward_ascent": ("charter", "quarantine"),
           "sovereign": ("order", "commission", "dismiss"), "captain": ("swear", "forswear", "way")}
 
 
@@ -177,6 +178,16 @@ def grant(kernel: Any, pid: str, house: str) -> Dict[str, Any]:
     return {"ok": True, "house": h["name"], "granted": h["grants"]}
 
 
+def charter(kernel: Any, pid: str, who: str, verdict: str = "chartered") -> Dict[str, Any]:
+    """A player who keeps a realm rules on a people that petitions it: chartered among the stars, or held at home."""
+    from xylarium.kernel import ascendance, stewardship
+    realm = stewardship.realm_held(kernel, pid)
+    rec = ascendance.stats(kernel)["of"].get(who)
+    if realm is None or rec is None or rec["realm"] != realm:
+        return _no("no people petitions your realm by that name")
+    return ascendance.rule(kernel, who, verdict, pid)
+
+
 def _house_named(kernel: Any, name: str) -> Optional[Dict[str, Any]]:
     from xylarium.kernel import dynasties
     if "dynasties" not in kernel.state:
@@ -322,6 +333,8 @@ def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
           "claim": lambda: claim(kernel, pid, str(kw.get("realm", ""))),
           "withdraw": lambda: withdraw(kernel, pid),
           "grant": lambda: grant(kernel, pid, str(kw.get("house", ""))),
+          "charter": lambda: charter(kernel, pid, str(kw.get("people", "")), "chartered"),
+          "quarantine": lambda: charter(kernel, pid, str(kw.get("people", "")), "quarantine"),
           "order": lambda: order(kernel, pid, kw.get("book")),
           "commission": lambda: commission(kernel, pid, str(kw.get("captain", ""))),
           "dismiss": lambda: dismiss(kernel, pid, str(kw.get("captain", ""))),

@@ -299,8 +299,9 @@ def _begin(kernel: Any, who: str, logs: List[str]) -> None:
                              "gen": generation(kernel, who)}
     if owner(kernel, home.sector_id) is None:
         _hold(kernel, who, net, home.sector_id)
-    else:
-        _contact(kernel, who, home.sector_id, logs)            # it crosses inside another's sphere: they meet now
+    else:                                                      # it crosses inside a realm another keeps: it asks
+        from xylarium.kernel import ascendance                 # that realm's steward to let it go among the stars
+        ascendance.petition(kernel, who, owner(kernel, home.sector_id))
 
 
 def _busy(kernel: Any) -> List[int]:
@@ -324,11 +325,13 @@ def grow(kernel: Any, who: str, net: Dict[str, Any], logs: List[str]) -> None:
     A front at war is passed by, not pressed: the rest of its growth goes on. With nothing left within the charts,
     its passages reach on into the systems beyond them (held in count until witnessed) - or, for a line that has a
     throat to forge where traffic is lost, bank toward it (transit.py)."""
-    from xylarium.kernel import mastery, relations, transit
+    from xylarium.kernel import ascendance, mastery, relations, transit
     now = _years(kernel, who)
     worlds = relations._peoples(kernel).get(who) or []
     if not worlds:
         return
+    if not ascendance.free(kernel, who):
+        return                                               # held at home by a steward's ruling: its passages wait
     paid = Fraction(max(0.0, mastery.power_w(kernel, worlds) * (now - float(net["t"])) * YEAR_S)) / \
         Fraction(mastery.E_BRIDGE_J)
     paid += transit.drain_revenue(kernel, who)              # what its lanes collected pays for more of them

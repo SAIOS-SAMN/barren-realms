@@ -181,6 +181,7 @@ def quarter(kernel: Any) -> List[str]:
                 continue
             # no ships of its own: who can reach it, has met it, and values strangers' lives?
             fam = contact.stats(kernel)["familiarity"]
+            answered = False
             for port in [w for s2 in kernel.sectors.values() for w in s2.planets
                          if w.population > 0 and sustenance.yards(w) and _holder(w) != holder
                          and contact._key(holder, _holder(w) or "") in fam]:
@@ -204,7 +205,13 @@ def quarter(kernel: Any) -> List[str]:
                                   actors=[_holder(port), holder], planet=p, magnitude=saved,
                                   cause="their sun is dying and they had no ships")
                     logs.append(f"[EXODUS] The {rname} carry {saved:,} of the {name} from {p.name}.")
+                    answered = True
                 break
+            if not answered and holder not in st.setdefault("unanswered", {}):
+                st["unanswered"][holder] = kernel.cycle_count     # it asked; no one who could came (a grievance)
+                history.event(kernel, "PLEA_UNANSWERED", f"The {name} call for help and no one comes", actors=[holder],
+                              planet=p, cause="their sun is dying, they have no ships, and none who could reach them "
+                                              "would carry them")
     logs += _salvage(kernel, doomed)
     return logs
 

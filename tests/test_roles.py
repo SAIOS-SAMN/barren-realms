@@ -786,6 +786,37 @@ class TestSpheres(unittest.TestCase):
             self.assertGreater(dark["own_dead"] + dark["troops"], 0.0)            # but its own still do
             self.assertGreaterEqual(light["order"], dark["order"])
 
+    def test_war_inside_a_web_of_bonds_puts_the_shared_economy_at_stake(self):
+        from xylarium.kernel import realmwars, spheres
+        st = spheres.stats(self.k)
+        saved = dict(st["bonds"])
+        try:
+            st["bonds"].clear()
+            st["bonds"]["civ:A|civ:B"] = {"kind": "federation", "a": "civ:A", "b": "civ:B"}
+            st["bonds"]["civ:B|civ:C"] = {"kind": "alliance", "a": "civ:B", "b": "civ:C"}
+            st["bonds"]["civ:C|civ:D"] = {"kind": "standoff", "a": "civ:C", "b": "civ:D"}
+            self.assertEqual(realmwars._web(self.k, "civ:A"), {"civ:A", "civ:B", "civ:C"})   # standoffs bind no one
+        finally:
+            st["bonds"].clear()
+            st["bonds"].update(saved)
+
+    def test_a_betrayed_people_owes_its_realm_nothing_and_a_dying_one_fights_for_room(self):
+        from xylarium.kernel import exodus, realmwars, spheres
+        st = spheres.stats(self.k)
+        live = [w for w in st["nets"] if spheres._home(self.k, w) is not None and st["nets"][w]["held"]]
+        who, other = live[0], live[1]
+        sid = st["nets"][other]["held"][0]
+        with mock.patch.object(realmwars, "_integration", return_value=(1e18, True)):
+            r = realmwars.weigh(self.k, who, other, sid)
+            if "gain" in r:
+                self.assertFalse(r["war"])                         # an outbreak in its own body is not worth it
+            exodus.stats(self.k).setdefault("unanswered", {})[who] = 0
+            r = realmwars.weigh(self.k, who, other, sid)
+            exodus.stats(self.k)["unanswered"].pop(who)
+            if "gain" in r:
+                self.assertEqual(r["integration"], 0.0)
+                self.assertTrue(r["betrayed"])
+
     def test_the_fronts_and_their_seam_are_read_by_kind(self):
         from xylarium.kernel import spheres
         f = spheres.fronts(self.k)

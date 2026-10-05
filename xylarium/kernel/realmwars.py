@@ -18,7 +18,7 @@ fold delivered nothing - a wall - and it yields. A line that ends leaves the oth
 """
 
 from fractions import Fraction
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
 
@@ -84,6 +84,12 @@ def weigh(kernel: Any, who: str, other: str, sector: int, fighting: bool = False
       SUPPLY    and pays each lane's toll and tithe on the way
       LEVY      the economy it forgoes while levied, a share a year for the war's expected years
       TRADE     the share of its output riding on its contracts with the other, lost while they are at war
+      WEB       inside an established realm war is an outbreak in a shared body: everything it shares with the
+                peoples bound up with it (trade, its lanes' tolls) is at stake when the other is inside its web of
+                bonds - and, wherever the war is, its trade with every partner whose doctrine forbids taking, who
+                will turn from an aggressor; on a frontier, with no web, nothing - so war lives where realms are not
+      SURVIVAL  a people whose sun is dying gains, from a system that can hold it, its own people's lives at the odds
+      BETRAYAL  a people whose plea for help went unanswered owes the realm nothing: its web is no cost to it
       ORDER     the other side's dead, a life's work each (alignment.lives_of_sol), weighed by its own whole-history
                 character: the Light count them as their own loss, the Dark discount them - but no people, however
                 dark, fights at no cost: its own dead, its fuel and its position are counted by all
@@ -95,6 +101,9 @@ def weigh(kernel: Any, who: str, other: str, sector: int, fighting: bool = False
     mine, theirs = spheres._home(kernel, who), spheres._home(kernel, other)
     if mine is None or theirs is None or sector not in kernel.sectors:
         return {"war": False, "why": "no capital to fight from"}
+    from xylarium.kernel import ascendance
+    if ascendance.ruling(kernel, other) in ("quarantine", "pending"):
+        return {"war": False, "why": "the steward shields a people it holds at home"}
     fronts = (0 if fighting else 1) + sum(1 for w in stats(kernel)["wars"].values() if w["status"] == "open"
                                           and who in (w.get("taker"), w.get("holder")))
     path = kernel.find_path(mine.sector_id, sector) or []
@@ -134,11 +143,79 @@ def weigh(kernel: Any, who: str, other: str, sector: int, fighting: bool = False
     civ = getattr(mine, "civilization", None)
     light = (1.0 + alignment.character(civ)) / 2.0 if civ is not None else 0.5   # 1 the Light, 0 absolute darkness
     order = light * alignment.lives_of_sol(kernel, their_lost * per, mine) * life
-    cost = troops + own_dead + fuel + supply + levy + trade + order
+    integration, inside = _integration(kernel, who, other, m)
+    betrayed = who in _unanswered(kernel)                       # it asked for help and none came: it owes nothing
+    if betrayed:
+        integration = 0.0
+    survival = 0.0
+    if (getattr(mine, "society", {}) or {}).get("forecast"):     # its own sun is dying: a world that can hold it
+        from xylarium.kernel import biosphere
+        room = sum(max(0, int(biosphere.carrying_capacity(kernel, w)) - int(w.population))
+                   for w in kernel.sectors[sector].planets)
+        survival = odds * min(room, int(mine.population)) * life
+    gain += survival
+    cost = troops + own_dead + fuel + supply + levy + trade + order + integration
     pick = decide.choose(kernel, [decide.option("war", cost, gain)], m, who, other, "realm_war", int(fighting))
     return {"war": pick is not None, "gain": gain, "odds": odds, "troops": troops, "own_dead": own_dead, "fuel": fuel,
+            "integration": integration, "inside": inside, "betrayed": betrayed, "survival": survival,
             "supply": supply, "levy": levy, "trade": trade, "order": order, "fronts": fronts, "hops": hops,
             "their_hops": their_hops, "allies": allies, "attack": attack, "defend": defend}
+
+
+def _web(kernel: Any, who: str) -> set:
+    """The peoples a people is bound up with: every network reachable through bonds of trust (federations,
+    conglomerates, alliances - not standoffs), itself included."""
+    from xylarium.kernel import spheres
+    bonds = [b for b in spheres.stats(kernel)["bonds"].values() if b["kind"] in ("federation", "conglomerate",
+                                                                                  "alliance")]
+    seen, todo = {who}, [who]
+    while todo:
+        x = todo.pop()
+        for b in bonds:
+            if x in (b["a"], b["b"]):
+                y = b["b"] if b["a"] == x else b["a"]
+                if y not in seen:
+                    seen.add(y)
+                    todo.append(y)
+    return seen
+
+
+def _integration(kernel: Any, who: str, other: str, m: Dict[str, float]) -> Tuple[float, bool]:
+    """What a war would sever of the economy a people shares: its trade with every people bound up with it and the
+    tolls its lanes collect, over its horizon. If the other is inside that web, the war is an outbreak inside the
+    body it lives in - all of it is at stake; outside, only what it shares with those bound to the other too."""
+    from xylarium.kernel import contact, decide, relations, transit
+    by = relations._peoples(kernel)
+    web = _web(kernel, who)
+    inside = other in web
+    theirs = _web(kernel, other)
+    talks = contact.contacts(kernel, by).get(who, {})
+    total = max(1, sum(talks.values()))
+    out_q = relations._output_sol(kernel, by.get(who, []))
+    at_stake = [p for p in web - {who} if inside or p in theirs or _abhors(kernel, p)]
+    trade_q = out_q * sum(talks.get(p, 0) for p in at_stake) / total
+    tolls_q = sum(r["collected"] for k, r in transit.stats(kernel)["lanes"].items()
+                  if transit.owner(kernel, *map(int, k.split("-"))) == who) / max(1.0, kernel.cycle_count / 25.0) \
+        if (inside or at_stake) else 0.0
+    return decide.worth(kernel, trade_q + tolls_q, m), inside
+
+
+def _abhors(kernel: Any, partner: str) -> bool:
+    """Would a partner turn from an aggressor: its own doctrine forbids taking from others (its card allows no
+    exploiting or collecting) - so a war of taking costs the aggressor its trade with it, wherever the war is."""
+    from xylarium.config import POLICY_CARDS
+    from xylarium.kernel import alignment, federation, spheres
+    home = spheres._home(kernel, partner)
+    civ = getattr(home, "civilization", None) if home is not None else None
+    if civ is None:
+        return False
+    allows = POLICY_CARDS.get(federation.preferred_card(alignment.doctrine(civ)), {}).get("allows", set())
+    return not ({"exploit", "collect"} & set(allows))
+
+
+def _unanswered(kernel: Any) -> Dict[str, int]:
+    from xylarium.kernel import exodus
+    return exodus.stats(kernel).get("unanswered", {}) if "exodus" in kernel.state else {}
 
 
 def _fleet_strength(kernel: Any) -> float:
@@ -216,6 +293,14 @@ def _fight(kernel: Any, war: Dict[str, Any], logs: List[str]) -> None:
                         f"{stewardship.realm_name(war['against'])}.")
             return
         _attrition(kernel, war, r)
+        from xylarium.kernel.sustenance import _strength
+        held = spheres._home(kernel, war["holder"]) if war.get("holder") else None
+        if held is not None and _strength(held) <= 0:          # no one is left to hold it: it falls
+            spheres.transfer(kernel, war["sector"], war["taker"])
+            _end(kernel, war, "taken", f"the {war['holder'].split(':', 1)[-1]} had no one left to hold it")
+            logs.append(f"[GALACTIC WAR] The {war['taker'].split(':', 1)[-1]} take "
+                        f"{stewardship.realm_name(war['against'])}: no one was left to hold it.")
+            return
     if not stewardship.binds(kernel, a["people"], d["people"]):
         t = polity.treaty(kernel, a["id"], d["id"])
         if t is None or t["kind"] != "war":
