@@ -14,19 +14,21 @@ class TestTempo(unittest.TestCase):
         self.k = GameKernel(seed=7, genesis="cosmic")
         self.k.activate()
 
-    def test_every_place_keeps_its_own_time_and_peoples_meet_by_their_ledgers(self):
+    def test_every_place_keeps_its_own_time_by_where_it_stands_and_peoples_meet_by_their_ledgers(self):
         from xylarium.kernel import clocks, relations
         who = sorted(relations._peoples(self.k))[0]
         home = max(relations._peoples(self.k)[who], key=lambda p: p.population)
         self.assertTrue(clocks.own(self.k, who))
-        self.assertLess(clocks.rate(self.k, who), cosmos.ceiling(self.k))     # its history's pace
-        self.assertEqual(tempo.desired(self.k), cosmos.ceiling(self.k))       # cosmic time runs on
+        lapse = clocks.lapse(self.k, home.sector_id)
+        self.assertLess(lapse, 1.0)                                            # the galaxy's gravity slows it
+        self.assertGreater(lapse, 1.0 - 1e-5)                                  # by parts per million
+        self.assertLessEqual(tempo.desired(self.k), cosmos.ceiling(self.k))   # the camera slows to watch the living
         self.k.cycle_count = 1000
-        self.assertLess(clocks.now(self.k, who), cosmos.deep_gyr(self.k))      # its place lives at its own pace
+        self.assertAlmostEqual(clocks.now(self.k, who), lapse * cosmos.cosmic_gyr(self.k), places=12)
         self.assertEqual(cosmos.deep_gyr(self.k, sector_id=home.sector_id), clocks.now(self.k, who))
         before = clocks.now(self.k, who)
-        clocks.set_pace(self.k, home.sector_id, cosmos.ceiling(self.k))
-        self.assertAlmostEqual(clocks.now(self.k, who), before, places=12)     # a clock never jumps
+        cosmos.set_rate(self.k, cosmos.ruler(self.k) * 4)
+        self.assertAlmostEqual(clocks.now(self.k, who), before, places=12)     # a change of camera never jumps it
         clocks.stats(self.k)["peoples"]["civ:Other"] = {"home": 999, "h": 7, "links": {}}
         clocks.link(self.k, who, "civ:Other", "their ships meet")
         self.assertEqual(clocks.height(self.k, who), 8)                        # h = 1 + max(own, other's)

@@ -1,5 +1,5 @@
 """
-Xylarium tempo: how fast deep time runs for each clock year - set by the living, not chosen.
+Xylarium tempo: how fast deep time runs for each clock year - the one camera the whole galaxy is filmed by.
 
 The universe's truth is a function of deep time (creation.py, worlds.py); the clock is only the camera that films
 it, and its speed changes nothing it films. So it runs as fast as it can without stepping over what the living are
@@ -9,7 +9,10 @@ in the middle of - the rule an integrator follows (a Courant condition): no cloc
 whose world holds it from the sky has no next bridge, only its fall; a people among the stars waits on its
 dominion's next e-fold of settlement - so once any people is among the stars, the galaxy runs at the pace of its
 expansion. With no people in the middle of its history, deep time runs at the pace
-chosen at genesis (cosmos.ceiling): the galaxy turns fast between minds and slows to watch each one rise.
+chosen at genesis (cosmos.ceiling): the galaxy turns fast between minds and slows to watch each one rise. It is one
+rate for every place (clocks.py: a place's own time is its lapse times cosmic time): the worlds all spin on one
+coordinated clock. It slows only for the peoples a seat watches - an input, the same however the engine holds the
+rest - so what it films never depends on what is held folded.
 
 Changes of rate are kept as segments (cosmos.set_rate), so deep time is exactly accumulated; a change smaller than
 a factor of two is not worth a new segment.
@@ -42,15 +45,28 @@ def wait_years(kernel: Any, who: str, home: Any) -> Optional[float]:
     return min(fall, annals.SPANS[annals.STAGES[nxt]] / annals._speed(kernel, home) * gen)
 
 
+def seated(kernel: Any) -> set:
+    """The peoples a seat watches (a player's or an AI's: ages.bind) - the same whatever the engine holds folded."""
+    from xylarium.kernel import ages
+    try:
+        return {rec.get("people") for rec in (ages.stats(kernel).get("stewards") or {}).values() if rec.get("people")}
+    except Exception:
+        return set()
+
+
 def desired(kernel: Any) -> float:
+    """The camera's rate: as fast as the genesis pace allows, slowed to watch each people a seat watches through its
+    next turning. Peoples no seat watches are carried by the annals at the level of history, as ever."""
     from xylarium.kernel import cosmos, syntropy
     top = cosmos.ceiling(kernel)
     waits = []
-    from xylarium.kernel import clocks
+    watched = seated(kernel)
     for who, worlds in syntropy._peoples(kernel).items():
+        if who not in watched:
+            continue
         home = max(worlds, key=lambda p: p.population)
-        if not (home.society.get("arisen") or {}) or clocks.own(kernel, who):
-            continue                                          # a people keeping its own clock does not hold the galaxy's
+        if not (home.society.get("arisen") or {}):
+            continue
         w = wait_years(kernel, who, home)
         if w is not None:
             waits.append(w)

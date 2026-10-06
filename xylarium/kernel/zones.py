@@ -38,6 +38,9 @@ ASPECT: Dict[str, Dict[int, int]] = {
 }
 
 ALL_OPEN = False                              # tests: hold every charted region open (the stepped reference)
+PEOPLES_OPEN = False                          # tests: carry no people at the level of history (every one stepped) -
+                                              # apart from ALL_OPEN: which worlds are stepped and which peoples are
+                                              # folded are two different holds
 
 
 def _ring(kernel: Any, anchors: Iterable[int], lanes: int) -> Set[int]:
@@ -191,7 +194,7 @@ def folded_peoples(kernel: Any) -> FrozenSet[str]:
     or AI, of any tier - holds the realm open to the worlds. A folded people lives at the level of history alone:
     the annals carry its years, its turnings, its falls and its dominion; when a seat comes near it opens, its worlds
     as its history has made them, and the engine takes up its seasons."""
-    if ALL_OPEN or not hasattr(kernel, "caches"):
+    if PEOPLES_OPEN or not hasattr(kernel, "caches"):
         return frozenset()
     from xylarium.kernel import cache
 
@@ -209,7 +212,7 @@ def folded_peoples(kernel: Any) -> FrozenSet[str]:
 
 
 def folded_worlds(kernel: Any) -> FrozenSet[str]:
-    if ALL_OPEN or not hasattr(kernel, "caches"):
+    if PEOPLES_OPEN or not hasattr(kernel, "caches"):
         return frozenset()
     from xylarium.kernel import cache
 

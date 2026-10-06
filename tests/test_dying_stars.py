@@ -22,11 +22,9 @@ class TestDyingStars(unittest.TestCase):
         self.k.activate()
         self.p = next(p for s in self.k.sectors.values() for p in s.planets if p.population > 0)
         self.sid = self.p.sector_id
-        clocks.set_pace(self.k, self.sid, cosmos.ceiling(self.k))     # one star's story, told at the galaxy's pace
 
     def _at(self, gyr):
         from xylarium.kernel import clocks
-        clocks.set_pace(self.k, self.sid, cosmos.ceiling(self.k))     # its place watched at the galaxy's pace
         st = cosmos.stats(self.k)
         st["minds"] = []                                     # no new minds in this test: one star's story
         self.k.cycle_count = int((gyr - st["epoch0"]) * 1e9 / cosmos.ruler(self.k) * 100)

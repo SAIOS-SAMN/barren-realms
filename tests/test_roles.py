@@ -243,23 +243,25 @@ class TestZones(unittest.TestCase):
         self.assertAlmostEqual(am.angle_now(far),
                                physics.orbital_angle(k.sectors[far.sector_id], far, am.cycle_count))
 
-    def test_a_dying_sun_is_held_to_its_frame_while_other_places_run_the_span(self):
+    def test_a_dying_sun_holds_the_one_camera_to_its_frame(self):
         from xylarium.kernel import clocks, cosmos, knowledge, tempo, zones
         random.seed(3)
         k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
         who = knowledge.holder_of_planet(ages.homeworld(k, "player_1"))
         clocks.look_away(k, who, 1e9)
-        for key in clocks.stats(k)["places"]:
+        coarse = clocks.away_pace(k)
+        self.assertIsNotNone(coarse)
+        for key in clocks.stats(k)["places"]:                      # no living people's dying star is stepped over
             sid = int(key)
-            pace = clocks.place_pace(k, sid)
             life = cosmos.star_life(k, sid)
-            if pace is None or life is None:
+            if life is None or sid not in zones.peopled(k):
                 continue
             ahead = (life[1] - cosmos.deep_gyr(k, sector_id=sid)) * 1e9
-            if sid in zones.peopled(k) and 0 < ahead < 1e9:
-                self.assertLessEqual(pace, ahead / tempo.FRAMES * 1.0001)   # its people get their seasons
-            elif sid not in zones.peopled(k):
-                self.assertGreater(pace, 1e8)                              # nothing to watch: the span runs on
+            if 0 < ahead < 1e9:
+                self.assertLessEqual(coarse, ahead / tempo.FRAMES * 1.0001)   # its people get their seasons
+        for key in clocks.stats(k)["places"]:                      # and every place reads one coordinated clock
+            sid = int(key)
+            self.assertAlmostEqual(clocks.place_now(k, sid), clocks.lapse(k, sid) * cosmos.cosmic_gyr(k), places=12)
 
 
 class TestHistoryStreams(unittest.TestCase):
@@ -309,8 +311,6 @@ class TestInverseCompaction(unittest.TestCase):
         return ({p.id: dict(p.element_deposits) for s in k.sectors.values() for p in s.planets},
                 dict(geology.stats(k)), dict(k.matter.sources), folded)
 
-    @unittest.expectedFailure    # task #149: place clocks run at a pace set by who watches, so a star near a folded
-    # world dies at another cycle than near a stepped one; pace must come from the place's galactic position alone
     def test_a_folded_world_caught_up_is_the_world_that_was_stepped(self):
         stepped, folded = self._run(True), self._run(False)
         self.assertGreater(folded[3], 10)                          # most of the charted realm was held folded

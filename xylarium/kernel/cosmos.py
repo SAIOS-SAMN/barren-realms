@@ -232,13 +232,20 @@ def _segment(kernel: Any, c: float) -> List[float]:
 def deep_gyr(kernel: Any, cycle: Optional[int] = None, sector_id: Optional[int] = None) -> float:
     """The deep-time epoch (Gyr since the Big Bang) at a clock cycle: deep time accumulated through every change of
     the clock's rate (tempo.py) - the camera's speed changes, never what it films. Asked for a place, the place's
-    own now: a people no one has yet observed keeps its own clock, and its world reads it (clocks.py)."""
+    own now: its lapse times cosmic time - fixed by where it stands, nothing else (clocks.py)."""
     c = kernel.cycle_count if cycle is None else cycle
     if sector_id is not None:
         from xylarium.kernel import clocks
         local = clocks.place_now(kernel, sector_id, c)
         if local is not None:
             return local
+    return cosmic_gyr(kernel, c)
+
+
+def cosmic_gyr(kernel: Any, cycle: Optional[int] = None) -> float:
+    """Cosmic time (Gyr since the Big Bang) at a clock cycle: the gauge, accumulated through every change of the one
+    camera's rate."""
+    c = kernel.cycle_count if cycle is None else cycle
     c0, d0, rate = _segment(kernel, c)
     return float(d0) + (c - c0) / 100.0 * float(rate) / 1.0e9
 

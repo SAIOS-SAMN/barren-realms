@@ -62,7 +62,8 @@ moving:
 - Dense star formation lifts winds into the halo, which rains them back over ~1 Gyr where gas is falling in.
 - Gas drifts inward at about 1 km/s.
 - The centre takes what reaches it: a share passes across the horizon into the child universe, and the rest returns.
-- Stars burn hydrogen into helium and metals (dY/dZ ≈ 2).
+- Stars burn hydrogen into helium and metals (dY/dZ ≈ 2). The Sun's X ≈ 0.709 follows from that input by
+  arithmetic: it shows the bookkeeping is consistent, not that the physics is confirmed.
 
 Mergers are lumpy: a star's birth cloud holds a Poisson count of recent events.
 
@@ -74,11 +75,17 @@ gives:
 - oxygen-rich early gas;
 - a ledger in which everything made is somewhere in the flow.
 
-**The Sun as a prediction.** The radius whose gas 4.57 Gyr ago best matches the Sun's composition is 7.75–8.75 kpc
-(rms ≈ 0.06 dex). The migration picture puts it at 5–7 kpc. The model's local gas reaches an equilibrium early, as
-infall and inward drift balance what stars make, so its age–metallicity relation at the Sun's radius is nearly flat
-over the last 5 Gyr. That matches the observed flat local relation (Casagrande 2011). The evidence for migration (the
-Sun being richer than its same-age neighbours) needs stellar populations, which the model does not yet track.
+**The Sun's birth radius: not yet decidable.** The radius whose gas 4.57 Gyr ago lies nearest the Sun's composition
+is 7.75 kpc (rms 0.058 dex), against 0.079 dex at 6.75 kpc. That 0.02 dex gap is below the error on measured
+abundances (~0.05 dex), and the test is nearly circular: the yields are calibrated to today's local gas, which is
+about solar, and the model's local gas changes by only ~0.06 dex over the last 4.57 Gyr, so solar gas here then
+follows almost by construction. The honest result is "can't tell 8 kpc from 5-7 kpc." The flat local
+age-metallicity relation agrees with Casagrande (2011) only over the last ~5 Gyr: the model's gas at 9.8 Gyr ago is
+about -0.24 dex and at 11.8 Gyr ago about -0.55 dex, steeper than the observed mean for old stars. Deciding migration
+needs stellar populations: the Sun against its same-age neighbours.
+
+**Planets.** A handful of draws says nothing. The test is hundreds of draws of Sun-like stars against measured
+occurrence rates: giant planets within a few AU (about 10%) and Earth-sized planets in the habitable zone.
 
 **Worlds from their birth gas.** Every star's worlds are made from the gas at its radius and birth epoch:
 - its metallicity sets the disc's solids;
@@ -87,6 +94,17 @@ Sun being richer than its same-age neighbours) needs stellar populations, which 
 
 `creation.analogue` builds a star of any mass at any place and epoch, so a Sun-like star born where the model finds
 the Sun can grow its own planets from that gas.
+
+## One coordinated clock (#149)
+
+A place's own time is its lapse times cosmic time. The lapse is the galaxy's gravity plus the place's orbital motion
+(`geometry.lapse`, parts per million), fixed by where the place stands. Nothing else paces a place: not the peoples
+living there, not who watches, not whether it is stepped or held folded. So a world caught up later is the world that
+ran, and the run is deterministic.
+
+How much deep time one clock year films is the one camera (`tempo.py`). It slows to watch any living people through
+its next turning, and speeds up while a watcher looks away. Even then it never runs past the frame of a living
+people whose star will die. It is one rate for the whole galaxy, and it changes nothing it films.
 
 ## Still to derive
 
@@ -102,7 +120,5 @@ the Sun can grow its own planets from that gas.
 - **The centre at parsec scale.** This needs the black hole's mass, the tidal-density limit for forming stars, and
   the young stars that do form there.
 - **Planet survival.** Close stellar passes, and discs evaporated by massive neighbours.
-- **Clock pace (#149).** Place clocks are still paced by who watches. A folded world's neighbouring star dies at
-  another cycle than a stepped one's (test_roles' inverse-compaction test is marked as an expected failure until pace
-  comes from galactic position).
+- **Planet statistics.** Run hundreds of Sun-like draws against measured occurrence rates.
 - **Interior fidelity.** In the current interior model a Mars-sized world still runs a dynamo at 4.6 Gyr.
