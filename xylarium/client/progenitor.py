@@ -84,7 +84,8 @@ def run(seed: int, save: Optional[Any] = None) -> Optional[Any]:
         else:
             print("  " + "   ".join(f"{c_gold('[' + k + ']')} {t}" for k, t in (
                 ("W", "Watch some years"), ("G", "The galaxy and its peoples"),
-                ("H", "The chronicle, told in a people's own years"), ("S", "Steward intelligences for all"),
+                ("H", "The chronicle, told in a people's own years"), ("O", "Open the universe to live play"),
+                ("S", "Steward intelligences for all"),
                 ("E", "Enlist a steward intelligence for one people"), ("D", "Dismiss a people's steward"),
                 ("Q", "Save and leave"))))
         try:
@@ -119,6 +120,14 @@ def run(seed: int, save: Optional[Any] = None) -> Optional[Any]:
             _show_galaxy(kernel)
         elif cmd == "G":
             _show_galaxy(kernel)
+        elif cmd == "O":
+            from xylarium.kernel import cosmos
+            if cosmos.live(kernel):
+                print(c_gray("  It is open: one clock, at the captains' scale."))
+            else:
+                rec = cosmos.open_universe(kernel, "the progenitors")
+                print(c_green(f"  The deep era ends at {rec['epoch']:.4f} Gyr. From now on a clock year is a "
+                              f"standard year, for every seat."))
         elif cmd == "H":
             from xylarium.kernel import history
             rows = _peoples(kernel)

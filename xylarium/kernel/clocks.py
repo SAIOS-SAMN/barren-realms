@@ -225,7 +225,7 @@ def look_away(kernel: Any, who: str, deep_years: float) -> Optional[float]:
     st["frames"] = {}                                         # each place's frame is read afresh for this span
     st["gauge_until"] = max(float(st.get("gauge_until") or 0.0), cosmos.deep_gyr(kernel) + deep_years / 1e9)
     coarse = away_pace(kernel)
-    if coarse:
+    if coarse and not cosmos.live(kernel):                   # in the live era no seat moves the one clock
         cosmos.set_rate(kernel, max(cosmos.ruler(kernel), coarse))
     return until
 

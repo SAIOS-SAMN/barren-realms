@@ -276,6 +276,40 @@ def cycle_at(kernel: Any, epoch: float) -> int:
     return int(round(seg[0] + (epoch - float(seg[1])) * 1.0e9 / float(seg[2]) * 100.0))
 
 
+# ---------------------------------------------------------------------- the two eras
+LIVE_YEARS_PER_YEAR = 1.0       # in the live era a clock year IS a standard year (physics.CYCLES_PER_STANDARD_YEAR
+                                # cycles): the clock is the captains' - a definition, not a rate chosen
+
+
+def opened(kernel: Any) -> Optional[Dict[str, Any]]:
+    """When the universe was opened to live play, if it has been: the deep era is over."""
+    if kernel is None or "cosmos" not in getattr(kernel, "state", {}):
+        return None
+    return stats(kernel).get("opened")
+
+
+def live(kernel: Any) -> bool:
+    """Is the universe in its live era: one clock, locked to the captains' scale, whoever is watching?"""
+    return opened(kernel) is not None
+
+
+def open_universe(kernel: Any, by: str = "the progenitors") -> Dict[str, Any]:
+    """The deep era ends: the architects have laid the board, and from now on deep time runs at the captains' scale -
+    a clock year is a standard year - and no seat speeds it up or slows it down. Every seat above the captains acts on
+    its own cadence, on this one clock."""
+    got = opened(kernel)
+    if got is not None:
+        return got
+    from xylarium.kernel import history
+    set_rate(kernel, LIVE_YEARS_PER_YEAR)
+    rec = stats(kernel)["opened"] = {"cycle": int(kernel.cycle_count), "epoch": round(deep_gyr(kernel), 9),
+                                     "by": by}
+    history.event(kernel, "UNIVERSE_OPENED", "The universe opens", actors=[],
+                  cause=f"{by} end the deep era: from now on one clock, at the captains' scale, for every seat",
+                  data={"epoch": rec["epoch"]})
+    return rec
+
+
 def set_rate(kernel: Any, rate: float) -> None:
     """From this cycle on, deep time runs at `rate` deep years per clock year."""
     st = stats(kernel)

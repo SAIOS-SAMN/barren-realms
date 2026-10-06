@@ -16,6 +16,10 @@ rest - so what it films never depends on what is held folded.
 
 Changes of rate are kept as segments (cosmos.set_rate), so deep time is exactly accumulated; a change smaller than
 a factor of two is not worth a new segment.
+
+All of that is the DEEP ERA. Once the universe is opened to live play (cosmos.open_universe) the camera is retired:
+the clock is locked to the captains' scale - a clock year is a standard year - and no seat speeds it or slows it;
+every seat above the captains acts on its own cadence on that one clock.
 """
 
 import math
@@ -84,6 +88,8 @@ def wake(kernel: Any) -> None:
     """A mind has arisen: the clock is set to the living at once - not a year later, when a year at the galaxy's
     pace would already have carried the new people through its whole history."""
     from xylarium.kernel import clocks, cosmos
+    if cosmos.live(kernel):
+        return                                                # the live era: the clock is the captains', always
     if clocks.away_pace(kernel):
         return                                                # its watcher has looked away; the annals carry it
     want = desired(kernel)
@@ -96,6 +102,10 @@ def season(kernel: Any) -> List[str]:
     """Once a year the clock is set to the living."""
     from xylarium.kernel import cosmos
     if not cosmos.is_cosmic(kernel) or (kernel.cycle_count // 25) % 4:
+        return []
+    if cosmos.live(kernel):                                   # the live era: locked to the captains' scale
+        if cosmos.ruler(kernel) != cosmos.LIVE_YEARS_PER_YEAR:
+            cosmos.set_rate(kernel, cosmos.LIVE_YEARS_PER_YEAR)
         return []
     want = desired(kernel)
     from xylarium.kernel import clocks

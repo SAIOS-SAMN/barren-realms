@@ -9,6 +9,7 @@ import signal
 import sys
 import os
 import argparse
+from typing import Optional
 
 # Ensure module path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,6 +19,43 @@ from xylarium.persistence.store import StatePersistence
 from bridge.websocket_server import WebSocketGateway
 from bridge.telnet_server import TelnetServer
 from xylarium.client.ansi import c_cyan, c_gold, c_green, c_red, bold
+
+
+TICK_S = 30.0                   # wall seconds per cycle: the server's frame rate (an operator's setting, not physics)
+
+
+def stamp(kernel: GameKernel) -> None:
+    """Keep the wall time of the universe's last cycle with it."""
+    import time
+    kernel.state.setdefault("server", {})["wall"] = time.time()
+
+
+def catch_up(kernel: GameKernel, now: Optional[float] = None) -> int:
+    """A served universe that was down runs the cycles its clock owed meanwhile - the orbits did not wait. Returns how
+    many it ran."""
+    import time
+    wall = (kernel.state.get("server") or {}).get("wall")
+    if wall is None:
+        return 0
+    owed = int(max(0.0, (now if now is not None else time.time()) - float(wall)) // TICK_S)
+    for i in range(owed):
+        kernel.tick_simulation()
+        if owed >= 100 and (i + 1) % 100 == 0:
+            print(f"  caught up {i + 1:,} of {owed:,} cycles...")
+    stamp(kernel)
+    return owed
+
+
+def serve(kernel: GameKernel) -> None:
+    """A universe served is live: a cosmic one still in its deep era is opened (cosmos.open_universe), then caught up
+    to now."""
+    from xylarium.kernel import cosmos
+    if cosmos.is_cosmic(kernel) and not cosmos.live(kernel):
+        cosmos.open_universe(kernel, "its server")
+    ran = catch_up(kernel)
+    if ran:
+        print(f"Caught up {ran:,} cycles the universe ran while the server was down.")
+    stamp(kernel)
 
 
 class BridgeDaemon:
@@ -63,10 +101,12 @@ class BridgeDaemon:
             await self.stop()
 
     async def _ambient_universe_ticker(self) -> None:
-        """Simulates ambient trade, port drift, and colony growth every 30 seconds."""
+        """The universe's one clock: a cycle every TICK_S of wall time, whoever is connected. The wall time of the last
+        cycle is kept with the universe, so a server that was down catches up what its orbits ran meanwhile."""
         while not self._shutdown_event.is_set():
-            await asyncio.sleep(30)
+            await asyncio.sleep(TICK_S)
             self.kernel.tick_simulation()
+            stamp(self.kernel)
 
     async def stop(self) -> None:
         """Gracefully shuts down listeners and persists universe state."""
@@ -116,6 +156,7 @@ def run_daemon(
         print(f"Bootstrapping new universe (Seed: {seed})...")
         kernel = GameKernel(seed=seed)
 
+    serve(kernel)
     daemon = BridgeDaemon(
         kernel=kernel,
         host=host,

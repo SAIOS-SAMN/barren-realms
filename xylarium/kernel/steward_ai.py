@@ -31,6 +31,19 @@ def enlist_all(kernel: Any, on: bool = True) -> None:
     stats(kernel)["all"] = bool(on)
 
 
+def ensure(kernel: Any, peoples: Any) -> None:
+    """The board is complete up to the stewards: in a universe begun at its Big Bang, every living people has a steward
+    beside it - its own world folded or not (the annals, which see every people, call this each year)."""
+    from xylarium.kernel import cosmos, steward
+    st = stats(kernel)
+    on = st["all"] if st.get("all") is not None else cosmos.is_cosmic(kernel)
+    if not on:
+        return
+    for holder in sorted(peoples):
+        if steward.of(kernel, holder) is None:
+            enlist(kernel, holder)
+
+
 def _ours(kernel: Any) -> List[str]:
     from xylarium.kernel import steward
     if "steward" not in getattr(kernel, "state", {}):
@@ -45,10 +58,7 @@ def season(kernel: Any) -> List[str]:
         return []
     st = stats(kernel)
     by = relations._peoples(kernel)
-    if st["all"]:
-        for holder in by:
-            if steward.of(kernel, holder) is None:
-                enlist(kernel, holder)
+    ensure(kernel, by)                                        # the open worlds' peoples; the annals see the rest
     for holder in _ours(kernel):
         worlds = by.get(holder)
         if not worlds:
@@ -85,5 +95,5 @@ def summary(kernel: Any) -> Dict[str, Any]:
 from xylarium.kernel import state  # noqa: E402
 from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
 
-register_subsystem(Subsystem(name="steward_ai", state=lambda: {"all": False, "urged": 0}, season=season,
+register_subsystem(Subsystem(name="steward_ai", state=lambda: {"all": None, "urged": 0}, season=season,
                              summary=summary))

@@ -154,6 +154,8 @@ def _fall(kernel: Any, who: str, worlds: List[Any], epoch: float) -> str:
         p.civilization = None
         p.owner_id = None
         p.faction_id = None
+    from xylarium.kernel import steward
+    steward.detach(kernel, who)                               # no one is left to counsel
     history.event(kernel, "FALL", f"The {name} fall", actors=[who], planet=home,
                   data={"epoch": round(epoch, 6)},
                   cause=f"at the level of history; its ruins lie on "
@@ -324,8 +326,9 @@ def season(kernel: Any) -> List[str]:
     jobs = [j for j in (_live_ages(kernel, who, worlds, logs) for who, worlds in sorted(_peoples(kernel).items()))
             if j is not None]
     _settle(kernel, [j for j in jobs if j.get("cross") is not None], logs)
-    from xylarium.kernel import gateways, settling
+    from xylarium.kernel import gateways, settling, steward_ai
     settling.mark_wakings(kernel, _peoples(kernel))
+    steward_ai.ensure(kernel, _peoples(kernel))              # the board is complete up to the stewards
     gateways.kindling(kernel, logs)
     for j in jobs:
         _books(kernel, j, logs)
