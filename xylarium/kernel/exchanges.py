@@ -8,9 +8,10 @@ pools of the port's money against SOL, takes the exchanges' fee on every convers
 place's own - it moves with what the place buys and sells.
 
   FLOW      every conversion made at a place is noted there (note): its value in SOL, and how many.
-  DEPTH     a pool deep enough that a typical conversion there moves its price by no more than its fee
-            (constant product: a trade of size x into depth D slips ~x / D): D = typical conversion / fee - on each
-            side. That is the founder's capital, the place's money and SOL.
+  DEPTH     a year of the place's conversions, held on each side: deep enough to clear what passes there in a
+            year without the federation - as far as buying its SOL side at the federation moves that rate by no
+            more than the fee (a council pays no more slippage than the trade it would earn on). That is the
+            founder's capital, the place's money and SOL.
   FOUNDING  each year, a port whose flow is noted and has no exchange: the council of the richest world there that
             keeps the port's money weighs it (decide.choose) - the fees the flow would pay (fee x flow a quarter, over
             its horizon) against what its capital would earn waiting (its money's rate on it, over its horizon) - and
@@ -18,7 +19,8 @@ place's own - it moves with what the place buys and sells.
             money's side matched to it at the federation's rate: it opens at the federation's price.
   RATE      conversions at a place with an exchange clear through its pools (convert_at); its rate drifts from the
             federation's with the place's own trade: a place that buys more than it sells sells its own money there,
-            and it is cheapest there. The gap is a CURRENCY ROUTE: money bought cheap at one exchange is worth more
+            and it is cheapest there - but its founder keeps it within its bank's band of its money's fair rate,
+            what the goods its people hold are worth (backing.py). The gap is a CURRENCY ROUTE: money bought cheap at one exchange is worth more
             at another - carried there in a hold, by whoever dares (fxroutes.py).
   DIVIDEND  each year half of what the pools have grown beyond the founder's capital (valued at their own mid) is paid
             to the founder, in its money - an exchange is an investment, like a dock (waystations.py).
@@ -152,7 +154,13 @@ def _found(kernel: Any, sec: Any, flow: List[float], logs: List[str], chosen: bo
     if council is None:
         return False
     fee = _fee(kernel, cur)
-    depth_sol = _typical(flow) / max(1e-9, fee)              # a typical conversion slips no more than the fee
+    pool = fx.pools.get(cur)
+    # a year of the place's conversions, held on each side - but its SOL side is bought at the federation, and a
+    # council pays no more than the fee in slippage for it: what moves the federation's rate by its fee at most
+    afford = float(pool["sol"]) * (1.0 - 1.0 / math.sqrt(1.0 + fee)) if pool else 0.0
+    depth_sol = min(float(flow[0]), afford)
+    if depth_sol <= 0:
+        return False
     mid = fx.rate(cur)
     capital_local = int(2 * depth_sol * mid)
     if council.treasury < capital_local:
@@ -183,6 +191,28 @@ def _found(kernel: Any, sec: Any, flow: List[float], logs: List[str], chosen: bo
     return True
 
 
+def _keep(kernel: Any, ex: Dict[str, Any]) -> None:
+    """The founding council keeps its pools near its money's fair rate (backing.py), moving its own money between
+    its pools and its vault within the band its bank keeps (CLEARING_BAND) - the place's rate drifts with its trade,
+    but no further from what its goods are worth."""
+    from xylarium.config import CLEARING_BAND, CLEARING_INTERVENTION_RATE
+    from xylarium.kernel import backing
+    founder = kernel.get_planet(ex["founder"])
+    fair = backing.fair(kernel, ex["cur"])
+    if founder is None or not fair or founder.currency != ex["cur"]:
+        return
+    target = fair * float(ex["sol"])
+    held = float(ex["local"])
+    if held > target * CLEARING_BAND:                         # its money cheaper there than its goods: take some out
+        amt = int((held - target * CLEARING_BAND) * CLEARING_INTERVENTION_RATE)
+        ex["local"] = held - amt
+        founder.treasury += amt
+    elif held < target / CLEARING_BAND:                       # dearer than its goods: put some in
+        amt = min(int((target / CLEARING_BAND - held) * CLEARING_INTERVENTION_RATE), max(0, int(founder.treasury)))
+        ex["local"] = held + amt
+        founder.treasury -= amt
+
+
 def _dividend(kernel: Any, sid: str, ex: Dict[str, Any]) -> None:
     """Half of what the pools have grown beyond the founder's capital, valued at their own mid, to the founder."""
     founder = kernel.get_planet(ex["founder"])
@@ -209,6 +239,7 @@ def season(kernel: Any) -> List[str]:
     st = stats(kernel)
     logs: List[str] = []
     for sid, ex in list(st["of"].items()):
+        _keep(kernel, ex)
         _dividend(kernel, sid, ex)
     for sid, flow in sorted(st["flow"].items(), key=lambda kv: -kv[1][0]):
         sec = kernel.sectors.get(int(sid))

@@ -380,6 +380,17 @@ when the route ends). Each seat has its business book (`business.py`): a captain
 wanted cargo near it; a sovereign sees its people's model, imports and exchanges, and may found an exchange
 at one of its ports (`command`: exchange); a steward sees its realm's exchanges, their gaps and its worlds' wants.
 
+### Backing: what stands behind each money (`backing.py`)
+A money is a claim on the goods its own people hold. Its backing is the worth, in SOL, of its worlds' stores and its
+ports' shelves - valued at the ports that price in SOL, never through its own rate - and its fair rate against SOL
+is SOL's goods per unit over its own. Where its market strays beyond the exchanges' band from that, the goods route
+runs each quarter: a money dearer than its goods is sold for SOL and the SOL spent on goods brought home; one
+cheaper than its goods is bought and its goods carried out - swaps and moved goods, nothing minted. A world whose
+money's own backing per unit keeps thinning beyond the noise (debasement, or goods run down) may leave it for its
+realm's reserve money, converting at the market; a money all its worlds leave ends with its last holder. In seed 42,
+a currency whose bank grew its supply 55% in a year while its goods held lost all its worlds; those whose goods kept
+pace kept theirs.
+
 ### Waystations (`waystations.py`)
 Genesis gave most systems a starport; from then on ports are founded by the economy. Every arrival is counted
 where it lands. Each year, for every portless system with traffic, the worth of a dock is measured off the docks

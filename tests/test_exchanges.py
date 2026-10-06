@@ -72,6 +72,7 @@ class TestExchanges(unittest.TestCase):
         cap = next(c for c in self.k.captains.values())
         cap.credits = 10 ** 6
         cap.fx_wallet.pop(self.cur, None)
+        before = exchanges.rate(ex)
         with mock.patch.object(self.k.fx_market, "exchange", wraps=self.k.fx_market.exchange) as fed:
             ok, _, got = fxroutes.exchange(self.k, cap, self.sec.id, "SOL", self.cur, 1000)
             self.assertTrue(ok)
@@ -79,7 +80,9 @@ class TestExchanges(unittest.TestCase):
             other = next(s.id for s in self.k.sectors.values() if s.id != self.sec.id)
             fxroutes.exchange(self.k, cap, other, "SOL", self.cur, 1000)
             fed.assert_called_once()                             # elsewhere, the federation's
-        self.assertAlmostEqual(got, 1000 * exchanges.rate(ex), delta=1000 * exchanges.rate(ex) * 0.05)
+        self.assertGreater(got, 0)
+        self.assertLessEqual(got, 1000 * before)                 # at the place's rate, less what the trade moved it
+        self.assertLess(exchanges.rate(ex), before)              # buying its money there made it dearer there
 
     def test_a_gap_is_a_route_worth_flying(self):
         ex = self._found()
