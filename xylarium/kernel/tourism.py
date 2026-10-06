@@ -3,10 +3,12 @@ Xylarium tourism: provided-for peoples travel to what they cannot find at home.
 
 Resorts
   * Pleasure Domes ([RC] RESORT_DOME surface districts): a colony council raises one on an open tile when its
-    people are provided for and it can pay the region's contractors; more as its beds fill. A dome drinks
-    water each season (pools, gardens, spas) and closes while dry. Receipts go to the world's vault.
+    people are provided for and it can pay the region's contractors; more as its beds fill. A dome holds its
+    people's own medium (uses.py: what their chemistry runs in), loses some each season, and closes while it runs
+    out. Receipts go to the world's vault.
   * Commercial orbital stations (private property - the starport is the government's, government.py): an investor
-    builds one at a world whose beds turn travellers away, paying the region's builders and the hull metal; its
+    builds one at a world whose beds turn travellers away, paying the region's builders and the hull matter (what
+    holds its shape at its people's warmth: uses.py); its
     receipts go to the owner, less the commercial tax to the system's government.
 
 Tier 1 - mass tourism (an abstracted flow along the lanes)
@@ -51,7 +53,7 @@ from xylarium.config import (
 )
 from xylarium.kernel import matter, topology
 
-STATION_METAL = {"Fe": 60, "Ti": 30}
+STATION_HULL_UNITS = 90      # the matter a station's hull takes (units; what it is made of is its people's: uses.py)
 
 
 def _hash(*parts: Any) -> int:
@@ -131,20 +133,27 @@ def _build_resort(kernel: Any, planet: Any, st: Dict[str, Any]) -> Optional[str]
     return f"[TOURISM] {planet.name} opened a Pleasure Dome ({n + 1} on the world)."
 
 
-def _water_resorts(kernel: Any, planet: Any) -> None:
+def _fill_resorts(kernel: Any, planet: Any) -> None:
+    """A pleasure dome holds its people's own medium (uses.py: water to a water-born people, ammonia ices to an
+    ammonia-born one, a giant's hydrogen to a plasma-born one) and loses some each season; a dome whose medium runs
+    out closes until it is brought."""
+    from xylarium.kernel import uses
     n = resorts(planet)
     if n <= 0:
         return
+    good = uses.medium(kernel, planet)
+    if good is None:
+        return
     need = n * RESORT_H2O_PER_QUARTER
-    have = planet.element_reserves.get("H2O", 0)
+    have = planet.element_reserves.get(good, 0)
     if have >= need:
-        planet.element_reserves["H2O"] = have - need
-        matter.sink("resort_upkeep", "H2O", need)
+        planet.element_reserves[good] = have - need
+        matter.sink("resort_upkeep", good, need)
         planet.society.pop("resort_dry", None)
     else:
         planet.society["resort_dry"] = True
         from xylarium.kernel import demand
-        demand.want(planet, "H2O", need - have)                # a dry dome wants water brought
+        demand.want(planet, good, need - have)                 # a dome gone dry wants its medium brought
 
 
 def station(planet: Any) -> Optional[Dict[str, Any]]:
@@ -166,12 +175,14 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
     port = sec.port
     if port is None:
         raise ValueError("A station needs a system with yards.")
-    held = {m: port.stock.get(m, 0) + planet.element_reserves.get(m, 0) for m in STATION_METAL}
-    if any(held[m] < q for m, q in STATION_METAL.items()):
+    from xylarium.kernel import uses
+    b = uses.body(kernel, planet)
+    hull = uses.build_with(kernel, planet, b["t"], STATION_HULL_UNITS) if b else []
+    if not hull:                                              # nothing solid at its people's warmth to be had here
         from xylarium.kernel import demand
-        for m, q in STATION_METAL.items():
-            demand.want(planet, m, q - held[m])               # the yards want the metal brought
-        raise ValueError("The system's yards lack the hull metal (Fe, Ti) for a station.")
+        for g in uses.structural(b["t"])[:1] if b else []:
+            demand.want(planet, g, STATION_HULL_UNITS)        # the yards want hull matter brought
+        raise ValueError("The system's yards lack matter that holds its shape at its people's warmth for a hull.")
     from xylarium.kernel import fx
     cost_local = station_cost(planet)
     cost_sol = int(_sol(planet.currency, cost_local)) + 1
@@ -182,11 +193,17 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
     local = _convert(kernel, "SOL", planet.currency, cost_sol)
     planet.household_purse += local // 2
     port.treasury += _convert(kernel, planet.currency, port.currency, local - local // 2)
-    for m, q in STATION_METAL.items():
-        own = min(q, planet.element_reserves.get(m, 0))       # metal brought to the world first, then the yards'
-        if own:
+    for m, q in hull:                                         # its own stores first, then the yards'
+        own = min(q, planet.element_reserves.get(m, 0) + (planet.ore_silo if m == "ORE" else 0))
+        if m == "ORE":
+            from_silo = min(own, planet.ore_silo)
+            planet.ore_silo -= from_silo
+            own_left = own - from_silo
+            if own_left:
+                planet.element_reserves[m] = planet.element_reserves.get(m, 0) - own_left
+        elif own:
             planet.element_reserves[m] -= own
-        port.stock[m] -= q - own
+        port.stock[m] = port.stock.get(m, 0) - (q - own)
         matter.sink("construction", m, q)
     planet.society["station"] = {"owner": investor.id, "berths": ORBITAL_BERTHS_PER_STATION,
                                  "built": kernel.cycle_count, "receipts": 0, "booked": 0}
@@ -538,7 +555,7 @@ def quarter(kernel: Any) -> List[str]:
             log = _build_resort(kernel, p, st)
             if log:
                 logs.append(log)
-            _water_resorts(kernel, p)
+            _fill_resorts(kernel, p)
             stn = station(p)
             if stn is not None:
                 if stn.get("booked") and ledger.ACTIVE_POLICY is not None:

@@ -363,7 +363,7 @@ where seas evaporated, from chlorine at the Sun's abundance: a world that never 
 
 ### Demand: wants and imports (`demand.py`)
 No people is told what its body needs: what it must have is what its own works and ways come to use. Whatever a
-world cannot get at home it wants - water for a dry pleasure dome, hull metal for a station - and its port brings it
+world cannot get at home it wants - its own medium for a pleasure dome gone dry, hull matter for a station - and its port brings it
 from the landed source (paying the source, its carriers and the lanes' tolls), or the world's own office does where
 the port cannot. Provisioning
 offices also post freight contracts for captains, priced at landed cost and at least a ship's trip.

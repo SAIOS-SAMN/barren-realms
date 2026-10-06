@@ -1,8 +1,9 @@
 """
 Xylarium demand: what docks, resorts and yards consume - and how a want that cannot be met at home becomes trade.
 
-  LEISURE   a pleasure dome drinks water; one that goes dry wants it (tourism.py).
-  DOCKS     a station's hull metal comes from the system's yards - or from metal brought to the world (tourism.py).
+  LEISURE   a pleasure dome holds its people's own medium (uses.py); one that runs out wants it (tourism.py).
+  DOCKS     a station's hull is matter that holds its shape at its people's warmth (uses.py), from the world's stores
+            or the system's yards - or brought (tourism.py).
   FUEL      ships buy reaction mass at the ports; where a port holds none its landed cost prices it (supply.py).
 
 No people is told what its body needs: what it must have is what its own works and ways come to use. Salt is a

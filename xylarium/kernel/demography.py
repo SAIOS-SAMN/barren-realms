@@ -604,8 +604,12 @@ def households(kernel: Any) -> None:
             from xylarium.kernel import staples
             staple = staples.of(kernel, planet)
             basket: Dict[str, float] = {}
-            for comm, per_k in HOUSEHOLD_BASKET.items():         # a household's groceries are its people's staple
-                key = staple if comm == "ORGANICS" else comm
+            from xylarium.kernel import uses
+            own_medium = uses.medium(kernel, planet)
+            for comm, per_k in HOUSEHOLD_BASKET.items():         # a household's groceries are its people's staple,
+                key = staple if comm == "ORGANICS" else own_medium if comm == "H2O" else comm   # its water its medium
+                if key is None:
+                    continue
                 basket[key] = basket.get(key, 0.0) + per_k
             for comm, per_k in basket.items():
                 need = int(planet.population / 1000.0 * per_k * prosperity)
