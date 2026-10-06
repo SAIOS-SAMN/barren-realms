@@ -35,8 +35,8 @@ later, inside the galaxy, by stars that form from its gas - and it is carried, r
              in, unenriched.
   WINDS      where star formation is dense enough (Heckman's threshold, measured) the supernovae blow a wind out of
              the disc: the share of what is made that the excess drives rises into the halo - and the halo gives it
-             back: it cools and rains onto the disc over ~1 Gyr, where gas is falling in at the time (inside-out). Nothing leaves for good but
-             what crosses the horizon (and that passes on, into the child universe beyond it).
+             back: it cools and rains onto the disc over ~1 Gyr, where gas is falling in at the time (inside-out). What crosses the
+             horizon passes into the paired sphere beyond, and as much comes back through its bounce.
   MODIFIED   matter is not only made but changed: stars burn hydrogen, making about two units of helium for every
              unit of metals (dY/dZ ~ 2, measured), so hydrogen runs down as the metals rise - the Sun's hydrogen,
              0.709 of its mass from the Big Bang's 0.752 (measured 0.715).
@@ -46,8 +46,9 @@ later, inside the galaxy, by stars that form from its gas - and it is carried, r
              Early, and at the thin rim, many stars are born with none of the heaviest and a few with a great deal;
              by today the lumps have mixed smooth.
   THE CENTRE what reaches the centre - the gas drifting all the way in, and what mixing carries inside the
-             innermost ring - falls into it (blackhole.py): a share crosses the horizon, lost to this universe, the
-             seed of a child one; the rest returns as the centre's outflow over an active episode, out past the bulge.
+             innermost ring - falls into it (blackhole.py): a share crosses the horizon to the paired sphere beyond,
+             and its bounce sends as much back - the waves between the spheres feed the core - and all of it returns as
+             the centre's outflow over an active episode, out past the bulge.
 
 CALIBRATION. The yields are set by the measured gas at the Sun's radius today (young B stars: the Cosmic Abundance
 Standard), one scale per channel from the element it dominates. The Sun itself is not put in: sun_birth() asks the
@@ -56,7 +57,8 @@ other place and time - the gradient, the core's early enrichment, the rim's late
 what the laws give. A universe with other initial conditions runs the same yields through its own history.
 
 THE LEDGER. Nothing here is conserved from the Big Bang: the galaxy's metal mass grows as its stars make it, is
-locked in stars, flows out past the disc, falls to the centre, crosses the horizon. budget() books every term.
+locked in stars, flows out past the disc, falls to the centre, crosses the horizon and comes back through the
+paired sphere's bounce. budget() books every term.
 """
 
 import functools
@@ -194,7 +196,7 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
               "sigma": _sigma_total(r_mid), "tau": tau_b, "width": width,
               "norm": 1.0 - math.exp(-max(1e-9, cosmos_today() - t1) / tau_b)}
     gpool = [[0.0] * len(SLOW_RETURN) for _ in range(nr)]
-    book = {"made": 0.0, "locked": 0.0, "outflow": 0.0, "horizon": 0.0, "returned": 0.0}
+    book = {"made": 0.0, "locked": 0.0, "outflow": 0.0, "horizon": 0.0, "bounced": 0.0, "returned": 0.0}
     hist_gas: List[List[float]] = []
     hist_metal: List[Dict[Tuple[str, str], List[float]]] = []
     hist_merger: List[List[float]] = []
@@ -244,8 +246,9 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
                 m_ = arr[j] * drift
                 arr[j] -= m_
                 if j == 0:
-                    book["horizon"] += m_ * blackhole.HORIZON_SHARE
-                    centre[key2] += m_ * (1.0 - blackhole.HORIZON_SHARE)
+                    book["horizon"] += m_ * blackhole.HORIZON_SHARE      # across, to the paired sphere...
+                    book["bounced"] += m_ * blackhole.HORIZON_SHARE      # ...and as much back from its bounce
+                    centre[key2] += m_
                 else:
                     arr[j - 1] += m_
             if j > 0:
@@ -333,8 +336,9 @@ def _spread(arr: List[float], mass: float, j: int, lam: float, book: Dict[str, f
         if centre is None:
             arr[0] += to_centre
             return
-        book["horizon"] += to_centre * blackhole.HORIZON_SHARE
-        centre[ckey] = centre.get(ckey, 0.0) + to_centre * (1.0 - blackhole.HORIZON_SHARE)
+        book["horizon"] += to_centre * blackhole.HORIZON_SHARE          # across, to the paired sphere...
+        book["bounced"] += to_centre * blackhole.HORIZON_SHARE          # ...and as much back from its bounce
+        centre[ckey] = centre.get(ckey, 0.0) + to_centre
 
 
 def cosmos_today() -> float:
@@ -474,8 +478,8 @@ def gradient(seed: Any, sym: str, t: float, r_in: float = 4.0, r_out: float = 14
 def budget(seed: Any) -> Dict[str, float]:
     """Where the metals made over the galaxy's history are now, as shares of what was made (unit yields): in its
     gas, in its stars (locked, or in giants still to give back), in the halo (lifted by winds, raining back), passed
-    across the horizon to the child universe, held at the centre, in the extended gas past the disc. The shares
-    close: everything is somewhere in the flow."""
+    across the horizon to the paired sphere (and, negative, what its bounce sent back), held at the centre, in the
+    extended gas past the disc. The shares close: everything is somewhere in the flow."""
     run = _run(_key(seed))
     snap = _snapshot(_key(seed), (run["steps"] - 1) * DT_GYR)            # the run's own end: its books are its whole
     made = run["book"]["made"] or 1.0
@@ -484,6 +488,7 @@ def budget(seed: Any) -> Dict[str, float]:
     giving = sum(sum(sum(p_) for p_ in rings_) for rings_ in run["pools"].values())     # in giants, still to return
     return {"made": 1.0, "gas": in_gas / made, "locked": (run["book"]["locked"] + giving) / made,
             "halo": sum(run["halo"].values()) / made, "horizon": run["book"]["horizon"] / made,
+            "bounced": -run["book"]["bounced"] / made,
             "centre": held / made, "beyond": sum(run["beyond"]["metal"].values()) / made}
 
 

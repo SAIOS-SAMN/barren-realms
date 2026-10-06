@@ -24,7 +24,8 @@ class TestBounce(unittest.TestCase):
         st = blackhole.stats(self.k)
         ch = blackhole.child(self.k)
         self.assertEqual(ch["elements"], {"Fe": 100, "Si": 50})                 # a tenth crosses
-        self.assertEqual(st["reservoir"], {"Fe": 900, "Si": 450})              # the rest feeds the jets
+        self.assertEqual(st["reservoir"], {"Fe": 1000, "Si": 500})             # the rest feeds the jets - and the
+        self.assertEqual(st["inbound"], 150)                                   # paired sphere sends back as much
         self.assertIsNotNone(ch["born"])
         self.assertEqual(ch["records"][0]["peoples"], ["civ:Fallen"])         # no information is destroyed
         kinds = [e.get("kind") for e in history.stats(self.k).get("recent", [])]

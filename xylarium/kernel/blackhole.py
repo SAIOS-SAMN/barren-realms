@@ -14,6 +14,8 @@ The galaxy's central black hole therefore takes matter in by two roads:
   HORIZON   a share of what falls crosses the horizon (HORIZON_SHARE; the rest is carried off by the hot disc's own
             outflow before it gets there) - it bounces, and is the matter of the child universe beyond: its elements
             and the RECORDS of what fell (the worlds, the stars, the peoples) are carried whole (child()).
+  INBOUND   the bounce runs both ways: the paired sphere's white hole sends back as much as crosses, into the centre's
+            reservoir (the waves between the spheres feed the core) - the web of spheres loses nothing at its joins.
 
   CAPTURE   within the bulge (cosmos.R_BULGE_KPC) a dying star's shed matter, and the worlds its death unbinds (a
             supernova's ejected planets, a giant's engulfed ones), fall to the centre instead of drifting into the void:
@@ -72,7 +74,10 @@ def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
             ch = child(kernel)
             ch["elements"][el] = ch["elements"].get(el, 0) + through
             crossed += through
-        st["reservoir"][el] = st["reservoir"].get(el, 0) + q - through
+        # the bounce runs both ways: the paired sphere's white hole sends back as much as crossed - the waves between
+        # the spheres feed the core (its own laws, so its centre's mix is ours)
+        st["reservoir"][el] = st["reservoir"].get(el, 0) + q
+        st["inbound"] = st.get("inbound", 0) + through
         total += q
     st["fed_season"] = st.get("fed_season", 0) + total
     st["captured"] += total
@@ -161,7 +166,8 @@ def summary(kernel: Any) -> Dict[str, Any]:
     ch = st.get("child") or {}
     return {"mass_suns": round(st.get("mass", MASS0), 1), "luminosity_lsun": float(f"{luminosity(kernel):.3g}"),
             "reservoir": sum(st["reservoir"].values()), "captured": st["captured"], "returned": st["returned"],
-            "fed_suns": round(st.get("fed_suns", 0.0), 3), "crossed": st.get("crossed", 0), "child_born": ch.get("born"), "child_records": len(ch.get("records", []))}
+            "fed_suns": round(st.get("fed_suns", 0.0), 3), "crossed": st.get("crossed", 0),
+            "inbound": st.get("inbound", 0), "child_born": ch.get("born"), "child_records": len(ch.get("records", []))}
 
 
 from xylarium.kernel import matter, state  # noqa: E402

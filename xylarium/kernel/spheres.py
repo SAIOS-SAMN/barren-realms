@@ -320,8 +320,10 @@ def _busy(kernel: Any) -> List[int]:
 
 
 def grow(kernel: Any, who: str, net: Dict[str, Any], logs: List[str]) -> None:
-    """Its power over the years since last paid in passages. A fold costs the same at any distance, so a guild opens
-    its passages where the traffic is first (the busiest systems it does not hold - its arteries), then the nearest.
+    """Its power over the years since last paid in passages. A fold reaches only as far as its cell's black hole
+    (gateways.py); past that a passage goes through the hub - two folds and a ride, as the hub's keeper allows. A guild
+    opens its passages where the traffic is first (the busiest systems it does not hold - its arteries), then the
+    nearest.
     A front at war is passed by, not pressed: the rest of its growth goes on. With nothing left within the charts,
     its passages reach on into the systems beyond them (held in count until witnessed) - or, for a line that has a
     throat to forge where traffic is lost, bank toward it (transit.py)."""
@@ -342,16 +344,25 @@ def grow(kernel: Any, who: str, net: Dict[str, Any], logs: List[str]) -> None:
         return
     held = set(net["held"])
     seen: set = set()
+    from xylarium.kernel import gateways
+    far = gateways.long_range(kernel, who)                   # through the hub, as its keeper allows
+    where: Dict[int, Any] = {}
     for s in _busy(kernel) + _order(kernel, net["home"]):
         if owed < 1:
             break
         if s in held or s in seen:
             continue
         seen.add(s)
+        # the fold stays local: within a fold of what it holds, one passage; beyond, only through the gateways -
+        # a fold to its own cell's black hole, the bounce through the hub, a fold in at the far end: two passages
+        cost = 1 if gateways.folds_to(kernel, held, s, where) else (2 if far else 0)
+        if not cost or owed < cost:
+            continue
         rid = owner(kernel, s)
         if rid is None:
             _hold(kernel, who, net, s)
-            owed -= 1
+            held.add(s)
+            owed -= cost
             continue
         other = presence(kernel, rid)
         if other == who or bond(kernel, who, other) is not None:
@@ -359,7 +370,7 @@ def grow(kernel: Any, who: str, net: Dict[str, Any], logs: List[str]) -> None:
         if transit.at_war(kernel, who, other):
             continue                                         # a front at war: passed by, the war decides it
         _contact(kernel, who, s, logs)
-        owed -= 1
+        owed -= cost
     whole = int(owed)
     if whole:
         if who in transit.stats(kernel)["masters"] and _forge_wanted(kernel, who):

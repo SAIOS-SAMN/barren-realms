@@ -30,9 +30,10 @@ galaxy's heart on the map. Through the bounce a ship is carried on the torsion's
 its clock dilated: a throat is crossed in one hop, as cheap to travel as the cheapest lane - and paid for by its
 tithe.
 
-  MASTERY   no one passes a throat until a people devises how: an ancient people (board.ancient_peoples) - the core's
-            first, whose own reach makes it to the core (its network's reach at least its home's distance from the
-            centre) - masters the bounce. It holds every throat whose mouth its network reaches, and the centre's
+  MASTERY   a people that folds space rides a stellar black hole's throat (gateways.py); the fold itself stays within
+            its cell, so every road past it runs through the mouths. The centre's throat - the hub - is kept by the
+            master whose minds evolved deepest in the centre's wave (or travel as information): the core's ancients,
+            by where they are. A master holds every throat whose mouth its network reaches, the hub's keeper the centre's
   HANDLING  its own choice, by its needs: closed while it is at war, guarded (its own and its bonded only) while
             its sovereign's first need is security, else tolled by the toll law; a player's progenitor sets its own
             - open (only what the throat cost), tolled, guarded or closed (command.py)
@@ -592,24 +593,38 @@ def handling_of(kernel: Any, who: str) -> str:
 
 
 def _masters(kernel: Any, logs: List[str]) -> None:
-    """An ancient people whose network reaches the core devises how to pass the bounce."""
-    from xylarium.kernel import board, cosmos, history, spheres
+    """A people that folds space rides the bounce of a stellar black hole (gateways.py: the torsion carries a mass
+    undistorted). The centre's throat - the hub - is kept by the master whose minds evolved deepest in the centre's
+    wave, or travel as information; it passes to another when a deeper one arises or its keeper falls."""
+    from xylarium.kernel import cosmos, gateways, history, spheres
     if not cosmos.is_cosmic(kernel):
         return
     st = stats(kernel)
-    for who, home in board.ancient_peoples(kernel).items():
+    for who in sorted(spheres.stats(kernel)["nets"]):
         if who in st["masters"] or not spheres.crossed(kernel, who):
             continue
-        p = cosmos.position(kernel, home.sector_id)
-        if p is None or spheres.radius(kernel, who) < p["r"]:
-            continue                                         # its passages do not yet reach the core
         st["masters"][who] = kernel.cycle_count
+        home = spheres._home(kernel, who)
         history.event(kernel, "BOUNCE_MASTERED", f"The {who.split(':', 1)[-1]} learn to pass the bounce",
                       actors=[who], planet=home,
-                      cause="its passages reach the core: it devises how to ride the torsion's repulsion through a "
-                            "black hole's throat, mass undistorted, clock dilated",
-                      data={"handling": handling_of(kernel, who)})
-        logs.append(f"[WORMHOLE] The {who.split(':', 1)[-1]} master the bounce: the throats are theirs to open.")
+                      cause="it folds space: past its fold's reach it rides a black hole's throat on the torsion's "
+                            "repulsion, mass undistorted, clock dilated",
+                      data={"exposure": round(gateways.home_exposure(kernel, who), 3)})
+        logs.append(f"[WORMHOLE] The {who.split(':', 1)[-1]} master the bounce.")
+    keeper = gateways.hub_keeper(kernel, st["masters"])
+    if keeper != st.get("hub"):
+        old = st.get("hub")
+        st["hub"] = keeper
+        if keeper is not None:
+            history.event(kernel, "HUB_KEPT", f"The {keeper.split(':', 1)[-1]} keep the galaxy's hub",
+                          actors=[keeper] + ([old] if old else []),
+                          cause="of those who ride the bounce, their minds bear the centre's wave best"
+                                + (f" - it passes from the {old.split(':', 1)[-1]}" if old else ""),
+                          data={"exposure": round(gateways.home_exposure(kernel, keeper), 3)})
+            for w in st["worms"].values():
+                if MOUTH_BASE in (w["a"], w["b"]) and w.get("kind") in ("long_haul", "intergalactic") \
+                        and w.get("owner") == old:
+                    w["owner"], w["handling"] = keeper, handling_of(kernel, keeper)
 
 
 def _natural(kernel: Any, logs: List[str]) -> None:
@@ -620,7 +635,7 @@ def _natural(kernel: Any, logs: List[str]) -> None:
     if not st["masters"]:
         return
     centre = _centre_sector(kernel)
-    first = min(st["masters"], key=lambda w: (st["masters"][w], w))      # the centre is the first master's
+    first = st.get("hub") or min(st["masters"], key=lambda w: (st["masters"][w], w))   # the hub's keeper
     for sid, m in mouths(kernel).items():
         if m["kind"] != "stellar" or key(sid, centre) in st["worms"]:
             continue
@@ -737,7 +752,8 @@ def _heirs(kernel: Any, logs: List[str]) -> None:
             elif holder is not None and holder in living and end != MOUTH_BASE and end in mouths(kernel):
                 tamperer = tamperer or (holder, end)
         if heir is None and MOUTH_BASE in (w["a"], w["b"]) and st["masters"]:
-            heir = min(st["masters"], key=lambda m: (st["masters"][m], m))
+            from xylarium.kernel import gateways
+            heir = gateways.hub_keeper(kernel, st["masters"])
         if heir is not None:
             w["owner"], w["handling"] = heir, handling_of(kernel, heir)
             w.pop("dormant", None)

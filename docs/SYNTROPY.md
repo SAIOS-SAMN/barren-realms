@@ -155,6 +155,47 @@ people that wakes there wakes among the settlers' settlements (`settling.mark_wa
 - **Every later people falls.** Nine peoples woke among their settlements and seven crossed inside both dominions.
   Each holds its home world alone and falls at the one-world rate (a mean of ~5,000 generations).
 
+## Gateways: the fold stays local, the black holes carry the rest (`gateways.py`)
+
+Every black hole is a bounce: a sink on this side and a white hole in the paired sphere beyond. Those bounces are the
+fabric's long roads.
+
+**Where the mouths are.** A star born heavier than 20 suns ends as a black hole. Their number is the local stars
+times the share born that heavy (`creation.imf`, with each place's own clouds). Near the warm, crowded core the IMF is
+top-heavy, so the core is thick with mouths: about 0.27 per pc³ at 0.17 kpc against 4×10⁻⁴ at the Sun's radius.
+
+**The fold stays local.** Space is cut into the cells of its black holes, and a fold reaches as far as the nearest
+one: 0.554·n_BH^(−1/3), Hertz's nearest-neighbour distance. That is ~0.9 pc at the core, ~7.5 pc at the Sun's radius
+and ~13 pc at 12 kpc. Charted systems lie a median 109 pc apart, so every road between them runs through a mouth. A
+journey past the fold's reach goes: fold to your own cell's black hole, ride to the centre, ride out, fold in. That
+costs two passages, and only through the hub.
+
+**The hub.** Any people that folds space can ride a stellar throat. The centre's throat sits in the deepest bounce
+wave (falling as 1/r² from the core). It is kept by the master whose minds evolved deepest in that wave, or whose minds
+travel as information (mind transfer). Others pass as the keeper's handling allows: tolled, guarded or closed. In seed
+7 the keeper is Tuoksha, born at 0.17 kpc, not Thnevri, which crossed first. Location, not age, decides it.
+
+**The waves feed the core.** The bounce runs both ways. What crosses the centre's horizon to the paired sphere comes
+back from that sphere's white hole: the live centre's reservoir takes it in, and the element model books it as
+`bounced`. The web of spheres loses nothing at its joins.
+
+**Kindling a singularity.** A new black hole whose white hole holds costs the lightest black hole's mass-energy: 3
+M☉c² ≈ 5.4×10⁴⁷ J, some centuries of a whole galaxy's starlight. The rules:
+- A coalition (dominions joined by a bond where they met, or one dominion alone) banks its power only once it has
+  nowhere left to settle.
+- It needs the ancients' approval: the hub's keeper must be a member, or bonded to one with its throat open. Every
+  member must be free by its steward's ruling.
+- Beyond the new white hole a sphere opens, a galaxy's room, and the kindlers share it. That is ascension's pivot: new
+  room, and nothing around it torn.
+
+In seed 7 at 1.98 Gyr no one can kindle. The two full dominions command only their home grids times their worlds,
+~10¹³ W a world, so a kindling would take ≥10¹⁶ years. A coalition must harness its stars, not just settle their
+worlds, first.
+
+Not yet: dominions in deep time still settle by the fold front alone (gateways change trade, contact and the hub's
+politics, not a front that already crosses the galaxy in ~1 Myr), and the galaxy's rotation is still declared, not
+inherited through the bounce.
+
 ## Still to derive
 
 - **Disc accretion.** Should depend on fields carrying angular momentum, and stellar winds should be sorted by

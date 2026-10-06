@@ -323,8 +323,9 @@ def season(kernel: Any) -> List[str]:
     jobs = [j for j in (_live_ages(kernel, who, worlds, logs) for who, worlds in sorted(_peoples(kernel).items()))
             if j is not None]
     _settle(kernel, [j for j in jobs if j.get("cross") is not None], logs)
-    from xylarium.kernel import settling
+    from xylarium.kernel import gateways, settling
     settling.mark_wakings(kernel, _peoples(kernel))
+    gateways.kindling(kernel, logs)
     for j in jobs:
         _books(kernel, j, logs)
     return logs

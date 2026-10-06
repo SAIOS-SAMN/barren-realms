@@ -276,7 +276,8 @@ def held(kernel: Any, who: str, t: float) -> float:
             if lives_on(other.get("metab", "biotic"), other.get("home_type"), kind):
                 free *= 1.0 - frac
         left += w * free
-    return max(1.0, systems_in(b["r0"], reach) * b["share"] * left)
+    room = float(b.get("room", 0.0)) * b["share"]            # what it has kindled beyond a white hole (gateways)
+    return max(1.0, systems_in(b["r0"], reach) * b["share"] * left + room)
 
 
 def breaks(kernel: Any, who: str, ta: float, tb: float) -> List[float]:
@@ -328,7 +329,11 @@ def meet(kernel: Any, a: str, b: str, when: Tuple[float, float, float, Optional[
         share = o(holder, enclosed)
         if st[enclosed].get("enclosed") is None:                # the first whose dominion it crossed into
             st[enclosed]["enclosed"] = {"by": holder, "t": tc}
-        st[enclosed]["cuts"][holder] = {"by": holder, "a": None, "t": tc, "o": share}
+        try:
+            how = spheres.style(kernel, enclosed, holder)
+        except Exception:
+            how = "standoff"
+        st[enclosed]["cuts"][holder] = {"by": holder, "a": None, "t": tc, "o": share, "style": how}
         left = "no world" if share >= 0.999 else ("every world" if share <= 0.001 else f"{1 - share:.0%} of the worlds")
         history.event(kernel, "DOMINION", f"The {name(enclosed)} cross into the dominion of the {name(holder)}",
                       actors=[enclosed, holder], sector_id=st[enclosed]["sid"],
@@ -338,12 +343,12 @@ def meet(kernel: Any, a: str, b: str, when: Tuple[float, float, float, Optional[
                       data={"epoch": round(tc, 6), "overlap": round(share, 4)})
         logs.append(f"[ANNALS] The {name(enclosed)} cross inside the dominion of the {name(holder)}.")
         return
-    st[a]["cuts"][b] = {"by": b, "a": sa, "t": tc, "o": o(b, a)}
-    st[b]["cuts"][a] = {"by": a, "a": sb, "t": tc, "o": o(a, b)}
     try:
         how = spheres.style(kernel, a, b)
     except Exception:
         how = "standoff"
+    st[a]["cuts"][b] = {"by": b, "a": sa, "t": tc, "o": o(b, a), "style": how}
+    st[b]["cuts"][a] = {"by": a, "a": sb, "t": tc, "o": o(a, b), "style": how}
     if how == "war":
         annals.stats(kernel)["wars"] += 1
     else:
