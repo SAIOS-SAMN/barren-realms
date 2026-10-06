@@ -22,9 +22,9 @@ class TestGalaxyLaws(unittest.TestCase):
         self.assertAlmostEqual(cosmos.abundance("Fe", cosmos.R0_KPC), 1.0)
         self.assertGreater(cosmos.abundance("U", 2.0), cosmos.abundance("Fe", 2.0))      # the core is rich in heavies
         self.assertLess(cosmos.abundance("U", 14.0), cosmos.abundance("H", 14.0))        # the rim keeps the light
-        # iron's gradient is the measured one: -0.06 dex per kpc
+        # iron's gradient comes out near the measured one (-0.06 dex per kpc) without being put in
         import math
-        self.assertAlmostEqual(math.log10(cosmos.abundance("Fe", 9.0)), -0.06 * 56.0 / 55.8, places=3)
+        self.assertAlmostEqual(math.log10(cosmos.abundance("Fe", 9.0)), -0.06, delta=0.02)
 
     def test_inside_out_and_the_habitable_zone(self):
         self.assertLess(cosmos.formed_gyr(2.0), cosmos.formed_gyr(10.0))

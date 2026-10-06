@@ -28,10 +28,10 @@ THE GALAXY (Milky Way measurements as rulers and data points, not as a template)
 
   * inside-out star formation: a radius forms its stars after tau(r) = 1.033 r - 1.267 Gyr (Chiappini, Matteucci &
     Romano 2001); the core first, the rim last.
-  * elements scatter by mass: what supernovae and winds throw out settles back under gravity, so an element spreads
-    outward over a length inversely proportional to its mass: lambda(A) = lambda_Fe x 56 / A, with lambda_Fe from
-    iron's measured radial gradient (-0.06 dex/kpc). Heavy elements stay near the core, the lightest reach
-    furthest. Deposits are scaled from their values at R0 (the Sun's radius, the ruler they were set at).
+  * the galaxy makes its own elements (enrichment.py): stars form from infalling gas, four channels make each element
+    on their own clocks, fountains carry it a radial epicycle by weight (Graham's 1/sqrt(A)), winds blow some out,
+    gas drifts inward, the centre takes what reaches it. Heavy elements stay near the core, the light reach the rim;
+    iron's gradient comes out near the measured -0.06 dex/kpc without being put in.
   * clockwork: every system rides a flat rotation curve (V_FLAT) around the centre, theta(t) = theta0 + V t / r -
     closed form, any moment as cheap as any other; each star keeps its own worlds on their own orbits.
 
@@ -73,8 +73,6 @@ PACES = {"lonely": 1.0e5, "neighbourly": 1.0e6, "teeming": 1.0e7}   # deep years
 DEEP_YEARS_PER_YEAR = PACES["neighbourly"]                          # the default: the one ruler between the tiers' clocks
 GALAXIES_IN_CLUSTER = 40        # the home cluster's galaxies (Local Group scale); only the home galaxy is simulated
 # ---------------------------------------------------------------------- laws and measurements
-FE_GRADIENT = 0.06              # dex/kpc: iron's radial gradient (Milky Way disc)
-LAMBDA_FE = 1.0 / (FE_GRADIENT * math.log(10.0))       # kpc: iron's scatter length
 HARD_STEPS = 4                  # Carter (1983); Watson (2008): ~4 hard steps to intelligence (creation.py)
 SUN_MS_GYR = 10.0               # main-sequence lifetime of a solar-mass star; tau ~ M^-2.5
 STERILISE_AT_R0 = 0.1           # chance a biosphere at R0 is sterilised by a nearby supernova over its window
@@ -147,8 +145,9 @@ def formed_gyr(r: float) -> float:
 
 
 def metals(r: float) -> float:
-    """Metallicity relative to the Sun's: iron's gradient about R0, capped at solar (rocky worlds need metals)."""
-    return min(1.0, 10.0 ** (-FE_GRADIENT * (r - R0_KPC)))
+    """Metallicity of the gas at radius r today, relative to the Sun's birth gas (enrichment.py)."""
+    from xylarium.kernel import creation, enrichment
+    return enrichment.metals(None, r, creation.TODAY_GYR)
 
 
 def survival(r: float) -> float:
@@ -166,13 +165,17 @@ def mass_of(element: str) -> float:
 
 
 def scatter_length(element: str) -> float:
-    """kpc over which an element spreads from where it was made: inversely as its mass."""
-    return LAMBDA_FE * 56.0 / max(1.0, mass_of(element))
+    """kpc an element made at R0 travels before it settles: a fountain's epicycle, by weight (enrichment.py)."""
+    from xylarium.kernel import enrichment
+    return enrichment.travel_kpc(element, R0_KPC)
 
 
 def abundance(element: str, r: float) -> float:
-    """An element's abundance at r relative to R0: heavy elements stay near the core, light ones reach furthest."""
-    return math.exp(-(r - R0_KPC) / scatter_length(element))
+    """An element's abundance in today's gas at r relative to R0's (enrichment.py)."""
+    from xylarium.kernel import creation, enrichment
+    here = enrichment.relative(None, element, r, creation.TODAY_GYR)
+    there = enrichment.relative(None, element, R0_KPC, creation.TODAY_GYR)
+    return here / there if there > 0 else 0.0
 
 
 def first_generation(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
@@ -744,6 +747,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
                 share = q // max(1, len(worlds)) + (1 if j < q % max(1, len(worlds)) else 0)
                 if share:
                     w.element_deposits[el] = w.element_deposits.get(el, 0) + share
+                    got = w.society.setdefault("delivered", {})          # delivered: no survey forgets it
+                    got[el] = got.get(el, 0) + share
                     matter.source("stellar_ejecta", el, share)          # made in the star, now in the worlds
     sec.star_type = ("White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant" if kind == "supernova"
                      else "Neutron star remnant" if not heavy else "Black hole remnant")

@@ -12,8 +12,9 @@ their own five axes (period, group, phase), so they obey the same gates.
 WHAT A WORLD HOLDS is not chosen; it is what survives four gates of its own formation, in order (each can only
 remove), and why an element is missing is remembered:
 
-    ladder         its star's lineage reaches only so deep into the table: an M dwarf's nebula was enriched to
-                   period 3, a G star's to 5, a heavy star's or a stellar remnant's to all of them  -> never_made
+    birth gas      what the galaxy's own stars had made, carried and kept where and when the system's gas was
+                   gathered (enrichment.py: four channels on their own clocks, mixed by weight, the mergers' share
+                   lumpy) - the core rich early, the rim late, the heaviest only where mergers reached  -> never_made
     retention      it stays only if the world can hold it: escape energy x nucleon mass against formation
                    temperature (Jeans: a heavy cold world keeps hydrogen; a small hot one loses its water)  -> escaped
     condensation   it was solid where the world formed (formation temperature below its condensation point),
@@ -113,18 +114,24 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------- the gates
-def ladder(sector: Any) -> int:
-    """How deep into the table a system's nebula was enriched: by its star's lineage."""
-    label = (getattr(sector, "star_type", None) or "G-class").lower()
-    if "brown dwarf" in label:
-        return 3                                           # a failed star made nothing deep
-    if any(w in label for w in ("neutron", "pulsar", "precursor")):
-        return 8                                           # a neutron-rich lineage: the r-process past uranium
-    if any(w in label for w in ("white dwarf", "remnant")):
-        return 7                                           # a dead star's lineage seeded everything to uranium
-    from xylarium.kernel import physics
-    m = float(physics.star(sector)["mass"])
-    return 3 if m < 0.5 else 4 if m < 0.9 else 5 if m < 1.4 else 6 if m < 2.5 else 7
+def birth(kernel: Any, sector: Any) -> Optional[Tuple[Any, float, float, float]]:
+    """Where and when a system's gas was gathered: (seed, galactic radius, birth epoch, its share of the mergers'
+    lumps) - None on a board laid without a galaxy (its worlds are the Sun's kind)."""
+    from xylarium.kernel import cosmos, creation
+    if kernel is None or not cosmos.is_cosmic(kernel):
+        return None
+    g = cosmos.stats(kernel)["place"].get(str(getattr(sector, "id", "")))
+    if not g or g.get("r") is None:
+        return None
+    seed = cosmos.cosmos_seed(kernel)
+    lump = 1.0
+    try:
+        slot = creation.cell(seed, *g["cell"])[g["k"]]
+        lump = float(slot.get("rlump", 1.0))
+    except Exception:
+        pass
+    born = float(g.get("born", cosmos.formed_gyr(float(g["r"]))))
+    return seed, float(g["r"]), born, lump
 
 
 def region_weight(sector: Any, family: str) -> float:
@@ -144,7 +151,8 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
     esc = float(physics.escape_energy(planet)) or 1e-6
     rho_p = 5.51 * mass / (radius ** 3)
     melt = min(1.0, geology.heat(planet))                # how far the world differentiated
-    depth = ladder(sector)
+    from xylarium.kernel import enrichment
+    origin = birth(kernel, sector)
     held: Dict[str, int] = {}
     why: Dict[str, str] = {}
     from xylarium.kernel import concentration, substances
@@ -166,8 +174,9 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
         if e["origin"] == "deep" and not deep:
             why[sym] = "shallow"                           # its mantle never reaches the pressure that makes it
             continue
-        if e["line"] > depth:
-            why[sym] = "never_made"
+        made = enrichment.of_good(origin[0], sym, origin[1], origin[2], origin[3]) if origin else 1.0
+        if made <= 0:
+            why[sym] = "never_made"                        # nothing in its birth gas had made it, there and then
             continue
         if not giant and esc * e["A"] / t_rel < RETENTION:
             why[sym] = "escaped"
@@ -187,7 +196,8 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
             held[sym] = 5                                  # below any crust: only what eruptions bring up
             continue
         size = math.sqrt(min(mass, 400.0))                 # a crust's reach grows with the world, not its whole mass
-        g = concentration.grade(concentration.crustal(sym, wstate, flows), concentration.strength(sym, flows))
+        g = concentration.grade(min(1.0, concentration.crustal(sym, wstate, flows) * made),
+                                concentration.strength(sym, flows))
         units = PURE_UNITS * g * size * reach * region_weight(sector, e["family"])
         held[sym] = max(1, int(units))                     # where it survives, a trace is always there to find
     return held, why
@@ -217,8 +227,9 @@ def survey(kernel: Any) -> None:
             from xylarium.kernel import zones
             zones.touch(kernel, p)                            # its folded seasons first, then what it is found to hold
             held, why = inventory(kernel, sec, p)
+            delivered = p.society.get("delivered") or {}             # what the galaxy brought since: kept
             for sym in set(held) | {s for s in p.element_deposits if s in TABLE}:
-                old, new = p.element_deposits.get(sym, 0), held.get(sym, 0)
+                old, new = p.element_deposits.get(sym, 0), held.get(sym, 0) + int(delivered.get(sym, 0))
                 if new > old:
                     matter.source("planetary_survey", sym, new - old)
                 elif old > new:

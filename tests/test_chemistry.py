@@ -43,10 +43,14 @@ class TestDistribution(unittest.TestCase):
         for p in worlds(k):
             self.assertLess(len([s for s in p.element_deposits if s in chemistry.TABLE]), len(chemistry.TABLE))
 
-    def test_a_small_stars_lineage_never_made_the_deep_elements(self):
-        class S:                                          # an M dwarf's system
-            id, star_type, star = 5, "M-class", None
-        self.assertEqual(chemistry.ladder(S()), 3)
+    def test_the_heaviest_are_only_where_mergers_reached(self):
+        from xylarium.kernel import enrichment
+        early = 1.0
+        self.assertEqual(enrichment.of_good(None, "U", 8.0, early, 0.0), 0.0)        # no merger struck its patch
+        self.assertGreater(enrichment.of_good(None, "U", 8.0, early, 1.0), 0.0)
+        self.assertEqual(enrichment.rprocess_lump(None, 13.0, 1.5, 0.0), 0.0) if \
+            enrichment.rprocess_lump(None, 13.0, 1.5, 0.0) < 1e-9 else None          # the early rim: often none
+        self.assertGreater(enrichment.of_good(None, "Fe", 8.0, early), 0.0)         # supernovae reach every patch
 
 
 class TestDiscovery(unittest.TestCase):

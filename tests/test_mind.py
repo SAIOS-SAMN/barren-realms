@@ -17,10 +17,10 @@ class TestMind(unittest.TestCase):
         self.p = max((p for s in self.k.sectors.values() for p in s.planets), key=lambda p: p.population)
         self.who = knowledge.holder_of_planet(self.p)
 
-    def test_the_first_people_is_an_aquatic_collective(self):
+    def test_the_first_people_is_an_aquatic_mind_read_from_its_world(self):
         prof = mind.profile(self.k, self.p)
         self.assertTrue(prof["aquatic"])
-        self.assertEqual(prof["collective"], 1.0)
+        self.assertTrue(0.0 < prof["collective"] <= 1.0)                  # how far it thinks as one: its own traits'
         self.assertGreater(prof["affinity"]["biology"], prof["affinity"]["information"])   # biology before the sky
 
     def test_foragers_learn_from_the_day_they_wake(self):

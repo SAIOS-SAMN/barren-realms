@@ -50,6 +50,44 @@ process moves order between scales; none only destroys.
 - **Renewal.** A taken deposit is rebuilt toward its standing grade at the pace of its flows (`geology._rebuild`).
   Where the flows have stopped, nothing comes back.
 
+## Where the elements come from (`enrichment.py`)
+
+The Big Bang gives hydrogen and helium only. Everything heavier is made by the galaxy's own stars, and it is always
+moving:
+- Gas falls in inside-out.
+- Stars form per orbit above Toomre's threshold, and on their own free-fall time below it.
+- Four channels make each element on their own clocks.
+- Stars give back 40% of their mass, half of it over gigayears at their birth mix.
+- Fountains mix what is made a radial epicycle each way, by weight (Graham: 1/√A).
+- Dense star formation lifts winds into the halo, which rains them back over ~1 Gyr where gas is falling in.
+- Gas drifts inward at about 1 km/s.
+- The centre takes what reaches it: a share passes across the horizon into the child universe, and the rest returns.
+- Stars burn hydrogen into helium and metals (dY/dZ ≈ 2).
+
+Mergers are lumpy: a star's birth cloud holds a Poisson count of recent events.
+
+Calibration is to the measured gas near the Sun today (young B stars), one yield scale per channel. The model then
+gives:
+- gradients steepening by weight: oxygen −0.025, iron −0.069, uranium −0.105 dex/kpc (the Milky Way's are about
+  −0.02 to −0.07);
+- the core enriched first;
+- oxygen-rich early gas;
+- a ledger in which everything made is somewhere in the flow.
+
+**The Sun as a prediction.** The radius whose gas 4.57 Gyr ago best matches the Sun's composition is 7.75–8.75 kpc
+(rms ≈ 0.06 dex). The migration picture puts it at 5–7 kpc. The model's local gas reaches an equilibrium early, as
+infall and inward drift balance what stars make, so its age–metallicity relation at the Sun's radius is nearly flat
+over the last 5 Gyr. That matches the observed flat local relation (Casagrande 2011). The evidence for migration (the
+Sun being richer than its same-age neighbours) needs stellar populations, which the model does not yet track.
+
+**Worlds from their birth gas.** Every star's worlds are made from the gas at its radius and birth epoch:
+- its metallicity sets the disc's solids;
+- its elements set the deposits;
+- a metal-free star has no worlds.
+
+`creation.analogue` builds a star of any mass at any place and epoch, so a Sun-like star born where the model finds
+the Sun can grow its own planets from that gas.
+
 ## Still to derive
 
 - **Disc accretion.** Should depend on fields carrying angular momentum, and stellar winds should be sorted by
@@ -58,4 +96,13 @@ process moves order between scales; none only destroys.
 - **Commodities (P1b).** A good's anchor is the order it embodies (its grade, and the event that made its nuclei)
   times its renewal time, with extraction work as its cost. A market lists goods as civilisations stabilise trade in
   them, not from a table.
+- **One star-formation history.** Stars are still drawn from creation's own inside-out curve, not from the
+  enrichment run's star formation. Discs read a single metallicity rather than their gas's own iron, silicon and
+  oxygen.
+- **The centre at parsec scale.** This needs the black hole's mass, the tidal-density limit for forming stars, and
+  the young stars that do form there.
+- **Planet survival.** Close stellar passes, and discs evaporated by massive neighbours.
+- **Clock pace (#149).** Place clocks are still paced by who watches. A folded world's neighbouring star dies at
+  another cycle than a stepped one's (test_roles' inverse-compaction test is marked as an expected failure until pace
+  comes from galactic position).
 - **Interior fidelity.** In the current interior model a Mars-sized world still runs a dynamo at 4.6 Gyr.

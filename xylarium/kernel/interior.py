@@ -5,7 +5,7 @@ and the life that runs on its warmth in the dark.
 
 RADIOGENIC. Uranium-238 and -235, thorium-232 and potassium-40 heat a rocky mantle as they decay. A world gets the
 inventory its star's gas held when the star was born: what the ring's stars had made by then (the age-metallicity
-relation), spread by mass (heavy uranium and thorium stay near the core: cosmos.abundance), and decayed since it
+relation), as the galaxy made and spread them (enrichment.py: uranium and thorium by mergers, potassium by supernovae), and decayed since it
 was made (each isotope's made over the ring's star-formation history, decaying all the while - a young galaxy is
 rich in short-lived uranium-235 and potassium-40). The rulers are the bulk silicate Earth's measured abundances and
 heat per kilogram, read back to the Sun's birth (Turcotte & Schubert 2002) - a measurement at one place and time,
@@ -124,7 +124,9 @@ def inventory(seed: Any, r_kpc: float, born: float, z: float, laws: Any = None) 
         sun_kept = _made_and_kept(tau0, tau_f0, SUN_BORN_GYR - creation.FIRST_STARS_GYR)
         tau = half_life(iso, L) / math.log(2.0)
         kept = _made_and_kept(tau, tau_f, born - t1)
-        spread = cosmos.abundance(ELEMENT[iso], r_kpc) / cosmos.abundance("Fe", r_kpc)
+        from xylarium.kernel import enrichment
+        fe = enrichment.relative(seed, "Fe", r_kpc, born)
+        spread = enrichment.relative(seed, ELEMENT[iso], r_kpc, born) / fe if fe > 0 else 1.0
         out[iso] = at_sun_birth * max(0.0, z) * spread * kept / max(1e-12, sun_kept)
     return out
 

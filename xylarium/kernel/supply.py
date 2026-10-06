@@ -2,7 +2,7 @@
 Xylarium supply: what a system holds, what it lacks, and what it costs to bring - the economy read from the elements
 the galaxy made.
 
-Every element was spread by the galaxy that made it (cosmos.abundance: heavy elements stay near the core, light
+Every element was spread by the galaxy that made it (enrichment.py: heavy elements stay near the core, light
 ones reach furthest) and laid into worlds by their formation (creation.py). A port trades the elements and minerals
 its system holds and buys what it lacks - nothing is chartered by lot.
 
@@ -79,7 +79,7 @@ def halite(kernel: Any, planet: Any) -> int:
         laid = 1.0                                                   # seas gone: their salt is all salt flat
     else:
         return 0
-    enrich = z / max(1e-9, cosmos.metals(r)) * cosmos.abundance("Cl", r)
+    enrich = z                                   # chlorine is made with the metals, by the same supernovae (enrichment.py)
     cl = rock * chlorine_share() * enrich * float(w.get("degassed", 0.0))
     return int(cl * NACL_PER_CL * laid)
 

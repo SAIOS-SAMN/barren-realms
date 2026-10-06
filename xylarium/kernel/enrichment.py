@@ -8,7 +8,11 @@ later, inside the galaxy, by stars that form from its gas - and it is carried, r
              rim last), toward the disc's exponential profile (scale length R_D, normalised by the measured surface
              density at the Sun's radius). The thinning web feeds each ring less as the universe expands.
   STARS      form from the gas at a share of it per orbit (Silk-Kennicutt: Sigma_SFR = 0.017 Sigma_gas Omega, Omega =
-             V / r, measured): the inner disc, turning faster, makes its stars sooner. A share R of what forms returns at once (the IMF's measured
+             V / r, measured) where the gas is dense enough to collapse against the disc's shear (Toomre:
+             Sigma_crit = kappa sigma / 3.36 G, at Kennicutt's measured 0.7 of it). Below it the shear no longer
+             sets the pace: the gas collapses on its own free-fall time, which at fixed thickness goes as
+             Sigma^-1/2 - the Schmidt law Sigma^1.5, joined to the orbital law at the threshold: (Sigma / crit)^1/2.
+             The inner disc, turning faster, makes its stars sooner; the outer disc stays gas-rich. A share R of what forms returns at once (the IMF's measured
              return); the rest is locked away in stars, with the elements its gas held.
   CHANNELS   each element is made by channels that run on their own clocks (delay-time distributions, measured):
                ccsn     core-collapse supernovae of massive stars - prompt (within tens of Myr)
@@ -30,16 +34,26 @@ later, inside the galaxy, by stars that form from its gas - and it is carried, r
              running dry - and what reaches the bulge feeds the centre. At the disc's edge the gas beyond it drifts
              in, unenriched.
   WINDS      where star formation is dense enough (Heckman's threshold, measured) the supernovae blow a wind out of
-             the disc: the share of what is made that the excess drives leaves for the halo (outflow) - the early
-             inner disc loses much of what it makes; the quiet rim keeps it.
-  THE CENTRE what is made inside the bulge falls to the centre (blackhole.py): a share crosses the horizon - lost to
-             this universe, the seed of a child one - and the rest returns as the centre's outflow over an active
-             episode, enriching the bulge again.
+             the disc: the share of what is made that the excess drives rises into the halo - and the halo gives it
+             back: it cools and rains onto the disc over ~1 Gyr, where gas is falling in at the time (inside-out). Nothing leaves for good but
+             what crosses the horizon (and that passes on, into the child universe beyond it).
+  MODIFIED   matter is not only made but changed: stars burn hydrogen, making about two units of helium for every
+             unit of metals (dY/dZ ~ 2, measured), so hydrogen runs down as the metals rise - the Sun's hydrogen,
+             0.709 of its mass from the Big Bang's 0.752 (measured 0.715).
+  LUMPS      mergers are rare: a star's birth cloud holds the long-mixed share of what they made, and of the recent
+             share only what the events that actually struck its patch (~300 pc, ~100 Myr) gave - their number
+             Poisson about the expected (the merger rate x the stars its patch formed then), drawn from the seed.
+             Early, and at the thin rim, many stars are born with none of the heaviest and a few with a great deal;
+             by today the lumps have mixed smooth.
+  THE CENTRE what reaches the centre - the gas drifting all the way in, and what mixing carries inside the
+             innermost ring - falls into it (blackhole.py): a share crosses the horizon, lost to this universe, the
+             seed of a child one; the rest returns as the centre's outflow over an active episode, out past the bulge.
 
-CALIBRATION. The yields are set by one data point: the gas the Sun formed from (at R0, 4.57 Gyr before today) held
-the solar abundances. Each channel's yield is fixed so that it alone gives its measured share of each element there.
-Every other place and time - the gradient, the core's early enrichment, the rim's late, how far each element reached -
-is what the laws give. A universe with other initial conditions runs the same yields through its own history.
+CALIBRATION. The yields are set by the measured gas at the Sun's radius today (young B stars: the Cosmic Abundance
+Standard), one scale per channel from the element it dominates. The Sun itself is not put in: sun_birth() asks the
+model where, 4.57 Gyr ago, the gas matched the Sun's composition - and the answer is a finding (stars migrate). Every
+other place and time - the gradient, the core's early enrichment, the rim's late, how far each element reached - is
+what the laws give. A universe with other initial conditions runs the same yields through its own history.
 
 THE LEDGER. Nothing here is conserved from the Big Bang: the galaxy's metal mass grows as its stars make it, is
 locked in stars, flows out past the disc, falls to the centre, crosses the horizon. budget() books every term.
@@ -52,6 +66,10 @@ from typing import Any, Dict, List, Optional, Tuple
 DR_KPC = 0.5                    # ring width
 DT_GYR = 0.1                    # time step
 SIGMA_R0 = 50.0                 # Msun / pc^2: the disc's surface density at the Sun's radius (measured, Flynn 2006)
+GAS_SIGMA_KMS = 6.0             # the cold gas's velocity dispersion (measured)
+G_PC = 4.301e-3                 # G in pc Msun^-1 (km/s)^2
+TOOMRE_SHARE = 0.7              # gas forms stars per orbit where it holds above ~0.7 of Toomre's critical density
+                                # (Kennicutt 1989, measured); below it, on its own free-fall time
 PER_ORBIT = 0.017               # Sigma_SFR = 0.017 Sigma_gas Omega: a disc turns this share of its gas into stars per
                                 # radian of its orbit (Kennicutt 1998, measured)
 RETURNED = 0.4                  # the share of a stellar generation's mass its stars give back (Kroupa IMF, measured):
@@ -62,6 +80,11 @@ INFLOW_KMS = 1.0                # gas drifts inward through the disc as infall a
                                 # (Lacey & Fall 1985; measured and modelled 0.5-3 km/s): ~1 kpc a Gyr
 WIND_SFR = 100.0                # Msun / pc^2 / Gyr: star formation this dense drives a galactic wind out of the disc
                                 # (Heckman 2002: 0.1 Msun / yr / kpc^2, measured); the excess's share of what is made leaves
+HALO_RETURN_GYR = 1.0           # what winds lift into the halo cools and rains back over ~1 Gyr (wind recycling in a
+                                # galaxy of the Milky Way's mass: Oppenheimer & Dave 2008)
+X_PRIMORDIAL = 0.752            # hydrogen's mass share from the Big Bang (Y_p = 0.248, measured)
+DY_DZ = 2.0                     # helium made per unit of metals as stars burn hydrogen (measured, ~2)
+Z_SUN = 0.0142                  # the Sun's metal share by mass (Asplund 2009)
 RETURN_GYR = 0.1                # the centre's active episode: what it holds returns over ~100 Myr (blackhole.py)
 SUN_AGE_GYR = 4.57
 
@@ -69,7 +92,7 @@ CHANNEL_DELAY = {"ccsn": (0.0, 0.04), "ia": (0.04, 14.0), "agb": (0.1, 10.0), "m
 # each element's share by channel (the solar system's origins; the superheavies only by mergers)
 ORIGIN: Dict[str, Dict[str, float]] = {
     "C": {"ccsn": 0.5, "agb": 0.5}, "N": {"ccsn": 0.4, "agb": 0.6}, "O": {"ccsn": 1.0},
-    "Na": {"ccsn": 0.8, "agb": 0.2}, "Mg": {"ccsn": 1.0}, "Al": {"ccsn": 1.0},
+    "Na": {"ccsn": 0.8, "agb": 0.2}, "K": {"ccsn": 1.0}, "Mg": {"ccsn": 1.0}, "Al": {"ccsn": 1.0},
     "Si": {"ccsn": 0.7, "ia": 0.3}, "S": {"ccsn": 0.7, "ia": 0.3}, "Cl": {"ccsn": 0.8, "ia": 0.2},
     "Ca": {"ccsn": 0.7, "ia": 0.3}, "Ti": {"ccsn": 0.7, "ia": 0.3},
     "Fe": {"ccsn": 0.4, "ia": 0.6}, "Ni": {"ccsn": 0.4, "ia": 0.6}, "Cu": {"ccsn": 0.7, "ia": 0.3},
@@ -79,6 +102,15 @@ ORIGIN: Dict[str, Dict[str, float]] = {
     "AdL": {"merger": 1.0}, "mirror_glass": {"merger": 1.0},
 }
 PRIMORDIAL = ("H", "He", "He-3")
+# the gas at the Sun's radius today, measured in the young B stars near it (the Cosmic Abundance Standard: Nieva &
+# Przybilla 2012), in dex against the solar values (Asplund 2009); the mergers' share read from the young Cepheids'
+# europium (~solar: Luck & Lambert 2011). This is what the yields are set by: the Sun is then a prediction.
+ISM_TODAY_DEX = {"C": -0.10, "N": -0.04, "O": 0.07, "Mg": -0.04, "Si": -0.01, "Fe": 0.02, "Eu": 0.0}
+CALIBRATION = "ism_today"       # or "sun": the gas the Sun formed from
+MERGER_PER_MSUN = 2.0e-5        # neutron-star mergers per solar mass of stars formed (~1 per 5e4: the Galaxy's merger
+                                # rate over its star formation rate, measured)
+MIX_KPC = 0.3                   # how far turbulence spreads one event's matter before stars form from it (~300 pc
+MIX_GYR = 0.1                   # in ~100 Myr, measured)
 
 
 # ---------------------------------------------------------------------- the galaxy's laws, read from cosmos
@@ -153,6 +185,7 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
     metal = {(s, c): [0.0] * nr for s in syms for c in ORIGIN[s]}
     centre = {(s, c): 0.0 for s in syms for c in ORIGIN[s]}
     pools = {k: [[0.0] * len(SLOW_RETURN) for _ in range(nr)] for k in metal}
+    halo = {k: 0.0 for k in metal}
     r_edge = rings[-1][1]
     width = r_edge / 2.0                                                    # the extended disc: out to 1.5 x the optical
     r_mid = r_edge + width / 2.0
@@ -164,6 +197,7 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
     book = {"made": 0.0, "locked": 0.0, "outflow": 0.0, "horizon": 0.0, "returned": 0.0}
     hist_gas: List[List[float]] = []
     hist_metal: List[Dict[Tuple[str, str], List[float]]] = []
+    hist_merger: List[List[float]] = []
     for n in range(steps):
         t = n * DT_GYR
         for j in range(nr):
@@ -171,7 +205,10 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
                 inflow = _sigma_total(rings[j][2]) / tau[j] * math.exp(-(t - t1) / tau[j]) / norm[j]
                 gas[j] += inflow * DT_GYR
             omega = cosmos.V_FLAT_KMS / max(DR_KPC / 2.0, rings[j][2]) * 1.0227      # per Gyr (km/s/kpc -> 1/Gyr)
-            sfr = PER_ORBIT * stars * gas[j] * omega if gas[j] > 0 else 0.0
+            kappa_pc = math.sqrt(2.0) * cosmos.V_FLAT_KMS / max(DR_KPC / 2.0, rings[j][2]) / 1000.0  # km/s per pc
+            crit = TOOMRE_SHARE * kappa_pc * GAS_SIGMA_KMS / (3.36 * G_PC)
+            unstable = min(1.0, (gas[j] / crit) ** 0.5) if crit > 0 else 1.0     # below: its own free fall
+            sfr = PER_ORBIT * stars * gas[j] * omega * unstable if gas[j] > 0 else 0.0
             sfr = min(sfr, gas[j] / DT_GYR / (1.0 - RETURN_PROMPT))         # never more than the ring holds
             sfr_hist[j][n] = sfr
             taken = (1.0 - RETURN_PROMPT) * sfr * DT_GYR                   # into stars, net of what returns at once
@@ -196,10 +233,9 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
                     m_ = pools[key2][j][p_] * f
                     pools[key2][j][p_] -= m_
                     arr[j] += m_
-        # the disc's gas drifts inward, its metals with it; what reaches the bulge feeds the centre
+        # the disc's gas drifts inward, its metals with it; what drifts out of the innermost ring feeds the centre
         drift = min(0.5, INFLOW_KMS * 1.0227 * DT_GYR / DR_KPC)             # share of a ring's gas crossing inward
-        edge = len(bulge)
-        for j in range(edge, nr):
+        for j in range(0, nr):
             moved = gas[j] * drift
             if moved <= 0:
                 continue
@@ -207,12 +243,12 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
             for key2, arr in metal.items():
                 m_ = arr[j] * drift
                 arr[j] -= m_
-                if j - 1 < edge:
+                if j == 0:
                     book["horizon"] += m_ * blackhole.HORIZON_SHARE
                     centre[key2] += m_ * (1.0 - blackhole.HORIZON_SHARE)
                 else:
                     arr[j - 1] += m_
-            if j - 1 >= edge:
+            if j > 0:
                 gas[j - 1] += moved * area[j] / area[j - 1]
         # the extended gas beyond the disc: infall like the disc's, too thin to form stars, holding what mixing
         # carried past the edge - it drifts in across the edge with its own mix
@@ -246,28 +282,40 @@ def _run(key: Tuple[float, float, float]) -> Dict[str, Any]:
                     continue
                 book["made"] += made
                 if wind[j]:
-                    book["outflow"] += made * wind[j]                       # blown out of the disc
+                    halo[(s, c)] += made * wind[j]                          # lifted into the halo
                     made *= 1.0 - wind[j]
                 _spread(arr, made, j, lam[s][j], book, centre, (s, c), bulge, beyond)
             give = centre[(s, c)] * min(1.0, DT_GYR / RETURN_GYR)          # the centre gives back as its outflow,
             if give > 0:                                                    # out past the bulge it fell into
                 centre[(s, c)] -= give
                 book["returned"] += give
-                edge = len(bulge)
-                _spread(arr, give, edge, lam[s][edge], book, centre, (s, c), bulge, beyond)
+                b_edge = len(bulge)
+                _spread(arr, give, b_edge, lam[s][b_edge], book, centre, (s, c), bulge, beyond)
+        rain = min(1.0, DT_GYR / HALO_RETURN_GYR)                           # the halo rains back where gas falls in
+        infall_w = [area[j] * _sigma_total(rings[j][2]) / tau[j] * math.exp(-max(0.0, t - t1) / tau[j]) / norm[j]
+                    for j in range(nr)]                                     # now: inside-out, as the gas itself
+        infall_sum = sum(infall_w) or 1.0
+        for key2, arr in metal.items():
+            back = halo[key2] * rain
+            if back > 0:
+                halo[key2] -= back
+                book["rained"] = book.get("rained", 0.0) + back
+                for j in range(nr):
+                    arr[j] += back * infall_w[j] / infall_sum
+        hist_merger.append(list(out["merger"]))
         hist_gas.append(list(gas))
         hist_metal.append({k: list(v) for k, v in metal.items()})
     book["beyond"] = sum(beyond["metal"].values())
     return {"rings": rings, "area": area, "gas": hist_gas, "metal": hist_metal, "steps": steps, "book": book,
-            "centre": centre, "sfr": sfr_hist, "beyond": beyond, "pools": pools}
+            "centre": centre, "sfr": sfr_hist, "beyond": beyond, "pools": pools, "merger": hist_merger, "halo": halo}
 
 
 def _spread(arr: List[float], mass: float, j: int, lam: float, book: Dict[str, float],
             centre: Optional[Dict[Any, float]] = None, ckey: Any = None, bulge: Any = (),
             beyond: Optional[Dict[str, Any]] = None) -> None:
-    """Deposit what was made at ring j over its travel length, inward and outward (exp(-|dr| / lambda)): what lands
-    in the bulge falls to the centre (a share across the horizon), what lands past the disc joins the extended gas
-    beyond it."""
+    """Deposit what was made at ring j over its travel length, inward and outward (exp(-|dr| / lambda)): what is
+    carried inside the innermost ring falls to the centre (a share across the horizon), what lands past the disc
+    joins the extended gas beyond it."""
     from xylarium.kernel import blackhole
     nr = len(arr)
     q = math.exp(-DR_KPC / max(1e-6, lam))
@@ -280,11 +328,7 @@ def _spread(arr: List[float], mass: float, j: int, lam: float, book: Dict[str, f
     else:
         book["outflow"] += mass * outer / total
     for k in range(nr):
-        w = mass * q ** abs(k - j) / total
-        if k in bulge:
-            to_centre += w
-        else:
-            arr[k] += w
+        arr[k] += mass * q ** abs(k - j) / total
     if to_centre > 0:
         if centre is None:
             arr[0] += to_centre
@@ -311,15 +355,28 @@ def _snapshot(key: Tuple[float, float, float], t: float) -> Dict[str, Any]:
             "book": run["book"]}
 
 
-@functools.lru_cache(maxsize=1)
-def _calibration() -> Dict[Tuple[str, str], float]:
-    """Each channel's unit-yield concentration of each element in the Sun's birth gas: what sets the yields."""
-    snap = _snapshot(_key(None), _sun_birth())
+@functools.lru_cache(maxsize=4)
+def _calibration(mode: str = None) -> Dict[Tuple[str, str], float]:
+    """Each (element, channel)'s unit-yield concentration at the calibration point, divided by that channel's yield
+    scale: relative() divides by it.
+      ism_today  the measured gas at R0 today (ISM_TODAY_DEX). One yield scale per channel, solved from the element
+                 it dominates: core-collapse from oxygen, Type Ia from iron (with core-collapse's share), the giants
+                 from nitrogen, mergers from europium; carbon, magnesium and silicon are left as checks.
+      sun        the gas the Sun formed from, every element at its solar value (the old calibration)."""
+    mode = mode or CALIBRATION
+    if mode == "sun":
+        snap = _snapshot(_key(None), _sun_birth())
+        j = _ring_of(snap["rings"], _r0())
+        return {k: arr[j] / max(1e-30, snap["area"][j] * snap["gas"][j]) for k, arr in snap["metal"].items()}
+    snap = _snapshot(_key(None), cosmos_today())
     j = _ring_of(snap["rings"], _r0())
-    out = {}
-    for k, arr in snap["metal"].items():
-        out[k] = arr[j] / max(1e-30, snap["area"][j] * snap["gas"][j])
-    return out
+    g = snap["area"][j] * snap["gas"][j]
+    t = {e: 10 ** v for e, v in ISM_TODAY_DEX.items()}
+    k = {"ccsn": t["O"]}
+    k["ia"] = (t["Fe"] - ORIGIN["Fe"]["ccsn"] * k["ccsn"]) / ORIGIN["Fe"]["ia"]
+    k["agb"] = (t["N"] - ORIGIN["N"]["ccsn"] * k["ccsn"]) / ORIGIN["N"]["agb"]
+    k["merger"] = t["Eu"]
+    return {key: arr[j] / max(1e-30, g) / k[key[1]] for key, arr in snap["metal"].items()}
 
 
 def _r0() -> float:
@@ -331,26 +388,32 @@ def _ring_of(rings: List[Tuple[float, float, float]], r: float) -> int:
     return max(0, min(len(rings) - 1, int(r / DR_KPC)))
 
 
-def relative(seed: Any, sym: str, r: float, t: float) -> float:
+def relative(seed: Any, sym: str, r: float, t: float, lump: float = 1.0) -> float:
     """An element's abundance in the gas at radius r and epoch t, relative to the Sun's birth gas (1 there): what a
     star and its worlds born there and then are made of. Primordial matter is 1 everywhere."""
     base = sym.split("-")[0] if sym not in ORIGIN else sym
+    if sym in ("H", "He"):                                          # burned and made as the metals rise
+        z = metals(seed, r, t) * Z_SUN
+        if sym == "H":
+            return (X_PRIMORDIAL - (1.0 + DY_DZ) * z) / (X_PRIMORDIAL - (1.0 + DY_DZ) * Z_SUN)
+        y0 = 1.0 - X_PRIMORDIAL
+        return (y0 + DY_DZ * z) / (y0 + DY_DZ * Z_SUN)
     if sym in PRIMORDIAL or base not in ORIGIN:
         return 1.0
     snap = _snapshot(_key(seed), t)
     j = _ring_of(snap["rings"], r)
-    cal = _calibration()
+    cal = _calibration(CALIBRATION)
     g = snap["gas"][j] * snap["area"][j]
     if g <= 0:
         return 0.0
     tot = 0.0
     for c, f in ORIGIN[base].items():
         conc = snap["metal"][(base, c)][j] / g
-        tot += f * conc / max(1e-30, cal[(base, c)])
+        tot += f * conc / max(1e-30, cal[(base, c)]) * (lump if c == "merger" else 1.0)
     return tot
 
 
-def of_good(seed: Any, sym: str, r: float, t: float) -> float:
+def of_good(seed: Any, sym: str, r: float, t: float, lump: float = 1.0) -> float:
     """A good's abundance relative to the Sun's birth gas: an element's own; a compound's, its scarcest constituent's
     (beyond the primordial hydrogen)."""
     from xylarium.kernel import substances
@@ -358,8 +421,30 @@ def of_good(seed: Any, sym: str, r: float, t: float) -> float:
     if not parts:
         return 1.0
     if sym in ORIGIN:
-        return relative(seed, sym, r, t)
-    return min(relative(seed, x, r, t) for x in parts)
+        return relative(seed, sym, r, t, lump)
+    return min(relative(seed, x, r, t, lump) for x in parts)
+
+
+def rprocess_lump(seed: Any, r: float, t: float, u: float) -> float:
+    """The share of the mergers' smooth expectation a star's birth cloud holds, for its own draw u (0 .. 1): the
+    long-mixed part, plus the recent part scaled by how many events actually struck its patch (Poisson)."""
+    run = _run(_key(seed))
+    n = max(0, min(run["steps"] - 1, int(round(t / DT_GYR))))
+    j = _ring_of(run["rings"], r)
+    held = run["metal"][n].get(("U", "merger"), [0.0])[j]
+    if held <= 0:
+        return 0.0 if run["merger"][n][j] <= 0 else 1.0
+    recent = min(1.0, run["merger"][n][j] * (MIX_GYR / DT_GYR) / held)
+    formed = run["sfr"][j][n] * math.pi * (MIX_KPC * 1000.0) ** 2 * MIX_GYR          # Msun in its patch, then
+    expect = MERGER_PER_MSUN * formed
+    if expect <= 0:
+        return 1.0 - recent
+    k, p, cum = 0, math.exp(-expect), math.exp(-expect)
+    while u > cum and k < 1000:                                               # Poisson by its inverse
+        k += 1
+        p *= expect / k
+        cum += p
+    return (1.0 - recent) + recent * k / expect
 
 
 def metals(seed: Any, r: float, t: float) -> float:
@@ -387,9 +472,10 @@ def gradient(seed: Any, sym: str, t: float, r_in: float = 4.0, r_out: float = 14
 
 
 def budget(seed: Any) -> Dict[str, float]:
-    """Where the metals made over the galaxy's history went, as shares of what was made (unit yields): in its gas,
-    in its stars (locked, or in giants still to give back), blown out by winds, across the horizon, held at the
-    centre, in the extended gas past the disc. The shares close: nothing is lost that is not booked."""
+    """Where the metals made over the galaxy's history are now, as shares of what was made (unit yields): in its
+    gas, in its stars (locked, or in giants still to give back), in the halo (lifted by winds, raining back), passed
+    across the horizon to the child universe, held at the centre, in the extended gas past the disc. The shares
+    close: everything is somewhere in the flow."""
     run = _run(_key(seed))
     snap = _snapshot(_key(seed), (run["steps"] - 1) * DT_GYR)            # the run's own end: its books are its whole
     made = run["book"]["made"] or 1.0
@@ -397,5 +483,23 @@ def budget(seed: Any) -> Dict[str, float]:
     held = sum(run["centre"].values())
     giving = sum(sum(sum(p_) for p_ in rings_) for rings_ in run["pools"].values())     # in giants, still to return
     return {"made": 1.0, "gas": in_gas / made, "locked": (run["book"]["locked"] + giving) / made,
-            "outflow": run["book"]["outflow"] / made, "horizon": run["book"]["horizon"] / made,
+            "halo": sum(run["halo"].values()) / made, "horizon": run["book"]["horizon"] / made,
             "centre": held / made, "beyond": sum(run["beyond"]["metal"].values()) / made}
+
+
+SUN_CHECK = ("C", "N", "O", "Mg", "Si", "Fe", "U")     # the Sun's composition, solar by definition (0 dex)
+
+
+def sun_birth(seed: Any = None) -> Dict[str, Any]:
+    """Where in the disc, 4.57 Gyr before today, the gas matched the Sun's composition: the radius whose gas lies
+    nearest to solar across C, N, O, Mg, Si, Fe and the mergers' uranium (rms of the dex differences). Returns the
+    best radius, its rms, each element there, and the rms at every radius."""
+    t = cosmos_today() - SUN_AGE_GYR
+    curve = []
+    for _, _, m in _rings():
+        dex = {s_: math.log10(max(1e-30, relative(seed, s_, m, t))) for s_ in SUN_CHECK}
+        rms = math.sqrt(sum(v * v for v in dex.values()) / len(dex))
+        curve.append((m, rms, dex))
+    best = min(curve, key=lambda c: c[1])
+    return {"r_kpc": best[0], "rms_dex": best[1], "dex": best[2], "curve": [(m, rms) for m, rms, _ in curve]}
+

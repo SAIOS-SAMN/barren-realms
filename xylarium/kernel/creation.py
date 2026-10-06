@@ -111,7 +111,7 @@ def _disc_mass(L: Any, slot: Dict[str, Any], z: float, a1: float, a2: float) -> 
 
 def _composition(L: Any, slot: Dict[str, Any], r: float, a_mid: float, z: float) -> Tuple[str, Dict[str, float]]:
     """What a belt is made of: the solids that condensed where it formed - metal and silicate everywhere, each ice
-    beyond its own line (worlds.condensed); the heaviest elements as the galaxy spread them (cosmos.abundance)."""
+    beyond its own line (worlds.condensed); the heaviest elements as the galaxy made and spread them (enrichment.py)."""
     from xylarium.kernel import worlds as W
     s = W.star_of(slot["spec"], L)
     t_form = W.T_UNIT * (s["lum"] / max(1e-6, a_mid) ** 2) ** 0.25
@@ -293,11 +293,10 @@ def _formed_share_ours(r: float, t: float) -> float:
 
 
 def metals_at(seed: int, r: float, t: float) -> float:
-    """Metallicity (solar = 1) of gas at radius r and epoch t: today's measured gradient, scaled by the share of the
-    ring's stars made by then over the share made by today in ours (the age-metallicity relation)."""
-    today = _formed_share_ours(r, TODAY_GYR)
-    # more baryons, more stars, more of the gas processed into metals (declared: metals scale with the stars made)
-    return _disc().metals(r) * formed_share(seed, r, t) / max(1e-9, today) * big_bang(seed)["stars"]
+    """Metallicity (relative to the Sun's birth gas) of the gas at radius r and epoch t: what the galaxy's own stars
+    had made, carried and kept there by then (enrichment.py)."""
+    from xylarium.kernel import enrichment
+    return enrichment.metals(seed, r, t)
 
 
 # ---------------------------------------------------------------------- a cell
@@ -407,13 +406,15 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
             continue
         born = first_stars(seed) + rng.expovariate(1.0 / infall_gyr(seed, r))
         z = metals_at(seed, r, born)
+        from xylarium.kernel import enrichment
+        rlump = enrichment.rprocess_lump(seed, r, born, _rng(seed, "rprocess", i, j, k).random())
         mass = imf(rng.random(), z, born, L, r)          # Kroupa, its break at its cloud's Jeans mass
         binary = rng.random() < BINARY_SHARE
         companion = mass * (0.1 + 0.9 * rng.random()) if binary else 0.0     # mass ratios flat (Raghavan 2010)
         star_type = _star(mass, binary, L)
         spec = _spec(mass, companion, L)
         sec = SimpleNamespace(star=spec, star_type=star_type)
-        slot.update({"star": star_type, "spec": spec, "born": round(born, 6), "z": round(z, 4),
+        slot.update({"star": star_type, "spec": spec, "born": round(born, 6), "z": round(z, 4), "rlump": round(rlump, 4),
                      "mass": float(physics.star(sec)["mass"])})
         from xylarium.kernel import geometry
         vr = _rng(seed, "vertical", i, j, k)             # its orbit through the disc's plane, heated as it ages
@@ -424,6 +425,25 @@ def cell(seed: int, i: int, j: int) -> List[Dict[str, Any]]:
         out.append(slot)
     _CACHE[key] = out
     return out
+
+
+def analogue(seed: Any, r: float, born: float, mass: float = 1.0, draw: int = 0) -> Dict[str, Any]:
+    """A star of a given mass born at radius r and epoch born, its worlds made from that gas exactly as any cell's
+    are (worlds.form, worlds.build) - nothing about any real system put in. draw picks one of its possible histories
+    (the luck of collisions, its orbits)."""
+    from types import SimpleNamespace
+    from xylarium.kernel import enrichment, physics
+    L = laws(seed)
+    z = enrichment.metals(seed, r, born)
+    rlump = enrichment.rprocess_lump(seed, r, born, _rng(seed, "analogue-r", draw).random())
+    spec = _spec(mass, 0.0, L)
+    star_type = _star(mass, False, L)
+    sec = SimpleNamespace(star=spec, star_type=star_type)
+    slot: Dict[str, Any] = {"k": draw, "r": round(r, 4), "star": star_type, "spec": spec, "born": round(born, 6),
+                            "z": round(z, 4), "rlump": round(rlump, 4), "mass": float(physics.star(sec)["mass"])}
+    rng = _rng(seed, "analogue", draw)
+    slot["worlds"] = _worlds(seed, L, -1, -1, draw, slot, sec, r, z, born, rng)
+    return slot
 
 
 def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec: Any, r: float, z: float,
@@ -438,6 +458,8 @@ def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec
     from xylarium.kernel.universe import _deposits_for
     cosmos = _disc()
     spec = sec.star
+    if z <= 0:
+        return []                                         # gas no star had enriched yet: no solids, no worlds
     env = cosmos.density(r)
     star_kg = float(_F(spec["mass"])) * interior.M_SUN_KG
     laid = physics.lay_out_system(sec, rng.randint(*SYSTEM_PLANETS), rng)
@@ -456,9 +478,9 @@ def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec
                         born=born, orbit=orbit, core=mm["layers"]["core"] / max(1e-9, 1.0 - mm["layers"]["envelope"]))
         ptype = W.label(state)
         deps = _deposits_for(ptype, wrng)
-        for el in deps:
-            enrich = 1.0 if el in PRIMORDIAL else z / max(1e-9, cosmos.metals(r))   # made by then, over today
-            deps[el] = int(round(deps[el] * cosmos.abundance(el, r) * enrich))
+        from xylarium.kernel import enrichment
+        for el in deps:                                   # what its birth gas held, against the Sun's (enrichment.py)
+            deps[el] = int(round(deps[el] * enrichment.of_good(seed, el, r, born, slot.get("rlump", 1.0))))
         media = W.media(seed, spec, a_au, mm["radius"], mm["mass"], mm["giant"], z, r, SETTLED_GYR, world=state)
         rec = {"q": body["q"], "body": body, "type": ptype, "deposits": deps, "ices": mm["ices"],
                "layers": {kk: round(v, 4) for kk, v in mm["layers"].items()},
