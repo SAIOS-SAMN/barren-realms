@@ -6,7 +6,7 @@ computed for each world and each people.
 | Kind | What it is | Examples | May it be a constant? |
 |---|---|---|---|
 | **Ruler** | a unit of measure; changing it changes no outcome | the AU, an Earth mass and area, a standard year (100 cycles), a solar luminosity, the energy unit (EU), a person's ruler draw of energy (`energy.PERSON_EU`), the knowledge unit, money units | yes |
-| **Universal law** | true everywhere | Stefan-Boltzmann, Kepler, Lanchester, Wright's learning curve (progress ratio), Landauer, conservation, an iron core's conduction share (`harvest.CONDUCTION_SHARE`) | yes |
+| **Universal law** | true everywhere | Stefan-Boltzmann, Kepler, Lanchester, Wright's learning curve (progress ratio), Landauer, conservation | yes |
 | **World fact** | follows from one world's physics | its light, temperature, core heat flow, **dynamo margin** (`harvest.dynamo_margin`: conduction against convection, ~ m^-1/3 / heat), atmosphere, crust | no - computed per world |
 | **People's outcome** | follows from a people's biology, world and choices | **energy need** (industry share x efficiency at its own energy knowledge + the thermal gap of its worlds), **what it burns** (fire only where a biosphere made an oxidiser), **its generation** (its strategy's fertility ceiling, at its substrate's pace), **its planning horizon** (its generation over its minds' noise), its aggression, its intelligence | no - derived, then measured |
 

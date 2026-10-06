@@ -97,7 +97,8 @@ def _build() -> Dict[str, Dict[str, Any]]:
 TABLE = _build()
 RETENTION = 6.0                 # escape energy x A / T (Earth = 1, 1, 1) a world needs to keep an element:
                                 # Earth keeps water (A 18) and loses helium (A 3) and hydrogen (A 1)
-DEPOSIT_UNIT = 20               # units per decade of cosmic abundance, per Earth crust
+PURE_UNITS = 500                # units an Earth-sized crust lays down of matter all of one kind: the deposit ruler
+                                # (a deposit holds PURE_UNITS x its standing grade, concentration.py)
 REGIONAL = [1 / 2, 2 / 3, 3 / 4, 7 / 8, 1, 9 / 8, 5 / 4, 3 / 2]
 FOUND = 1                       # periods every people knows from its first fire and first tool (line <= FOUND)
 
@@ -146,9 +147,13 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
     depth = ladder(sector)
     held: Dict[str, int] = {}
     why: Dict[str, str] = {}
-    from xylarium.kernel import substances
+    from xylarium.kernel import concentration, substances
     deep = substances.deep_mantle(mass, radius) and not giant
     living = _carbon_water_life(kernel, planet)
+    try:
+        flows = concentration.of_planet(kernel, planet)        # what the world's own flows gather
+    except Exception:
+        flows = concentration.channels({}, [], living)
     for sym, e in TABLE.items():
         if e["origin"] == "stellar":
             why[sym] = "stellar"                           # a star's matter, not a world's
@@ -180,8 +185,9 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
             held[sym] = 5                                  # below any crust: only what eruptions bring up
             continue
         size = math.sqrt(min(mass, 400.0))                 # a crust's reach grows with the world, not its whole mass
-        units = DEPOSIT_UNIT * max(0.0, math.log10(e["abund"]) + 3) * size * reach * region_weight(sector, e["family"])
-        held[sym] = max(5, int(units))                     # where it survives, a trace is always there to find
+        g = concentration.grade(concentration.dispersed(sym), concentration.strength(sym, flows))
+        units = PURE_UNITS * g * size * reach * region_weight(sector, e["family"])
+        held[sym] = max(1, int(units))                     # where it survives, a trace is always there to find
     return held, why
 
 
@@ -221,6 +227,7 @@ def survey(kernel: Any) -> None:
                     p.element_deposits.pop(sym, None)
             p.society["chem_surveyed"] = True
             p.society["withheld"] = why
+            p.society["standing"] = {k: v for k, v in held.items()}      # what its flows hold up (concentration.py)
             st["surveyed"] += 1
 
 

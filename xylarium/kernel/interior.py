@@ -232,6 +232,7 @@ def evolve(mass: float, radius: float, core: float, inv: Dict[str, float], age: 
     field = 0.0 if m_core <= 0 or q_ad <= 0 else max(0.0, min(1.0, q_cmb_area / q_ad - 1.0))
     return {"t_int": round(t_int, 1), "t_core": round(t_core, 1), "q": q, "q_rad": q_rad, "q_sec": q_sec,
             "q_tide": q_tide, "q_cmb": q_cmb_area, "q_ad": q_ad, "field": round(field, 3), "processed": processed,
+            "r_core": r_core,
             "heat_w": q * area, "flux_units": q / FLUX_UNIT_W}
 
 

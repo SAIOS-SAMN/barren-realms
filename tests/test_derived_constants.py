@@ -20,11 +20,17 @@ class Body:
 
 class TestDerived(unittest.TestCase):
     def test_each_core_sets_its_own_dynamo_margin(self):
-        earth = harvest.dynamo_margin(Body(1))
-        self.assertAlmostEqual(earth, 0.4, places=2)
-        self.assertEqual(harvest.dynamo_margin(Body(0.107)), 0.0)                     # Mars-sized: already dead
-        self.assertGreater(harvest.dynamo_margin(Body(1, "VOLCANIC")), earth)         # a hotter core spares more
-        self.assertGreater(harvest.dynamo_margin(Body(5)), earth)                     # a larger one too
+        from xylarium.kernel import cosmos, hydromagnetics, physics, worlds
+
+        def world(age, mass=1.0, radius=1.0):
+            return worlds.build(None, dict(physics.star_for("G-class")), 1.0, radius, mass, False, 0.0142,
+                                cosmos.R0_KPC, age)
+        now = world(4.57)
+        m = hydromagnetics.margin(now)
+        self.assertAlmostEqual(m, 1.0 - now["q_ad"] / now["q_cmb"], places=9)   # the core's own: 1 - q_ad / q_cmb
+        self.assertGreater(m, 0.0)
+        self.assertGreater(hydromagnetics.margin(world(1.0)), m)                # a young, hotter core spares more
+        self.assertEqual(hydromagnetics.margin({"q_cmb": 0.01, "q_ad": 0.02}), 0.0)   # conducting: no dynamo to spare
 
     def test_a_peoples_generation_follows_its_strategy_and_its_pace(self):
         self.assertLess(fertility.generation_years("r"), fertility.generation_years("K"))

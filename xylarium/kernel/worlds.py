@@ -389,6 +389,7 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
     return {"flux": flux, "t_form": round(t_form, 1), "t_surf": round(t_surf, 1), "p_bar": p_bar, "air": air,
             "seas": seas, "ices": ices, "heat": heat, "q": inside["q"], "q_tide": inside["q_tide"],
             "t_int": inside["t_int"], "field": round(field, 3), "giant": giant, "mass": mass, "radius": radius,
+            "q_cmb": inside.get("q_cmb", 0.0), "q_ad": inside.get("q_ad", 0.0), "r_core": inside.get("r_core", 0.0),
             "melted": melted, "processed": inside["processed"], "degassed": out, "wind": wind, "t_exo": t_exo,
             "escaped": round(1.0 - sum(gas.values()) / held0, 6) if held0 > 0 else 0.0,
             "air_escaped": round(max(0.0, 1.0 - p_bar / air0), 6) if air0 > 0 else 0.0,

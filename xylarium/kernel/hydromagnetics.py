@@ -1,0 +1,140 @@
+"""
+Xylarium hydromagnetics: conducting fluids and fields order one another - the syntropic half of a world's physics
+that thermodynamics alone leaves out.
+
+A core convects because it loses heat faster than its iron can conduct along its own adiabat (interior.py). That
+convection, in a conductor, builds and holds a field: ordered structure kept by a flow that would otherwise only run
+down. The field in turn shapes what reaches the world - its star's wind and the galaxy's cosmic rays - and so what
+its surface keeps, and what its living erase or keep.
+
+  DYNAMO       runs while q_cmb > q_ad (interior.py). The share of the core's heat flow that can be drawn off before
+               it stalls is 1 - q_ad / q_cmb: a world's own margin, nothing declared.
+  FIELD        the power-based scaling of planetary dynamos (Christensen & Aubert 2006): field in the core grows as the
+               cube root of the convective power (the excess flux x core radius); the dipole at the surface falls as
+               (r_core / R)^3. In units of the unit world's own, computed by the same physics (a ruler, not a target).
+  STANDOFF     where the field's pressure meets the star's wind (Chapman-Ferraro): r_mp / R = (B^2 / 2 mu0 P)^(1/6),
+               ruled by the unit world's measured ten radii. The wind's pressure at a world: its star's activity now
+               over the square of its distance (flux over luminosity).
+  EXPOSURE     the share of a world's sky the wind reaches: (R / r_mp)^2 - all of it where there is no field.
+  DOSE         particles reaching the surface: the star's (its wind's pressure x exposure) and the galaxy's cosmic rays
+               (rising with the stellar density where the world circles: supernovae make them), the field turning
+               away the cosmic rays below its cutoff (Stormer: cutoff rises with the moment over r^2; the spectrum
+               falls as rigidity^-1.7 above it), the air absorbing both by its column (nuclear attenuation length).
+               In units of the unit world's own dose. This is what the living's erasure reads.
+"""
+
+import functools
+import math
+from typing import Any, Dict, Optional
+
+EARTH_STANDOFF_R = 10.1         # the unit world's measured magnetopause, in its radii (subsolar, quiet wind)
+CR_SPECTRUM = 1.7               # integral cosmic-ray spectrum's fall with rigidity above the cutoff (measured)
+EARTH_CUTOFF_GV = 6.0           # the unit world's surface-averaged geomagnetic cutoff rigidity (measured)
+CR_MEDIAN_GV = 4.0              # median rigidity of the galactic cosmic rays at a quiet star's distance (measured)
+COLUMN_PER_BAR = 1033.0         # g/cm^2 of air over each bar at the unit world's gravity
+ATTENUATION = 160.0             # g/cm^2: nuclear attenuation length of cosmic-ray secondaries in air (measured)
+
+
+def margin(w: Dict[str, Any]) -> float:
+    """The share of a core's heat flow that can be drawn off before its dynamo stalls (0 with no dynamo)."""
+    q_cmb, q_ad = float(w.get("q_cmb") or 0.0), float(w.get("q_ad") or 0.0)
+    if q_cmb <= 0 or q_ad <= 0 or q_cmb <= q_ad:
+        return 0.0
+    return 1.0 - q_ad / q_cmb
+
+
+@functools.lru_cache(maxsize=1)
+def _unit() -> Dict[str, Any]:
+    """The unit world (unit mass and radius at a unit star's distance and age) - the rulers' own world."""
+    from xylarium.kernel import cosmos, physics, worlds
+    return worlds.build(None, dict(physics.star_for("G-class")), 1.0, 1.0, 1.0, False, 0.0142, cosmos.R0_KPC, 4.57)
+
+
+def _power(w: Dict[str, Any]) -> float:
+    q_cmb, q_ad, r = float(w.get("q_cmb") or 0.0), float(w.get("q_ad") or 0.0), float(w.get("r_core") or 0.0)
+    return max(0.0, q_cmb - q_ad) * r
+
+
+def moment(w: Dict[str, Any]) -> float:
+    """The world's dipole moment, in the unit world's: core field (convective power)^(1/3) x core volume."""
+    u = _unit()
+    pu, ru = _power(u), float(u.get("r_core") or 0.0)
+    p, r = _power(w), float(w.get("r_core") or 0.0)
+    if p <= 0 or r <= 0 or pu <= 0 or ru <= 0:
+        return 0.0
+    return (p / pu) ** (1.0 / 3.0) * (r / ru) ** 3
+
+
+def surface_field(w: Dict[str, Any]) -> float:
+    """Dipole field at the surface, in the unit world's: moment over radius cubed."""
+    radius = max(1e-6, float(w.get("radius") or 1.0))
+    return moment(w) / radius ** 3
+
+
+def wind_pressure(w: Dict[str, Any], activity: float = 1.0, luminosity: float = 1.0) -> float:
+    """The star's wind pressure at the world, in the unit world's: activity x flux / luminosity (1 / a^2)."""
+    return max(0.0, activity) * float(w.get("flux") or 0.0) / max(1e-9, luminosity)
+
+
+def standoff(w: Dict[str, Any], pressure: float = 1.0) -> float:
+    """Where the field holds off the wind, in the world's radii (0: no field, the wind reaches the air)."""
+    b = surface_field(w)
+    if b <= 0:
+        return 0.0
+    return EARTH_STANDOFF_R * (b * b / max(1e-12, pressure)) ** (1.0 / 6.0)
+
+
+def exposure(w: Dict[str, Any], pressure: float = 1.0) -> float:
+    """The share of the world's sky its star's wind reaches."""
+    r = standoff(w, pressure)
+    return 1.0 if r <= 1.0 else 1.0 / (r * r)
+
+
+def _gcr_through_field(w: Dict[str, Any]) -> float:
+    radius = max(1e-6, float(w.get("radius") or 1.0))
+    cutoff = EARTH_CUTOFF_GV * moment(w) / radius ** 2
+    return (1.0 + cutoff / CR_MEDIAN_GV) ** (-CR_SPECTRUM)
+
+
+def _through_air(w: Dict[str, Any]) -> float:
+    g = max(1e-6, float(w.get("g") or 1.0))
+    column = COLUMN_PER_BAR * float(w.get("p_bar") or 0.0) / g
+    return math.exp(-column / ATTENUATION)
+
+
+def _dose_raw(w: Dict[str, Any], pressure: float, galactic: float) -> float:
+    stellar = pressure * exposure(w, pressure)
+    cosmic = galactic * _gcr_through_field(w)
+    return (stellar + cosmic) * _through_air(w)
+
+
+def dose(w: Dict[str, Any], pressure: float = 1.0, galactic: float = 1.0) -> float:
+    """Particles reaching the surface, in the unit world's dose. galactic: cosmic-ray flux where the world circles
+    (cosmos.density - supernovae make them), 1 at the unit radius."""
+    u = _dose_raw(_unit(), 1.0, 1.0)
+    return _dose_raw(w, pressure, galactic) / max(1e-12, u)
+
+
+# ---------------------------------------------------------------------- a world on the board
+def of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
+    """A world's hydromagnetic state now: its dynamo's margin, surface field, magnetopause, the share of its sky its
+    star's wind reaches, and the dose reaching its surface."""
+    from xylarium.kernel import cosmos, physics, worlds
+    w = worlds.state_of_planet(kernel, planet)["world"]
+    sec = kernel.sectors.get(planet.sector_id) if kernel is not None else None
+    star = physics.star(sec) if sec is not None else {"mass": 1, "luminosity": 1}
+    lum = float(star.get("luminosity", 1) or 1)
+    try:
+        act = worlds.activity(float(star.get("mass", 1)), worlds.world_age(kernel, planet))
+        act0 = worlds.activity(1.0, 4.57)
+        act = act / max(1e-12, act0)
+    except Exception:
+        act = 1.0
+    p = wind_pressure(w, act, lum)
+    galactic = 1.0
+    if kernel is not None and cosmos.is_cosmic(kernel):
+        g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {})
+        if g.get("r") is not None:
+            galactic = cosmos.density(float(g["r"]))
+    return {"margin": round(margin(w), 4), "field": round(surface_field(w), 4), "standoff": round(standoff(w, p), 2),
+            "exposure": round(exposure(w, p), 4), "dose": round(dose(w, p, galactic), 4)}

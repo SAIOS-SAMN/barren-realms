@@ -230,14 +230,21 @@ def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any], swell: Opti
             deposits["ORE"] += grow
             matter.source("tectonic_renewal", "ORE", grow)
             st["renewed"] += grow
+    _rebuild(kernel, p, season)
     flux = w["flux"]
     area = w["area"]
-    # Solar-wind He-3 into airless regolith
+    # Solar-wind He-3 into airless regolith - where the wind reaches the ground: a field holds it off
+    # (hydromagnetics.exposure: all of it on a world without one)
     if w["airless"]:
         cap3 = HE3_REGOLITH_PER_AREA * area
         have = deposits.get("He-3", 0)
         if have < cap3:
-            add = int(HE3_IMPLANT_PER_YEAR * flux * area * season * (1.0 - have / cap3))
+            from xylarium.kernel import hydromagnetics
+            try:
+                reach_wind = hydromagnetics.of_planet(kernel, p)["exposure"]
+            except Exception:
+                reach_wind = 1.0
+            add = int(HE3_IMPLANT_PER_YEAR * flux * area * season * reach_wind * (1.0 - have / cap3))
             if add > 0:
                 deposits["He-3"] = have + add
                 matter.source("solar_wind", "He-3", add)
@@ -262,6 +269,35 @@ def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any], swell: Opti
                 deposits[v] = deposits.get(v, 0) + outgas_v
                 matter.source("outgassing", v, outgas_v)
                 st["outgassed"] += outgas_v
+
+
+def _rebuild(kernel: Any, p: Any, season: float) -> None:
+    """A taken deposit is rebuilt toward its standing grade at the pace of the flows that gathered it
+    (concentration.py): the unit world's tectonic pace times how strongly its flows gather that element. Where the
+    flows have stopped, nothing comes back."""
+    standing = p.society.get("standing")
+    if not standing:
+        return
+    from xylarium.kernel import concentration
+    try:
+        flows = concentration.of_planet(kernel, p)
+    except Exception:
+        return
+    carry = p.society.setdefault("rebuild_carry", {})
+    deposits = p.element_deposits
+    for sym, cap in standing.items():
+        have = int(deposits.get(sym, 0))
+        if have >= cap:
+            continue
+        k = concentration.strength(sym, flows)
+        if k <= 0:
+            continue
+        exact = (cap - have) * TECTONIC_RENEWAL_PER_YEAR * k * season + carry.get(sym, 0.0)
+        grow = int(exact)
+        carry[sym] = exact - grow
+        if grow > 0:
+            deposits[sym] = have + grow
+            matter.source("concentration", sym, grow)
 
 
 def _decay(store: Dict[str, int], elem: str, share: float, carry: Dict[str, float], label: str,

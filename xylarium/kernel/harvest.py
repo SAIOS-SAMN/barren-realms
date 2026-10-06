@@ -42,7 +42,6 @@ ORE_PER = {"field": 2, "tap": 4, "array": 6}
 FIELD_AREA = 1e-4                  # of an Earth's surface
 ARRAY_MODULE_AREA = 1e-5           # of an Earth's surface
 CORE_TAP_SHARE = 0.05              # of the core's heat flow a tap draws
-CONDUCTION_SHARE = 0.6             # of an iron core's heat flow its conduction carries at an Earth's size and heat
 AREA_RATIO = 1.8e-9                # (Earth's radius / 1 AU)^2: an Earth's area as a share of the 1 AU sphere
 NOUN = {"field": "sunfields", "tap": "core bores", "array": "orbital array"}
 MAKE = {"biotic": "grown", "mineral": "forged", "plasmic": "woven", "cryogenic": "frozen", "umbral": "shadowed"}
@@ -139,14 +138,14 @@ def field_output(kernel: Any, planet: Any, eff: float) -> float:
     return fl * FIELD_AREA * energy.TERRA_INSOLATION * eff * day
 
 
-def dynamo_margin(planet: Any) -> float:
-    """The share of a rocky world's core heat flow it can lose before its dynamo stalls (its own core's physics)."""
-    from xylarium.kernel import geology, physics
+def dynamo_margin(planet: Any, kernel: Any = None) -> float:
+    """The share of a rocky world's core heat flow it can lose before its dynamo stalls: 1 - q_ad / q_cmb, its own
+    core's (hydromagnetics.py, from interior.py)."""
+    from xylarium.kernel import geology, hydromagnetics, ledger, worlds
     if not geology.rocky(planet):
         return 0.0
-    m = max(1e-6, float(physics.body(planet).get("mass", 1)))
-    hotness = geology.heat(planet) / m                         # 2 on a volcanic world, 1 otherwise
-    return max(0.0, 1.0 - CONDUCTION_SHARE * m ** (-1.0 / 3.0) / hotness)
+    k = kernel if kernel is not None else ledger.active_kernel()
+    return hydromagnetics.margin(worlds.state_of_planet(k, planet)["world"])
 
 
 def tap_output(planet: Any, eff: float) -> float:
@@ -332,7 +331,7 @@ def _cores(kernel: Any) -> List[str]:
             soc = p.society
             if not taps and soc.get("dynamo", 1.0) >= 1.0:
                 continue
-            margin = dynamo_margin(p)
+            margin = dynamo_margin(p, kernel)
             if margin <= 0:
                 continue                                     # no dynamo to stall: its core was quiet before anyone bored it
             stress = taps * CORE_TAP_SHARE
