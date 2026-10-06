@@ -243,6 +243,19 @@ def _reckon(kernel: Any, planet: Any, metabolism: Optional[str], tier: int, habs
     return prof
 
 
+def open_share(kernel: Any, planet: Any) -> float:
+    """The share of a world's people living under its open sky rather than in what it has built over itself (its
+    habitats): its natural capacity over natural and enclosed together."""
+    try:
+        ld = land(kernel, planet)
+    except Exception:
+        return 1.0
+    natural = float(ld["area"] * ld["chemistry"] * ld["light"] * ld["season"])
+    enclosed = float(_HAB_AREA) * float(getattr(planet, "habitats", 0) or 0)
+    total = natural + enclosed
+    return natural / total if total > 0 else 0.0
+
+
 def carrying_capacity(kernel: Any, planet: Any, citadel: Optional[int] = None, habitats: Optional[int] = None,
                       metabolism: Optional[str] = None) -> int:
     """K: how many people this world can feed at its technology - less what a stripped atmosphere no longer

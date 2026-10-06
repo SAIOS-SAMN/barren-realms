@@ -23,6 +23,9 @@ the flow's pace when it is taken.
             oxygen: hydrothermal, biological), siderophile (it holds neither: hydrothermal, placer, biological - and
             most of it sank with the iron), atmophile (a gas at a world's warmth: no rock flow gathers it; its
             reservoir is the air and the ice).
+  CRUST     melting carries what does not fit mantle crystals up into a crust, by its measured partition
+            coefficient D (batch melting: 1 / (D + F (1 - D)), F the share the world melts where it melts) - uranium
+            and thorium rise tens of times; nickel stays below.
   GRADE     the flows close part of the log-distance from dispersed to pure: grade = x^(1 - k/2), k = 1 - prod(1 - k_c)
             over the element's channels. With every channel running, a deposit reaches x^(1/2): measured ore grades
             follow about that across ten decades of abundance (iron at ~50% from 5% in rock, copper at ~0.6% from
@@ -38,6 +41,12 @@ from typing import Any, Dict, List, Optional
 GRADE_REACH = 0.5               # share of the log-distance to purity a world's saturated flows close (measured ore
                                 # grades against crustal abundance; see above)
 FEO_PER_O = -272.0              # kJ/mol: iron's oxide, the line between lithophile and the rest (Goldschmidt)
+
+# bulk partition coefficients between mantle rock and its melt (measured; Workman & Hart 2005 and compilations):
+# below 1 an element prefers the melt and rises into a crust; above 1 it stays in the mantle
+PARTITION_D = {"U": 0.0014, "Th": 0.001, "K": 0.0018, "Ba": 0.0003, "Ra": 0.0003, "Pb": 0.014, "Ti": 0.04,
+               "Na": 0.03, "Ca": 0.3, "Al": 0.1, "Si": 0.9, "Fe": 1.0, "Mg": 3.0, "Cr": 3.0, "Ni": 10.0}
+MIN_MELT = 0.01                 # a melt cannot leave its rock below ~1% porosity (melt connectivity)
 
 _CLASS_CHANNELS = {"lithophile": ("magmatic", "placer"), "chalcophile": ("hydrothermal", "biological"),
                    "siderophile": ("hydrothermal", "placer", "biological"), "atmophile": ()}
@@ -142,6 +151,31 @@ def dispersed(sym: str) -> float:
     if cls == "biogenic":
         return 1.0                                        # what life makes, it makes whole
     return min(1.0, m * S.abundance(sym) / max(1e-300, host))
+
+
+def melt_fraction(w: Dict[str, Any]) -> float:
+    """How much of its mantle a world melts where it melts: its mantle's temperature between rock's solidus and
+    liquidus (worlds.MELT_K, interior.LIQUIDUS_K), never below the share a melt needs to leave its rock."""
+    from xylarium.kernel import interior, worlds
+    t = float(w.get("t_int") or 0.0)
+    f = (t - worlds.MELT_K) / max(1.0, interior.LIQUIDUS_K - worlds.MELT_K)
+    return max(MIN_MELT, min(1.0, f))
+
+
+def crustal(sym: str, w: Dict[str, Any], ch: Dict[str, float]) -> float:
+    """A good's fraction in a world's crust: its dispersed share, carried up into the crust by melting as far as it
+    prefers the melt (batch melting: 1 / (D + F (1 - D))) and as far as the world has melted (its magmatic flow)."""
+    x = dispersed(sym)
+    if affinity(sym) != "lithophile":
+        return x
+    from xylarium.kernel import substances as S
+    base = S.SUPERHEAVY[sym][2] if sym in S.SUPERHEAVY else sym
+    d = PARTITION_D.get(base)
+    if d is None:
+        return x
+    f = melt_fraction(w)
+    rise = 1.0 / (d + f * (1.0 - d))
+    return min(1.0, x * (1.0 + ch.get("magmatic", 0.0) * (rise - 1.0)))
 
 
 def of_planet(kernel: Any, planet: Any) -> Dict[str, float]:

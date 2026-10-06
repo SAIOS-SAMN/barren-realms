@@ -28,11 +28,14 @@ import math
 from typing import Any, Dict, Optional
 
 EARTH_STANDOFF_R = 10.1         # the unit world's measured magnetopause, in its radii (subsolar, quiet wind)
+HOME_LIFETIME_RISK = 0.0105    # lifetime risk the unit world's own background carries for its people (~3 mSv a year
+                                # over a ~70-year life at ~5% per sievert: measured) - the scale of harm per home dose
 CR_SPECTRUM = 1.7               # integral cosmic-ray spectrum's fall with rigidity above the cutoff (measured)
 EARTH_CUTOFF_GV = 6.0           # the unit world's surface-averaged geomagnetic cutoff rigidity (measured)
 CR_MEDIAN_GV = 4.0              # median rigidity of the galactic cosmic rays at a quiet star's distance (measured)
 COLUMN_PER_BAR = 1033.0         # g/cm^2 of air over each bar at the unit world's gravity
-ATTENUATION = 160.0             # g/cm^2: nuclear attenuation length of cosmic-ray secondaries in air (measured)
+ATTENUATION = 185.0             # g/cm^2: the cosmic-ray dose's attenuation through air, its cascade included (the
+                                # unit world's sea level takes ~1/270 of the dose its field lets into its sky)
 
 
 def margin(w: Dict[str, Any]) -> float:
@@ -109,9 +112,9 @@ def _dose_raw(w: Dict[str, Any], pressure: float, galactic: float) -> float:
 
 
 def dose(w: Dict[str, Any], pressure: float = 1.0, galactic: float = 1.0) -> float:
-    """Particles reaching the surface, in the unit world's dose. galactic: cosmic-ray flux where the world circles
-    (cosmos.density - supernovae make them), 1 at the unit radius."""
-    u = _dose_raw(_unit(), 1.0, 1.0)
+    """Particles reaching the surface, in the unit world's dose under one bar of its own air. galactic: cosmic-ray
+    flux where the world circles (cosmos.density - supernovae make them), 1 at the unit radius."""
+    u = _dose_raw(dict(_unit(), p_bar=1.0, g=1.0), 1.0, 1.0)
     return _dose_raw(w, pressure, galactic) / max(1e-12, u)
 
 
@@ -138,3 +141,40 @@ def of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
             galactic = cosmos.density(float(g["r"]))
     return {"margin": round(margin(w), 4), "field": round(surface_field(w), 4), "standoff": round(standoff(w, p), 2),
             "exposure": round(exposure(w, p), 4), "dose": round(dose(w, p, galactic), 4)}
+
+
+def health(kernel: Any, planet: Any) -> float:
+    """The share of a people's newborns its world's radiation spares, against the world it arose on: its repair is
+    tuned to its home's dose, and each home dose more erases about what a home dose does over a life (linear, no
+    threshold). Its people under the open sky take its surface dose; those in its habitats are shielded. 1 at home or
+    anywhere gentler; remembered for a clock century (the field changes on deep time)."""
+    if kernel is None:
+        return 1.0
+    soc = planet.society
+    key = int(getattr(kernel, "cycle_count", 0)) // 100
+    got = soc.get("_rad")
+    if got and got[0] == key:
+        return float(got[1])
+    from xylarium.kernel import biosphere, relations, sustenance, worlds
+
+    def lived(world: Any) -> float:
+        """The dose its people live under: none where its medium lies under ice or deep (the overburden shields
+        it) or nowhere on the world (it lives in what it has built); else its surface dose on those under the open
+        sky (its habitats shield the rest)."""
+        try:
+            med = worlds.best(worlds.of_planet(kernel, world), biosphere.metabolism_of(kernel, world))
+        except Exception:
+            med = None
+        if med is None or med.get("where") != "surface":
+            return 0.0                                  # no medium of its own under this sky: it lives enclosed
+        return of_planet(kernel, world)["dose"] * biosphere.open_share(kernel, world)
+    here = lived(planet)
+    people = sustenance.people_of(planet)
+    own = [w for w in (relations._peoples(kernel).get(people) or []) if w.population > 0] if people else []
+    home_world = max(own, key=lambda w: w.population) if own else planet     # where most of its kind still live
+    base = here if home_world is planet else lived(home_world)
+    excess = max(0.0, here / max(1e-9, base) - 1.0)
+    value = math.exp(-excess * HOME_LIFETIME_RISK)
+    soc["_rad"] = [key, round(value, 6)]
+    return value
+

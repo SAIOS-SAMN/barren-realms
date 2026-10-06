@@ -15,7 +15,8 @@ kinetics, not on orbits; a people reckons its own age in its homeworld's years -
                 (inquiry, births, work) is scaled by its share against the stable one.
   THR           total health resilience, 0 .. 1: the chance a newborn lives to old age - nutrition x air x its
                 star's light x its world's cleanliness x how well its biome suits it x shelter x what its crowd
-                diseases spare. Mortality before old age is -ln(THR) over the span to it; fertility is scaled by
+                diseases spare x what its world's radiation spares against the world it arose on
+                (hydromagnetics.health: the field and the air shield it). Mortality before old age is -ln(THR) over the span to it; fertility is scaled by
                 THR (TFR x THR).
   LONGEVITY     an elder's remaining span reaches from the median life (2.5 generations) toward the longest lives
                 (4.3) as the people masters biology (knowledge.py: medicine), and shrinks with THR. The deaths its
@@ -139,7 +140,9 @@ def thr(kernel: Any, planet: Any) -> float:
     shelter = min(1.0, k / max(1, planet.population)) if k > 0 else 0.0
     d = disease(kernel, planet)
     spared = 1.0 - d["met"] * d["cfr"]
-    return max(0.0, nutrition * air * sun * float(pollution_factor(planet)) * biome * shelter * spared)
+    from xylarium.kernel import hydromagnetics
+    rad = hydromagnetics.health(kernel, planet)          # the dose its field and air let through, against home's
+    return max(0.0, nutrition * air * sun * float(pollution_factor(planet)) * biome * shelter * spared * rad)
 
 
 def medicine(kernel: Any, planet: Any) -> float:

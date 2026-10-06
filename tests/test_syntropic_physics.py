@@ -19,7 +19,7 @@ class TestHydromagnetics(unittest.TestCase):
         u = H._unit()
         self.assertAlmostEqual(H.moment(u), 1.0)
         self.assertAlmostEqual(H.standoff(u), H.EARTH_STANDOFF_R)
-        self.assertAlmostEqual(H.dose(u), 1.0)
+        self.assertAlmostEqual(H.dose(dict(u, p_bar=1.0, g=1.0)), 1.0)    # under one bar of its own air
 
     def test_without_a_field_the_wind_reaches_the_whole_sky(self):
         bare = dict(H._unit(), q_cmb=0.0)
@@ -38,6 +38,36 @@ class TestHydromagnetics(unittest.TestCase):
         thin = dict(u, p_bar=0.0)
         thick = dict(u, p_bar=10.0)
         self.assertGreater(H.dose(thin), H.dose(thick))
+
+    def test_the_living_take_the_dose_where_they_live(self):
+        from unittest import mock
+        from xylarium.kernel import biosphere, relations, sustenance, worlds
+        from xylarium.kernel.engine import GameKernel
+        random.seed(4)
+        k = GameKernel(seed=42)
+        k.activate()
+        home = max((p for s in k.sectors.values() for p in s.planets if p.population > 0),
+                   key=lambda p: p.population)
+        colony = next(p for s in k.sectors.values() for p in s.planets if p is not home and p.population > 0)
+        people = sustenance.people_of(home)
+        doses = {home.id: 1.0, colony.id: 300.0}
+
+        def of(kk, w):
+            return {"dose": doses[w.id]}
+
+        def check(where):
+            for w in (home, colony):
+                w.society.pop("_rad", None)
+            medium = None if where is None else {"where": where, "solvent": "H2O"}
+            with mock.patch.object(H, "of_planet", side_effect=of), \
+                    mock.patch.object(sustenance, "people_of", return_value=people), \
+                    mock.patch.object(relations, "_peoples", return_value={people: [home, colony]}), \
+                    mock.patch.object(worlds, "best", return_value=medium), \
+                    mock.patch.object(biosphere, "open_share", return_value=1.0):
+                return H.health(k, colony)
+        self.assertLess(check("surface"), 0.1)                            # three hundred home doses, open sky
+        self.assertEqual(check("under_ice"), 1.0)                         # the ice above shields its sea
+        self.assertEqual(check(None), 1.0)                                # no medium under this sky: it lives enclosed
 
 
 class TestConcentration(unittest.TestCase):
@@ -70,6 +100,14 @@ class TestConcentration(unittest.TestCase):
         lift = {s: g[s] / K.dispersed(s) for s in g}
         self.assertGreater(lift["Pt"], lift["Cu"])
         self.assertGreater(lift["Cu"], lift["Fe"])
+
+    def test_melting_carries_what_does_not_fit_up_into_a_crust(self):
+        u = H._unit()
+        melted = dict(self.alive)
+        unmelted = dict(self.alive, magmatic=0.0)
+        self.assertGreater(K.crustal("U", u, melted), 10 * K.dispersed("U"))      # tens of times (D ~ 0.001)
+        self.assertAlmostEqual(K.crustal("U", u, unmelted), K.dispersed("U"))
+        self.assertLess(K.crustal("Si", u, melted) / K.dispersed("Si"), 1.2)     # a major element barely moves
 
     def test_the_air_and_the_ice_are_not_gathered_by_rock(self):
         x = K.dispersed("Xe")

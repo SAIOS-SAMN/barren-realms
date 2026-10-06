@@ -36,16 +36,25 @@ process moves order between scales; none only destroys.
   - Which flows gather an element is read from its bonds (Goldschmidt's classes).
   - The standing grade is x^(1 - k/2). With every channel running, a world reaches the x^(1/2) that measured ore
     grades follow. A world without flows holds only x.
+- **Crust.** Melting carries what doesn't fit mantle crystals up into a crust, by its measured partition
+  coefficient (batch melting: 1/(D + F(1-D))). F is the share the world melts, read from its mantle temperature
+  between rock's solidus and liquidus, and is never below the ~1% a melt needs to leave its rock. Uranium rises about
+  20× on the unit world; nickel stays below.
+- **Radiation and the living.** Each people's repair is tuned to the dose of the world most of its kind live on.
+  Each home dose more erases about what a home dose does over a life: the unit world's background, ~1%, linear, no
+  threshold. That enters the chance a newborn lives to old age (`lifespan.thr`). A people takes the dose only where it
+  lives:
+  - nothing under ice or deep, where the overburden shields it;
+  - nothing where its medium stands nowhere on the world's surface, because it lives enclosed;
+  - otherwise the surface dose, on those under the open sky, while its habitats shield the rest.
 - **Renewal.** A taken deposit is rebuilt toward its standing grade at the pace of its flows (`geology._rebuild`).
   Where the flows have stopped, nothing comes back.
 
 ## Still to derive
 
-- **Magmatic incompatibility.** Uranium, thorium, potassium and the like are enriched into a crust by melting,
-  through their measured partition coefficients. Without it, uranium is thinner than on real worlds.
 - **Disc accretion.** Should depend on fields carrying angular momentum, and stellar winds should be sorted by
   first ionisation potential (FIP).
-- **Erasure.** Affinity and the living's erasure should read `hydromagnetics.dose`.
+- **Affinity.** The signed affinity (yield − erasure, P3) should read the same dose for every substance's harm.
 - **Commodities (P1b).** A good's anchor is the order it embodies (its grade, and the event that made its nuclei)
   times its renewal time, with extraction work as its cost. A market lists goods as civilisations stabilise trade in
   them, not from a table.

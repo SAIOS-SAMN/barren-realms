@@ -151,9 +151,11 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
     deep = substances.deep_mantle(mass, radius) and not giant
     living = _carbon_water_life(kernel, planet)
     try:
+        from xylarium.kernel import worlds as _worlds
+        wstate = _worlds.state_of_planet(kernel, planet)["world"]
         flows = concentration.of_planet(kernel, planet)        # what the world's own flows gather
     except Exception:
-        flows = concentration.channels({}, [], living)
+        wstate, flows = {}, concentration.channels({}, [], living)
     for sym, e in TABLE.items():
         if e["origin"] == "stellar":
             why[sym] = "stellar"                           # a star's matter, not a world's
@@ -185,7 +187,7 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
             held[sym] = 5                                  # below any crust: only what eruptions bring up
             continue
         size = math.sqrt(min(mass, 400.0))                 # a crust's reach grows with the world, not its whole mass
-        g = concentration.grade(concentration.dispersed(sym), concentration.strength(sym, flows))
+        g = concentration.grade(concentration.crustal(sym, wstate, flows), concentration.strength(sym, flows))
         units = PURE_UNITS * g * size * reach * region_weight(sector, e["family"])
         held[sym] = max(1, int(units))                     # where it survives, a trace is always there to find
     return held, why

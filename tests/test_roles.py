@@ -588,7 +588,10 @@ class TestStewardBooks(unittest.TestCase):
         from xylarium.kernel.engine import GameKernel
         random.seed(5)
         k = GameKernel(seed=42)
-        for _ in range(8 * 100):
+        for _ in range(7 * 100):
+            k.tick_simulation()
+        ruled_before = sum(m["ruled"] for m in stewardship.stats(k)["envoys"].values())
+        for _ in range(100):                                   # a year for what was ruled to be measured
             k.tick_simulation()
         for realm in stewardship.realms(k):
             res = stewardship.books(k, realm)
@@ -600,8 +603,10 @@ class TestStewardBooks(unittest.TestCase):
         envoys = list(stewardship.stats(k)["envoys"].values())
         ruled = sum(m["ruled"] for m in envoys)
         learned = sum(len(m["mind"]["crystals"]) + len(m["mind"]["walls"]) for m in envoys)
-        if ruled:
-            self.assertGreater(learned, 0)                     # what its rulings did is in its memory
+        if ruled_before:
+            self.assertGreater(learned, 0)                     # what its rulings did, measured since, is its memory
+        elif ruled:
+            pass                                               # ruled only this year: not yet measured
         else:                                                  # a quiet realm: nothing a ruling could answer
             for realm in stewardship.realms(k):
                 for (site, book), v in stewardship.books(k, realm).items():
