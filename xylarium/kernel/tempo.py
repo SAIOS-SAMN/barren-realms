@@ -30,8 +30,13 @@ def wait_years(kernel: Any, who: str, home: Any) -> Optional[float]:
     stage = annals._stage(kernel, who, home)
     gen = max(1.0, fertility.generation_of(kernel, home))
     if stage == "crossed":
-        # among the stars its next turning is its dominion's next e-fold of settlement (annals)
-        return gen / annals.DOMINION_PER_GENERATION / annals._speed(kernel, home)
+        # among the stars its next turning is its dominion's next e-fold of settlement while it grows freely; once it
+        # holds all its front reaches, its fall, shared over the worlds it holds (settling.py)
+        from xylarium.kernel import settling
+        w = float(((annals.stats(kernel)["of"].get(who) or {}).get("hist") or {}).get("W", 1.0))
+        if who in settling.stats(kernel) and w >= annals.dominion_cap(kernel, who, home):
+            return gen * w / annals.FALL_PER_GENERATION * annals.resilience(kernel, who)
+        return gen / settling.settle_rate(kernel, home) / annals._speed(kernel, home)
     nxt = annals.STAGES.index(stage) + 1
     fall = gen / annals.FALL_PER_GENERATION * annals.resilience(kernel, who)
     if annals.STAGES[nxt] == "yards" and not annals._can_reach_orbit(kernel, who, home):

@@ -110,18 +110,50 @@ A people wakes at its forecast on that clock (`society["arisen"]["epoch"]`), how
 The step that caught it is kept apart (`"caught"`), and the stretch between the two is history the annals carry it
 through. Its population is the world's: the annals' `P` is progress in generations, not a head count.
 
-## Dominions settle at the speed of their front
+## Dominions are settled places, on one clock
 
-A crossed people settles 1% more worlds per generation per world it holds (declared). It can only settle systems its
-front has reached. Each settlement is a hop to the nearest system, n^(−1/3) at the density of stars where it began
-(disc, bulge and nucleus: `encounters.components`). So the front moves one hop per settlement it can make. At the Sun's
-density that is ~1.7 pc per 2,500 years, which crosses the disc in ~15–25 Myr. The systems within the front are a
-sphere cut by the disc's thickness, never more than the galaxy holds (~1.2×10¹¹). Its fall is shared over the worlds
-it holds, integrated along that growth (`annals._dominion_hazard`). The old flat cap of 10,000 worlds is gone.
+The annals run in three passes each year, so what one people does reaches another when it happens on the one
+coordinate clock, in whatever order they are read:
 
-Open: dominions do not yet exclude one another. Every crossed people's front fills the same galaxy within ~25 Myr of
-crossing, and crossings are tens to hundreds of Myr apart. So the first to cross reaches every system before the next
-one crosses. Who holds what when fronts meet needs its own rule.
+1. Each people's own ages, up to its fall or its crossing. Nothing another people does touches these.
+2. Every crossed people's dominion together, in coordinate time (`annals._settle`, `settling.py`). Bubbles grow,
+   meet, enclose and fall in the order those things happen.
+3. Each people's books for the stretch.
+
+A test (`tests/test_settling.py`, `TestOneClock`) holds that one stretch or many give the same meetings,
+enclosures, falls and hazards.
+
+**How fast a dominion grows.** A people at full natural increase grows e-fold a generation. A landed party is a
+tenth of its parent world, between 500 and 20,000 settlers, as daughters are founded live. It must grow to its new
+world's carrying capacity K before that world can send its own party. So each world held settles another every
+ln(K/N₀) generations: g = 1/ln(K/N₀), about 0.16 a generation for K = 10⁷. A passage costs E_BRIDGE (~100 a
+generation from a modest grid), so for a crossed people its population sets the pace, not its power.
+
+**How far.** Each settlement is a hop to the nearest system it can live on, (n·s)^(−1/3), so the front moves one hop
+per settlement: R(t) = hop·(1 + g·(t − t₀)). That is ~10 kpc/Myr, or ~3% of light, for a people that folds space.
+
+**What it holds.** The systems within R, times the share of systems it can live on. The disc is counted over
+galactocentric rings, each column no deeper than the disc. The bulge and nuclear cluster are counted over shells
+about the centre, with the share of each shell inside the ball. The galaxy holds ~6.5×10¹⁰ systems by the same
+densities.
+
+**Where dominions meet.** The seam is where the two fronts came together, and each holds its own side from then on.
+A people that crosses inside another's dominion is enclosed. Either way, one people takes from another only the
+worlds both can live on, kind by kind of world, and a world is lost once however many neighbours could take it.
+Peoples of different niches share systems and take different worlds. What a people can live on is its metabolism's
+worlds (`universe.habitability`) and always the kind it evolved on, until the board's yield-over-erasure language
+replaces the table. A fallen people's systems are no one's: what it took lapses, and its neighbours may settle it.
+
+**Before a mind wakes.** A world whose minds have not yet woken may be settled by a people that can live on it. This
+is allowed by default; a steward may forbid it by keeping the system a sanctuary (`ascendance.keep_sanctuary`). A
+people that wakes there wakes among the settlers' settlements (`settling.mark_wakings`, read on the coordinate clock).
+
+**Seed 7 at 1.98 Gyr.**
+- **Two dominions hold the galaxy.** Thnevri (cryogenic, born on a rogue world) crossed first, at 1.483 Gyr, and
+  holds 5.6×10¹⁰ systems within 17 kpc. Tuoksha (biotic) crossed inside it at 1.543 and still settles the worlds
+  Thnevri cannot use: 1.5×10¹⁰ systems.
+- **Every later people falls.** Nine peoples woke among their settlements and seven crossed inside both dominions.
+  Each holds its home world alone and falls at the one-world rate (a mean of ~5,000 generations).
 
 ## Still to derive
 

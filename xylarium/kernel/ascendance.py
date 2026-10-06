@@ -50,6 +50,22 @@ def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "ascendance")
 
 
+def sanctuary(kernel: Any, sector_id: int) -> bool:
+    """Has a steward kept this system for the minds that will wake there? Settling a world before its mind wakes is
+    allowed unless a steward forbids it (settling.py)."""
+    if kernel is None or "ascendance" not in getattr(kernel, "state", {}):
+        return False
+    return int(sector_id) in (stats(kernel).get("sanctuaries") or {})
+
+
+def keep_sanctuary(kernel: Any, sector_id: int, by: str) -> None:
+    """A steward forbids settling a system before the minds forecast there wake."""
+    from xylarium.kernel import history
+    stats(kernel).setdefault("sanctuaries", {})[int(sector_id)] = {"by": by, "cycle": kernel.cycle_count}
+    history.event(kernel, "SANCTUARY", f"A sanctuary is kept at system {sector_id}", actors=[by], sector_id=sector_id,
+                  cause="its steward forbids settling it before the minds that will wake there")
+
+
 # ---------------------------------------------------------------------- the measures (higher is worse)
 def _home(kernel: Any, who: str) -> Optional[Any]:
     from xylarium.kernel import spheres

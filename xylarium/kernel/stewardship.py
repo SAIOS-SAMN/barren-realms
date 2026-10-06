@@ -503,8 +503,8 @@ def _succeed_envoy(kernel: Any, m: Dict[str, Any]) -> None:
 
 def _steward_name(kernel: Any, realm: str, generation: int) -> str:
     from xylarium.kernel import scheduler
-    from xylarium.kernel.natives import _name
-    return _name(scheduler.rng(kernel, "steward", realm, generation))
+    from xylarium.kernel.natives import person_name
+    return person_name(scheduler.rng(kernel, "steward", realm, generation))
 
 
 STEWARD_BOOKS = ("young", "lives", "holds", "power")       # the order a steward attends to them

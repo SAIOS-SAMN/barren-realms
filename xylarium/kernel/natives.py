@@ -75,6 +75,11 @@ def _name(rng: random.Random) -> str:
     return n.capitalize()
 
 
+def person_name(rng: random.Random) -> str:
+    """A steward's or sovereign's name: four syllables, so never a people's (two or three: _name)."""
+    return "".join(rng.choice(NATIVE_SYLLABLES) for _ in range(4)).capitalize()
+
+
 def stage_name(natives: Dict[str, Any]) -> str:
     return NATIVE_STAGES[min(int(natives["stage"]), ORBITAL)]
 

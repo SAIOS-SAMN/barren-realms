@@ -112,8 +112,8 @@ def of_people(kernel: Any, holder: str) -> List[Dict[str, Any]]:
 
 def _name(kernel: Any, *salt: Any) -> str:
     from xylarium.kernel import scheduler
-    from xylarium.kernel.natives import _name as syllables
-    return syllables(scheduler.rng(kernel, "sovereign", *salt))
+    from xylarium.kernel.natives import person_name
+    return person_name(scheduler.rng(kernel, "sovereign", *salt))
 
 
 def _seat(kernel: Any, realm: Dict[str, Any], parent: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
