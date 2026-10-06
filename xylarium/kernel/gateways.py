@@ -261,8 +261,8 @@ def kindling(kernel: Any, logs: list) -> None:
             b["room"] = float(b.get("room", 0.0)) + room / len(members)
         names = ", ".join(w.split(":", 1)[-1] for w in members)
         history.event(kernel, "SINGULARITY_KINDLED", f"The {names} kindle a singularity", actors=list(members),
-                      cause=f"{t:.4f} Gyr after the Big Bang: nowhere left to settle, they pooled "
+                      cause=f"nowhere left to settle, they pooled "
                             f"{kindle_cost_j():.2e} J - the lightest black hole's mass-energy - and the hub's keeper "
                             f"approved; beyond its white hole a sphere opens, a galaxy's room",
-                      data={"seed": rec["seed"], "room": room})
+                      data={"seed": rec["seed"], "room": room, "epoch": round(t, 6)})
         logs.append(f"[GATEWAYS] The {names} kindle a singularity: a new sphere opens beyond it.")

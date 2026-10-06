@@ -337,7 +337,7 @@ def meet(kernel: Any, a: str, b: str, when: Tuple[float, float, float, Optional[
         left = "no world" if share >= 0.999 else ("every world" if share <= 0.001 else f"{1 - share:.0%} of the worlds")
         history.event(kernel, "DOMINION", f"The {name(enclosed)} cross into the dominion of the {name(holder)}",
                       actors=[enclosed, holder], sector_id=st[enclosed]["sid"],
-                      cause=f"{tc:.4f} Gyr after the Big Bang: the {name(holder)} had settled all around their home "
+                      cause=f"the {name(holder)} had settled all around their home "
                             f"before they crossed; of the worlds the {name(enclosed)} can live on, {left} is left "
                             f"to them while the {name(holder)} stand",
                       data={"epoch": round(tc, 6), "overlap": round(share, 4)})
@@ -356,7 +356,7 @@ def meet(kernel: Any, a: str, b: str, when: Tuple[float, float, float, Optional[
     history.event(kernel, "GALACTIC_WAR" if how == "war" else "DOMINION",
                   f"The dominions of the {name(a)} and the {name(b)} meet" + (" in war" if how == "war" else ""),
                   actors=[a, b], sector_id=st[a]["sid"],
-                  cause=f"{tc:.4f} Gyr after the Big Bang, their fronts {sa + sb:.2f} kpc apart at home; each holds "
+                  cause=f"their fronts met with their homes {sa + sb:.2f} kpc apart; each holds "
                         f"its own side of the seam ({how})", data={"epoch": round(tc, 6), "style": how})
     logs.append(f"[ANNALS] The dominions of the {name(a)} and the {name(b)} meet ({how}).")
 
@@ -434,6 +434,5 @@ def mark_wakings(kernel: Any, peoples: Dict[str, List[Any]]) -> None:
         arisen["under"] = holder
         history.event(kernel, "DOMINION", f"The {who.split(':', 1)[-1]} woke among the settlements of the "
                                           f"{holder.split(':', 1)[-1]}", actors=[who, holder], planet=home,
-                      cause=f"the {holder.split(':', 1)[-1]} had settled its system before its minds woke, "
-                            f"{float(arisen['epoch']):.4f} Gyr after the Big Bang",
+                      cause=f"the {holder.split(':', 1)[-1]} had settled its system before its minds woke",
                       data={"epoch": float(arisen["epoch"])})

@@ -39,10 +39,12 @@ def entries(kernel: Any, name: Optional[str] = None) -> List[Dict[str, Any]]:
 
 
 def render(kernel: Any) -> str:
-    """The progenitor's chronicle as a document."""
+    """The progenitor's chronicle as a document, dated in turns of the galaxy (a progenitor has no world)."""
+    from xylarium.kernel import history
     lines = ["# The Progenitor's Chronicle", ""]
     for e in stats(kernel)["entries"]:
-        when = f"year {e['year']:,}" + (f", {e['epoch_gyr']} Gyr after the Big Bang" if e.get("epoch_gyr") else "")
+        when = f"year {e['year']:,}" + (", " + history.tell(kernel, {"deep_gyr": e["epoch_gyr"]})
+                                        if e.get("epoch_gyr") else "")
         lines += [f"## {e['n']}. {e['title']}", f"*{e['name']} — {when}*", ""]
         if e.get("about"):
             lines += ["Concerning: " + ", ".join(a.split(":", 1)[-1] for a in e["about"]), ""]

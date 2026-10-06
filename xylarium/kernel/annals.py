@@ -155,7 +155,8 @@ def _fall(kernel: Any, who: str, worlds: List[Any], epoch: float) -> str:
         p.owner_id = None
         p.faction_id = None
     history.event(kernel, "FALL", f"The {name} fall", actors=[who], planet=home,
-                  cause=f"{epoch:.3f} Gyr after the Big Bang, at the level of history; its ruins lie on "
+                  data={"epoch": round(epoch, 6)},
+                  cause=f"at the level of history; its ruins lie on "
                         f"{len(worlds)} world{'s' if len(worlds) != 1 else ''}")
     return f"[ANNALS] The {name} fall; their ruins lie on {home.name}."
 
@@ -410,7 +411,7 @@ def _live_ages(kernel: Any, who: str, worlds: List[Any], logs: List[str]) -> Opt
         text = {"farm": "takes up farming", "state": "founds a state", "works": "raises its first great works",
                 "yards": "builds yards that can launch to orbit", "crossed": "folds space and crosses to the stars"}
         history.event(kernel, kind_ev, f"The {who.split(':', 1)[-1]} {text[stage]}", actors=[who], planet=home,
-                      cause=f"at the level of history, {epoch_of(t):.4f} Gyr after the Big Bang",
+                      cause="at the level of history",
                       data={"epoch": round(epoch_of(t), 6), "stage": stage})
     job.update(stage=stage, speed=speed, fall_rate=fall_rate, ruled_from=ruled_from, epoch_of=epoch_of)
     if job["cross"] is not None:                              # what is left of the stretch is lived among the stars

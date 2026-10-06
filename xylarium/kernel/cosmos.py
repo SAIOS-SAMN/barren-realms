@@ -1058,11 +1058,10 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
                               if rec.get("setbacks") else "") + ".",
                       data={"steps_gyr": steps, "setbacks": rec.get("setbacks", 0), "medium": traits["medium"]})
     history.event(kernel, "EMERGENCE", f"The {name} look up", actors=[f"civ:{name}"], planet=p,
-                  magnitude=p.population, cause=f"{len(steps) or HARD_STEPS} hard steps, {rec['epoch']:.3f} Gyr "
-                                                f"into the galaxy",
+                  magnitude=p.population, cause=f"after {len(steps) or HARD_STEPS} hard steps",
                   text=f"On {p.name}, {r:.1f} kpc from the galactic centre, under a star of {m:.2f} solar masses, "
                        f"in {traits['medium']}, a people became aware of itself: {traits['describe']} - "
-                       f"the {name}.", data={"traits": traits})
+                       f"the {name}.", data={"traits": traits, "epoch": float(rec["epoch"])})
     from xylarium.kernel import clocks, kinship, knowledge, tempo
     clocks.begin(kernel, knowledge.holder_of_planet(p), p)   # it keeps its own clock until others can see it
     tempo.wake(kernel)

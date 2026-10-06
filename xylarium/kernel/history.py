@@ -20,6 +20,8 @@ replay.
 """
 
 import json
+import math
+import re
 import weakref
 from typing import Any, Dict, List, Optional
 
@@ -113,6 +115,86 @@ def event(kernel: Any, kind: str, title: str, actors: Optional[List[str]] = None
     from xylarium.kernel import memory
     memory.witness(kernel, rec)                        # what its peoples lived through, they may keep (their own record)
     return rec
+
+
+# ---------------------------------------------------------------------- telling: dates in the reader's own years
+_GYR_TEXT = re.compile(r"(at the level of history, )?,?\s*\d+(\.\d+)? Gyr (after the Big Bang|into the galaxy)[,:;]?\s*")
+
+
+def when_gyr(rec: Dict[str, Any]) -> Optional[float]:
+    """When an event happened on the one coordinate clock: the epoch its annals dated it to, else when it was
+    written."""
+    got = (rec.get("data") or {}).get("epoch")
+    if got is None:
+        got = rec.get("deep_gyr")
+    return float(got) if got is not None else None
+
+
+def galactic_year_gyr() -> float:
+    """One turn of the galaxy at the Sun's radius: 2 pi R0 / V (Gyr) - the year of a reader with no world."""
+    from xylarium.kernel import cosmos, geometry
+    return 2.0 * math.pi * cosmos.R0_KPC / cosmos.V_FLAT_KMS * geometry.GYR_PER_KPC_PER_KMS
+
+
+def _count(n: float) -> str:
+    n = abs(n)
+    for size, word in ((1e12, "trillion"), (1e9, "billion"), (1e6, "million"), (1e3, "thousand")):
+        if n >= size:
+            v = n / size
+            return f"{v:.1f} {word}" if v < 10 else f"{v:.0f} {word}"
+    return f"{n:,.0f}"
+
+
+def _home_of(kernel: Any, reader: Optional[str]) -> Any:
+    if not reader:
+        return None
+    from xylarium.kernel import relations
+    worlds = relations._peoples(kernel).get(reader) or []
+    return max(worlds, key=lambda p: (p.population, p.id)) if worlds else None
+
+
+def tell(kernel: Any, rec: Dict[str, Any], reader: Optional[str] = None) -> str:
+    """When an event happened, told to a reader in its own years: turns of its own world about its star, counted
+    back from its own now on its own clock - and, before its people woke, how long before. With no reader (or one
+    with no world), in turns of the galaxy."""
+    from xylarium.kernel import cosmos
+    epoch = when_gyr(rec)
+    if epoch is None or not cosmos.is_cosmic(kernel):
+        return f"year {rec.get('year', 0):,}"
+    home = _home_of(kernel, reader)
+    if home is None:
+        turns = epoch / galactic_year_gyr()
+        return f"{_count(turns)} turns of the galaxy after the Big Bang"
+    from xylarium.kernel import clocks, physics
+    sec = kernel.sectors.get(home.sector_id)
+    year = float(physics.year_cycles(sec, home)) / physics.CYCLES_PER_STANDARD_YEAR if sec is not None else 1.0
+    lapse = clocks.lapse(kernel, home.sector_id)
+    ago = (clocks.now(kernel, reader) - epoch * lapse) * 1e9 / max(1e-12, year)
+    world = home.name
+    if abs(ago) < 1.0:
+        told = f"this turn of {world}"
+    elif ago > 0:
+        told = f"{_count(ago)} turns of {world} about its star ago"
+    else:
+        told = f"{_count(-ago)} turns of {world} about its star from now"
+    woke = (home.society.get("arisen") or {}).get("epoch")
+    if woke is not None and epoch < float(woke):
+        before = (float(woke) - epoch) * lapse * 1e9 / max(1e-12, year)
+        told += f", {_count(before)} before the {reader.split(':', 1)[-1]} woke"
+    return told
+
+
+def chronicle(kernel: Any, reader: Optional[str] = None, about: Optional[str] = None,
+              kinds: Optional[List[str]] = None, limit: int = 60) -> List[str]:
+    """The galaxy's history as a reader would read it: oldest first, each event dated in the reader's own years."""
+    recs = of_people(kernel, about) if about else list(stats(kernel)["recent"])
+    recs = [r for r in recs if (not kinds or r["kind"] in kinds) and when_gyr(r) is not None]
+    recs.sort(key=lambda r: (when_gyr(r), r["id"]))
+    out = []
+    for r in recs[-limit:]:
+        cause = _GYR_TEXT.sub("", r.get("cause") or "").strip()
+        out.append(f"{tell(kernel, r, reader)}: {r['title']}." + (f" ({cause})" if cause else ""))
+    return out
 
 
 def _muted(kernel: Any, kind: str, actors: List[str]) -> bool:

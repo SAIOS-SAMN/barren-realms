@@ -83,7 +83,8 @@ def run(seed: int, save: Optional[Any] = None) -> Optional[Any]:
                 ("P", "Pace: lonely / neighbourly / teeming"), ("B", "Begin"), ("Q", "Leave"))))
         else:
             print("  " + "   ".join(f"{c_gold('[' + k + ']')} {t}" for k, t in (
-                ("W", "Watch some years"), ("G", "The galaxy and its peoples"), ("S", "Steward intelligences for all"),
+                ("W", "Watch some years"), ("G", "The galaxy and its peoples"),
+                ("H", "The chronicle, told in a people's own years"), ("S", "Steward intelligences for all"),
                 ("E", "Enlist a steward intelligence for one people"), ("D", "Dismiss a people's steward"),
                 ("Q", "Save and leave"))))
         try:
@@ -118,6 +119,16 @@ def run(seed: int, save: Optional[Any] = None) -> Optional[Any]:
             _show_galaxy(kernel)
         elif cmd == "G":
             _show_galaxy(kernel)
+        elif cmd == "H":
+            from xylarium.kernel import history
+            rows = _peoples(kernel)
+            print(f"  [0] the galaxy (in turns of the galaxy)")
+            for i, r in enumerate(rows, 1):
+                print(f"  [{i}] the {r['people']}")
+            raw = input(c_gold("Told to > ")).strip()
+            reader = rows[int(raw) - 1]["holder"] if raw.isdigit() and 1 <= int(raw) <= len(rows) else None
+            for line in history.chronicle(kernel, reader):
+                print("  " + line)
         elif cmd == "S":
             steward_ai.enlist_all(kernel)
             print(c_green("  Every people, as it arises, will have a steward intelligence beside it."))
