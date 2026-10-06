@@ -9,11 +9,11 @@ exchanges.py, fxroutes.py) and puts it in front of the seat that can act on it:
                  orders pay - and the escort a world here would lend. It acts with its own hands: trade, freight,
                  the desk (an exchange's rate where one stands), an escort (HIRE_ESCORT).
   SOVEREIGN (the corporate machine of a people)   its people's model (regime, controls, rent, openness, balance),
-                 what its worlds bought and sold, the goods they want and cannot get, their salt, and the exchanges its
+                 what its worlds bought and sold, the goods they want and cannot get, and the exchanges its
                  councils founded - and it may found one itself at a port of its worlds (found_exchange), paying the
                  capital the place's flow asks for.
   STEWARD (the realm's book)   its realm's exchanges and their gaps against the federation, the routes flown through
-                 them, what its ports carried in, and the worlds short of salt.
+                 them, what its ports carried in, and the worlds wanting what they cannot get at home.
 """
 
 from typing import Any, Dict, List, Optional
@@ -68,12 +68,9 @@ def sovereign_book(kernel: Any, people: str) -> Dict[str, Any]:
                 "depth_sol": round(ex["sol"])}
                for sid, ex in exchanges.stats(kernel)["of"].items() if ex.get("founder") in ids] \
         if "exchanges" in kernel.state else []
-    salt = [round(demand.salt_share(w), 3) for w in worlds if "salt" in (w.society or {})]
     return {"model": commerce.model(kernel, people) if "commerce" in kernel.state else {},
             "traded": (commerce.stats(kernel)["peoples"].get(people) if "commerce" in kernel.state else None),
-            "wants": wants, "exchanges": founded,
-            "salt": {"worlds": len(salt), "short": sum(1 for s in salt if s < 0.99),
-                     "least": min(salt) if salt else None}}
+            "wants": wants, "exchanges": founded}
 
 
 def found_exchange(kernel: Any, people: str, sector_id: int) -> Dict[str, Any]:
@@ -106,7 +103,7 @@ def steward_book(kernel: Any, realm: str) -> Dict[str, Any]:
             "gap": round(exchanges.rate(ex) / max(1e-9, fx.rate(ex["cur"])) - 1.0, 4)}
            for sid, ex in exchanges.stats(kernel)["of"].items() if int(sid) in sectors] \
         if "exchanges" in kernel.state else []
-    short = [w.name for sid in sectors if sid in kernel.sectors for w in kernel.sectors[sid].planets
-             if w.population > 0 and demand.salt_share(w) < 0.99]
-    return {"exchanges": exs, "salt_short": short[:20],
+    wanting = {w.name: demand.wants(w) for sid in sectors if sid in kernel.sectors
+               for w in kernel.sectors[sid].planets if w.population > 0 and demand.wants(w)}
+    return {"exchanges": exs, "wanting": dict(list(wanting.items())[:20]),
             "carried": dict(demand.stats(kernel).get("carried", {})) if "demand" in kernel.state else {}}

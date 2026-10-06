@@ -361,11 +361,11 @@ core elements are dearest far from the core. A good's exotic index at a port is 
 cosmic seed 7 uranium reaches ~4.5x, xenon ~4x, salt ~3.7x, while iron is held everywhere. Salt (NaCl) is laid down
 where seas evaporated, from chlorine at the Sun's abundance: a world that never had seas has none.
 
-### Demand: salt, wants and imports (`demand.py`)
-Water-based life eats salt with its food (sodium's share of a diet, Earth's ~0.7% as the data point), keeping two
-seasons in store; a world short of it is less healthy. Whatever a world cannot get at home it wants - salt, water
-for a dry pleasure dome, hull metal for a station - and its port brings it from the landed source (paying the
-source, its carriers and the lanes' tolls), or the world's own office does where the port cannot. Provisioning
+### Demand: wants and imports (`demand.py`)
+No people is told what its body needs: what it must have is what its own works and ways come to use. Whatever a
+world cannot get at home it wants - water for a dry pleasure dome, hull metal for a station - and its port brings it
+from the landed source (paying the source, its carriers and the lanes' tolls), or the world's own office does where
+the port cannot. Provisioning
 offices also post freight contracts for captains, priced at landed cost and at least a ship's trip.
 
 ### Local exchanges and currency routes (`exchanges.py`, `fxroutes.py`, `business.py`)
@@ -377,8 +377,8 @@ So a gap is a currency route: buy where the money is cheap, fly it out, sell whe
 - pirates weigh a purse, and a destroyed ship loses half of it - so a captain may hire a world's government to lend
 fighters for the trip (paid for what they are expected to lose; they take the fight's losses first and go home
 when the route ends). Each seat has its business book (`business.py`): a captain sees exotic goods, open routes and
-wanted cargo near it; a sovereign sees its people's model, imports, exchanges and salt, and may found an exchange
-at one of its ports (`command`: exchange); a steward sees its realm's exchanges, their gaps and its salt shortfalls.
+wanted cargo near it; a sovereign sees its people's model, imports and exchanges, and may found an exchange
+at one of its ports (`command`: exchange); a steward sees its realm's exchanges, their gaps and its worlds' wants.
 
 ### Waystations (`waystations.py`)
 Genesis gave most systems a starport; from then on ports are founded by the economy. Every arrival is counted

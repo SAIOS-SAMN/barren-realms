@@ -1,14 +1,13 @@
 """
-Demand: water-life eats salt with its food (its own beds, its stores, its port), and health reads the share met;
-what a world cannot get at home it wants, and a port (or, without one, the world's own office) brings it from the
-good's landed source - the source paid its price and haul, nothing minted.
+Demand: what a world cannot get at home it wants, and a port (or, without one, the world's own office) brings it from
+the good's landed source - the source paid its price and haul, nothing minted. No body's needs are declared.
 """
 
 import random
 import unittest
 from unittest import mock
 
-from xylarium.kernel import biosphere, demand, ledger, lifespan, supply
+from xylarium.kernel import demand, ledger, supply
 from xylarium.kernel.engine import GameKernel
 
 
@@ -20,34 +19,12 @@ class TestDemand(unittest.TestCase):
         self.w = max((p for s in self.k.sectors.values() for p in s.planets if p.population > 0),
                      key=lambda p: p.population)
 
-    def test_water_life_eats_salt_from_its_own_beds_first(self):
-        self.w.element_reserves.pop("NaCl", None)
-        self.w.society.pop("halite_dug", None)
-        with mock.patch.object(biosphere, "metabolism_of", return_value="biotic"), \
-                mock.patch.object(supply, "_halite_cached", return_value=10 ** 6):
-            met = demand.diet(self.k, self.w)
-        self.assertEqual(met, 1.0)
-        self.assertGreater(self.w.society.get("halite_dug", 0), 0)
-        self.assertNotIn("NaCl", demand.wants(self.w))
-
-    def test_a_world_with_no_salt_wants_it_and_its_health_falls(self):
-        self.w.element_reserves.pop("NaCl", None)
-        sec = self.k.sectors[self.w.sector_id]
-        if sec.port is not None:
-            sec.port.stock["NaCl"] = 0
-        before = lifespan.thr(self.k, self.w)
-        with mock.patch.object(biosphere, "metabolism_of", return_value="biotic"), \
-                mock.patch.object(supply, "_halite_cached", return_value=0):
-            for _ in range(8):
-                demand.diet(self.k, self.w)
-        self.assertGreater(demand.wants(self.w).get("NaCl", 0), 0)
-        self.assertLess(demand.salt_share(self.w), 0.5)
-        self.assertLess(lifespan.thr(self.k, self.w), before)
-
-    def test_life_that_needs_no_sodium_eats_none(self):
-        with mock.patch.object(biosphere, "metabolism_of", return_value="mineral"):
-            self.assertEqual(demand.diet(self.k, self.w), 1.0)
-        self.assertEqual(demand.salt_share(self.w), 1.0)
+    def test_no_people_is_told_what_its_body_needs(self):
+        self.assertFalse(hasattr(demand, "diet"))
+        self.assertFalse(hasattr(demand, "NA_DIET"))
+        self.w.society.pop("wants", None)
+        demand.season(self.k)
+        self.assertNotIn("NaCl", demand.wants(self.w))          # salt is wanted only where something uses it
 
     def test_a_want_is_the_standing_shortfall_and_landing_answers_it(self):
         self.w.society.pop("wants", None)

@@ -1,15 +1,12 @@
 """
-Xylarium demand: what peoples, docks, resorts and yards consume - and how a want that cannot be met at home becomes
-trade.
+Xylarium demand: what docks, resorts and yards consume - and how a want that cannot be met at home becomes trade.
 
-  DIET      life whose solvent is water keeps its cells by sodium: a body eats salt with its food, sodium's share of
-            a diet's mass as Earth's peoples show it (~5 g a day in ~0.7 kg of dry food: NA_DIET, a data point, not a
-            dial). A world takes it from its own salt beds first (supply.halite), then its stores, then its system's
-            port (paid from its vault). What its people get over what they need is its salt share; health reads it
-            as it reads food (lifespan.thr).
   LEISURE   a pleasure dome drinks water; one that goes dry wants it (tourism.py).
   DOCKS     a station's hull metal comes from the system's yards - or from metal brought to the world (tourism.py).
   FUEL      ships buy reaction mass at the ports; where a port holds none its landed cost prices it (supply.py).
+
+No people is told what its body needs: what it must have is what its own works and ways come to use. Salt is a
+mineral like any other (supply.py); it is wanted where something a people does uses it.
 
 WANTS. Whatever a world cannot get at home it wants: the want is written on the world (society["wants"]). Its port
 brings it (carry): it buys from the good's landed source (supply.py), paying the source its price, the source's
@@ -20,10 +17,6 @@ is answered when the goods land.
 """
 
 from typing import Any, Dict, List, Optional
-
-NA_DIET = 0.007                  # salt's share of a water-based diet's mass (Earth: ~5 g a day in ~0.7 kg dry food)
-SODIUM_LIFE = ("biotic", "umbral")   # life whose solvent is water
-
 
 def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "demand")
@@ -50,11 +43,6 @@ def answered(planet: Any, comm: str, n: int) -> None:
     w[comm] = max(0, int(w[comm]) - int(n))
     if not w[comm]:
         w.pop(comm)
-
-
-def salt_share(planet: Any) -> float:
-    """The share of its people's salt need a world met (1 where its people do not need it)."""
-    return float((getattr(planet, "society", None) or {}).get("salt", 1.0))
 
 
 def _buy_at_port(kernel: Any, planet: Any, comm: str, n: int) -> int:
@@ -168,51 +156,8 @@ def carry(kernel: Any, sector: Any) -> int:
     return moved
 
 
-def diet(kernel: Any, planet: Any) -> float:
-    """A quarter's salt for a water-life world: its own beds, its stores, its port - the rest wanted. Returns the share
-    of the need met."""
-    from xylarium.kernel import biosphere, matter, supply
-    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
-    if planet.population <= 0 or biosphere.metabolism_of(kernel, planet) not in SODIUM_LIFE:
-        planet.society.pop("salt", None)
-        return 1.0
-    per_q = biosphere.consumption(planet) * FISCAL_QUARTER_CYCLES * NA_DIET
-    carry = float(planet.society.get("salt_carry", 0.0)) + per_q
-    need = int(carry)
-    planet.society["salt_carry"] = round(carry - need, 6)
-    keep = max(1, int(2 * per_q + 0.999))                              # two seasons in store, as its staple is kept
-    have = int(planet.element_reserves.get("NaCl", 0))
-    if have < need + keep:
-        dug = supply._dig(kernel, planet, "NaCl", need + keep - have)    # its own beds
-        planet.element_reserves["NaCl"] = have + dug
-    have = int(planet.element_reserves.get("NaCl", 0))
-    if have < need + keep:
-        _buy_at_port(kernel, planet, "NaCl", need + keep - have)
-    have = int(planet.element_reserves.get("NaCl", 0))
-    if have - need < keep:
-        want(planet, "NaCl", keep - max(0, have - need))
-    if need <= 0:
-        return salt_share(planet)
-    eaten = min(need, have)
-    if eaten:
-        planet.element_reserves["NaCl"] = have - eaten
-        if not planet.element_reserves["NaCl"]:
-            planet.element_reserves.pop("NaCl")
-        matter.sink("eaten", "NaCl", eaten)
-    met = eaten / need
-    share = 0.75 * salt_share(planet) + 0.25 * met                       # a year's memory, a season at a time
-    planet.society["salt"] = round(share, 4)
-    st = stats(kernel)
-    st["salt_need"] += need
-    st["salt_eaten"] += eaten
-    return met
-
-
 def season(kernel: Any) -> List[str]:
-    """Every quarter: each water-life world eats its salt; then each port brings what its worlds want and lack."""
-    worlds = [w for s in kernel.sectors.values() for w in s.planets if w.population > 0]
-    for w in worlds:
-        diet(kernel, w)
+    """Every quarter: each port brings what its worlds want and lack."""
     for sec in kernel.sectors.values():
         if any(wants(w) for w in sec.planets):
             carry(kernel, sec)
@@ -221,12 +166,10 @@ def season(kernel: Any) -> List[str]:
 
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    short = 0
+    wanting = 0
     if hasattr(kernel, "sectors"):
-        short = sum(1 for s in kernel.sectors.values() for w in s.planets
-                    if w.population > 0 and salt_share(w) < 0.99)
-    return {"salt_need": st["salt_need"], "salt_eaten": st["salt_eaten"], "worlds_short_of_salt": short,
-            "carried": dict(st.get("carried", {}))}
+        wanting = sum(1 for s in kernel.sectors.values() for w in s.planets if w.population > 0 and wants(w))
+    return {"worlds_wanting": wanting, "carried": dict(st.get("carried", {}))}
 
 
 from xylarium.kernel import state  # noqa: E402
@@ -234,7 +177,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="demand",
-    state=lambda: {"salt_need": 0, "salt_eaten": 0, "carried": {}},
+    state=lambda: {"carried": {}},
     season=season,
     summary=summary,
 ))

@@ -139,9 +139,7 @@ def thr(kernel: Any, planet: Any) -> float:
     shelter = min(1.0, k / max(1, planet.population)) if k > 0 else 0.0
     d = disease(kernel, planet)
     spared = 1.0 - d["met"] * d["cfr"]
-    from xylarium.kernel import demand
-    salt = min(1.0, demand.salt_share(planet))          # water-life keeps its cells by sodium (demand.py)
-    return max(0.0, nutrition * air * sun * float(pollution_factor(planet)) * biome * shelter * spared * salt)
+    return max(0.0, nutrition * air * sun * float(pollution_factor(planet)) * biome * shelter * spared)
 
 
 def medicine(kernel: Any, planet: Any) -> float:

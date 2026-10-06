@@ -37,7 +37,7 @@ class TestBusiness(unittest.TestCase):
         if people is None:
             self.skipTest("no people keeps a port of its own money")
         book = business.sovereign_book(self.k, people)
-        for key in ("model", "traded", "wants", "exchanges", "salt"):
+        for key in ("model", "traded", "wants", "exchanges"):
             self.assertIn(key, book)
         exchanges.stats(self.k)["last_flow"].pop(str(sec.id), None)
         exchanges.stats(self.k)["flow"].pop(str(sec.id), None)
@@ -66,7 +66,7 @@ class TestBusiness(unittest.TestCase):
         if not realms:
             self.skipTest("no realm yet")
         book = business.steward_book(self.k, realms[0])
-        for key in ("exchanges", "salt_short", "carried"):
+        for key in ("exchanges", "wanting", "carried"):
             self.assertIn(key, book)
 
 
