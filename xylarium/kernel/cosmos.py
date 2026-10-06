@@ -1036,9 +1036,9 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
     p.treasury = 0
     p.society["way"] = "forage"
     p.society["crop_z"] = 0.0
-    # its waking is a living thing's, resolved to the clock's frame: its history starts where the camera catches it
-    # (deep_gyr now - at most one step past its forecast), or the step it slept through would count as lived history
-    p.society["arisen"] = {"epoch": max(float(rec["epoch"]), deep_gyr(kernel)), "forecast": rec["epoch"],
+    # it wakes at its forecast on the one cosmic clock, however coarsely the camera is stepping: the stretch between
+    # its waking and the step that caught it is history it has lived, and the annals carry it there (annals.py)
+    p.society["arisen"] = {"epoch": float(rec["epoch"]), "forecast": rec["epoch"], "caught": deep_gyr(kernel),
                            "cell": list(cell), "cycle": kernel.cycle_count}
     ways._refresh(kernel, p)
     p.population = max(500, int(biosphere.carrying_capacity(kernel, p)))

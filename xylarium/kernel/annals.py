@@ -11,13 +11,14 @@ span in the people's own generations (measured by tools/bridges.py from the engi
 minds think: laws.cognition's speed). Peoples also fall: a hazard per generation, measured the same way.
 
 What a people lives in its annals it keeps: its way, its works, its yards, its knowledge, its crossing - and its
-people grows to what its world now feeds. Once across, its dominion grows (worlds settled per generation, as far as
-its network's reach: spheres.py, paid in passages by its power), and where two networks meet the style of the one
+people grows to what its world now feeds. Once across, its dominion grows (worlds settled per generation, up to the star systems within
+its network's reach: spheres.py, paid in passages by its power - so no faster than its ships travel), and where two networks meet the style of the one
 arriving decides between a bond and a realm war (spheres.py, realmwars.py). A fallen people leaves ruins on its homeworld (archaeology.py: the deep strata of an ANCIENT
 culture) and its name in the galaxy's chronicle. The galaxy's lore is these annals: every era, crossing, war and
 fall, dated in deep time (history.py: ERA, ASCENT, DOMINION, GALACTIC_WAR, FALL).
 """
 
+import functools
 import math
 from typing import Any, Dict, List, Optional
 
@@ -37,7 +38,8 @@ EMBODIMENT_SPAN = 200.0         # generations a genome-less people takes to come
 FALL_PER_GENERATION = 2.0e-4    # a one-world people's hazard of falling, per generation (declared: a mean of ~5,000
                                 # generations); among the stars it is shared out over the worlds it holds
 DOMINION_PER_GENERATION = 0.01  # worlds a crossed people settles per generation, per world it holds (declared)
-DOMINION_MAX = 10000            # worlds one dominion can hold together
+STARS_PER_SYSTEM = 4.0 / 3.0    # a third of systems are binaries (creation.BINARY_SHARE)
+DISC_HALF_THICKNESS_PC = 300.0  # the thin disc's scale height (measured): a reach wider than it settles a slab
 MIN_GENERATIONS = 1.0           # gaps shorter than a generation are left to the full engine
 
 
@@ -190,24 +192,90 @@ def _history(kernel: Any, who: str, rec: Dict[str, Any], stage: str, lived: floa
     return h
 
 
-def _dominion_hazard(rate: float, w0: float, gens: float) -> float:
-    """The hazard a dominion of w0 worlds runs over `gens` generations as it settles: each world's hazard shared over
-    its worlds, which grow e^(g t) up to DOMINION_MAX and hold there - f/(w0 g)(1 - e^-g t) while it grows, f/MAX
-    a generation after."""
-    g, w0 = DOMINION_PER_GENERATION, max(1.0, w0)
-    full = max(0.0, math.log(DOMINION_MAX / w0) / g)          # generations until it holds all it can
-    grow = min(gens, full)
-    return rate / (w0 * g) * (1.0 - math.exp(-g * grow)) + rate / DOMINION_MAX * max(0.0, gens - full)
+def _systems_per_pc3(kernel: Any, home: Any = None) -> float:
+    """Star systems per pc^3 where a people began (encounters.components: disc, bulge and nucleus)."""
+    from xylarium.kernel import cosmos, encounters
+    r = cosmos.R0_KPC
+    if home is not None and kernel is not None and cosmos.is_cosmic(kernel):
+        g = cosmos.stats(kernel)["place"].get(str(home.sector_id)) or {}
+        r = float(g.get("r", r))
+    return sum(n for n, _ in encounters.components(r)) / STARS_PER_SYSTEM
 
 
-def _dominion_until(rate: float, w0: float, need: float) -> float:
-    """The generations until a dominion of w0 worlds has run `need` of hazard (the inverse of _dominion_hazard)."""
+@functools.lru_cache(maxsize=1)
+def galaxy_systems() -> float:
+    """Every star system the galaxy holds: its exponential disc (2 pi R_d^2 Sigma(0)), bulge and nuclear cluster, at the
+    Kroupa mean star and a third of systems binaries."""
+    from xylarium.kernel import cosmos, encounters, geometry
+    suns = 2.0 * math.pi * cosmos.R_D_KPC ** 2 * geometry.surface_density(0.0) + encounters.BULGE_M + encounters.NUCLEUS_M
+    return suns / encounters.MEAN_STAR / STARS_PER_SYSTEM
+
+
+def _systems_within(n: float, reach_pc: float) -> float:
+    """The systems within reach_pc: a sphere cut by the disc's thickness (exact: 2 pi H (R^2 - H^2/3) once wider),
+    and never more than the galaxy holds."""
+    h = DISC_HALF_THICKNESS_PC
+    v = 4.0 / 3.0 * math.pi * reach_pc ** 3 if reach_pc <= h else 2.0 * math.pi * h * (reach_pc ** 2 - h * h / 3.0)
+    return min(n * v, galaxy_systems())
+
+
+def front_pc(n: float, since: float) -> float:
+    """How far a people's settling front has come `since` generations after it crossed: each settlement is a hop to
+    the nearest system (n^-1/3), and it settles at DOMINION_PER_GENERATION - so the front moves a hop for each
+    settlement it can make, and no faster than that (at the Sun's density and 25-year generations ~1.7 pc per
+    2,500 years: the disc's 10 kpc in some 15 Myr)."""
+    return n ** (-1.0 / 3.0) * (1.0 + DOMINION_PER_GENERATION * max(0.0, since))
+
+
+def dominion_cap(kernel: Any, who: str, home: Any = None, since: Optional[float] = None) -> float:
+    """How many worlds a dominion can hold: the star systems within its settling front (front_pc, `since` its
+    crossing - by default as far as its annals have carried it), or within its network's reach where the engine has
+    built one (spheres.radius); never less than the worlds it already holds."""
+    from xylarium.kernel import spheres
+    n = _systems_per_pc3(kernel, home)
+    rec = (stats(kernel)["of"].get(who) or {}) if kernel is not None else {}
+    if since is None:
+        since = float((rec.get("hist") or {}).get("X", 0.0))
+    reach_pc = max(front_pc(n, since), spheres.radius(kernel, who) * 1000.0 if kernel is not None else 0.0)
+    return max(1.0, float(rec.get("dominion", 1)), _systems_within(n, reach_pc))
+
+
+def _dominion_hazard(rate: float, w0: float, gens: float, cap_of: Any, need: Optional[float] = None) -> tuple:
+    """The hazard a dominion of w0 worlds runs over `gens` generations as it settles, its fall shared over its worlds:
+    they grow e^(g t), but never past the systems its front has reached (cap_of(t), growing as the front does).
+    While it grows freely, f/(w0 g)(1 - e^-g t); once its front binds it, the integral of f/cap, taken in
+    ln(1 + g t) where the front's volume is smooth. With `need`, also when that much hazard has been run (else None).
+    Returns (hazard run, generations until `need`)."""
     g, w0 = DOMINION_PER_GENERATION, max(1.0, w0)
-    full = max(0.0, math.log(DOMINION_MAX / w0) / g)
-    at_full = rate / (w0 * g) * (1.0 - math.exp(-g * full))
-    if need < at_full:
-        return -math.log(1.0 - need * w0 * g / rate) / g
-    return full + (need - at_full) * DOMINION_MAX / rate
+    bound = lambda t: math.log(w0) + g * t >= math.log(max(1.0, cap_of(t)))   # noqa: E731
+    if bound(0.0):
+        tb = 0.0
+    elif not bound(gens):
+        tb = gens
+    else:
+        lo, hi = 0.0, gens
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            lo, hi = (lo, mid) if bound(mid) else (mid, hi)
+        tb = hi
+    free = rate / (w0 * g) * (1.0 - math.exp(-g * tb))
+    if need is not None and need < free:
+        return need, -math.log(1.0 - need * w0 * g / rate) / g
+    ran, steps = free, 256
+    u0, u1 = math.log1p(g * tb), math.log1p(g * gens)
+    du = (u1 - u0) / steps
+    for i in range(steps):
+        if du <= 0:
+            break
+        ua, ub = u0 + i * du, u0 + (i + 1) * du
+        ta, tb_ = math.expm1(ua) / g, math.expm1(ub) / g
+        tm = math.expm1(0.5 * (ua + ub)) / g
+        w = min(math.exp(min(700.0, math.log(w0) + g * tm)), max(1.0, cap_of(tm)))
+        h = rate / w * (tb_ - ta)
+        if need is not None and ran + h >= need:
+            return need, ta + (need - ran) * w / rate
+        ran += h
+    return ran, None
 
 
 def _next_kind(kernel: Any, who: str, home: Any, worlds: List[Any], stage: str) -> tuple:
@@ -326,9 +394,16 @@ def season(kernel: Any) -> List[str]:
                 # among the stars a people falls only if all its worlds do: its hazard is the one-world hazard over
                 # its dominion, which grows as it settles - H = f / (W0 g) (1 - e^-g T) over what is left of T
                 need = hist["E"] - hist["H"]
-                ran = _dominion_hazard(fall_rate, hist["W"], left)
-                if need < ran:
-                    fell = t + _dominion_until(fall_rate, hist["W"], need)
+                x0 = hist.get("X", 0.0) if crossed_at == 0.0 and t == 0.0 else 0.0
+                hist["X"] = x0
+                from xylarium.kernel import spheres
+                n_sys = _systems_per_pc3(kernel, home)
+                net_pc = spheres.radius(kernel, who) * 1000.0
+                floor = max(1.0, float(rec.get("dominion", 1)))
+                ran, until = _dominion_hazard(fall_rate, hist["W"], left, lambda tt: max(
+                    floor, _systems_within(n_sys, max(net_pc, front_pc(n_sys, x0 + tt)))), need)
+                if until is not None:
+                    fell = t + until
                     hist["H"] = hist["E"]
                 else:
                     hist["H"] += ran
@@ -377,7 +452,9 @@ def season(kernel: Any) -> List[str]:
         if fell is None:
             if stage == "crossed":
                 since = max(0.0, gens - (crossed_at or 0.0))
-                hist["W"] = min(float(DOMINION_MAX), hist["W"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since)))
+                hist["X"] = hist.get("X", 0.0) + since            # generations its front has been moving
+                hist["W"] = min(dominion_cap(kernel, who, home, since=hist["X"]),
+                                hist["W"] * math.exp(min(50.0, DOMINION_PER_GENERATION * since)))
                 rec["dominion"] = int(hist["W"])
                 from xylarium.kernel import spheres
                 rec["reach"] = spheres.radius(kernel, who)       # its network's reach, paid in passages (spheres.py)

@@ -424,7 +424,7 @@ def _beyond_the_witnessed(kernel: Any, planet: Any, emigrants: int, cost: int, q
     _pay_contractor(kernel, planet, cost)
     planet.population -= emigrants
     rec = annals.stats(kernel)["of"].setdefault(who, {"advanced": 0.0, "passed": [], "dominion": 1, "reach": 0.0})
-    rec["dominion"] = min(annals.DOMINION_MAX, rec["dominion"] + 1)
+    rec["dominion"] = int(min(annals.dominion_cap(kernel, who, planet), rec["dominion"] + 1))
     stats(kernel)["beyond_witnessed"] = stats(kernel).get("beyond_witnessed", 0) + 1
     return None
 

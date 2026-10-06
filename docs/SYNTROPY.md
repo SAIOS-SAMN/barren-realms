@@ -106,6 +106,23 @@ How much deep time one clock year films is the one camera (`tempo.py`). It slows
 its next turning, and speeds up while a watcher looks away. Even then it never runs past the frame of a living
 people whose star will die. It is one rate for the whole galaxy, and it changes nothing it films.
 
+A people wakes at its forecast on that clock (`society["arisen"]["epoch"]`), however coarsely the camera was stepping.
+The step that caught it is kept apart (`"caught"`), and the stretch between the two is history the annals carry it
+through. Its population is the world's: the annals' `P` is progress in generations, not a head count.
+
+## Dominions settle at the speed of their front
+
+A crossed people settles 1% more worlds per generation per world it holds (declared). It can only settle systems its
+front has reached. Each settlement is a hop to the nearest system, n^(−1/3) at the density of stars where it began
+(disc, bulge and nucleus: `encounters.components`). So the front moves one hop per settlement it can make. At the Sun's
+density that is ~1.7 pc per 2,500 years, which crosses the disc in ~15–25 Myr. The systems within the front are a
+sphere cut by the disc's thickness, never more than the galaxy holds (~1.2×10¹¹). Its fall is shared over the worlds
+it holds, integrated along that growth (`annals._dominion_hazard`). The old flat cap of 10,000 worlds is gone.
+
+Open: dominions do not yet exclude one another. Every crossed people's front fills the same galaxy within ~25 Myr of
+crossing, and crossings are tens to hundreds of Myr apart. So the first to cross reaches every system before the next
+one crosses. Who holds what when fronts meet needs its own rule.
+
 ## Still to derive
 
 - **Disc accretion.** Should depend on fields carrying angular momentum, and stellar winds should be sorted by
