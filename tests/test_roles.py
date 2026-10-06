@@ -89,9 +89,11 @@ class TestProgenitorSeat(unittest.TestCase):
         self.assertTrue(anc)                                      # the seed's own number of them
         self.assertEqual([a["dawn_gyr"] for a in anc], sorted(a["dawn_gyr"] for a in anc))
         from xylarium.kernel import cosmos
-        for a in anc:                                             # each on the core's first set of stars
-            self.assertLess(cosmos.ring_radius(a["ring"]), cosmos.R_BULGE_KPC)
-            self.assertTrue(cosmos.first_generation(k, tuple(a["cell"]), a["k"]))
+        first = min(float(m["epoch"]) for m in cosmos.stats(k)["minds"])
+        self.assertEqual(anc[0]["dawn_gyr"], round(first, 4))      # the galaxy's first mind is an ancient
+        for a in anc:                                             # by age: within one core assembly time of it
+            self.assertLessEqual(a["dawn_gyr"] - first, cosmos.ancient_window(k) + 1e-4)
+            self.assertTrue(cosmos.first_of_its_ring(k, tuple(a["cell"]), a["k"]))   # by place: its ring's first stars
 
 
 class TestOpeningMenu(unittest.TestCase):

@@ -178,16 +178,31 @@ def abundance(element: str, r: float) -> float:
     return here / there if there > 0 else 0.0
 
 
-def first_generation(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
-    """Is this slot's star of the first set the core raised - orbiting inside its bulge, and born within the first
-    e-fold of the bulge's star formation (its infall timescale after the first stars)? The ancients rise on these."""
+def first_of_its_ring(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
+    """Was this slot's star of its own ring's first generation - born within the first e-fold of that ring's star
+    formation (its infall timescale after the first stars)? Inside-out: the core's first generation is early, the
+    rim's late; where a star stands sets what 'first' means for it."""
     from xylarium.kernel import creation
     r = ring_radius(int(cell[0]))
-    if r >= R_BULGE_KPC:
-        return False
     s = cosmos_seed(kernel)
     slot = creation.cell(s, int(cell[0]), int(cell[1]))[int(k)]
+    if "born" not in slot:
+        return False
     return slot["born"] - creation.first_stars(s) <= creation.infall_gyr(s, r)
+
+
+def ancient_window(kernel: Any) -> float:
+    """How long after the galaxy's first mind another still counts among the first: one e-fold of the fastest star
+    formation anywhere - the core's own assembly time (Gyr)."""
+    from xylarium.kernel import creation
+    return creation.infall_gyr(cosmos_seed(kernel), 0.0)
+
+
+def is_ancient(kernel: Any, mind: Dict[str, Any], first_dawn: float) -> bool:
+    """An ancient, by age and by place: it woke within one core assembly time of the galaxy's first mind, on a star
+    of its own ring's first generation."""
+    return (float(mind["epoch"]) - first_dawn <= ancient_window(kernel)
+            and first_of_its_ring(kernel, tuple(mind["cell"]), int(mind["k"])))
 
 
 def omega(r: float) -> float:

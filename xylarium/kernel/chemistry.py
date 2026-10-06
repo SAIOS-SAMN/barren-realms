@@ -98,6 +98,8 @@ def _build() -> Dict[str, Dict[str, Any]]:
 TABLE = _build()
 RETENTION = 6.0                 # escape energy x A / T (Earth = 1, 1, 1) a world needs to keep an element:
                                 # Earth keeps water (A 18) and loses helium (A 3) and hydrogen (A 1)
+EXHUMED = 0.01                  # share of what a world's melting brings up that comes from below its upper mantle
+                                # (superdeep diamonds carry bridgmanite up: rare; a stated estimate, not measured)
 PURE_UNITS = 500                # units an Earth-sized crust lays down of matter all of one kind: the deposit ruler
                                 # (a deposit holds PURE_UNITS x its standing grade, concentration.py)
 REGIONAL = [1 / 2, 2 / 3, 3 / 4, 7 / 8, 1, 9 / 8, 5 / 4, 3 / 2]
@@ -192,14 +194,17 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
         if reach < 0.05:
             why[sym] = "sunk"
             continue
-        if e["origin"] == "deep":
-            held[sym] = 5                                  # below any crust: only what eruptions bring up
-            continue
+        deep_share = EXHUMED * flows.get("magmatic", 0.0) if e["origin"] == "deep" else 1.0   # below any crust:
+                                                           # only what its deepest eruptions bring up
         size = math.sqrt(min(mass, 400.0))                 # a crust's reach grows with the world, not its whole mass
         g = concentration.grade(min(1.0, concentration.crustal(sym, wstate, flows) * made),
                                 concentration.strength(sym, flows))
-        units = PURE_UNITS * g * size * reach * region_weight(sector, e["family"])
-        held[sym] = max(1, int(units))                     # where it survives, a trace is always there to find
+        units = PURE_UNITS * g * size * reach * region_weight(sector, e["family"]) * deep_share
+        n = int(units)
+        if n <= 0:
+            why[sym] = "dispersed"                         # too thin anywhere on it to hold one unit: none to find
+            continue
+        held[sym] = n
     return held, why
 
 

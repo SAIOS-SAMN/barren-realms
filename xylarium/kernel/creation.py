@@ -510,6 +510,9 @@ def _worlds(seed: Any, L: Any, i: int, j: int, k: int, slot: Dict[str, Any], sec
                     e=round(now["e"], 5), inc=round(now["inc"], 5), node=round(now["node"], 5),
                     peri=round(now["peri"], 5), obliquity=round(now["obliquity"], 5))
         orbit = {"host_kg": star_kg, "a_m": a_m, "el": el, "obliquity": now["obliquity"]}
+        from xylarium.kernel import encounters
+        if _rng(seed, "flyby", i, j, k, n).random() >= encounters.survival(a_au, r, SETTLED_GYR):
+            continue                                       # a passing star took it (and its moons) out of the system
         worlds.append(world(body, mm, a_au, orbit, None, rng))
         parent = len(worlds) - 1
         if not mm["giant"]:

@@ -378,13 +378,15 @@ start_steward = start_sovereign          # the older name of the sovereign's sea
 
 
 def ancients(kernel: Any) -> List[Dict[str, Any]]:
-    """The ancients this universe will raise: the minds that wake on the first set of stars the galactic core made -
-    inside its bulge, born in the first e-fold of its star formation (cosmos.first_generation). Their number is the
-    seed's, not chosen. Earliest first: when each wakes (Gyr after the Big Bang), what its life is made of, and how
-    far out its home lies (its ring of the galaxy)."""
+    """The ancients this universe will raise, by age and by place (cosmos.is_ancient): the minds that wake within one
+    core assembly time of the galaxy's first mind, each on a star of its own ring's first generation. Their number is
+    the seed's, not chosen. Earliest first: when each wakes (Gyr after the Big Bang), what its life is made of, and
+    how far out its home lies (its ring of the galaxy)."""
     from xylarium.kernel import cosmos
     out = []
-    firsts = [m for m in cosmos.stats(kernel)["minds"] if cosmos.first_generation(kernel, tuple(m["cell"]), m["k"])]
+    minds = sorted(cosmos.stats(kernel)["minds"], key=lambda m: float(m["epoch"]))
+    first = float(minds[0]["epoch"]) if minds else 0.0
+    firsts = [m for m in minds if cosmos.is_ancient(kernel, m, first)]
     for i, m in enumerate(firsts):
         out.append({"index": i, "dawn_gyr": round(float(m["epoch"]), 4), "metabolism": m.get("metab") or "biotic",
                     "ring": int(m["cell"][0]), "cell": list(m["cell"]), "k": int(m["k"]), "w": int(m.get("w", 0)),

@@ -89,16 +89,17 @@ def seated_progenitor(kernel: Any) -> Optional[str]:
 
 # ---------------------------------------------------------------------- the progenitors: an ancients' own class
 def ancient_peoples(kernel: Any) -> Dict[str, Any]:
-    """The living peoples that are ancients: their home world's star is of the core's first set
-    (cosmos.first_generation). -> {holder: home world}."""
-    from xylarium.kernel import cosmos, relations
+    """The living peoples that are ancients (roles.ancients: by age and by place - woke within one core assembly time
+    of the galaxy's first mind, on a star of its own ring's first generation). -> {holder: home world}."""
+    from xylarium.kernel import cosmos, relations, roles
     if not cosmos.is_cosmic(kernel):
         return {}
+    origins = {(tuple(a["cell"]), int(a["k"])) for a in roles.ancients(kernel)}
     out = {}
     for who, worlds in relations._peoples(kernel).items():
         home = max(worlds, key=lambda w: (w.population, w.id))
         g = cosmos.stats(kernel)["place"].get(str(home.sector_id)) or {}
-        if "cell" in g and cosmos.first_generation(kernel, tuple(g["cell"]), g.get("k", 0)):
+        if "cell" in g and (tuple(g["cell"]), int(g.get("k", 0))) in origins:
             out[who] = home
     return out
 
@@ -106,8 +107,10 @@ def ancient_peoples(kernel: Any) -> Dict[str, Any]:
 def progenitors(kernel: Any) -> Dict[str, Dict[str, Any]]:
     """The progenitor lines: an ancient people that has crossed to the stars - staying near its own worlds, as the
     old do - raises a class of its own to do its bidding across them. Each line's reach is its people's network of
-    folded passages (spheres.py: as far as its power has paid for); a line whose people falls ends. In a settled universe, which has no Big Bang of
-    its own, the elders of its prehistory hold the progenitors' place."""
+    folded passages (spheres.py: as far as its power has paid for); a line whose people falls ends. A people that is
+    not ancient keeps its own line when it crosses: it sends its own stewards to the realms its network holds
+    (stewardship.envoys: "sent by the X themselves"), and raises no progenitors. In a settled universe, which has no
+    Big Bang of its own, the elders of its prehistory hold the progenitors' place."""
     from xylarium.kernel import annals, mastery, spheres
     st = stats(kernel)
     lines = st.setdefault("progenitors", {})
