@@ -1913,7 +1913,7 @@ class GameKernel:
             captain.credits -= cost
             royalty = shipdesign_mod.royalty_on_build(self, captain, ship_name, cost)   # the designer's share
             self._stardock_revenue(sector, cost - royalty)
-            iron_frame = propulsion_mod.refit(self, sector, captain.ship.ship_type, ship_name)
+            iron_frame = propulsion_mod.refit(self, sector, captain.ship.ship_type, ship_name, captain.ship, captain)
             if cfg.get("drive") and cfg.get("designer"):
                 # a drawn design comes with the fuel cell it was drawn for; the old bunker goes back to the yard
                 old = propulsion_mod.fuel_of(captain.ship)

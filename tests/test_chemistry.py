@@ -52,7 +52,7 @@ class TestDistribution(unittest.TestCase):
 class TestDiscovery(unittest.TestCase):
     def test_peoples_dig_into_what_their_worlds_hold(self):
         k = fresh()
-        for _ in range(400):
+        for _ in range(600):                              # two dozen quarters: a few finds are a few rolls
             k.tick_simulation()
         st = chemistry.stats(k)
         self.assertGreater(st["discoveries"], 0)

@@ -72,5 +72,74 @@ class TestUses(unittest.TestCase):
         self.assertNotIn("H2O", demand.wants(self.w))
 
 
+class TestHulls(unittest.TestCase):
+    def setUp(self):
+        random.seed(5)
+        self.k = GameKernel(seed=42)
+        self.k.activate()
+
+    def test_a_crews_hull_is_what_holds_at_its_warmth_and_melts_back_to_itself(self):
+        from xylarium.kernel import chemistry, matter, propulsion
+        from xylarium.kernel.economy import EconomyManager
+        cap = next(iter(self.k.captains.values()))
+        cap.metabolism = "cryogenic"
+        sol = self.k.sectors[cap.sector_id] if self.k.sectors[cap.sector_id].port else self.k.sectors[1]
+        EconomyManager.ensure_port_inventory(sol.port)
+        for g in uses.structural(0.0):
+            sol.port.stock[g] = 0
+        sol.port.stock["H2O"] = 10_000                           # only ice on the shelves
+        chemistry.stats(self.k)["known"][f"captain:{cap.id}"] = sorted(chemistry.TABLE)
+        self.assertLess(uses.captain_body(self.k, cap)["t"], 273.16)
+        short = propulsion.refit(self.k, sol, cap.ship.ship_type, "Merchant Cruiser", cap.ship, cap)
+        self.assertFalse(short)
+        self.assertEqual(set(cap.ship.hull_matter), {"H2O"})      # an ice hull for a cold-blooded crew
+        built = cap.ship.hull_matter["H2O"]
+        before = sol.port.stock["H2O"]
+        propulsion.refit(self.k, sol, "Merchant Cruiser", "Merchant Cruiser", cap.ship, cap)
+        self.assertEqual(sol.port.stock["H2O"], before + built - sum(cap.ship.hull_matter.values()))
+
+    def test_a_district_is_built_of_what_holds_where_it_stands_and_returns_as_itself(self):
+        from xylarium.kernel import chemistry
+        from xylarium.kernel.surface import SurfaceManager, DistrictType
+        w = max((p for s in self.k.sectors.values() for p in s.planets if p.population > 0),
+                key=lambda p: p.population)
+        cap = next(iter(self.k.captains.values()))
+        w.owner_id = cap.id
+        cap.credits = 10 ** 6
+        for g in uses.structural(0.0):
+            w.element_reserves.pop(g, None)
+        w.ore_silo = 0
+        port = self.k.sectors[w.sector_id].port
+        if port is not None:
+            for g in uses.structural(0.0):
+                port.stock[g] = 0
+        w.element_reserves["H2O"] = 500
+        chemistry.stats(self.k)["known"][uses.holder_of(w)] = sorted(chemistry.TABLE)
+        grid = SurfaceManager.ensure_surface_grid(w)
+        tile = next(t for t in grid.tiles if t.district == DistrictType.EMPTY)
+        with mock.patch.object(uses, "site_t", return_value=218.0):           # a cold people on a cold world
+            r = SurfaceManager.build_district(cap, w, tile.x, tile.y, DistrictType.HYDROPONIC_SPIRE)
+        self.assertTrue(r.success, r.message)
+        self.assertEqual(w.society["built_of"][f"{tile.x},{tile.y}"], {"H2O": 25})
+        self.assertEqual(w.element_reserves["H2O"], 475)
+        r = SurfaceManager.demolish_district(cap, w, tile.x, tile.y)
+        self.assertEqual(r.data["salvage_matter"], {"H2O": 12})              # its ice back, not ore
+        with mock.patch.object(uses, "site_t", return_value=worlds.body_temperature("H2O")):
+            r = SurfaceManager.build_district(cap, w, tile.x, tile.y, DistrictType.HYDROPONIC_SPIRE)
+        self.assertFalse(r.success)                                          # ice melts at a water-born site
+
+    def test_a_citadel_is_mended_with_what_it_is_made_of(self):
+        w = max((p for s in self.k.sectors.values() for p in s.planets if p.population > 0),
+                key=lambda p: p.population)
+        w.society["citadel_of"] = {"H2O": 120, "ORE": 5}
+        self.assertEqual(uses.wears(self.k, w), "H2O")
+        w.element_reserves["H2O"] = 10
+        self.assertEqual(uses.take(w, "H2O", 3, "citadel_upkeep"), 3)
+        self.assertEqual(w.element_reserves["H2O"], 7)
+        w.society.pop("citadel_of")
+        with mock.patch.object(uses, "site_t", return_value=worlds.body_temperature("plasma")):
+            self.assertIsNone(uses.wears(self.k, w))                     # nothing holds: no walls to mend
+
+
 if __name__ == "__main__":
     unittest.main()

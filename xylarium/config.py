@@ -916,7 +916,7 @@ SENATE_EDICT_COOLDOWN = 30              # Minimum cycles between edict proclamat
 # [5] Surface Grid & Planetary Invasion Constants (Netstratum 02_COLONY_LOOP)
 SURFACE_GRID_WIDTH = 8
 SURFACE_GRID_HEIGHT = 8
-SURFACE_DISTRICT_COST_ORE = 25          # Base ore cost to construct a surface district
+SURFACE_DISTRICT_UNITS = 25             # Matter a surface district takes (what it is made of is its site's: uses.py)
 SURFACE_DISTRICT_COST_CREDITS = 1500    # Base credits cost to construct a surface district
 SURFACE_TROOP_RECRUIT_COST = 250        # Credits per assault troop division recruited
 SURFACE_TROOP_RECRUIT_ORE = 5           # Heavy ore for troop armored plating
@@ -1627,7 +1627,7 @@ TOURIST_H_PER_HUNDRED_HOPS = 1         # Reaction mass burned per hundred passen
 TOURIST_SPEND_PER_HEAD = 2             # SOL-value a mass tourist spends per trip (to count heads)
 RESORT_BEDS = 5000                     # Tourist-trips per quarter a Pleasure Dome tile hosts
 RESORT_COST = 4000                     # SOL-value (x price level) to raise one, paid to the contractor port
-RESORT_ORE = 40
+RESORT_SHELL_UNITS = 40                # Matter a dome's shell takes (what it is made of is its site's: uses.py)
 RESORT_H2O_PER_QUARTER = 5             # Water a dome consumes per quarter (pools, gardens, spas)
 ORBITAL_BERTHS_PER_STATION = 8000      # Tourist-trips per quarter an orbital leisure station hosts
 ORBITAL_STATION_COST = 12000           # SOL-value to build one at a starport (the port's operator pays)

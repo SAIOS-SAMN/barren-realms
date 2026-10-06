@@ -577,18 +577,17 @@ class FactionManager:
         live = [c for c in f.fleet if c in kernel.captains]
         if len(live) >= IMPERIUM_FLEET_MAX or not __import__("xylarium.kernel.populace", fromlist=["room_for_ai"]).room_for_ai(kernel):
             return []
-        stock = {"Fe": fortress.element_reserves.get("Fe", 0), "Ti": fortress.element_reserves.get("Ti", 0),
-                 "ORE": fortress.ore_silo}
-        if any(stock[k] < v for k, v in IMPERIUM_WARSHIP_COST.items()):
+        # a hull is matter that holds its shape at its crew's warmth - the fortress world's people - from the
+        # fortress's own stores and its port's (uses.py); how much is the hull's size
+        from xylarium.kernel import uses
+        b = uses.body(kernel, fortress)
+        t = b["t"] if b else (uses.captain_body(kernel, None) or {"t": 300.0})["t"]   # its crews are carbon-water
+        frame = uses.build_with(kernel, fortress, t, sum(IMPERIUM_WARSHIP_COST.values()))
+        if not frame:
             return []
         if self.vault_sol(kernel, f) < IMPERIUM_CREW_FLOAT * 2:
             return []
-        for k, v in IMPERIUM_WARSHIP_COST.items():
-            if k == "ORE":
-                matter.consume(fortress, "ore_silo", "ORE", v, "shipbuilding")
-            else:
-                fortress.element_reserves[k] -= v
-                matter.sink("shipbuilding", k, v)
+        made = uses.draw(kernel, fortress, frame, "shipbuilding")
         has_hauler = any(kernel.captains[c].ship.ship_type == "Bulk Goliath" for c in live)
         hull = "Gothic Battle-Cruiser" if has_hauler else "Bulk Goliath"
         crew_float = self._pay_from_vault(kernel, f, IMPERIUM_CREW_FLOAT)   # paid in the realm's own money
@@ -596,6 +595,7 @@ class FactionManager:
                                "human-imperial", fortress.sector_id, crew_float.pop("SOL", 0))
         for cur, amt in crew_float.items():
             cap.fx_wallet[cur] = cap.fx_wallet.get(cur, 0) + amt
+        cap.ship.hull_matter = made
         f.bump("warships")
         from xylarium.kernel import chronicle
         chronicle.decree(kernel, f, f"The Commissioning of {cap.name}",

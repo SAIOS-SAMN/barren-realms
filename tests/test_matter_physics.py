@@ -68,18 +68,19 @@ class TestYardsAndIndustry(unittest.TestCase):
         self.kernel = GameKernel(seed=7)
         self.kernel.activate()
 
-    def test_old_hulls_are_melted_down_and_titanium_is_substituted(self):
+    def test_old_hulls_are_melted_down_and_new_ones_built_from_what_holds(self):
+        from xylarium.kernel import uses
         sol = self.kernel.sectors[1]
         EconomyManager.ensure_port_inventory(sol.port)
         sol.port.stock["Ti"] = 0
         sol.port.stock["Fe"] = 10_000
         t0, n0 = matter.totals(self.kernel), self.kernel.matter.net()
-        iron = propulsion.refit(self.kernel, sol, "Scout Ship", "Merchant Cruiser")
-        self.assertFalse(iron)                                  # iron stood in for the missing titanium
-        self.assertEqual(undeclared(self.kernel, t0, n0), {})
-        sol.port.stock["Fe"] = 0
-        sol.port.stock["Ti"] = 0
-        self.assertTrue(propulsion.refit(self.kernel, sol, "Scout Ship", "Merchant Cruiser"))   # short: iron frame
+        short = propulsion.refit(self.kernel, sol, "Scout Ship", "Merchant Cruiser")
+        self.assertFalse(short)                                 # other matter that holds stood in for titanium
+        self.assertEqual(undeclared(self.kernel, t0, n0), {})   # melted and built: every unit declared
+        for g in uses.structural(0.0):
+            sol.port.stock[g] = 0                               # nothing on the shelves holds a shape at all
+        self.assertTrue(propulsion.refit(self.kernel, sol, "Scout Ship", "Merchant Cruiser"))   # a short frame
 
     def test_fabrication_needs_inputs_and_leaves_slag(self):
         port = next(s.port for s in self.kernel.sectors.values() if s.port is not None and s.port.sells.get("EQUIPMENT"))

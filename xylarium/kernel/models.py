@@ -550,6 +550,7 @@ class Ship:
     core_wear: int = 0       # jumps on the installed warp core
     design: Optional[Dict[str, Any]] = None   # the hull entry of a drawn design this ship was built to (hulls.py)
     has_cryo_containment: bool = False  # Stasis Pod cryogenic containment reducing transit spoilage by 80%
+    hull_matter: Optional[Dict[str, int]] = None   # what its hull is made of (uses.py: its builder's matter)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -563,6 +564,7 @@ class Ship:
             "core_wear": self.core_wear,
             "design": dict(self.design) if self.design else None,
             "has_cryo_containment": self.has_cryo_containment,
+            "hull_matter": dict(self.hull_matter) if self.hull_matter else None,
         }
 
     @classmethod
@@ -578,6 +580,7 @@ class Ship:
             max_shields=data["max_shields"],
             fighters=data["fighters"],
             has_cryo_containment=bool(data.get("has_cryo_containment", False)),
+            hull_matter=dict(data["hull_matter"]) if data.get("hull_matter") else None,
         )
 
 

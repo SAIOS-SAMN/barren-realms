@@ -37,7 +37,7 @@ from xylarium.config import (
     XP_INDUSTRY_DISTRICT,
     XP_GOVERNANCE_HEALTHY_TAX,
 )
-from xylarium.kernel import matter
+from xylarium.kernel import ledger, matter, uses
 from xylarium.kernel.models import (
     Planet,
     Captain,
@@ -472,21 +472,31 @@ class ColonyManager:
                 message=f"Citadel upgrade requires {cost_cr:,} Cr. You have {captain.credits:,} Cr.",
             )
 
+        # its walls are matter that holds its shape where it stands (uses.py), the world's own and its port's;
+        # rock a captain carries in where rock holds there
+        kernel = ledger.active_kernel()
+        t = uses.site_t(kernel, planet) if kernel is not None else None
+        parts = uses.build_with(kernel, planet, t, cost_ore) if t is not None else []
+        rock_holds = t is None or uses.solid_at(uses.ROCK, t)
         available_ore = captain.ship.cargo.unbonded("ORE") + planet.ore_silo
-        if available_ore < cost_ore:
+        if not parts and not (rock_holds and available_ore >= cost_ore):
             return ActionResult(
                 success=False,
                 action=ActionType.PLANET_UPGRADE_CITADEL,
-                message=f"Requires {cost_ore} Ore for construction. Available across ship/silo: {available_ore}.",
+                message=f"Requires {cost_ore} units of matter that holds its shape at {planet.name} "
+                        f"for construction (rock across ship/silo: {available_ore}).",
             )
 
-        # Deduct ore
-        ore_needed = cost_ore
-        if planet.ore_silo >= ore_needed:
-            matter.consume(planet, "ore_silo", "ORE", ore_needed, "construction")
+        if parts:
+            made = uses.draw(kernel, planet, parts, "construction")
         else:
-            ore_needed -= matter.consume(planet, "ore_silo", "ORE", planet.ore_silo, "construction")
+            ore_needed = cost_ore
+            ore_needed -= matter.consume(planet, "ore_silo", "ORE", min(planet.ore_silo, ore_needed), "construction")
             matter.consume(captain.ship.cargo, "ore", "ORE", ore_needed, "construction")
+            made = {"ORE": cost_ore}
+        rec = planet.society.setdefault("citadel_of", {})
+        for m, q in made.items():
+            rec[m] = rec.get(m, 0) + q
 
         captain.credits -= cost_cr
         cls._pay_contractor_sol(planet, cost_cr)
@@ -738,9 +748,13 @@ class ColonyManager:
         # push a solvent colony into arrears - the authority sees the shortfall and asks again next season
         services_due = min(services_due, max(0, tax_yield + planet.treasury // 10 - upkeep_credits))
         spending = upkeep_credits + services_due
-        upkeep_paid = (tax_yield + planet.treasury >= spending) and planet.ore_silo >= upkeep["ore"]
+        # its walls are mended with what they are made of (uses.citadel_of)
+        mend = uses.wears(ledger.active_kernel(), planet) if upkeep["ore"] else None
+        upkeep_paid = (tax_yield + planet.treasury >= spending) and \
+            (mend is None or uses.held(planet, mend) >= upkeep["ore"])
         if upkeep_paid:
-            matter.consume(planet, "ore_silo", "ORE", upkeep["ore"], "citadel_upkeep")
+            if mend is not None:
+                uses.take(planet, mend, upkeep["ore"], "citadel_upkeep")
             soc["fiscal_acc"] = soc.get("fiscal_acc", 0) + tax_yield        # the tax it actually took (relations)
             # Taxes and public services are the fiscal pair (declared mint / burn) ...
             net = tax_yield - services_due

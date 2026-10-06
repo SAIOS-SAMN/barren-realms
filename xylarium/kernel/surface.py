@@ -12,11 +12,11 @@ import random
 import math
 from typing import Dict, List, Optional, Tuple, Any
 
-from xylarium.kernel import matter
+from xylarium.kernel import matter, uses
 from xylarium.config import (
     SURFACE_GRID_WIDTH,
     SURFACE_GRID_HEIGHT,
-    SURFACE_DISTRICT_COST_ORE,
+    SURFACE_DISTRICT_UNITS,
     SURFACE_DISTRICT_COST_CREDITS,
     SURFACE_TROOP_RECRUIT_COST,
     SURFACE_TROOP_RECRUIT_ORE,
@@ -65,6 +65,29 @@ DISTRICT_GLYPHS = {
     DistrictType.MILITARY_BARRACKS: "B",
     DistrictType.RESORT_DOME: "L",
 }
+
+
+def ledger_kernel() -> Any:
+    from xylarium.kernel import ledger
+    return ledger.active_kernel()
+
+
+def _built_of(planet: Any) -> Dict[str, Dict[str, int]]:
+    """What each district on a world is made of, by tile, so what is pulled down returns as itself."""
+    return planet.society.setdefault("built_of", {})
+
+
+def _district_matter(kernel: Any, planet: Any) -> List[Tuple[str, int]]:
+    """A district's matter: the cheapest at the world that holds its shape where it stands (uses.site_t)."""
+    if kernel is None:
+        return []
+    t = uses.site_t(kernel, planet)
+    return uses.build_with(kernel, planet, t, SURFACE_DISTRICT_UNITS) if t is not None else []
+
+
+def _rock_holds(kernel: Any, planet: Any) -> bool:
+    t = uses.site_t(kernel, planet) if kernel is not None else None
+    return t is None or uses.solid_at(uses.ROCK, t)
 
 
 @dataclass
@@ -337,9 +360,10 @@ class SurfaceManager:
                 action_type=ActionType.SURFACE_BUILD_DISTRICT,
             )
 
-        # Check costs (Credits and Ore)
+        # Check costs: credits, and matter that holds its shape where it stands (uses.py)
         cost_cr = SURFACE_DISTRICT_COST_CREDITS
-        cost_ore = SURFACE_DISTRICT_COST_ORE
+        kernel = ledger_kernel()
+        parts = _district_matter(kernel, planet)
 
         # Can draw from captain credits or planetary treasury
         if captain.credits < cost_cr and planet.treasury < cost_cr:
@@ -349,10 +373,13 @@ class SurfaceManager:
                 action_type=ActionType.SURFACE_BUILD_DISTRICT,
             )
 
-        if planet.ore_silo < cost_ore and captain.ship.cargo.unbonded("ORE") < cost_ore:
+        from_hold = not parts and _rock_holds(kernel, planet) and \
+            captain.ship.cargo.unbonded("ORE") >= SURFACE_DISTRICT_UNITS
+        if not parts and not from_hold:
             return ActionResult(
                 success=False,
-                message=f"Insufficient ore to construct {district.name} ({cost_ore} Ore required).",
+                message=f"Nothing here holds {district.name}'s shape where it stands "
+                        f"({SURFACE_DISTRICT_UNITS} units of matter solid at its site required).",
                 action_type=ActionType.SURFACE_BUILD_DISTRICT,
             )
 
@@ -366,13 +393,15 @@ class SurfaceManager:
             planet.treasury -= cost_cr
             ColonyManager._pay_local(planet, ledger.active_kernel(), cost_cr)
 
-        if planet.ore_silo >= cost_ore:
-            matter.consume(planet, "ore_silo", "ORE", cost_ore, "construction")
+        if parts:
+            made = uses.draw(kernel, planet, parts, "construction")
         else:
-            matter.consume(captain.ship.cargo, "ore", "ORE", cost_ore, "construction")
+            matter.consume(captain.ship.cargo, "ore", "ORE", SURFACE_DISTRICT_UNITS, "construction")
+            made = {"ORE": SURFACE_DISTRICT_UNITS}
 
         # Build
         tile.district = district
+        _built_of(planet)[f"{x},{y}"] = made
         from xylarium.kernel.experience import ExperienceManager
         from xylarium.config import XP_INDUSTRY_DISTRICT
         ExperienceManager.award(captain, "industry", XP_INDUSTRY_DISTRICT, None, key=f"district:{planet.id}")
@@ -418,7 +447,7 @@ class SurfaceManager:
             )
 
         salvage_cr = SURFACE_DISTRICT_COST_CREDITS // 2
-        salvage_ore = SURFACE_DISTRICT_COST_ORE // 2
+        made = _built_of(planet).pop(f"{x},{y}", None) or {"ORE": SURFACE_DISTRICT_UNITS}   # unrecorded: older rock
 
         old_district = tile.district
         tile.district = DistrictType.EMPTY
@@ -433,13 +462,14 @@ class SurfaceManager:
         if buyer is not None:
             ledger_debit_port_sol(buyer, salvage_cr)
         captain.credits += salvage_cr
-        matter.produce(planet, "ore_silo", "ORE", salvage_ore, "demolition_salvage")
+        back = uses.salvage(planet, made, 0.5, "demolition_salvage")
+        got = ", ".join(f"{q} {m}" for m, q in back.items()) or "nothing"
 
         return ActionResult(
             success=True,
-            message=f"Demolished {old_district.name} at ({x}, {y}). Salvaged {salvage_cr} Cr and {salvage_ore} Ore.",
+            message=f"Demolished {old_district.name} at ({x}, {y}). Salvaged {salvage_cr} Cr and {got}.",
             action_type=ActionType.SURFACE_DEMOLISH_DISTRICT,
-            data={"salvage_credits": salvage_cr, "salvage_ore": salvage_ore},
+            data={"salvage_credits": salvage_cr, "salvage_matter": back, "salvage_ore": back.get("ORE", 0)},
         )
 
     @staticmethod
@@ -685,7 +715,6 @@ class SurfaceManager:
         # Autonomous infrastructure construction when colony treasury exceeds 10,000 Cr and faces deficits
         if planet.owner_id is not None and planet.treasury >= 10000:
             cost_cr = SURFACE_DISTRICT_COST_CREDITS
-            cost_ore = SURFACE_DISTRICT_COST_ORE
 
             # Unclosed deficits check
             has_ration_deficit = (staples.held(planet, food) == 0)
@@ -701,8 +730,10 @@ class SurfaceManager:
                         chosen_tile = ideal_tiles[0] if ideal_tiles else empty_tiles[0]
                         planet.treasury -= cost_cr
                         _pay_builders(planet, cost_cr)
-                        if planet.ore_silo >= cost_ore:
-                            matter.consume(planet, "ore_silo", "ORE", cost_ore, "construction")
+                        parts = _district_matter(ledger_kernel(), planet)
+                        if parts:
+                            _built_of(planet)[f"{chosen_tile.x},{chosen_tile.y}"] = \
+                                uses.draw(ledger_kernel(), planet, parts, "construction")
                     elif has_ore_deficit and planet.treasury >= cost_cr:
                         target_district = DistrictType.MANTLE_BORE
                         ideal_tiles = [t for t in empty_tiles if t.terrain in [TerrainType.MOUNTAINS, TerrainType.MINERAL_RIDGE]]

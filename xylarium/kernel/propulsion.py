@@ -418,35 +418,44 @@ def hull_metal(ship_type: str, kernel: Any = None) -> tuple:
     return fe, max(1, fe // 2)
 
 
-def refit(kernel: Any, yard_sector: Any, old_type: str, new_type: str) -> bool:
-    """A hull upgrade: the old hull is melted down into the yard's warehouse, the new one is built from the
-    yard's metal - titanium substituted by twice the iron when short. If even the iron runs out, the yard
-    still delivers, as a heavier iron-frame build with less hold space. Returns True for an iron frame."""
-    from xylarium.kernel import matter, topology
+def refit(kernel: Any, yard_sector: Any, old_type: str, new_type: str, ship: Any = None,
+          captain: Any = None) -> bool:
+    """A hull upgrade: the old hull is melted down into the yard's warehouse - what it is made of (its recorded
+    matter; a hull from before matter was recorded is the iron and titanium it was) - and the new one is built from
+    the yard's matter that holds its shape at its crew's warmth and that its captain understands (uses.py), as much
+    as the hull's mass asks. If the yard runs short, it still delivers, a lighter-framed build with less hold space.
+    Returns True for such a short frame."""
+    from xylarium.kernel import matter, uses
     port = getattr(yard_sector, "port", None)
     if port is None:
         return False
     from xylarium.kernel.economy import EconomyManager
     EconomyManager.ensure_port_inventory(port)
-    fe_old, ti_old = hull_metal(old_type, kernel)
-    port.stock["Fe"] = port.stock.get("Fe", 0) + fe_old
-    port.stock["Ti"] = port.stock.get("Ti", 0) + ti_old
-    matter.source("hull_meltdown", "Fe", fe_old)
-    matter.source("hull_meltdown", "Ti", ti_old)
+    old = dict(ship.hull_matter) if ship is not None and getattr(ship, "hull_matter", None) else None
+    if old is None:
+        fe_old, ti_old = hull_metal(old_type, kernel)
+        old = {"Fe": fe_old, "Ti": ti_old}
+    for g, q in old.items():
+        if q > 0:
+            port.stock[g] = port.stock.get(g, 0) + q
+            matter.source("hull_meltdown", g, q)
     fe_need, ti_need = hull_metal(new_type, kernel)
-    ti_used = min(ti_need, port.stock.get("Ti", 0))
-    fe_need += 2 * (ti_need - ti_used)                      # substitution: iron for the missing titanium
-    fe_used = min(fe_need, port.stock.get("Fe", 0))
-    port.stock["Ti"] = port.stock.get("Ti", 0) - ti_used
-    port.stock["Fe"] = port.stock.get("Fe", 0) - fe_used
-    matter.sink("shipbuilding", "Ti", ti_used)
-    matter.sink("shipbuilding", "Fe", fe_used)
+    units = fe_need + ti_need
+    body = uses.captain_body(kernel, captain) if captain is not None else None
+    t = body["t"] if body else 300.0
+    holder = f"captain:{captain.id}" if captain is not None else None
+    drawn = uses.from_shelf(kernel, port, t, units, holder)
+    for g, q in drawn.items():
+        port.stock[g] -= q
+        matter.sink("shipbuilding", g, q)
+    if ship is not None:
+        ship.hull_matter = drawn or None
     si_need = int(((hulls.lookup(kernel, new_type) or {}).get("materials") or {}).get("Si", 0))
     si_used = min(si_need, port.stock.get("Si", 0))           # shields, reactors and lasers are silicon
     if si_used:
         port.stock["Si"] -= si_used
         matter.sink("shipbuilding", "Si", si_used)
-    return fe_used < fe_need
+    return sum(drawn.values()) < units
 
 
 from xylarium.kernel import cache, state  # noqa: E402

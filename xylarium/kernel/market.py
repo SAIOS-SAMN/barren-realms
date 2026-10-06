@@ -731,8 +731,11 @@ class MarketManager:
                 if staples.stores(kernel, planet) < food_need * 20:
                     needs.append((staples.of(kernel, planet), min(60, max(15, food_need * 5))))
                 upkeep_ore = CITADEL_UPKEEP.get(planet.citadel_level, {}).get("ore", 0)
-                if upkeep_ore and planet.ore_silo < upkeep_ore * 25:
-                    needs.append(("ORE", min(60, max(15, upkeep_ore * 10))))
+                if upkeep_ore:
+                    from xylarium.kernel import uses as _uses       # its walls are mended with what they are made of
+                    mend = _uses.wears(kernel, planet)
+                    if mend is not None and _uses.held(planet, mend) < upkeep_ore * 25:
+                        needs.append((mend, min(60, max(15, upkeep_ore * 10))))
                 from xylarium.kernel import demand as _demand, supply as _supply
                 for comm_w, n_w in sorted(_demand.wants(planet).items()):
                     if n_w > 0 and not any(c == comm_w for c, _ in needs):
@@ -998,7 +1001,10 @@ class MarketManager:
                     metabolism = getattr(owner, "metabolism", metabolism)
                 demand = list(METABOLIC_DEMAND.get(metabolism, ["H2O"]))
                 if CITADEL_UPKEEP.get(planet.citadel_level, {}).get("ore", 0):
-                    demand.append("ORE")
+                    from xylarium.kernel import uses as _uses
+                    mend = _uses.wears(kernel, planet)
+                    if mend is not None and mend not in demand:
+                        demand.append(mend)
                 demand = [e for e in demand if planet.element_reserves.get(e, 0) < 60 or e == "ORE" and planet.ore_silo < 200]
                 if not demand:
                     continue

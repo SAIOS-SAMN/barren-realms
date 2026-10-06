@@ -43,7 +43,7 @@ from xylarium.config import (
     RESORT_BEDS,
     RESORT_COST,
     RESORT_H2O_PER_QUARTER,
-    RESORT_ORE,
+    RESORT_SHELL_UNITS,
     SHIP_CATALOG,
     TOURISM_FARE_SHARE,
     TOURISM_PURSE_SHARE,
@@ -117,7 +117,12 @@ def _build_resort(kernel: Any, planet: Any, st: Dict[str, Any]) -> Optional[str]
     level = PRICE_LEVEL.get(planet.currency, 1.0)
     cost = int(RESORT_COST * level)
     reserve = int(demography.DEMOGRAPHY_COUNCIL_RESERVE * level)
-    if planet.treasury < cost + reserve or planet.ore_silo < RESORT_ORE + 600:
+    if planet.treasury < cost + reserve:
+        return None
+    from xylarium.kernel import uses
+    t = uses.site_t(kernel, planet)
+    shell = uses.build_with(kernel, planet, t, RESORT_SHELL_UNITS) if t is not None else []
+    if not shell:                                            # nothing here holds a dome's shape where it stands
         return None
     grid = SurfaceManager.ensure_surface_grid(planet)
     empty = [t for t in grid.tiles if t.district == DistrictType.EMPTY]
@@ -128,7 +133,7 @@ def _build_resort(kernel: Any, planet: Any, st: Dict[str, Any]) -> Optional[str]
     tile.district = DistrictType.RESORT_DOME
     planet.surface_grid = grid.to_dict()
     demography._pay_contractor(kernel, planet, cost)
-    matter.consume(planet, "ore_silo", "ORE", RESORT_ORE, "construction")
+    uses.draw(kernel, planet, shell, "construction")
     st["resorts_built"] += 1
     return f"[TOURISM] {planet.name} opened a Pleasure Dome ({n + 1} on the world)."
 
@@ -193,18 +198,7 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
     local = _convert(kernel, "SOL", planet.currency, cost_sol)
     planet.household_purse += local // 2
     port.treasury += _convert(kernel, planet.currency, port.currency, local - local // 2)
-    for m, q in hull:                                         # its own stores first, then the yards'
-        own = min(q, planet.element_reserves.get(m, 0) + (planet.ore_silo if m == "ORE" else 0))
-        if m == "ORE":
-            from_silo = min(own, planet.ore_silo)
-            planet.ore_silo -= from_silo
-            own_left = own - from_silo
-            if own_left:
-                planet.element_reserves[m] = planet.element_reserves.get(m, 0) - own_left
-        elif own:
-            planet.element_reserves[m] -= own
-        port.stock[m] = port.stock.get(m, 0) - (q - own)
-        matter.sink("construction", m, q)
+    uses.draw(kernel, planet, hull, "construction")          # its own stores first, then the yards'
     planet.society["station"] = {"owner": investor.id, "berths": ORBITAL_BERTHS_PER_STATION,
                                  "built": kernel.cycle_count, "receipts": 0, "booked": 0}
     stats(kernel)["stations_built"] += 1

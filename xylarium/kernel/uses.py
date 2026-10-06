@@ -89,6 +89,42 @@ def body(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
     return None
 
 
+def captain_body(kernel: Any, captain: Any) -> Optional[Dict[str, Any]]:
+    """A crew's chemistry, read from its biology's region (worlds.region inverted). Where the region allows several
+    solvents, the warmest bounds what its hull must hold at: what holds there holds at all of them."""
+    from xylarium.kernel import worlds
+    metab = getattr(captain, "metabolism", None) or "biotic"
+    cands = _region_solvents(metab)
+    liquid = [x for x in cands if x in ("melt", "plasma") or
+              worlds.phase(x, worlds.body_temperature(x), 1.0) == "liquid"]
+    cands = liquid or cands
+    if not cands:
+        return None
+    s = max(cands, key=lambda x: worlds.body_temperature(x))
+    return {"solvent": s, "t": float(worlds.body_temperature(s))}
+
+
+def from_shelf(kernel: Any, port: Any, t: float, units: int, holder: Optional[str]) -> Dict[str, int]:
+    """Structural matter for a build at a yard: the cheapest solids at temperature t on its shelves that the
+    builder understands, until `units` are found (as many as there are)."""
+    from xylarium.kernel.economy import EconomyManager
+    opts = []
+    for g in structural(t, kernel, holder):
+        have = int(port.stock.get(g, 0))
+        if have > 0:
+            price = EconomyManager.get_unit_prices(port, g)[1] or float("inf")
+            opts.append((price, -have, g, have))
+    got: Dict[str, int] = {}
+    left = units
+    for _, _, g, have in sorted(opts):
+        if left <= 0:
+            break
+        take = min(have, left)
+        got[g] = take
+        left -= take
+    return got
+
+
 def medium(kernel: Any, planet: Any) -> Optional[str]:
     """The good that holds a people's medium, or None where no good does (or no people lives there)."""
     b = body(kernel, planet)
@@ -160,6 +196,104 @@ def build_with(kernel: Any, planet: Any, t: float, units: int) -> List[Tuple[str
         out.append((g, take))
         left -= take
     return out if left <= 0 else []
+
+
+def site_t(kernel: Any, planet: Any) -> Optional[float]:
+    """The temperature a building on a world must hold its shape at: it stands in its world's surface and holds its
+    people at their own warmth, so the warmer of the two (None where neither can be read)."""
+    from xylarium.kernel import worlds
+    b = body(kernel, planet)
+    try:
+        surf = float(worlds.state_of_planet(kernel, planet)["world"]["t_surf"])
+    except Exception:
+        surf = None
+    ts = [x for x in ((b or {}).get("t"), surf) if x is not None]
+    return max(ts) if ts else None
+
+
+def draw(kernel: Any, planet: Any, parts: List[Tuple[str, int]], reason: str) -> Dict[str, int]:
+    """Take a build's matter out of the world's own stores first, then its port's shelves (build_with chose it);
+    the matter leaves the ledger into what is built (matter.sink). Returns what it is made of."""
+    from xylarium.kernel import matter
+    port = getattr(kernel.sectors.get(planet.sector_id), "port", None)
+    made: Dict[str, int] = {}
+    for m, q in parts:
+        own = min(q, int((planet.element_reserves or {}).get(m, 0)) + (int(planet.ore_silo or 0) if m == ROCK else 0))
+        if m == ROCK:
+            from_silo = min(own, int(planet.ore_silo or 0))
+            planet.ore_silo -= from_silo
+            if own - from_silo:
+                planet.element_reserves[m] = planet.element_reserves.get(m, 0) - (own - from_silo)
+        elif own:
+            planet.element_reserves[m] -= own
+        if q - own and port is not None:
+            port.stock[m] = port.stock.get(m, 0) - (q - own)
+        matter.sink(reason, m, q)
+        made[m] = made.get(m, 0) + q
+    return made
+
+
+def salvage(planet: Any, made: Dict[str, int], share: float, reason: str) -> Dict[str, int]:
+    """Matter recovered from what is pulled down, back to the world's stores as what it was built of."""
+    from xylarium.kernel import matter
+    back: Dict[str, int] = {}
+    for m, q in (made or {}).items():
+        n = int(q * share)
+        if n <= 0:
+            continue
+        if m == ROCK:
+            planet.ore_silo = int(planet.ore_silo or 0) + n
+        else:
+            planet.element_reserves[m] = planet.element_reserves.get(m, 0) + n
+        matter.source(reason, m, n)
+        back[m] = n
+    return back
+
+
+def held(planet: Any, good: str) -> int:
+    """What a world holds of a good in its own stores (rock in its silo)."""
+    return int((planet.element_reserves or {}).get(good, 0)) + (int(planet.ore_silo or 0) if good == ROCK else 0)
+
+
+def take(planet: Any, good: str, n: int, reason: str) -> int:
+    """Take up to n of a good from a world's own stores; the matter is worn away (matter.sink)."""
+    from xylarium.kernel import matter
+    if good == ROCK:
+        return matter.consume(planet, "ore_silo", ROCK, n, reason)
+    have = int((planet.element_reserves or {}).get(good, 0))
+    got = max(0, min(n, have))
+    if got:
+        planet.element_reserves[good] = have - got
+        matter.sink(reason, good, got)
+    return got
+
+
+def citadel_of(kernel: Any, planet: Any) -> Dict[str, int]:
+    """What a world's citadel is made of: recorded as it is raised; a citadel standing before any record is read
+    once from its site - the cheapest matter there that holds where it stands, else the first its people
+    understands - and remembered (its walls do not change what they are made of). Empty where nothing holds a
+    shape at its site: such a people's citadel is not walls of matter."""
+    if "citadel_of" in planet.society:
+        return planet.society["citadel_of"]
+    if kernel is None:                       # nothing to read its site with: rock, unremembered
+        return {ROCK: 0}
+    t = site_t(kernel, planet)
+    good: Optional[str] = ROCK
+    if t is not None:
+        got = build_with(kernel, planet, t, 1)
+        if got:
+            good = got[0][0]
+        else:
+            opts = structural(t, kernel, holder_of(planet))
+            good = opts[0] if opts else None
+    planet.society["citadel_of"] = {good: 0} if good else {}
+    return planet.society["citadel_of"]
+
+
+def wears(kernel: Any, planet: Any) -> Optional[str]:
+    """The matter a world's citadel is mended with: what most of it is made of (None: nothing to mend)."""
+    rec = citadel_of(kernel, planet)
+    return max(sorted(rec), key=lambda g: rec[g]) if rec else None
 
 
 def summary(kernel: Any) -> Dict[str, Any]:
