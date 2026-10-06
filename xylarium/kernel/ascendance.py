@@ -129,8 +129,11 @@ def books(kernel: Any, who: str, realm: str) -> mc.Chain:
     mine = measures(kernel, who)
     if not mine:
         return {}
-    peers = [p for p in stewardship.peoples_of(kernel, realm) if p != who]
-    keeper = spheres.presence(kernel, realm)
+    if realm.startswith("line:"):                          # a line's ward: read against the line's own people
+        peers, keeper = [], realm[len("line:"):]
+    else:
+        peers = [p for p in stewardship.peoples_of(kernel, realm) if p != who]
+        keeper = spheres.presence(kernel, realm)
     if not peers and keeper and keeper != who:
         peers = [keeper]
     theirs = [measures(kernel, p) for p in peers]
@@ -309,13 +312,17 @@ def rule(kernel: Any, who: str, verdict: str, by: str, logs: Optional[List[str]]
 def _due(kernel: Any, rec: Dict[str, Any]) -> bool:
     """A petition is read on arrival, then again every term of the realm's steward."""
     from xylarium.kernel import stewardship
+    if rec["realm"].startswith("line:"):                  # a line reads its wards every one of its generations
+        from xylarium.kernel import clocks, spheres
+        span = clocks.lived_span(kernel, spheres.generation(kernel, rec["realm"][len("line:"):]))
+        return rec["ruled"] is None or kernel.cycle_count - rec["ruled"] >= span
     return rec["ruled"] is None or kernel.cycle_count - rec["ruled"] >= stewardship.span_cycles(kernel, rec["realm"])
 
 
 def season(kernel: Any) -> List[str]:
     """Once a year: each petition due is read by its realm's steward, who rules on it by its books - unless a player
     keeps the realm, who rules for it."""
-    from xylarium.kernel import polity, stewardship
+    from xylarium.kernel import board, polity, stewardship
     if (kernel.cycle_count // polity._quarter()) % 4:
         return []
     logs: List[str] = []
@@ -328,15 +335,25 @@ def season(kernel: Any) -> List[str]:
         lead = mc.lead(res, BOOKS)
         rec["books"] = {b: str(res.get((who, b), 0)) for b in BOOKS}
         rec["lead"] = lead[1] if lead else None
-        if stewardship.steward_of(kernel, rec["realm"]):
-            rec["ruled"] = kernel.cycle_count              # a player keeps the realm: it rules (command.py)
+        line = rec["realm"][len("line:"):] if rec["realm"].startswith("line:") else None
+        held_line = (board.progenitors(kernel).get(line) or {}) if line is not None else {}
+        if (line is None and stewardship.steward_of(kernel, rec["realm"])) or held_line.get("standing") == "by hand":
+            rec["ruled"] = kernel.cycle_count              # a player keeps the realm (or rules its line by hand)
             continue
+        # a player's line is ruled by its standing policy while its player is away: by the books, unless it chose
+        # to rule by hand (command: the progenitor's seat plays asynchronously)
         verdict = "chartered" if lead is None else "quarantine"
         if lead is not None:
             mc.intend(rec["mind"], lead, res[lead], "quarantine", "candidate")
-        sent = stewardship.mind(kernel, rec["realm"])
+        if line is not None:
+            by = (board.progenitors(kernel).get(line) or {}).get("name") or f"the {line.split(':', 1)[-1]}"
+            ledger = board.stats(kernel).setdefault("wards", {}).setdefault(line, {"chartered": 0, "quarantine": 0})
+            ledger[verdict] += 1                               # each line's record: how its wards were ruled
+        else:
+            sent = stewardship.mind(kernel, rec["realm"])
+            by = sent["name"] if sent else "the realm"
         was = rec["ruling"]
-        rule(kernel, who, verdict, sent["name"] if sent else "the realm", logs)
+        rule(kernel, who, verdict, by, logs)
         if (verdict != was or rec.get("coascension") is None) and (rec.get("hosts") or hosts(kernel, who)):
             coascend(kernel, who, rec, verdict == "chartered", logs)
     return logs

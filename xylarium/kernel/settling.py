@@ -235,7 +235,10 @@ def radius(b: Dict[str, Any], t: float) -> float:
     if t < b["t0"]:
         return 0.0
     end = t if b["fell"] is None else min(t, b["fell"])
-    return min(b["rmax"], b["hop"] + b["v"] * max(0.0, end - b["t0"]))
+    moving = max(0.0, end - b["t0"])
+    for a, z in b.get("pauses") or []:                      # held at home by a steward's ruling: the front waits
+        moving -= max(0.0, min(z, end) - max(a, b["t0"]))
+    return min(b["rmax"], b["hop"] + b["v"] * max(0.0, moving))
 
 
 def _cut_fraction(a: Optional[float], reach: float) -> float:
@@ -311,7 +314,15 @@ def contact_time(kernel: Any, a: str, b: str) -> Optional[Tuple[float, float, fl
         v = ba["v"] + bb["v"]
         if v <= 0:
             return None
-        tc = t_lo + (d - ra - rb) / v
+        held = sum(z - a for x in (ba, bb) for a, z in x.get("pauses") or [])
+        hi = t_lo + (d - ra - rb) / v + held                    # the latest they can meet, pauses and all
+        if radius(ba, hi) + radius(bb, hi) < d:
+            return None                                         # one stopped short (fell, or reached its edge)
+        lo = t_lo
+        for _ in range(80):                                     # the fronts grow monotonically: bisect
+            mid = 0.5 * (lo + hi)
+            lo, hi = (lo, mid) if radius(ba, mid) + radius(bb, mid) >= d else (mid, hi)
+        tc = hi
     ra, rb = radius(ba, tc), radius(bb, tc)
     s = ra / max(1e-12, ra + rb) * d                           # the fronts meet where they have come in step
     return tc, s, d - s, None

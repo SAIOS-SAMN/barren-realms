@@ -445,6 +445,11 @@ def _settle(kernel: Any, jobs: List[Dict[str, Any]], logs: List[str]) -> None:
         j.update(t=b["crossed"] + x0 * gyr, end=b["crossed"] + j["x1"] * gyr,
                  W=float(j["hist"]["W"]), need=j["hist"]["E"] - j["hist"]["H"],
                  rate=j["fall_rate"] * 1e9 * j["lapse"] / j["gen"], g=b["g"])
+    from xylarium.kernel import ascendance
+    for j in jobs:
+        b = settling.stats(kernel)[j["who"]]
+        if not ascendance.free(kernel, j["who"]) and j["fell"] is None and j["end"] > j["t"]:
+            b.setdefault("pauses", []).append([j["t"], j["end"]])    # held at home by its steward: its front waits
     t_end = max(j["end"] for j in jobs)
     while True:
         meet = settling.next_contact(kernel, t_end)

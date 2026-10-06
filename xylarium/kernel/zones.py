@@ -185,7 +185,8 @@ def settle_all(kernel: Any) -> None:
 
 # ---------------------------------------------------------------------- folded peoples
 # The laws that carry or catch up what is folded see folded worlds; every other seasonal law runs without them.
-SEES_FOLDED = {"tempo", "clocks", "cosmos", "annals", "blackhole", "exodus", "geology", "board", "spheres", "transit"}
+SEES_FOLDED = {"tempo", "clocks", "cosmos", "annals", "blackhole", "exodus", "geology", "board", "spheres", "transit",
+               "ascendance"}               # a line reads its wards whether or not any seat watches them
 
 
 def folded_peoples(kernel: Any) -> FrozenSet[str]:

@@ -28,17 +28,32 @@ class TestFold(unittest.TestCase):
 
 
 class TestHub(unittest.TestCase):
-    def test_the_deepest_minds_keep_the_hub(self):
-        depth = {"civ:Core": 400.0, "civ:Rim": 0.4}
-        with mock.patch.object(gateways, "home_exposure", lambda k, w: depth[w]), \
-                mock.patch.object(gateways, "travels_as_information", lambda k, w: False):
-            self.assertEqual(gateways.hub_keeper(None, {"civ:Rim": 1, "civ:Core": 5}), "civ:Core")
+    def _contest(self, homes, nets, lines, transfer=()):
+        from xylarium.kernel import board, spheres, steward_ai
+        with mock.patch.object(gateways, "_r", lambda k, sid: homes[sid]), \
+                mock.patch.object(spheres, "_home", lambda k, w: mock.Mock(sector_id=w)), \
+                mock.patch.object(gateways, "travels_as_information", lambda k, w: w in transfer), \
+                mock.patch.object(spheres, "stats", lambda k: {"nets": nets}), \
+                mock.patch.object(board, "progenitors", lambda k: {w: {} for w, ln in lines.items() if ln is None}), \
+                mock.patch.object(steward_ai, "line_of", lambda k, w: lines.get(w)):
+            return gateways.hub_keeper(None, {w: 1 for w in nets}), gateways.hub_contest(None, {w: 1 for w in nets})
 
-    def test_minds_that_travel_as_information_take_any_wave(self):
-        depth = {"civ:Core": 400.0, "civ:Rim": 0.4}
-        with mock.patch.object(gateways, "home_exposure", lambda k, w: depth[w]), \
-                mock.patch.object(gateways, "travels_as_information", lambda k, w: w == "civ:Rim"):
-            self.assertEqual(gateways.hub_keeper(None, {"civ:Rim": 1, "civ:Core": 5}), "civ:Rim")
+    def test_the_line_whose_networks_carry_most_keeps_the_hub_through_a_people_that_bears_it(self):
+        homes = {"civ:Core": 0.2, "civ:Rim": 9.0, "civ:Client": 1.5}
+        nets = {"civ:Core": {"held": [1]}, "civ:Rim": {"held": list(range(50))}, "civ:Client": {"held": [2, 3]}}
+        keeper, contest = self._contest(homes, nets, {"civ:Core": None, "civ:Rim": None, "civ:Client": "civ:Rim"})
+        self.assertEqual(keeper, "civ:Client")                       # the Rim's line, through its bulge-born ward
+        self.assertEqual(contest[0][0], "civ:Rim")
+
+    def test_no_one_keeps_the_hub_while_no_one_bears_it(self):
+        homes = {"civ:Rim": 9.0}
+        keeper, _ = self._contest(homes, {"civ:Rim": {"held": [1]}}, {})
+        self.assertIsNone(keeper)
+
+    def test_minds_that_travel_as_information_bear_any_wave(self):
+        homes = {"civ:Rim": 9.0}
+        keeper, _ = self._contest(homes, {"civ:Rim": {"held": [1]}}, {}, transfer=("civ:Rim",))
+        self.assertEqual(keeper, "civ:Rim")
 
 
 class TestKindling(unittest.TestCase):

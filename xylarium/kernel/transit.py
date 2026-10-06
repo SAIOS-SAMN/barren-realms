@@ -594,8 +594,9 @@ def handling_of(kernel: Any, who: str) -> str:
 
 def _masters(kernel: Any, logs: List[str]) -> None:
     """A people that folds space rides the bounce of a stellar black hole (gateways.py: the torsion carries a mass
-    undistorted). The centre's throat - the hub - is kept by the master whose minds evolved deepest in the centre's
-    wave, or travel as information; it passes to another when a deeper one arises or its keeper falls."""
+    undistorted). The centre's throat - the hub - is the progenitors' first contest, fought through the peoples they
+    steward: the line whose networks carry the most of the galaxy keeps it, through a people that bears its wave
+    (gateways.hub_contest); it passes when another line's networks outgrow it, or its keeper falls."""
     from xylarium.kernel import cosmos, gateways, history, spheres
     if not cosmos.is_cosmic(kernel):
         return
@@ -618,7 +619,8 @@ def _masters(kernel: Any, logs: List[str]) -> None:
         if keeper is not None:
             history.event(kernel, "HUB_KEPT", f"The {keeper.split(':', 1)[-1]} keep the galaxy's hub",
                           actors=[keeper] + ([old] if old else []),
-                          cause="of those who ride the bounce, their minds bear the centre's wave best"
+                          cause="of the lines whose peoples bear the centre's wave, theirs carries the most of the "
+                                "galaxy"
                                 + (f" - it passes from the {old.split(':', 1)[-1]}" if old else ""),
                           data={"exposure": round(gateways.home_exposure(kernel, keeper), 3)})
             for w in st["worms"].values():

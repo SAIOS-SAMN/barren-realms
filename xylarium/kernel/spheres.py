@@ -297,11 +297,15 @@ def _begin(kernel: Any, who: str, logs: List[str]) -> None:
     st["nets"][who] = net = {"home": home.sector_id, "since": kernel.cycle_count, "t0": _years(kernel, who),
                              "t": _years(kernel, who), "owed": "0", "held": [], "radius": 0.0,
                              "gen": generation(kernel, who)}
-    if owner(kernel, home.sector_id) is None:
+    from xylarium.kernel import ascendance, steward_ai
+    line = steward_ai.line_of(kernel, who)
+    if owner(kernel, home.sector_id) is not None:              # it crosses inside a realm another keeps: it asks
+        ascendance.petition(kernel, who, owner(kernel, home.sector_id))   # that realm's steward to let it go
+    elif line not in (None, "elders", who):                    # it crosses under a line's steward: it asks that line
         _hold(kernel, who, net, home.sector_id)
-    else:                                                      # it crosses inside a realm another keeps: it asks
-        from xylarium.kernel import ascendance                 # that realm's steward to let it go among the stars
-        ascendance.petition(kernel, who, owner(kernel, home.sector_id))
+        ascendance.petition(kernel, who, f"line:{line}")
+    else:
+        _hold(kernel, who, net, home.sector_id)
 
 
 def _busy(kernel: Any) -> List[int]:

@@ -19,9 +19,10 @@ Charted systems lie tens to hundreds of parsecs apart, so between them every roa
 THE WAVE. A bounce rings: what crosses at the centre's horizon sends its wave out through the galaxy, falling off as
 1/r^2 from the core. A people's minds evolved under its home's wave (exposure relative to the Sun's radius:
 (R0 / r)^2). A stellar throat carries a mass undistorted on the torsion's repulsion: any people that folds space can
-ride one. The centre's throat - the hub, and the road to the other galaxies - sits in the deepest wave: it is kept
-by the master whose minds evolved deepest in it, or whose minds travel as information (mind transfer); others pass
-it as its keeper's handling allows (transit.py).
+ride one. The centre's throat - the hub, and the road to the other galaxies - sits in the deepest wave: only a people
+born inside the bulge, or whose minds travel as information, can ride it. The progenitors contest it through the
+peoples they steward: the line whose networks carry the most of the galaxy keeps it, through one of its peoples that
+bears the wave; others pass as the keeper's handling allows (transit.py).
 """
 
 import functools
@@ -98,15 +99,46 @@ def within_fold(kernel: Any, a: int, b: int) -> bool:
 
 
 # ---------------------------------------------------------------------- the hub and who passes it
+def bears_hub(kernel: Any, who: str) -> bool:
+    """Can a people's minds ride the centre's throat: born inside the bulge, where the centre's wave is what its life
+    evolved in (cosmos.R_BULGE_KPC), or minds that travel as information."""
+    from xylarium.kernel import cosmos, spheres
+    if travels_as_information(kernel, who):
+        return True
+    home = spheres._home(kernel, who)
+    r = _r(kernel, home.sector_id) if home is not None else None
+    return r is not None and r <= cosmos.R_BULGE_KPC
+
+
+def hub_contest(kernel: Any, masters: Any) -> list:
+    """The progenitors' first contest, fought through the peoples they steward: each line's networks together
+    (its own people's, and every people its stewards keep - steward_ai.line_of), and whether any of them bears the
+    hub. -> [(line, systems its networks hold, rider or None)], strongest first."""
+    from xylarium.kernel import board, spheres, steward_ai
+    lines = board.progenitors(kernel)
+    groups: dict = {}
+    for m in sorted(masters):
+        line = m if m in lines else (steward_ai.line_of(kernel, m) or m)
+        groups.setdefault(line, []).append(m)
+    out = []
+    for line, members in groups.items():
+        size = 0
+        for m in members:
+            net = spheres.stats(kernel)["nets"].get(m) or {}
+            size += len(net.get("held", [])) + int(net.get("beyond", 0))
+        riders = [m for m in members if bears_hub(kernel, m)]
+        rider = max(riders, key=lambda w: (travels_as_information(kernel, w), round(home_exposure(kernel, w), 9), w)) \
+            if riders else None
+        out.append((line, size, rider))
+    out.sort(key=lambda x: (x[2] is None, -x[1], x[0]))
+    return out
+
+
 def hub_keeper(kernel: Any, masters: Any) -> Optional[str]:
-    """Who keeps the centre's throat: of the peoples that ride the bounce, one whose minds travel as information, else
-    the one whose minds evolved deepest in the centre's wave - the first of them to cross, on a tie."""
-    ms = sorted(masters)
-    if not ms:
-        return None
-    since = masters if isinstance(masters, dict) else {}
-    return max(ms, key=lambda w: (travels_as_information(kernel, w), round(home_exposure(kernel, w), 9),
-                                  -float(since.get(w, 0)), w))
+    """Who keeps the centre's throat: of the lines one of whose peoples bears its wave, the one whose networks carry
+    the most of the galaxy - kept through that people. None while no one can bear it: the long roads stay shut."""
+    contest = hub_contest(kernel, masters)
+    return contest[0][2] if contest and contest[0][2] is not None else None
 
 
 def long_range(kernel: Any, who: str) -> bool:
