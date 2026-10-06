@@ -23,8 +23,10 @@ boils. Nothing here names a people's needs; the physics of its body and its worl
              people whose solvent is molten rock builds with what stays solid in its furnace. Which of the solids a
              people builds with is what is cheapest to it - its own world's and its port's - not a recipe.
 
-Melting points are measured data (1 bar), as the element abundances are; the five-axis exotics carry their own
-workable state (elements.py: cryogenic, mesic, furnace, refractory).
+Melting points are measured data (1 bar), as the element abundances are; an element without one holds a shape below
+its solid point in the universal table (chemistry.TABLE - its condensation temperature; the exotics' read from their
+almanac phase). A people builds only with what its world holds and what it has come to understand (chemistry.known):
+an element is dug, then understood, then built with.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -38,10 +40,9 @@ VOLATILE_OF = {"H2O": "H2O", "cryogenite": "NH3"}
 # and dioxide) are laid down with carbon in the solid C good: no good holds them as liquids yet, so a people whose
 # chemistry runs in them keeps its medium from its own world until there is one
 MEDIUM_GOOD = {"H2O": "H2O", "NH3": "cryogenite", "N2": "cryogenite", "melt": "ORE", "plasma": "H"}
-# a five-axis exotic's workable state (elements.py PHASE_NAMES): furnace and refractory matter must be heated to be
-# worked, so it holds its shape at least until rock melts; cryogenic and mesic matter carries no melting point the
-# table gives, and is not counted on to hold a shape until its matter is known
-_FURNACE_WORKED = (3, 4)
+# ORE is a world's silicate rock: the mantle its magnesium, silicon and oxygen condense into (worlds.SOLIDS - MgSiO3
+# as the abundances give it), melting where rock melts (worlds.MELT_K). Every people knows the rock it stands on.
+ROCK = "ORE"
 
 
 def _region_solvents(metab: str) -> List[str]:
@@ -103,13 +104,9 @@ def melt_k(good: str) -> Optional[float]:
         return float(worlds.MELT_K)
     if good in MELT_K:
         return MELT_K[good]
-    try:
-        from xylarium.kernel.elements import PeriodicTable
-        e = PeriodicTable.get_element(good)
-    except Exception:
-        e = None
-    state = getattr(e, "phase", None) if e is not None else None
-    return float(worlds.MELT_K) if state in _FURNACE_WORKED else None
+    from xylarium.kernel import chemistry
+    e = chemistry.TABLE.get(good)                  # the universal table's own solid point (its condensation)
+    return float(e["tc"]) if e is not None else None
 
 
 def solid_at(good: str, t: float) -> bool:
@@ -117,11 +114,20 @@ def solid_at(good: str, t: float) -> bool:
     return m is not None and t < m
 
 
-def structural(t: float) -> List[str]:
+def structural(t: float, kernel: Any = None, holder: Optional[str] = None) -> List[str]:
     """The goods that hold a shape at a temperature: matter, not made things (the elements and minerals the galaxy
-    laid down, supply.goods, and rock)."""
-    from xylarium.kernel import supply
-    return [g for g in ["ORE"] + supply.goods() if solid_at(g, t)]
+    laid down, supply.goods, and rock) - and, for a people, only those it has come to understand (chemistry.known:
+    an element is dug before it is built with)."""
+    from xylarium.kernel import chemistry, supply
+    out = [g for g in [ROCK] + supply.goods() if solid_at(g, t)]
+    if kernel is not None and holder and "chemistry" in getattr(kernel, "state", {}):
+        out = [g for g in out if g == ROCK or chemistry.knows(kernel, holder, g)]
+    return out
+
+
+def holder_of(planet: Any) -> Optional[str]:
+    from xylarium.kernel import knowledge
+    return knowledge.holder_of_planet(planet)
 
 
 def _cost(kernel: Any, planet: Any, good: str) -> float:
@@ -140,7 +146,7 @@ def build_with(kernel: Any, planet: Any, t: float, units: int) -> List[Tuple[str
     cannot be built."""
     port = getattr(kernel.sectors.get(planet.sector_id), "port", None)
     options = []
-    for g in structural(t):
+    for g in structural(t, kernel, holder_of(planet)):
         own = int((planet.element_reserves or {}).get(g, 0)) + (int(planet.ore_silo or 0) if g == "ORE" else 0)
         shelf = int(port.stock.get(g, 0)) if port is not None else 0
         if own + shelf > 0:

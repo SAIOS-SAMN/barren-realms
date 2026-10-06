@@ -180,7 +180,7 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
     hull = uses.build_with(kernel, planet, b["t"], STATION_HULL_UNITS) if b else []
     if not hull:                                              # nothing solid at its people's warmth to be had here
         from xylarium.kernel import demand
-        for g in uses.structural(b["t"])[:1] if b else []:
+        for g in uses.structural(b["t"], kernel, uses.holder_of(planet))[:1] if b else []:
             demand.want(planet, g, STATION_HULL_UNITS)        # the yards want hull matter brought
         raise ValueError("The system's yards lack matter that holds its shape at its people's warmth for a hull.")
     from xylarium.kernel import fx

@@ -1658,8 +1658,6 @@ FUEL_CELLS = {
     "WARP": {"name": "Warp stabilizer drive", "v_e": None, "min_tier": 3, "part": "M4_WARP_CORE", "core_life": 400},
     "AM": {"name": "Antimatter photon drive", "v_e": 30.0, "min_tier": 4, "part": "M4_WARP_CORE"},
 }
-# What each biology's engineering tradition burns (before it looks at what is abundant)
-FUEL_TRADITION = {"biotic": "C", "mineral": "U", "plasmic": "H", "cryogenic": "H2O", "umbral": "Xe"}
 FUEL_REACH = 3                         # warps within which a people reckons what is abundant
 DRIVE_INSTALL_FEE = 2000               # SOL-value paid to the yard on top of the part
 # Readiness: a world's defence grid and fighters run on fusion. With too little hydrogen in reach it broadcasts

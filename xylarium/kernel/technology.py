@@ -14,7 +14,10 @@ works, or none:
                the rocket equation asks a mass ratio of e^(dv / v_e) for the dv to orbit (~0.8 v_esc with the
                losses of the climb). Past a ratio no structure carries (STRUCTURE: a ~4% dry share), a people
                cannot reach orbit by chemistry: a heavy world's people waits for the atom (FISSION's exhaust) - or
-               never builds yards (sustenance.yards reads it).
+               never builds yards (sustenance.yards reads it). And its rocket burns what its world gives it: split
+               water for chemistry (water its system holds and it understands), any volatile it holds for the atom.
+               A people beneath an ice shell or deep in a giant has no surface to launch from until it has the heat
+               to breach its world (FISSION): its sky is its world's ceiling.
   FISSION      the atom's energy, where its ground holds uranium or thorium: an exhaust ~2x chemistry's (nuclear
                thermal), and power.
   COMPUTATION  machines that think: on silicon or germanium where its ground holds them, or on superconductors
@@ -147,8 +150,7 @@ def feasible(kernel: Any, holder: str, cap: str, home: Any) -> bool:
             med = None
         return med is None or not med.get("dark")             # under ice or deep in a giant: no sky to send through
     if cap == "orbit":
-        v = chemical_exhaust_kms() * (FISSION_GAIN if "fission" in held else 1.0)
-        return orbit_ratio(home, v) <= STRUCTURE
+        return _can_launch(kernel, holder, home, "fission" in held)
     if cap == "fission":
         return home.element_deposits.get("U", 0) > 0 or any(
             p.element_deposits.get("U", 0) > 0 for p in _system(kernel, home))
@@ -162,6 +164,35 @@ def feasible(kernel: Any, holder: str, cap: str, home: Any) -> bool:
     if cap == "robotics":                                 # metal to build bodies from, in its own system
         return any(p.element_deposits.get("Fe", 0) > 0 for p in [home] + _system(kernel, home))
     return True
+
+
+def _can_launch(kernel: Any, holder: str, home: Any, fission: bool) -> bool:
+    """Whether a people can lift itself off its world, by what its world gives it: a chemical rocket burns split water
+    (the exhaust chemical_exhaust_kms reckons is water's), so it needs water its system holds and it understands; a
+    nuclear-thermal one heats any volatile it holds (water, hydrogen, the nitrogen or carbon ices). A people whose
+    chemistry runs under an ice shell or deep in a giant has no surface to launch from until it has the heat to
+    breach its world (fission) - its sky is its world's ceiling. Then the rocket equation decides, as before."""
+    from xylarium.kernel import biosphere, chemistry, worlds
+    worlds_here = [home] + _system(kernel, home)
+    held = set()
+    for p in worlds_here:
+        held |= {s for s, n in (p.element_deposits or {}).items() if n > 0}
+        held |= {s for s, n in (p.element_reserves or {}).items() if n > 0}
+
+    def has(s: str) -> bool:
+        return s in held and chemistry.knows(kernel, holder, s)
+    chemical = has("H2O")
+    nuclear = fission and any(has(s) for s in ("H2O", "H", "cryogenite", "C"))
+    if not chemical and not nuclear:
+        return False
+    try:
+        med = worlds.best(worlds.of_planet(kernel, home), biosphere.metabolism_of(kernel, home))
+    except Exception:
+        med = None
+    if med is not None and med.get("dark") and not fission:
+        return False                                          # beneath ice or deep in a giant: no surface yet
+    v = chemical_exhaust_kms() * (FISSION_GAIN if nuclear else 1.0)
+    return orbit_ratio(home, v) <= STRUCTURE
 
 
 def genomeless(kernel: Any, home: Any) -> bool:

@@ -111,7 +111,8 @@ def register(kernel: Any, designer: Any, name: str, frame: str, modules: Dict[st
     if drive is None:
         from xylarium.kernel import propulsion
         drive = propulsion.choose_fuel(kernel, designer.sector_id, getattr(designer, "metabolism", "biotic") or "biotic",
-                                       getattr(designer, "rank_tier", 1), getattr(designer, "cosmic_alignment", 0.0))
+                                       getattr(designer, "rank_tier", 1), getattr(designer, "cosmic_alignment", 0.0),
+                                       holder=f"captain:{designer.id}")
     spec = evaluate(frame, modules, drive)
     if spec["faults"]:
         raise ValueError(" ".join(spec["faults"]))

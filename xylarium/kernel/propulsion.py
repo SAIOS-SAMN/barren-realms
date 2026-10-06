@@ -12,7 +12,9 @@ Xylarium propulsion: moving mass costs reaction mass - and what a people burns i
   * Choosing a cell is algorithmic (choose_fuel), never hardcoded per species:
         score(f) = sqrt(v_e) x abundance(f)^r x tradition(f)^(1-r)
     abundance is each propellant's share of what lies in reach (starport stocks, the ground, gas-giant wells),
-    tradition is what the people's biology has always burned (FUEL_TRADITION), and r - clear-sightedness - rises
+    tradition is what the people's home first burned (tradition(): the propellant it understands that its home
+    system held most of - never a table by biology), only propellants it understands are built for, and r -
+    clear-sightedness - rises
     with alignment (the Light reads the galaxy as it is; the Dark keeps its ways) and with every lesson learned by
     coasting dry. A misaligned people keeps building oil engines on a water world: an evolutionary bottleneck
     that leaves it fuel-starved and DEGRADED, until the lessons turn it.
@@ -34,7 +36,6 @@ from xylarium.config import (
     DRIVE_INSTALL_FEE,
     FUEL_CELLS,
     FUEL_REACH,
-    FUEL_TRADITION,
     SHIP_CATALOG,
     SKIM_ENERGY_PER_SEASON,
     SKIM_HE3_SHARE,
@@ -194,16 +195,38 @@ def clear_sight(alignment: float, lessons: float = 0.0) -> float:
     return max(0.1, min(1.0, 0.5 + 0.5 * alignment + lessons))
 
 
+def tradition(kernel: Any, holder: Optional[str]) -> Optional[str]:
+    """What a people first burned: among the propellants it understands (chemistry.known), the one its home system
+    held most of - its first fire was what lay to hand. None for a crew with no home of its own."""
+    from xylarium.kernel import chemistry, relations
+    if not holder or not holder.startswith("civ:"):
+        return None
+    worlds = relations._peoples(kernel).get(holder) or []
+    if not worlds:
+        return None
+    home = max(worlds, key=lambda w: (w.population, w.id))
+    share = _abundance(kernel, home.sector_id)
+    known = [f for f in FUEL_CELLS if f not in ("WARP",) and chemistry.knows(kernel, holder, f)]
+    return max(known, key=lambda f: (share.get(f, 0.0), f), default=None)
+
+
 def choose_fuel(kernel: Any, sector_id: int, metabolism: str, tier: int, alignment: float,
-                lessons: float = 0.0) -> str:
+                lessons: float = 0.0, holder: Optional[str] = None) -> str:
+    """The cell a mind builds its drive for: among those it understands the propellant of, what is abundant where
+    it stands, weighed against its people's tradition (what its home first burned: tradition()) as far as it
+    reads the galaxy as it is (clear_sight)."""
+    from xylarium.kernel import chemistry
     share = _abundance(kernel, sector_id)
     r = clear_sight(alignment, lessons)
-    tradition = FUEL_TRADITION.get(metabolism, "H")
+    first = tradition(kernel, holder)
     best, best_s = "H", -1.0
     for f, cell in FUEL_CELLS.items():
         if f == "WARP" or cell["min_tier"] > tier:
             continue
-        s = math.sqrt(cell["v_e"]) * (share.get(f, 0.0) + 1e-4) ** r * (1.0 if f == tradition else 0.2) ** (1 - r)
+        if holder and not chemistry.knows(kernel, holder, f):
+            continue                                          # no drive for a propellant it does not understand
+        s = math.sqrt(cell["v_e"]) * (share.get(f, 0.0) + 1e-4) ** r * \
+            ((1.0 if f == first else 0.2) ** (1 - r) if first else 1.0)
         if s > best_s:
             best, best_s = f, s
     return best
@@ -286,7 +309,7 @@ def consider_refit(kernel: Any, captain: Any, sector: Any) -> Optional[str]:
         return refit_drive(kernel, captain, sector, "WARP")
     lessons = float(traits.get("fuel_lessons", 0.0))
     metab = getattr(captain, "metabolism", "biotic") or "biotic"
-    want = choose_fuel(kernel, sector.id, metab, tier, captain.cosmic_alignment, lessons)
+    want = choose_fuel(kernel, sector.id, metab, tier, captain.cosmic_alignment, lessons, f"captain:{captain.id}")
     if want == drive_key(captain.ship) or can_refit(kernel, captain, sector, want) is not None:
         return None
     if captain.credits < 3 * refit_cost_sol(kernel, sector, want):
@@ -328,8 +351,10 @@ def world_fuel(kernel: Any, planet: Any) -> str:
     owner = kernel.captains.get(planet.owner_id) if planet.owner_id else None
     align = float(getattr(civ, "alignment", 0.0) or 0.0) if (civ is not None and owner is None) else \
         float(getattr(owner, "cosmic_alignment", 0.0) or 0.0)
+    from xylarium.kernel import knowledge
     soc["fuel"] = choose_fuel(kernel, planet.sector_id, biosphere.metabolism_of(kernel, planet),
-                              max(1, planet.citadel_level), align, float(soc.get("fuel_lessons", 0.0)))
+                              max(1, planet.citadel_level), align, float(soc.get("fuel_lessons", 0.0)),
+                              knowledge.holder_of_planet(planet))
     soc["fuel_reckoned"] = kernel.cycle_count
     return soc["fuel"]
 

@@ -219,7 +219,8 @@ def prompt_workbench(cli: Any) -> None:
             guests = (_ask("Guests' biology for decks (biotic, cryogenic, plasmic, mineral, umbral; Enter = yours) > ")
                       or getattr(captain, "metabolism", "biotic"))
             drive = propulsion.choose_fuel(kernel, captain.sector_id, getattr(captain, "metabolism", "biotic"),
-                                           getattr(captain, "rank_tier", 1), captain.cosmic_alignment)
+                                           getattr(captain, "rank_tier", 1), captain.cosmic_alignment,
+                                           holder=f"captain:{captain.id}")
             if role not in shipdesign.ROLES or frame not in __import__("xylarium.config", fromlist=["SHIP_FRAMES"]).SHIP_FRAMES:
                 print(c_red("  Unknown role or frame."))
                 continue
@@ -245,15 +246,16 @@ def prompt_workbench(cli: Any) -> None:
 
 # ---------------------------------------------------------------------- drives
 def render_drives(kernel: Any, captain: Any) -> str:
-    from xylarium.config import FUEL_CELLS, FUEL_TRADITION
+    from xylarium.config import FUEL_CELLS
     from xylarium.kernel import propulsion
     sector = kernel.sectors[captain.sector_id]
     share = propulsion._abundance(kernel, sector.id)
     now = propulsion.drive_key(captain.ship)
     want = propulsion.choose_fuel(kernel, sector.id, getattr(captain, "metabolism", "biotic") or "biotic",
                                   getattr(captain, "rank_tier", 1), captain.cosmic_alignment,
-                                  float((getattr(captain, "traits", None) or {}).get("fuel_lessons", 0.0)))
-    tradition = FUEL_TRADITION.get(getattr(captain, "metabolism", "biotic"), "H")
+                                  float((getattr(captain, "traits", None) or {}).get("fuel_lessons", 0.0)),
+                                  f"captain:{captain.id}")
+    tradition = propulsion.tradition(kernel, getattr(captain, "lineage_people", None)) or want
     lines = [_rule("DRIVES & FUEL CELLS")]
     fuel = propulsion.fuel_of(captain.ship)
     lines.append(f"  Your {captain.ship.ship_type} flies a {bold(FUEL_CELLS.get(now, FUEL_CELLS['H'])['name'])}: "
