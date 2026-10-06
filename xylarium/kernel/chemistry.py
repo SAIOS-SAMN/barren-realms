@@ -42,43 +42,55 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import laws, matter
 
-# symbol: (name, A, density g/cc, condensation K, abundance per 1e6 Si, period, group, family)
-_REAL = {
-    "H": ("Hydrogen", 1, 0.09, 5, 2.8e10, 1, 1, "volatile"),
-    "He-3": ("Helium-3", 3, 0.12, 3, 4.5e5, 1, 18, "noble"),
-    "C": ("Carbon", 12, 2.26, 40, 1.0e7, 2, 14, "volatile"),
-    "H2O": ("Water", 18, 1.0, 182, 1.4e7, 2, 16, "ice"),
-    "Si": ("Silicon", 28, 2.33, 1310, 1.0e6, 3, 14, "metal"),
-    "Ti": ("Titanium", 48, 4.5, 1582, 2.4e3, 4, 4, "metal"),
-    "Fe": ("Iron", 56, 7.87, 1334, 8.4e5, 4, 8, "metal"),
-    "Ni": ("Nickel", 59, 8.9, 1353, 4.8e4, 4, 10, "metal"),
-    "Cu": ("Copper", 64, 8.96, 1037, 5.3e2, 4, 11, "metal"),
-    "Xe": ("Xenon", 131, 3.6, 69, 4.7, 5, 18, "noble"),
-    "Pt": ("Platinum", 195, 21.4, 1408, 1.4, 6, 10, "metal"),
-    "U": ("Uranium", 238, 19.1, 1610, 0.009, 7, 3, "fissile"),
-}
-_PHASE_TC = {1: 40, 2: 400, 3: 1200, 4: 1700}       # the almanac's phase axis as a condensation point
+# the goods the table carries: every element, superheavy and compound a world can hold as a deposit (substances.py
+# carries the measured matter; this is the subset laid down in worlds' ground and ice)
+GOODS = ("H", "He-3", "C", "H2O", "Si", "Ti", "Fe", "Ni", "Cu", "Xe", "Pt", "U",
+         "cryogenite", "stelalith", "ferrolattice", "chitinium", "void_resin", "sol_plasma",
+         "pyrosite", "SpR", "umbrite", "aetherium", "AdL", "mirror_glass")
+_NONMETALS = {"H", "C", "N", "O", "P", "S", "Se", "F", "Cl", "Br", "I"}
+_ORIGIN_FAMILY = {"ice": "ice", "mineral": "mineral", "deep": "mineral", "core": "metal", "biogenic": "organic",
+                  "photochemical": "organic", "stellar": "plasma"}
+_NAMES = {"H": "Hydrogen", "He-3": "Helium-3", "C": "Carbon", "H2O": "Water", "Si": "Silicon", "Ti": "Titanium",
+          "Fe": "Iron", "Ni": "Nickel", "Cu": "Copper", "Xe": "Xenon", "Pt": "Platinum", "U": "Uranium",
+          "cryogenite": "Cryogenite", "stelalith": "Stelalith", "ferrolattice": "Ferrolattice",
+          "chitinium": "Chitinium", "void_resin": "Void-Resin", "sol_plasma": "Sol-Plasma", "pyrosite": "Pyrosite",
+          "SpR": "Spiral Rime", "umbrite": "Umbrite", "aetherium": "Aetherium", "AdL": "Adamant Lode",
+          "mirror_glass": "Mirror-Glass"}
 
 
-def _exotic(line: int, lane: int, phase: int) -> Tuple[int, float, float, float]:
-    """An exotic's physics from its almanac axes: heavier and denser down the table, rarer the deeper."""
-    return 30 * line, 2.0 + 2.0 * line, _PHASE_TC.get(phase, 400), 10.0 ** (4 - line)
+def _family(sym: str, s: Dict[str, Any]) -> str:
+    """A substance's family, read from what it is: its origin for a compound; for a nucleus, a noble gas (group 18),
+    a fissile actinide, one made only by an r-process past uranium, a non-metal, or a metal."""
+    from xylarium.kernel import substances
+    if s["kind"] == "compound":
+        return _ORIGIN_FAMILY.get(s["origin"], "mineral")
+    if s["kind"] == "superheavy":
+        return "exotic"
+    if s["group"] == 18:
+        return "noble"
+    if 90 <= s["Z"] <= 100:
+        return "fissile"
+    base = sym.split("-")[0]
+    return "volatile" if base in _NONMETALS else "metal"
 
 
 def _build() -> Dict[str, Dict[str, Any]]:
-    from xylarium.kernel.elements import CANONICAL_ELEMENTS
+    """The table, read from substances: mass per unit, density, the point it condenses at, abundance, its period
+    (LINE: the deepest of what it is made of) and group (LANE: of its heaviest constituent), and its family."""
+    from xylarium.kernel import substances as S
     table = {}
-    for sym, (name, a, rho, tc, ab, line, lane, fam) in _REAL.items():
-        table[sym] = {"name": name, "A": a, "rho": rho, "tc": tc, "abund": ab, "line": line, "lane": lane,
-                      "family": fam}
-    for eid, e in CANONICAL_ELEMENTS.items():
-        a, rho, tc, ab = _exotic(e.line, e.lane, e.phase)
-        table[eid] = {"name": e.name, "A": a, "rho": rho, "tc": tc, "abund": ab, "line": e.line, "lane": e.lane,
-                      "family": "exotic"}
-    for eid, (line, lane, phase) in {"AdL": (6, 6, 4), "SpR": (7, 9, 4)}.items():   # the deepest lodes
-        a, rho, tc, ab = _exotic(line, lane, phase)
-        table[eid] = {"name": eid, "A": a, "rho": rho, "tc": tc, "abund": ab, "line": line, "lane": lane,
-                      "family": "exotic"}
+    for sym in GOODS:
+        s = S.get(sym)
+        if s["kind"] == "compound":
+            parts = [S.element(x) for x in S.constituents(sym)]
+            heavy = max(parts, key=lambda e: e["A"])
+            line, lane = max(e["period"] for e in parts), heavy["group"]
+            tc = s.get("tc", s["melt"])
+        else:
+            line, lane, tc = s["period"], s["group"], s["tc"]
+        table[sym] = {"name": _NAMES.get(sym, sym), "A": round(S.molar_mass(sym), 3), "rho": s["rho"], "tc": tc,
+                      "abund": S.abundance(sym), "line": line, "lane": lane, "family": _family(sym, s),
+                      "origin": s.get("origin", "nucleosynthesis"), "kind": s["kind"]}
     return table
 
 
@@ -105,8 +117,10 @@ def ladder(sector: Any) -> int:
     label = (getattr(sector, "star_type", None) or "G-class").lower()
     if "brown dwarf" in label:
         return 3                                           # a failed star made nothing deep
-    if any(w in label for w in ("white dwarf", "precursor", "neutron", "remnant", "pulsar")):
-        return 7                                           # a dead star's lineage seeded everything
+    if any(w in label for w in ("neutron", "pulsar", "precursor")):
+        return 8                                           # a neutron-rich lineage: the r-process past uranium
+    if any(w in label for w in ("white dwarf", "remnant")):
+        return 7                                           # a dead star's lineage seeded everything to uranium
     from xylarium.kernel import physics
     m = float(physics.star(sector)["mass"])
     return 3 if m < 0.5 else 4 if m < 0.9 else 5 if m < 1.4 else 6 if m < 2.5 else 7
@@ -132,7 +146,19 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
     depth = ladder(sector)
     held: Dict[str, int] = {}
     why: Dict[str, str] = {}
+    from xylarium.kernel import substances
+    deep = substances.deep_mantle(mass, radius) and not giant
+    living = _carbon_water_life(kernel, planet)
     for sym, e in TABLE.items():
+        if e["origin"] == "stellar":
+            why[sym] = "stellar"                           # a star's matter, not a world's
+            continue
+        if e["origin"] == "biogenic" and not living:
+            why[sym] = "lifeless"                          # only living chemistry makes it
+            continue
+        if e["origin"] == "deep" and not deep:
+            why[sym] = "shallow"                           # its mantle never reaches the pressure that makes it
+            continue
         if e["line"] > depth:
             why[sym] = "never_made"
             continue
@@ -150,10 +176,24 @@ def inventory(kernel: Any, sector: Any, planet: Any) -> Tuple[Dict[str, int], Di
         if reach < 0.05:
             why[sym] = "sunk"
             continue
+        if e["origin"] == "deep":
+            held[sym] = 5                                  # below any crust: only what eruptions bring up
+            continue
         size = math.sqrt(min(mass, 400.0))                 # a crust's reach grows with the world, not its whole mass
         units = DEPOSIT_UNIT * max(0.0, math.log10(e["abund"]) + 3) * size * reach * region_weight(sector, e["family"])
         held[sym] = max(5, int(units))                     # where it survives, a trace is always there to find
     return held, why
+
+
+def _carbon_water_life(kernel: Any, planet: Any) -> bool:
+    """Does living carbon-water chemistry stand on this world (what makes chitin)?"""
+    if getattr(planet, "population", 0) <= 0:
+        return False
+    try:
+        from xylarium.kernel import biosphere
+        return biosphere.metabolism_of(kernel, planet) == "biotic"
+    except Exception:
+        return False
 
 
 def survey(kernel: Any) -> None:

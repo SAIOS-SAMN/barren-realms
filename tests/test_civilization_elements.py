@@ -22,73 +22,59 @@ from xylarium.persistence.store import StatePersistence
 
 
 class TestPeriodicElements(unittest.TestCase):
-    """Verifies the 5-axis periodic table of elements ported from Netstratum."""
+    """The almanac is a view over measured matter (substances.py): every coordinate read, none declared."""
 
-    def test_periodic_axis_constants(self):
-        """Ensure 5 axes match Netstratum mathematical specifications."""
-        self.assertEqual(LINES, 7)
-        self.assertEqual(LANES, 10)
-        self.assertEqual(SHELLS, 4)
-        self.assertEqual(PHASES, 4)
-        self.assertEqual(SPINS, 2)
-        self.assertEqual(LINES * LANES * SHELLS * PHASES * SPINS, 2240)
+    def test_the_table_runs_from_hydrogen_past_the_islands(self):
+        from xylarium.kernel import substances
+        self.assertEqual(LINES, 8)                                   # period 8: the superheavies past 118
+        self.assertEqual(LANES, 18)
+        self.assertEqual(substances.period(26), 4)
+        self.assertEqual(substances.group(26), 8)                    # iron
+        self.assertEqual(substances.group(118), 18)                  # oganesson closes the noble group
+        self.assertEqual(substances.group(114), 14)                  # flerovium sits under lead
+        self.assertEqual(substances.group(92), 3)                    # the actinides fold into group 3
 
-    def test_canonical_elements_properties(self):
-        """Verify canonical Netstratum elements reflect correct mathematical properties."""
+    def test_the_almanacs_names_are_the_real_things_they_describe(self):
         stelalith = PeriodicTable.get_element("stelalith")
-        self.assertIsNotNone(stelalith)
-        self.assertEqual(stelalith.line, 3)
-        self.assertEqual(stelalith.lane, 4)
-        self.assertEqual(stelalith.shell, 2)
-        self.assertEqual(stelalith.phase, 2)  # Mesic
+        self.assertEqual(stelalith.shell, 3)                         # Mg, Si, O: bridgmanite
+        self.assertEqual(stelalith.arity, 4)
+        self.assertEqual(stelalith.phase_name, "Refractory")
         self.assertEqual(stelalith.spin, 0)
-        self.assertEqual(stelalith.binds, 4)  # Lane <= 5 -> binds = lane
-        self.assertEqual(stelalith.arity, 3)  # 1 + shell = 3-body compound
-        self.assertAlmostEqual(stelalith.refines_at, round(3 / 7.0, 3))
-
+        chitin = PeriodicTable.get_element("chitinium")
+        self.assertEqual(chitin.spin, 1)                             # what life makes is chiral
         umbrite = PeriodicTable.get_element("umbrite")
-        self.assertIsNotNone(umbrite)
-        self.assertEqual(umbrite.line, 5)
-        self.assertEqual(umbrite.lane, 8)
-        # Valence folds: lane > 5 -> binds = 11 - 8 = 3
-        self.assertEqual(umbrite.binds, 3)
-        self.assertEqual(umbrite.phase, 1)  # Cryogenic
-        self.assertEqual(umbrite.phase_name, "Cryogenic")
+        self.assertEqual((umbrite.line, umbrite.lane), (8, 2))       # eka-radium: Z 120
+        self.assertEqual(umbrite.binds, 2)
+        rime = PeriodicTable.get_element("SpR")
+        self.assertEqual(rime.binds, 0)                              # the last noble group
+        self.assertEqual(PeriodicTable.get_element("mirror_glass").refines_at, 1.0)
 
-        mirror = PeriodicTable.get_element("mirror_glass")
-        self.assertIsNotNone(mirror)
-        self.assertEqual(mirror.line, 7)
-        self.assertEqual(mirror.lane, 10)
-        self.assertEqual(mirror.binds, 1)  # 11 - 10 = 1
-        self.assertEqual(mirror.refines_at, 1.0)
-        self.assertEqual(mirror.arity, 5)  # 1 + 4 = 5-body compound
+    def test_binding_energy_peaks_near_iron(self):
+        from xylarium.kernel import substances
+        per = {s: substances.binding_per_nucleon(s) for s in ("H", "C", "O", "Fe", "U", "AdL")}
+        self.assertAlmostEqual(per["Fe"], 8.8, delta=0.15)          # measured 8.79 MeV
+        self.assertGreater(per["Fe"], per["C"])
+        self.assertGreater(per["Fe"], per["U"])
+        self.assertGreater(per["U"], per["AdL"])                     # past iron, heavier binds less per nucleon
 
-    def test_deterministic_hash_generation(self):
-        """Deterministically generates elements from hash bytes matching Netstratum periodic_of."""
-        elem1 = PeriodicTable.generate_from_hash("sector_42_vein_alpha")
-        elem2 = PeriodicTable.generate_from_hash("sector_42_vein_alpha")
-        self.assertEqual(elem1.element_id, elem2.element_id)
-        self.assertEqual(elem1.line, elem2.line)
-        self.assertEqual(elem1.lane, elem2.lane)
-        self.assertEqual(elem1.shell, elem2.shell)
-        self.assertEqual(elem1.phase, elem2.phase)
-        self.assertEqual(elem1.spin, elem2.spin)
-        self.assertTrue(1 <= elem1.line <= 7)
-        self.assertTrue(1 <= elem1.lane <= 10)
-        self.assertTrue(1 <= elem1.shell <= 4)
-        self.assertTrue(1 <= elem1.phase <= 4)
-        self.assertTrue(elem1.spin in [0, 1])
+    def test_what_a_chemistry_holds_in_its_hands_is_what_is_solid_at_its_warmth(self):
+        from xylarium.kernel import uses
+        for metab in ("biotic", "mineral", "cryogenic"):
+            elems = PeriodicTable.get_elements_for_metabolism(metab)
+            t = max(__import__("xylarium.kernel.worlds", fromlist=["x"]).body_temperature(x)
+                    for x in uses._region_solvents(metab))
+            for e in elems:
+                self.assertTrue(uses.solid_at(e.element_id, t), (metab, e.element_id))
+        self.assertEqual(PeriodicTable.get_elements_for_metabolism("plasmic"), [])   # nothing holds in plasma
 
-    def test_metabolic_affinity_elements(self):
-        """Metabolic families return relevant periodic elements."""
-        min_elems = PeriodicTable.get_elements_for_metabolism("mineral")
-        self.assertTrue(any(e.element_id == "stelalith" for e in min_elems))
-        bio_elems = PeriodicTable.get_elements_for_metabolism("biotic")
-        self.assertTrue(any(e.element_id == "chitinium" for e in bio_elems))
-        plasmic_elems = PeriodicTable.get_elements_for_metabolism("plasmic")
-        self.assertTrue(any(e.element_id == "pyrosite" for e in plasmic_elems))
-        umbral_elems = PeriodicTable.get_elements_for_metabolism("umbral")
-        self.assertTrue(any(e.element_id == "umbrite" for e in umbral_elems))
+    def test_metals_free_from_their_ores_in_the_order_their_bonds_allow(self):
+        from xylarium.kernel import substances
+        cu, fe = substances.reduction_t("CuO"), substances.reduction_t("FeO")
+        self.assertIsNotNone(cu)
+        self.assertLess(cu, fe)                                      # copper frees long before iron
+        ti = substances.reduction_t("TiO2")
+        self.assertGreater(ti, fe + 800)                             # titanium needs a furnace near 2000 K
+        self.assertLess(substances.reduction_t("TiO2", "Mg"), cu + 1)   # magnesium takes its oxygen cold (Kroll)
 
 
 class TestSpeciesTaxonAndPolities(unittest.TestCase):

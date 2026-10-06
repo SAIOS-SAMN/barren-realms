@@ -84,7 +84,6 @@ KPC_PER_MYR_AT_1KMS = 1.0 / 977.8
 ATOMIC_MASS = {"H": 1.0, "He-3": 3.0, "C": 12.0, "H2O": 18.0, "Si": 28.1, "ORE": 20.0, "Ti": 47.9, "Fe": 55.8,
                "Ni": 58.7, "Cu": 63.5, "Xe": 131.3, "Pt": 195.1, "U": 238.0, "TAILINGS": 20.0, "Na": 23.0,
                "Cl": 35.45, "NaCl": 58.44}
-PERIOD_MASS = {1: 2.5, 2: 13.0, 3: 30.0, 4: 60.0, 5: 105.0, 6: 170.0, 7: 250.0}
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -158,23 +157,17 @@ def survival(r: float) -> float:
 
 
 def mass_of(element: str) -> float:
-    """An element's (or a good's) mass per unit: its atomic mass, or its period's on the five-axis table."""
+    """An element's (or a good's) mass per unit: its atomic or formula mass (substances.py)."""
     a = ATOMIC_MASS.get(element)
     if a is None:
-        from xylarium.kernel.elements import PeriodicTable
-        e = PeriodicTable.get_element(element)
-        a = PERIOD_MASS.get(int(getattr(e, "line", 3) or 3), 30.0)
+        from xylarium.kernel import substances
+        a = substances.molar_mass(element) or 30.0
     return float(a)
 
 
 def scatter_length(element: str) -> float:
     """kpc over which an element spreads from where it was made: inversely as its mass."""
-    a = ATOMIC_MASS.get(element)
-    if a is None:
-        from xylarium.kernel.elements import PeriodicTable
-        e = PeriodicTable.get_element(element)
-        a = PERIOD_MASS.get(int(getattr(e, "line", 3) or 3), 30.0)
-    return LAMBDA_FE * 56.0 / max(1.0, a)
+    return LAMBDA_FE * 56.0 / max(1.0, mass_of(element))
 
 
 def abundance(element: str, r: float) -> float:

@@ -23,17 +23,15 @@ boils. Nothing here names a people's needs; the physics of its body and its worl
              people whose solvent is molten rock builds with what stays solid in its furnace. Which of the solids a
              people builds with is what is cheapest to it - its own world's and its port's - not a recipe.
 
-Melting points are measured data (1 bar), as the element abundances are; an element without one holds a shape below
-its solid point in the universal table (chemistry.TABLE - its condensation temperature; the exotics' read from their
+Melting points are measured data (1 bar, substances.py), as the element abundances are; a good without one holds a shape
+below its solid point in the universal table (chemistry.TABLE - its condensation temperature; the exotics' read from their
 almanac phase). A people builds only with what its world holds and what it has come to understand (chemistry.known):
 an element is dug, then understood, then built with.
 """
 
+import functools
 from typing import Any, Dict, List, Optional, Tuple
 
-# measured melting points at 1 bar (K): the data of each real substance a good is made of
-MELT_K = {"Fe": 1811.0, "Ti": 1941.0, "Ni": 1728.0, "Cu": 1358.0, "Si": 1687.0, "Pt": 2041.0, "U": 1405.0,
-          "C": 3915.0, "NaCl": 1074.0, "Xe": 161.4, "H": 14.0, "He-3": 0.3}
 # the volatile each volatile good is made of (worlds.VOLATILES carries its phase curve)
 VOLATILE_OF = {"H2O": "H2O", "cryogenite": "NH3"}
 # the good each solvent's matter is laid down as (creation._composition). The carbon ices (methane, carbon monoxide
@@ -49,6 +47,12 @@ def _region_solvents(metab: str) -> List[str]:
     """The solvents whose chemistry, held at its own best temperature, falls in a metabolism's region of chemistry
     space - the inverse of worlds.region, read from it rather than written beside it."""
     from xylarium.kernel import worlds
+    return list(_region_solvents_in(metab, worlds._laws(None)))
+
+
+@functools.lru_cache(maxsize=64)
+def _region_solvents_in(metab: str, laws: Any) -> tuple:                # laws: body temperatures are the universe's
+    from xylarium.kernel import worlds
     out = []
     for solvent in list(worlds.VOLATILES) + ["melt", "plasma"]:
         t = worlds.body_temperature(solvent)
@@ -56,7 +60,7 @@ def _region_solvents(metab: str) -> List[str]:
             m = {"solvent": solvent, "where": where, "t": t, "dark": dark}
             if worlds.region(m) == metab and solvent not in out:
                 out.append(solvent)
-    return out
+    return tuple(out)
 
 
 def body(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
@@ -131,6 +135,7 @@ def medium(kernel: Any, planet: Any) -> Optional[str]:
     return MEDIUM_GOOD.get(b["solvent"]) if b else None
 
 
+@functools.lru_cache(maxsize=None)
 def melt_k(good: str) -> Optional[float]:
     """The temperature a good stops holding its shape at (1 bar), or None where its matter is not known to."""
     from xylarium.kernel import worlds
@@ -138,9 +143,13 @@ def melt_k(good: str) -> Optional[float]:
         return float(worlds.VOLATILES[VOLATILE_OF[good]]["phase"][0])        # its triple point
     if good == "ORE":
         return float(worlds.MELT_K)
-    if good in MELT_K:
-        return MELT_K[good]
-    from xylarium.kernel import chemistry
+    from xylarium.kernel import chemistry, substances
+    sub = substances.get(good)
+    if sub is not None and sub.get("origin") == "stellar":
+        return None                                # a plasma holds no shape at any warmth
+    m = substances.melt(good)                      # its measured melting point (substances.py)
+    if m is not None:
+        return m
     e = chemistry.TABLE.get(good)                  # the universal table's own solid point (its condensation)
     return float(e["tc"]) if e is not None else None
 
