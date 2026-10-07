@@ -73,3 +73,28 @@ class TestConservation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestUnsettled(unittest.TestCase):
+    def test_a_payment_no_market_can_carry_is_held_not_lost(self):
+        random.seed(3)
+        k = GameKernel(seed=42)
+        k.activate()
+        fxm = k.fx_market
+        p = next(pl for s in k.sectors.values() for pl in s.planets)
+        before = totals(k)
+        p.treasury -= 500                                            # a payer debits before it converts
+        real_can = fxm.can_convert
+        fxm.can_convert = lambda a, b: False                         # no route between the two moneys
+        try:
+            out, venue = fxm.convert(p.currency, "NOWHERE", 500)
+        finally:
+            fxm.can_convert = real_can
+        self.assertEqual((out, venue), (0, "unsettled"))
+        self.assertEqual(totals(k), before)                          # the house holds it: counted, not destroyed
+        from xylarium.kernel.fx import FXMarket
+        self.assertEqual(FXMarket.from_dict(fxm.to_dict()).unsettled, fxm.unsettled)    # and it survives a save
+
+
+if __name__ == "__main__":
+    unittest.main()

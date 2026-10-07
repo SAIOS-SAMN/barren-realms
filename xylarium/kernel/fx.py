@@ -361,7 +361,8 @@ class FXMarket:
                 "volume_sol": dict(self.volume_sol), "fees_collected": dict(self.fees_collected),
                 "fees": dict(self.fees),
                 "cross_pools": {k: dict(p) for k, p in self.cross_pools.items()},
-                "cross_volume": dict(self.cross_volume)}
+                "cross_volume": dict(self.cross_volume),
+                "unsettled": {c: int(v) for c, v in (getattr(self, "unsettled", None) or {}).items()}}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FXMarket":
@@ -379,6 +380,7 @@ class FXMarket:
         else:
             fx.cross_pools = {}   # a pre-Galactic-ISSE save: no cross pairs appear out of nowhere
         fx.cross_volume = {k: float(v) for k, v in data.get("cross_volume", {}).items()}
+        fx.unsettled = {c: int(v) for c, v in data.get("unsettled", {}).items()}
         return fx
 
 
