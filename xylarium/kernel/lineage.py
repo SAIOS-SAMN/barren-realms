@@ -410,7 +410,15 @@ def _npc_death(kernel: Any, captain: Any, cause: str) -> str:
         for tkr, sh in captain.portfolio.items():
             heir.portfolio[tkr] = heir.portfolio.get(tkr, 0) + sh
     elif fed is not None:
-        escheat = captain.credits + sum(fxm.swap_to_sol(cur, amt) for cur, amt in captain.fx_wallet.items() if amt > 0)
+        banks = getattr(getattr(kernel, "banking", None), "banks", {}) or {}
+        escheat = captain.credits
+        for cur, amt in captain.fx_wallet.items():
+            if amt <= 0:
+                continue
+            if cur in fxm.pools:
+                escheat += fxm.swap_to_sol(cur, amt)
+            elif cur in banks:                     # a money no exchange quotes escheats to its own issuer
+                banks[cur].reserves += amt
         fed.receive(escheat, "escheat")
     captain.credits = 0
     captain.fx_wallet = {}

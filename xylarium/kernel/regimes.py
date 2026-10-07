@@ -212,7 +212,7 @@ def _money_commodity(kernel: Any, cur: str):
         port = sec.port
         if port is None or port.currency != cur:
             continue
-        for comm, n in port.stock.items():
+        for comm, n in list(port.stock.items()):           # pricing a good may shelve a key for it
             if n <= 0 or COMMODITY_CONFIG.get(comm, {}).get("category") in ("WASTE", "LUXURY"):
                 continue
             _, sell = EconomyManager.get_unit_prices(port, comm)

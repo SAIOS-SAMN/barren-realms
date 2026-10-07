@@ -563,6 +563,9 @@ def _books(kernel: Any, j: Dict[str, Any], logs: List[str]) -> None:
         ss = float(home.society.get("self_sufficiency", 1.0) or 1.0)
         lost = n * ruled * max(0.0, rent.starved(ss, rho) - rent.starved(ss, 0.0))
         alignment.flow(civ, light=n * lived_gens - lost, dark=lost, why="work and rent")
+        if ruled > 0:                                          # what its few took, in goods, coined at par
+            from xylarium.kernel import estates
+            estates.accrue(kernel, who, home, rho, ruled * gen)
         # among the stars, a people that displaced the living worlds of its chemistry built that share of its
         # dominion beyond its own system on their erasure, as deep as their life had climbed (settling.policy)
         from xylarium.kernel import settling
