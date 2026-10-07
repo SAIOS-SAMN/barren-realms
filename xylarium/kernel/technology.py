@@ -47,6 +47,9 @@ were written a bit a generation by slow-breeding bodies; science lets it write f
                survives what would end a body. Whether the copy is the same mind is not physics: the people that
                finds it must decide, and a people whose creed forbids it gives it up (TRANSFER_FORBIDDEN).
 
+  RELAYS       word kept moving without a ship sailing for it: posts on lanes that carry what each port has heard,
+               a hop a jump-time (comms.py) - reached by any people that has its sky or has crossed, by any path.
+
   EMBODIMENT   life without a genome - minds held in fields, not in copied molecules (plasmic) - has no hands. Before
                it can build anything it must come into a vessel: a living body designed from outside, matter built
                to order, or a machine. It learns the terrestrial dimensions from nothing, through instruments it
@@ -72,16 +75,16 @@ GENETIC_GAIN = 1.0              # how much faster a people that rewrites its gen
 SYNTHESIS_GAIN = 1.0            # what designed chemistry adds to how fast it reshapes a world
 ROBOTICS_GAIN = 1.0             # what built bodies add to a people's work and thought
 CAPS = ("radio", "orbit", "fission", "computation", "networks", "cyber", "medicine", "genetics", "synthesis",
-        "robotics", "embodiment", "transfer")
+        "robotics", "embodiment", "transfer", "relays")
 RELIC_ONLY = ("foresight",)     # capabilities no people finds by itself: held only from what others left (relics.py)
 NEEDS = {"radio": "information", "orbit": "energy", "fission": "energy", "computation": "information",
          "networks": "information", "cyber": "information", "medicine": "biology", "genetics": "biology",
          "synthesis": "materials", "robotics": "materials", "embodiment": "materials",
-         "transfer": "information"}
+         "transfer": "information", "relays": "information"}
 AFTER = {"networks": ("radio", "computation"), "cyber": ("networks",), "orbit": (), "fission": (),
          "radio": (), "computation": (), "medicine": (), "genetics": ("medicine", "computation"),
          "synthesis": ("genetics",), "robotics": ("computation",), "embodiment": (),
-         "transfer": ("genetics", "synthesis")}
+         "transfer": ("genetics", "synthesis"), "relays": ()}
 GENOMELESS = ("plasmic",)       # chemistries whose minds are held in fields, not in a copied genome
 
 
@@ -163,6 +166,9 @@ def feasible(kernel: Any, holder: str, cap: str, home: Any) -> bool:
         return genomeless(kernel, home)
     if cap == "robotics":                                 # metal to build bodies from, in its own system
         return any(p.element_deposits.get("Fe", 0) > 0 for p in [home] + _system(kernel, home))
+    if cap == "relays":                                   # a post must be put on a lane: it has reached its sky or
+        from xylarium.kernel import mastery              # crossed beyond it - by whatever path (no order)
+        return "orbit" in held or bool(mastery.crossed(kernel, holder))
     return True
 
 

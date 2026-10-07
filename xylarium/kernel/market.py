@@ -3097,6 +3097,8 @@ class MarketManager:
                 _fib.record_flow(kernel, hauler.sector_id, next_sec, _fib.SHIP_TRAFFIC)   # the lane remembers it
                 hauler.sector_id = next_sec
                 hauler.status = "IN_TRANSIT"
+                from xylarium.kernel import comms as _comms
+                _comms.arrive(kernel, f"hauler:{hauler.id}", next_sec)     # word rides the hauler
 
                 # Check Pirate Ambush in ANARCHY / BORDERLAND
                 sec_obj = kernel.sectors.get(next_sec)

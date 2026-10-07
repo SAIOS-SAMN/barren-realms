@@ -1026,6 +1026,8 @@ class AIManager:
         new_sec = kernel.sectors[destination]
         if captain.id not in new_sec.captains:
             new_sec.captains.append(captain.id)
+        from xylarium.kernel import comms
+        comms.arrive(kernel, f"captain:{captain.id}", destination)       # word rides the ship
 
     @classmethod
     def _maybe_chatter(cls, kernel: "GameKernel", captain: Captain, sector: Sector) -> None:

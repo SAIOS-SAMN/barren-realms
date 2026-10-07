@@ -8,8 +8,8 @@ what it last heard, and that word is old.
   MEMORY    every open port's price of every good it shelves is followed season by season: its latest, its long
             mean (the running mean of its log price since first heard), and how much it moves (the running variance
             of its seasonal log change) - kept as a few numbers a pair, nothing tuned.
-  HEARD     a market nearer than a season's light is heard as it stands; a farther one as its word left it - which,
-            older than any season the hearer has followed it, is its long mean.
+  HEARD     what a place has heard of a market is what has reached it (comms.py): word carried by ships, convoys and
+            relay posts, stamped with the cycle it left - never faster than its carrier.
   AGE       what that word's age costs: the drift a price makes over it, one deviation of its own moves scaled to the
             age (sigma sqrt(age)) - the premium a trader pays for acting on old news, and the gap a nearer, faster
             trader profits from.
@@ -59,6 +59,14 @@ def season(kernel: Any) -> None:
     return None
 
 
+def sigma(kernel: Any, port_sid: int, comm: str) -> float:
+    """A port's price's yearly deviation of log change (0 where it has not been followed long enough)."""
+    m = stats(kernel)["mem"].get(f"{port_sid}|{comm}")
+    if m is None or m["rn"] < 2:
+        return 0.0
+    return math.sqrt(m["rm2"] / (m["rn"] - 1) * _seasons_per_year())
+
+
 def light_years(kernel: Any, a: int, b: int) -> float:
     """How long word takes between two systems (years): their proper distance over light's speed."""
     if a == b:
@@ -72,16 +80,15 @@ def light_years(kernel: Any, a: int, b: int) -> float:
 
 
 def heard(kernel: Any, at: int, port_sid: int, comm: str) -> Optional[Tuple[float, float, float]]:
-    """A port's price of a good as heard at system `at`: (price, the word's age in years, its yearly deviation of
-    log change). None if no word of it has ever been followed."""
-    m = stats(kernel)["mem"].get(f"{port_sid}|{comm}")
-    if m is None:
+    """A port's price of a good as heard at system `at` - the word that has reached it (comms.py: carried by ships,
+    convoys and relay posts, never faster than they go): (price, the word's age in years, its yearly deviation of
+    log change). None if no word of it has ever arrived."""
+    from xylarium.kernel import comms
+    got = comms.heard(kernel, at, port_sid, comm)
+    if got is None:
         return None
-    age = light_years(kernel, at, port_sid)
-    per_year = _seasons_per_year()
-    sigma = math.sqrt(m["rm2"] / (m["rn"] - 1) * per_year) if m["rn"] > 1 else 0.0
-    price = math.exp(m["last"]) if age * per_year < 1.0 else math.exp(m["mean"])     # near: as it stands
-    return price, age, sigma
+    price, stamp = got
+    return float(price), max(0.0, (kernel.cycle_count - stamp) / 100.0), sigma(kernel, port_sid, comm)
 
 
 def age_cost(price: float, age_years: float, sigma: float) -> float:

@@ -134,12 +134,11 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
         return got
     from xylarium.kernel import fxroutes, news
     from xylarium.kernel.economy import EconomyManager
-    port = getattr(kernel.sectors.get(sw.sector_id), "port", None)
+    port = getattr(kernel.sectors.get(sw.sector_id), "port", None)     # a world with no port has no price to hear
     word = news.heard(kernel, bw.sector_id, sw.sector_id, comm) if port is not None else None
-    if word is None:                                          # no word of its port: the market's mean, heard as late
-        unit, age, sigma = transit.price(kernel, comm), news.light_years(kernel, bw.sector_id, sw.sector_id), 0.0
-    else:
-        unit, age, sigma = word
+    if word is None:
+        return 0                                              # no word of its price has reached the buyer: not bought
+    unit, age, sigma = word
     floor = float(EconomyManager.get_unit_prices(port, comm)[0]) if port is not None else 0.0
     if floor > 0 and unit < floor:
         return 0                                              # the seller's own port pays more: it keeps its goods
@@ -149,6 +148,8 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
     tolls = [(a, b, transit.flow_passage(kernel, buyer["people"], a, b)) for a, b in hops]
     route = sum(t for _, _, t in tolls)
     gain = worth - unit - route / q - risk - stale
+    if _moneyless(kernel, bw):
+        return _barter(kernel, buyer, bw, sw, comm, q, unit, worth, risk, stale, hops, route, rec)
     duty = gain / 2.0 if tariff and gain > 0 and capital is not None and capital is not bw else 0.0
     rate = _rate(kernel, bw.currency)
     afford = (float(bw.treasury) / rate - route) / max(1e-9, unit + duty)
@@ -176,12 +177,8 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
         bw.treasury -= levied
         capital.treasury += _to(kernel, bw.currency, capital.currency, levied)
         rec["tariff"] += q * duty
-    staples.move(sw, comm, -q)                                # out of the seller's stores, into the convoy
-    if hops:                                                  # a forward: paid now at the price struck, landed when the
-        stats(kernel).setdefault("in_transit", []).append({"to": bw.id, "from": sw.id, "comm": comm, "q": q,   # haul is sailed
-                                            "due": kernel.cycle_count + len(hops), "sector": bw.sector_id})
-    else:
-        staples.move(bw, comm, q)
+    _send(kernel, sw, bw, comm, q, hops)                      # a forward: paid now at the price struck, landed when
+                                                              # the haul is sailed, with the word of where it sailed from
     sol = q * unit
     rec["value"] += sol
     rec["tolls"] += route
@@ -193,6 +190,63 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
     side["earned"] += earned
     if comm == staples.of(kernel, bw):
         side["food"] += q
+    return q
+
+
+def _moneyless(kernel: Any, w: Any) -> bool:
+    """A world whose people has struck no money of its own (institutions: weighed, never staged) settles in goods."""
+    from xylarium.kernel import institutions
+    return institutions.founding(kernel) and w.currency not in institutions.stats(kernel).get("currencies", {})
+
+
+def _send(kernel: Any, frm: Any, to: Any, comm: str, q: int, hops: List[Tuple[int, int]]) -> None:
+    """Goods from one world to another: at once within a system, else aboard a counted convoy for the haul."""
+    from xylarium.kernel import comms, staples
+    staples.move(frm, comm, -q)
+    if hops:
+        stats(kernel).setdefault("in_transit", []).append({"to": to.id, "from": frm.id, "comm": comm, "q": q,
+                                                          "due": kernel.cycle_count + len(hops),
+                                                          "sector": to.sector_id,
+                                                          "word": comms.own(kernel, frm.sector_id)})
+    else:
+        staples.move(to, comm, q)
+
+
+def _barter(kernel: Any, buyer: Dict[str, Any], bw: Any, sw: Any, comm: str, q: int, unit: float, worth: float,
+            risk: float, stale: float, hops: List[Tuple[int, int]], route: float, rec: Dict[str, Any]) -> int:
+    """A people with no money pays in goods - only where the double coincidence holds: something it spares that the
+    seller lacks (Jevons). Both lots travel, each counted; nothing is minted, no money moves. A road whose keepers
+    want money it cannot pay is closed to it."""
+    import math
+    from xylarium.kernel import decide, news, staples
+    if route > 0:
+        return 0
+    offer = None
+    for g in sorted(_goods(kernel, bw)):
+        if g == comm:
+            continue
+        spare = staples.surplus(kernel, bw, g)
+        lack = staples.reserve(kernel, sw, g) - staples.held(sw, g)
+        word = news.heard(kernel, bw.sector_id, sw.sector_id, g) or news.heard(kernel, bw.sector_id, bw.sector_id, g)
+        if spare > 0 and lack > 0 and word and word[0] > 0:
+            offer = (g, spare, lack, word[0])
+            break
+    if offer is None:
+        return 0                                                  # no coincidence of wants: no trade
+    g, spare, lack, price_g = offer
+    q = min(q, int(min(spare, lack) * price_g / max(1e-9, unit)))
+    if q <= 0:
+        return 0
+    pay = int(math.ceil(q * unit / price_g))
+    m = decide.mind_of_planet(kernel, bw)
+    if decide.choose(kernel, [decide.option("barter", q * (unit + risk + stale), q * worth)], m,
+                     bw.id, sw.id, comm, "barter") is None:
+        return 0
+    _send(kernel, sw, bw, comm, q, hops)
+    _send(kernel, bw, sw, g, pay, list(reversed(hops)))
+    rec["value"] += q * unit
+    rec["barter"] = rec.get("barter", 0.0) + q * unit
+    rec["units"][comm] = rec["units"].get(comm, 0) + q
     return q
 
 
@@ -297,6 +351,8 @@ def land(kernel: Any) -> int:
         to = kernel.get_planet(lot["to"]) or kernel.get_planet(lot["from"])
         if to is not None:
             staples.move(to, lot["comm"], lot["q"])
+            from xylarium.kernel import comms
+            comms.land(kernel, to.sector_id, lot.get("word") or {})
         else:
             sec = kernel.sectors.get(lot["sector"])
             if sec is None:

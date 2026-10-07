@@ -34,6 +34,12 @@ class TestCommerce(unittest.TestCase):
         staples.move(self.sw, self.comm, staples.reserve(self.k, self.sw, self.comm) + 5000 -
                      staples.held(self.sw, self.comm))                              # the seller holds 5000 beyond
         self.bw.treasury = self.sw.treasury = 10 ** 9
+        from xylarium.kernel import comms                                            # a ship has brought word of the
+        comms.arrive(self.k, "captain:test-courier", self.sw.sector_id)              # seller's port to the buyer's
+        comms.arrive(self.k, "captain:test-courier", self.bw.sector_id)
+        if self.k.sectors[self.bw.sector_id].port is None:
+            comms.merge(comms.stats(self.k)["views"].setdefault(str(self.bw.sector_id), {}),
+                        comms.own(self.k, self.sw.sector_id))
 
     def _rec(self):
         return {"value": 0.0, "tolls": 0.0, "tariff": 0.0, "closed": 0, "units": {}, "flows": {}}
@@ -133,15 +139,21 @@ class TestHeardPrices(unittest.TestCase):
         self.key = next(iter(sorted(news.stats(self.k)["mem"])))
         self.sid, self.comm = int(self.key.split("|")[0]), self.key.split("|")[1]
 
-    def test_near_word_is_the_price_as_it_stands_and_far_word_its_long_mean(self):
-        import math
-        m = self.news.stats(self.k)["mem"][self.key]
-        with mock.patch.object(self.news, "light_years", return_value=0.0):
-            self.assertAlmostEqual(self.news.heard(self.k, self.sid, self.sid, self.comm)[0], math.exp(m["last"]))
-        with mock.patch.object(self.news, "light_years", return_value=500.0):
-            price, age, _ = self.news.heard(self.k, 0, self.sid, self.comm)
-        self.assertAlmostEqual(price, math.exp(m["mean"]))
-        self.assertEqual(age, 500.0)
+    def test_word_is_as_old_as_its_carrier_left_it_and_none_without_a_carrier(self):
+        from xylarium.kernel import comms
+        unheard = [sid for sid in sorted(self.k.sectors) if sid != self.sid
+                   and self.news.heard(self.k, sid, self.sid, self.comm) is None]    # nothing has carried it there
+        if not unheard:
+            self.skipTest("real traffic has already carried this port's word everywhere")
+        other = unheard[0]
+        comms.arrive(self.k, "captain:courier", self.sid)                              # a ship docks at the port...
+        stamp = self.k.cycle_count
+        self.k.cycle_count += 200                                                      # ...and sails two years
+        comms.stats(self.k)["views"].setdefault(str(other), {})
+        comms.merge(comms.stats(self.k)["views"][str(other)], comms.stats(self.k)["carried"]["captain:courier"])
+        price, age, _ = self.news.heard(self.k, other, self.sid, self.comm)
+        self.assertEqual(age, (self.k.cycle_count - stamp) / 100.0)
+        self.assertGreater(price, 0)
 
     def test_old_word_costs_more_and_a_still_price_costs_nothing(self):
         self.assertGreater(self.news.age_cost(100.0, 400.0, 0.1), self.news.age_cost(100.0, 4.0, 0.1))

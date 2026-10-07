@@ -135,6 +135,8 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
             put(raw["haulers"], getattr(h, "cargo", {}).items())
     from xylarium.kernel import commerce
     put(raw["convoys"], commerce.in_transit(kernel).items())             # treaty and brokered goods under way
+    from xylarium.kernel import comms
+    put(raw["relay_posts"], comms.posts_goods(kernel).items())           # the equipment held in relay posts
     out: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for where, stock in raw.items():
         for comm, n in stock.items():
