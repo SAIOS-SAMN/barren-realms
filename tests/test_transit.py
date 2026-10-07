@@ -135,13 +135,13 @@ class TestThroats(unittest.TestCase):
         self.assertIn(heart, self.k.sectors)                   # the passage is the observation
         self.assertIn(self.a, self.k.sectors[heart].warps)
 
-    def test_a_fallen_keepers_throat_lies_dormant_until_a_master_salvages_it(self):
+    def test_a_fallen_keepers_throat_lies_dormant_and_open_until_a_master_salvages_it(self):
         transit.open_throat(self.k, self.a, self.b, "civ:Gone", "forged", 1.0, "test")
         transit.stats(self.k)["masters"]["civ:Gone"] = 0
         transit._heirs(self.k, [])
         w = transit.worm(self.k, self.a, self.b)
         self.assertTrue(w["dormant"] is not None and w["owner"] is None)   # unused, it holds - no one keeps it
-        self.assertTrue(transit.refuses(self.k, self.cap, self.a, self.b))
+        self.assertFalse(transit.refuses(self.k, self.cap, self.a, self.b))  # a progenitor wormhole: dormant, open
         self.assertNotIn("civ:Gone", transit.stats(self.k)["masters"])
         spheres.ensure(self.k)
         end, heir = next((int(s), spheres.presence(self.k, r)) for s, r in sorted(spheres.stats(self.k)["owner"].items()))

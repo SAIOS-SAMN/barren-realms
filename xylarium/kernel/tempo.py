@@ -39,10 +39,10 @@ def wait_years(kernel: Any, who: str, home: Any) -> Optional[float]:
         from xylarium.kernel import settling
         w = float(((annals.stats(kernel)["of"].get(who) or {}).get("hist") or {}).get("W", 1.0))
         if who in settling.stats(kernel) and w >= annals.dominion_cap(kernel, who, home):
-            return gen * w / annals.FALL_PER_GENERATION * annals.resilience(kernel, who)
+            return gen * w / annals.fall_per_generation(kernel, who, home)
         return gen / settling.settle_rate(kernel, home) / annals._speed(kernel, home)
     nxt = annals.STAGES.index(stage) + 1
-    fall = gen / annals.FALL_PER_GENERATION * annals.resilience(kernel, who)
+    fall = gen / annals.fall_per_generation(kernel, who, home)
     if annals.STAGES[nxt] == "yards" and not annals._can_reach_orbit(kernel, who, home):
         return fall
     from xylarium.kernel import mastery

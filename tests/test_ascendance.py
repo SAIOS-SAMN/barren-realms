@@ -1,6 +1,6 @@
 """
 Ascendance: a people that crosses inside a realm another keeps petitions its steward, who reads it in need-ordered
-books against the worst the realm already holds, and charters it among the stars or holds it at home - read again
+books against the worst the realm already holds, and lets it ascend among the stars or holds it at home - read again
 every term. Held at home, its ships go no further than its own system, its network does not grow, and no one may
 make war on it.
 """
@@ -41,20 +41,20 @@ class TestAscendance(unittest.TestCase):
         self.assertFalse(ascendance.free(self.k, self.who))
         other = spheres.presence(self.k, self.realm)
         self.assertFalse(realmwars.weigh(self.k, other, self.who, home)["war"])  # the steward shields it
-        ascendance.rule(self.k, self.who, "chartered", "test")
+        ascendance.rule(self.k, self.who, "ascended", "test")
         self.assertTrue(ascendance.free(self.k, self.who))
 
-    def test_the_steward_charters_only_what_is_in_balance_and_reads_again_each_term(self):
+    def test_the_steward_ascends_only_what_is_in_balance_and_reads_again_each_term(self):
         ascendance.petition(self.k, self.who, self.realm)
         rec = ascendance.stats(self.k)["of"][self.who]
         with mock.patch.object(ascendance, "books", return_value={}):
             self.k.cycle_count = (self.k.cycle_count // 100 + 1) * 100
             ascendance.season(self.k)
-        self.assertEqual(rec["ruling"], "chartered")
+        self.assertEqual(rec["ruling"], "ascended")
         with mock.patch.object(ascendance, "books", return_value={(self.who, "sufficiency"): ascendance.mc.q(0.5)}):
             self.k.cycle_count = (self.k.cycle_count // 100 + 1) * 100
             ascendance.season(self.k)
-        self.assertEqual(rec["ruling"], "chartered")                  # not yet a term since: no new reading
+        self.assertEqual(rec["ruling"], "ascended")                   # not yet a term since: no new reading
         self.k.cycle_count += stewardship.span_cycles(self.k, self.realm) + 100
         self.k.cycle_count -= self.k.cycle_count % 100
         with mock.patch.object(ascendance, "books", return_value={(self.who, "sufficiency"): ascendance.mc.q(0.5)}):
@@ -67,7 +67,7 @@ class TestAscendance(unittest.TestCase):
         stewardship.seat_steward(self.k, "keeper", "Keeper", self.realm)
         self.assertTrue(command.dispatch(self.k, "keeper", "quarantine", people=self.who)["ok"])
         self.assertEqual(ascendance.ruling(self.k, self.who), "quarantine")
-        self.assertTrue(command.dispatch(self.k, "keeper", "charter", people=self.who)["ok"])
+        self.assertTrue(command.dispatch(self.k, "keeper", "ascend", people=self.who)["ok"])
         self.assertTrue(ascendance.free(self.k, self.who))
 
 
@@ -82,7 +82,7 @@ class TestCoAscension(unittest.TestCase):
 
     def test_a_host_that_held_it_down_is_bound_and_the_newcomer_shielded(self):
         with mock.patch.object(ascendance, "_suppressed", return_value=True):
-            ascendance.coascend(self.k, self.who, self.rec, chartered=False)
+            ascendance.coascend(self.k, self.who, self.rec, ascended=False)
         self.assertEqual(self.rec["coascension"][self.host], "protection")
         self.assertIsNotNone(stewardship.binds(self.k, self.host, self.who))
 
@@ -90,14 +90,14 @@ class TestCoAscension(unittest.TestCase):
         from xylarium.kernel import federation
         with mock.patch.object(ascendance, "_suppressed", return_value=False), \
                 mock.patch.object(federation, "preferred_card", return_value="BETA"):
-            ascendance.coascend(self.k, self.who, self.rec, chartered=True)
+            ascendance.coascend(self.k, self.who, self.rec, ascended=True)
         self.assertEqual(self.rec["coascension"][self.host], "shared")
         self.assertEqual(spheres.bond(self.k, self.who, self.host)["kind"], "federation")
         cards = iter(["ALPHA", "DELTA"] * 4)
         with mock.patch.object(ascendance, "_suppressed", return_value=False), \
                 mock.patch.object(federation, "preferred_card", side_effect=lambda a: next(cards)):
             rec = {"realm": self.realm, "hosts": [self.host]}
-            ascendance.coascend(self.k, self.who, rec, chartered=True)
+            ascendance.coascend(self.k, self.who, rec, ascended=True)
         self.assertEqual(rec["coascension"][self.host], "standing")
 
     def test_its_ascension_is_its_own_not_its_hosts(self):

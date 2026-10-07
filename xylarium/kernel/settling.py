@@ -223,6 +223,9 @@ def begin(kernel: Any, who: str, home: Any, t0: float, gen_years: float) -> Dict
                               "g": settle_rate(kernel, home) * gens_per_gyr, "rmax": r0 + cosmos.R_MAX_KPC,
                               "cuts": {}, "enclosed": None, "fell": None}
     b["v"] = b["hop"] * b["g"]                                 # kpc per Gyr
+    sec = kernel.sectors.get(home.sector_id)                   # the worlds of its own system it can live on: what
+    b["home_worlds"] = max(1, sum(1 for p in (sec.planets if sec is not None else [])   # no neighbour takes from it
+                                  if lives_on(metab, home.planet_type, p.planet_type)))
     return b
 
 
@@ -266,9 +269,10 @@ def held(kernel: Any, who: str, t: float) -> float:
     b = stats(kernel).get(who)
     if b is None or not alive(b, t):
         return 1.0
+    floor = float(b.get("home_worlds", 1))                   # its own system's worlds, shielded: never taken from it
     reach = radius(b, t)
     if reach <= 0:
-        return 1.0
+        return floor
     st = stats(kernel)
     takers = [(st[c["by"]], _cut_fraction(c["a"], reach))
               for c in b["cuts"].values() if _cut_on(kernel, c, t) and c["by"] in st]
@@ -279,8 +283,36 @@ def held(kernel: Any, who: str, t: float) -> float:
             if lives_on(other.get("metab", "biotic"), other.get("home_type"), kind):
                 free *= 1.0 - frac
         left += w * free
-    room = float(b.get("room", 0.0)) * b["share"]            # what it has kindled beyond a white hole (gateways)
-    return max(1.0, systems_in(b["r0"], reach) * b["share"] * left + room)
+    room = room_formed(kernel, b, t) * b["share"]           # what it has kindled beyond a white hole (gateways)
+    return max(floor, systems_in(b["r0"], reach) * b["share"] * left + room)
+
+
+def room_formed(kernel: Any, b: Dict[str, Any], t: float) -> float:
+    """The systems its kindled spheres hold by epoch t: each begins at its own Big Bang and forms its stars inside-out
+    on its own clock, as this galaxy did (creation.formed_share at the Sun's radius, the child's age)."""
+    children = b.get("children") or []
+    if not children:
+        return 0.0
+    from xylarium.kernel import cosmos, creation
+    seed = cosmos.cosmos_seed(kernel)
+    return sum(float(c["room"]) * creation.formed_share(seed, cosmos.R0_KPC, max(0.0, t - float(c["epoch"])))
+               for c in children)
+
+
+def forming(kernel: Any, b: Dict[str, Any], t: float) -> bool:
+    """Is a sphere it kindled still in its first e-fold of star formation (creation.infall_gyr at the Sun's radius,
+    on the child's own clock) - somewhere still to settle?"""
+    children = b.get("children") or []
+    if not children:
+        return False
+    from xylarium.kernel import cosmos, creation
+    span = creation.infall_gyr(cosmos.cosmos_seed(kernel), cosmos.R0_KPC)
+    return any(t - float(c["epoch"]) < span for c in children)
+
+
+def room_to_come(kernel: Any, b: Dict[str, Any], t: float) -> float:
+    """The room its kindled spheres will hold that has not formed yet: somewhere still to settle."""
+    return sum(float(c["room"]) for c in b.get("children") or []) - room_formed(kernel, b, t)
 
 
 def breaks(kernel: Any, who: str, ta: float, tb: float) -> List[float]:
@@ -403,10 +435,17 @@ def settled_by(kernel: Any, sector_id: int, t: float, planet_type: Optional[str]
     p = xy(kernel, sector_id, t)
     if p is None:
         return None
+    return settled_at(kernel, p, t, planet_type, home=sector_id)
+
+
+def settled_at(kernel: Any, p: Tuple[float, float], t: float, planet_type: Optional[str] = None,
+               home: Optional[int] = None) -> Optional[str]:
+    """The people whose dominion covers a point of the disc (kpc) at coordinate epoch t (the first to settle it);
+    a people's own home system (`home`) is never its own."""
     st = stats(kernel)
     for who in sorted(st, key=lambda w: st[w]["crossed"]):
         b = st[who]
-        if b["sid"] == sector_id or not alive(b, t):
+        if b["sid"] == home or not alive(b, t):
             continue
         if planet_type is not None and not lives_on(b.get("metab", "biotic"), b.get("home_type"), planet_type):
             continue

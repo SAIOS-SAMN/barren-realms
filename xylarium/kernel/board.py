@@ -99,9 +99,29 @@ def ancient_peoples(kernel: Any) -> Dict[str, Any]:
     for who, worlds in relations._peoples(kernel).items():
         home = max(worlds, key=lambda w: (w.population, w.id))
         g = cosmos.stats(kernel)["place"].get(str(home.sector_id)) or {}
-        if "cell" in g and (tuple(g["cell"]), int(g.get("k", 0))) in origins:
+        if ("cell" in g and (tuple(g["cell"]), int(g.get("k", 0))) in origins) or ancient_by_deed(kernel, who):
             out[who] = home
     return out
+
+
+def ancient_by_deed(kernel: Any, who: str) -> bool:
+    """A people becomes an ancient by what it has done: it folds space, its minds bear the centre's wave (born inside
+    the bulge, or travelling as information: gateways.bears_hub), and its dominion has settled inside the bulge - it
+    absorbs the core's shear and keeps worlds there. Once so, so for good."""
+    from xylarium.kernel import cosmos, gateways, history, settling
+    deeds = stats(kernel).setdefault("ancient_by_deed", {})
+    if who in deeds:
+        return True
+    b = settling.stats(kernel).get(who) if "annals" in kernel.state else None
+    if b is None or not settling.alive(b, cosmos.deep_gyr(kernel)) or not gateways.bears_hub(kernel, who):
+        return False
+    if float(b["r0"]) - settling.radius(b, cosmos.deep_gyr(kernel)) > cosmos.R_BULGE_KPC:
+        return False                                      # its dominion has not yet reached inside the bulge
+    deeds[who] = kernel.cycle_count
+    history.event(kernel, "ANCIENT_BY_DEED", f"The {who.split(':', 1)[-1]} become ancients", actors=[who],
+                  cause="they fold space, bear the centre's wave, and hold worlds inside the bulge",
+                  data={"epoch": round(cosmos.deep_gyr(kernel), 6)})
+    return True
 
 
 def progenitors(kernel: Any) -> Dict[str, Dict[str, Any]]:

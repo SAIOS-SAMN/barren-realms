@@ -148,8 +148,8 @@ def long_range(kernel: Any, who: str) -> bool:
     if not spheres.crossed(kernel, who):
         return False
     keeper = transit.stats(kernel).get("hub")
-    if keeper is None:
-        return False
+    if keeper is None:                                        # unkept: the progenitors' hub lies dormant and open
+        return not ascendance.confined(kernel, who, -1, -2)
     if keeper == who:
         return True
     if ascendance.confined(kernel, who, -1, -2) or transit.at_war(kernel, who, keeper):
@@ -229,15 +229,20 @@ def coalitions(kernel: Any, t: float) -> list:
 
 
 def coalition_power_w(kernel: Any, members: tuple) -> float:
-    """What a coalition commands: each member's power at home times the worlds its dominion holds."""
-    from xylarium.kernel import annals, mastery, relations
+    """What a coalition banking toward a singularity commands: the light its arrays take from every system its
+    dominions hold (harvest.py: arrays at a star's inner edge, built where the energy is needed - and room is the need
+    here) - each member's systems x its home star's light (the stars it settles are its kind of star) x an array's
+    efficiency. The arrays' own building is not yet charged (an upper bound)."""
+    from xylarium.kernel import annals, harvest, mastery, relations
     peoples = relations._peoples(kernel)
     total = 0.0
     for w in members:
         worlds = peoples.get(w) or []
-        if worlds:
-            total += mastery.power_w(kernel, worlds) * max(1.0, float(annals.stats(kernel)["of"].get(w, {})
-                                                                         .get("dominion", 1)))
+        if not worlds:
+            continue
+        home = max(worlds, key=lambda p: (p.population, p.id))
+        held = max(1.0, float(annals.stats(kernel)["of"].get(w, {}).get("dominion", 1)))
+        total += held * mastery.star_w(kernel, home) * harvest.BASE_EFF["array"]
     return total
 
 
@@ -245,18 +250,24 @@ def _full(kernel: Any, who: str, t: float) -> bool:
     """Has a dominion settled all it can reach: its worlds at what its bubble holds?"""
     from xylarium.kernel import annals, settling
     w = float(((annals.stats(kernel)["of"].get(who) or {}).get("hist") or {}).get("W", 1.0))
+    b = settling.stats(kernel).get(who)
+    if b is not None and settling.forming(kernel, b, t):
+        return False                                      # a sphere it kindled is still forming: room is coming
     return w >= 0.999 * settling.held(kernel, who, t)
 
 
 def approves(kernel: Any, members: tuple) -> bool:
-    """The ancients' approval: the hub's keeper among them, or bonded to one of them with its throat not closed; and
-    every member free among the stars by its steward's ruling."""
+    """The ancients' approval: the hub's keeper among them, or bonded to one of them with its throat not closed - or,
+    where no one keeps the hub, a living ancient among them or bonded to one; and every member free among the stars
+    by its steward's ruling."""
     from xylarium.kernel import ascendance, spheres, transit
     if not all(ascendance.free(kernel, w) for w in members):
         return False
     keeper = transit.stats(kernel).get("hub")
-    if keeper is None:
-        return False
+    if keeper is None:                                    # an unkept hub: the living ancients approve, or no one
+        from xylarium.kernel import board
+        elders = set(board.ancient_peoples(kernel))
+        return any(w in elders or any(spheres.bond(kernel, a, w) is not None for a in elders) for w in members)
     if keeper in members:
         return True
     if transit.handling_of(kernel, keeper) == "closed":
@@ -267,8 +278,9 @@ def approves(kernel: Any, members: tuple) -> bool:
 def kindling(kernel: Any, logs: list) -> None:
     """Once a year: a coalition whose dominions have nowhere left to settle banks its power toward a new singularity;
     when it has the lightest black hole's mass-energy and the ancients' approval, it kindles one - and beyond its
-    white hole a sphere opens, a galaxy's room, theirs to settle: the universe pivots on their ascension, and nothing
-    around it is torn."""
+    white hole a sphere opens - a universe at its own Big Bang, whose stars form inside-out on its own clock, a
+    galaxy's room as they do, theirs to settle: the universe pivots on their ascension, and nothing around it is
+    torn. A coalition with a sphere still forming has somewhere to settle, and kindles no other."""
     from xylarium.kernel import cosmos, history, settling
     t = cosmos.deep_gyr(kernel)
     gst = stats(kernel)
@@ -290,7 +302,7 @@ def kindling(kernel: Any, logs: list) -> None:
         gst["kindled"].append(rec)
         for w in members:
             b = settling.stats(kernel)[w]
-            b["room"] = float(b.get("room", 0.0)) + room / len(members)
+            b.setdefault("children", []).append({"n": n, "epoch": t, "room": room / len(members)})
         names = ", ".join(w.split(":", 1)[-1] for w in members)
         history.event(kernel, "SINGULARITY_KINDLED", f"The {names} kindle a singularity", actors=list(members),
                       cause=f"nowhere left to settle, they pooled "

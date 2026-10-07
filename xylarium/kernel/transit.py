@@ -58,6 +58,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
 
+YEAR_S = 3.156e7                 # seconds in a standard year
 MOUTH_BASE = 9_000_000          # sector ids for mouths beyond the charts: the centre, then the other galaxies' centres
 FREE_BONDS = ("federation", "conglomerate")
 
@@ -637,7 +638,7 @@ def _natural(kernel: Any, logs: List[str]) -> None:
     if not st["masters"]:
         return
     centre = _centre_sector(kernel)
-    first = st.get("hub") or min(st["masters"], key=lambda w: (st["masters"][w], w))   # the hub's keeper
+    first = st.get("hub")                                    # the hub's keeper - none: it lies open, unkept
     for sid, m in mouths(kernel).items():
         if m["kind"] != "stellar" or key(sid, centre) in st["worms"]:
             continue
@@ -650,10 +651,12 @@ def _natural(kernel: Any, logs: List[str]) -> None:
     for i in range(1, len(gals)):
         g = MOUTH_BASE + i                                   # its heart stays a formula until a ship passes (admits)
         if key(centre, g) not in st["worms"]:
-            open_throat(kernel, centre, g, first, "intergalactic", passage_cr(kernel),
+            w = open_throat(kernel, centre, g, first or "the progenitors", "intergalactic", passage_cr(kernel),
                         f"galaxies are spheres stacked on their bounces: the core's throat reaches toward "
                         f"{gals[i]['name']}, unwitnessed")
             logs.append(f"[WORMHOLE] A throat across the void opens toward {gals[i]['name']}.")
+            if first is None:
+                w["handling"] = "open"                         # unkept: a progenitor wormhole, open
 
 
 # ---------------------------------------------------------------------- forging
@@ -738,10 +741,11 @@ def _heirs(kernel: Any, logs: List[str]) -> None:
                       cause="its people has fallen")
     for k, w in sorted(st["worms"].items()):
         if w.get("owner") and w["owner"] not in living:
-            w["keeper"], w["owner"], w["handling"], w["dormant"] = w["owner"], None, "closed", kernel.cycle_count
+            w["keeper"], w["owner"], w["handling"], w["dormant"] = w["owner"], None, "open", kernel.cycle_count
             history.event(kernel, "WORMHOLE_DORMANT", f"The throat between {_name(kernel, w['a'])} and "
                           f"{_name(kernel, w['b'])} falls dormant", cause=f"the {w['keeper'].split(':', 1)[-1]} who "
-                          f"kept it are gone; unused, it holds - impassable until someone comes", data={"throat": k})
+                          f"kept it are gone; a progenitor wormhole, it lies dormant and open - no tolls, no guard, "
+                          f"no upkeep - until someone keeps it again", data={"throat": k})
     for k, w in sorted(st["worms"].items()):
         if k not in st["worms"] or w.get("dormant") is None:
             continue
@@ -806,9 +810,33 @@ def collapse_mouth(kernel: Any, mouth: int, why: str, seen: Optional[set] = None
     return fallen
 
 
+def _upkeep(kernel: Any, logs: List[str]) -> None:
+    """A throat its keeper has developed - tolled or guarded: docks, commerce, defences - is held, not left to the
+    bounce: each year it costs its keeper a passage's energy (mastery.E_BRIDGE_J), paid from the power its people
+    puts to work over the year. What its power cannot hold reverts to a progenitor wormhole: open, untolled,
+    unguarded, and free."""
+    from xylarium.kernel import history, mastery, relations
+    st = stats(kernel)
+    peoples = relations._peoples(kernel)
+    by: Dict[str, List[str]] = {}
+    for k, w in sorted(st["worms"].items()):
+        if w.get("owner") in peoples and w.get("handling") in ("tolled", "guarded"):
+            by.setdefault(w["owner"], []).append(k)
+    for who, ks in sorted(by.items()):
+        afford = int(mastery.power_w(kernel, peoples[who]) * YEAR_S // mastery.E_BRIDGE_J)
+        for k in ks[afford:]:
+            w = st["worms"][k]
+            w["handling"] = "open"
+            history.event(kernel, "THROAT_OPENED", f"The {who.split(':', 1)[-1]} cannot hold the throat between "
+                          f"{_name(kernel, w['a'])} and {_name(kernel, w['b'])}", actors=[who],
+                          cause="its upkeep is more than their power holds a year: it lies open, untolled")
+        if ks[afford:]:
+            logs.append(f"[WORMHOLE] The {who.split(':', 1)[-1]} let {len(ks) - afford} throats lie open.")
+
+
 def season(kernel: Any) -> List[str]:
-    """Once a year: each lane's year of traffic closes; a fallen keeper's throats pass on or collapse; masters of the
-    bounce arise; throats open; lines forge."""
+    """Once a year: each lane's year of traffic closes; a fallen keeper's throats pass on or lie open; masters of the
+    bounce arise; throats open; lines forge; developed throats are paid for or lie open."""
     from xylarium.kernel import polity
     if (kernel.cycle_count // polity._quarter()) % 4:
         return []
@@ -820,6 +848,7 @@ def season(kernel: Any) -> List[str]:
     _masters(kernel, logs)
     _natural(kernel, logs)
     _forging(kernel, logs)
+    _upkeep(kernel, logs)
     return logs
 
 

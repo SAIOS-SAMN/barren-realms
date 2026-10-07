@@ -379,7 +379,7 @@ start_steward = start_sovereign          # the older name of the sovereign's sea
 
 def ancients(kernel: Any) -> List[Dict[str, Any]]:
     """The ancients this universe will raise, by age and by place (cosmos.is_ancient): the minds that wake within one
-    core assembly time of the galaxy's first mind, each on a star of its own ring's first generation. Their number is
+    core assembly time of the galaxy's first mind, each on a star of the galaxy's first generation (near the core). Their number is
     the seed's, not chosen. Earliest first: when each wakes (Gyr after the Big Bang), what its life is made of, and
     how far out its home lies (its ring of the galaxy)."""
     from xylarium.kernel import cosmos
@@ -392,6 +392,21 @@ def ancients(kernel: Any) -> List[Dict[str, Any]]:
                     "ring": int(m["cell"][0]), "cell": list(m["cell"]), "k": int(m["k"]), "w": int(m.get("w", 0)),
                     "star_mass": m.get("mass")})
     return out
+
+
+def first_minds(kernel: Any) -> List[Dict[str, Any]]:
+    """The galaxy's first minds: those that wake within one core assembly time of the first, earliest first - the
+    progenitor's seat sits beside one of them. Its ancients by birth are among them; the others may yet become
+    ancients by their deeds (board.ancient_by_deed)."""
+    from xylarium.kernel import cosmos
+    minds = sorted(cosmos.stats(kernel)["minds"], key=lambda m: float(m["epoch"]))
+    if not minds:
+        return []
+    first = float(minds[0]["epoch"])
+    return [{"index": i, "dawn_gyr": round(float(m["epoch"]), 4), "metabolism": m.get("metab") or "biotic",
+             "ring": int(m["cell"][0]), "cell": list(m["cell"]), "k": int(m["k"]), "w": int(m.get("w", 0)),
+             "star_mass": m.get("mass")}
+            for i, m in enumerate(m for m in minds if float(m["epoch"]) - first <= cosmos.ancient_window(kernel))]
 
 
 def _arisen_world(kernel: Any, rec: Dict[str, Any]) -> Optional[Any]:
@@ -410,14 +425,14 @@ def _arisen_world(kernel: Any, rec: Dict[str, Any]) -> Optional[Any]:
 
 def start_progenitor(seed: int, name: str, pick: int = 0, pace: str = "neighbourly", player_id: str = "player_1",
                      progress: Any = None, max_cycles: int = 2_000_000) -> Any:
-    """A Big Bang universe of this seed, run to the dawn of the `pick`-th of its first minds; the player takes that
-    ancient people's seat (its steward from its first day). Returns the kernel, or None if the mind never woke (its
+    """A Big Bang universe of this seed, run to the dawn of the `pick`-th of its first minds (earliest first: its
+    ancients by birth are among them); the player takes that people's seat (its steward from its first day). Returns the kernel, or None if the mind never woke (its
     world was taken or its star died first)."""
     from xylarium.kernel import ages
     from xylarium.kernel.engine import GameKernel
     k = GameKernel(seed=seed, genesis=f"cosmic:{pace}")
     k.activate()
-    anc = ancients(k)
+    anc = first_minds(k)                               # the first minds, earliest first (its ancients among them)
     if not anc:
         return None
     rec = anc[min(max(0, pick), len(anc) - 1)]

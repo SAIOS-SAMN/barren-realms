@@ -70,7 +70,7 @@ class TestProgenitorSeat(unittest.TestCase):
         k = roles.start_progenitor(7, "Elder", pick=1, pace="teeming")
         self.assertIsNotNone(k)
         rec = roles.stats(k)["ancients"]["player_1"]
-        self.assertEqual(rec["index"], min(1, len(roles.ancients(k)) - 1))   # the one asked for, or the last arisen
+        self.assertEqual(rec["index"], min(1, len(roles.first_minds(k)) - 1))   # the one asked for, or the last
         home = ages.homeworld(k, "player_1")
         self.assertIsNotNone(home)
         self.assertIsNotNone(home.civilization)
@@ -86,14 +86,13 @@ class TestProgenitorSeat(unittest.TestCase):
         k = GameKernel(seed=7, genesis="cosmic:neighbourly")
         k.activate()
         anc = roles.ancients(k)
-        self.assertTrue(anc)                                      # the seed's own number of them
+        self.assertTrue(anc or roles.first_minds(k))             # the seed's own number; else its first minds
         self.assertEqual([a["dawn_gyr"] for a in anc], sorted(a["dawn_gyr"] for a in anc))
         from xylarium.kernel import cosmos
         first = min(float(m["epoch"]) for m in cosmos.stats(k)["minds"])
-        self.assertEqual(anc[0]["dawn_gyr"], round(first, 4))      # the galaxy's first mind is an ancient
         for a in anc:                                             # by age: within one core assembly time of it
             self.assertLessEqual(a["dawn_gyr"] - first, cosmos.ancient_window(k) + 1e-4)
-            self.assertTrue(cosmos.first_of_its_ring(k, tuple(a["cell"]), a["k"]))   # by place: its ring's first stars
+            self.assertTrue(cosmos.first_of_the_galaxy(k, tuple(a["cell"]), a["k"]))  # by place: the galaxy's first
 
 
 class TestOpeningMenu(unittest.TestCase):

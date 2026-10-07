@@ -196,6 +196,29 @@ Not yet: dominions in deep time still settle by the fold front alone (gateways c
 politics, not a front that already crosses the galaxy in ~1 Myr), and the galaxy's rotation is still declared, not
 inherited through the bounce.
 
+## The stewards' realms, and what changed in the sweep
+
+- **Realms of constellations** (`constellations.py`). A constellation is a cell of the disc. A realm is one line's
+  neighbouring constellations, as many as one steward can keep: its attention is a council season (a quarter of its
+  people's year) over a generation of its line. Its duties each term are the peoples living there, their petitions,
+  and the minds about to wake there. One steward speaks in every council of its realm. With today's few peoples one
+  steward keeps a whole galaxy; realms split as galaxies crowd.
+- **Ascension books read carried history.** Sufficiency counts only taking more than the worlds regrow; history reads
+  a carried people's memory (`memory.character_keep`) when the engine holds no records of it.
+- **The shielded young** keep the worlds of their own system they can live on; no neighbour takes them.
+- **Falls from physics.** A people's fall hazard is its world's life-ending events (nearby supernovae, impacts), as
+  crowded as its stars, over its resilience: about 2 a Gyr at the Sun's crowding, where 1 in 5,000 a generation was
+  declared before.
+- **Ancients** by birth woke on a star of the galaxy's first generation (inside-out, so near the core); a people
+  becomes one by deed when it folds space, bears the centre's wave and holds worlds inside the bulge. The progenitor's
+  seat sits beside one of the galaxy's first minds.
+- **Throats.** A progenitor wormhole unkept lies dormant and open; a tolled or guarded throat costs its keeper a
+  passage's energy a year or reverts to open. An unkept hub is open.
+- **Kindling** is paid from the starlight a coalition's arrays take (an upper bound: building the arrays is not yet
+  charged). A kindled sphere begins at its own Big Bang and forms its room on its own clock; a coalition with a sphere
+  in its first e-fold of formation kindles no other.
+- Not yet: the launch rebuild (a carried people's money, docks and exchange), wars (none arise yet).
+
 ## Still to derive
 
 - **Disc accretion.** Should depend on fields carrying angular momentum, and stellar winds should be sorted by

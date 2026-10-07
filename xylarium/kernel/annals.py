@@ -8,7 +8,8 @@ annals close that gap: every people is carried, at the level of history, through
 since it woke and that it has not yet lived, along the same bridges the full engine carries it across - foraging,
 farming, a state, works, yards, the crossing to the stars - each an exponential wait whose mean is that bridge's
 span in the people's own generations (measured by tools/bridges.py from the engine itself, scaled by how fast its
-minds think: laws.cognition's speed). Peoples also fall: a hazard per generation, measured the same way.
+minds think: laws.cognition's speed). Peoples also fall: a hazard per generation, the life-ending events their world
+faces (supernovae, impacts: world_hazard_per_gyr) borne as well as what they know of life lets them.
 
 What a people lives in its annals it keeps: its way, its works, its yards, its knowledge, its crossing - and its
 people grows to what its world now feeds. Once across, its dominion grows (worlds settled per generation, up to the star systems within
@@ -34,8 +35,6 @@ GENETICS_SPAN = 100.0           # generations a people with yards takes to maste
                                 # yards' 60 and the crossing's 400 - the knowledge of itself it needs to live elsewhere)
 EMBODIMENT_SPAN = 200.0         # generations a genome-less people takes to come into a vessel (declared: harder than any
                                 # one bridge - it learns the terrestrial dimensions from nothing)
-FALL_PER_GENERATION = 2.0e-4    # a one-world people's hazard of falling, per generation (declared: a mean of ~5,000
-                                # generations); among the stars it is shared out over the worlds it holds
 HAZARD_STEPS = 256              # steps a bound dominion's hazard is integrated over, in ln(1 + g t)
 MIN_GENERATIONS = 1.0           # gaps shorter than a generation are left to the full engine
 
@@ -76,6 +75,32 @@ def resilience(kernel: Any, who: str) -> float:
     r += 1.0 if technology.has(kernel, who, "genetics") else 0.0
     r += 2.0 if technology.has(kernel, who, "transfer") else 0.0
     return r
+
+
+def world_hazard_per_gyr(kernel: Any, home: Any) -> float:
+    """The life-ending events a world faces per Gyr where it circles - the same physics its life climbed against
+    (creation.chemistries): a nearby supernova (life.STERILISE_AT_R0 over 10 Gyr in the plane; half for a sea in the
+    dark) and a life-ending impact (life.EXTINCTIONS_PER_GYR), each as crowded as the stars about it (the disc's
+    density x the Big Bang's stars x its time in the plane)."""
+    from xylarium.kernel import cosmos, creation, life
+    g = cosmos.stats(kernel)["place"].get(str(home.sector_id)) or {} if cosmos.is_cosmic(kernel) else {}
+    if "cell" in g:
+        seed = cosmos.cosmos_seed(kernel)
+        slot = creation.cell(seed, int(g["cell"][0]), int(g["cell"][1]))[int(g["k"])]
+        crowd = cosmos.density(float(g["r"])) * creation.big_bang(seed)["stars"] * creation.exposure(slot)
+    else:
+        crowd = 1.0
+    medium = str(((getattr(getattr(home, "civilization", None), "traits", None) or {}).get("medium")) or "")
+    dark = "under ice" in medium or " deep" in medium
+    return crowd * (life.STERILISE_AT_R0 / 10.0 * (0.5 if dark else 1.0) + life.EXTINCTIONS_PER_GYR)
+
+
+def fall_per_generation(kernel: Any, who: str, home: Any) -> float:
+    """A one-world people's hazard of falling, per generation: its world's life-ending events over a generation, borne
+    as well as what it knows of life lets it (resilience). Among the stars it is shared out over the worlds it holds."""
+    from xylarium.kernel import fertility
+    gen = max(1.0, fertility.generation_of(kernel, home))
+    return world_hazard_per_gyr(kernel, home) * gen / 1e9 / resilience(kernel, who)
 
 
 def _speed(kernel: Any, home: Any) -> float:
@@ -326,8 +351,9 @@ def season(kernel: Any) -> List[str]:
     jobs = [j for j in (_live_ages(kernel, who, worlds, logs) for who, worlds in sorted(_peoples(kernel).items()))
             if j is not None]
     _settle(kernel, [j for j in jobs if j.get("cross") is not None], logs)
-    from xylarium.kernel import gateways, settling, steward_ai
+    from xylarium.kernel import constellations, gateways, settling, steward_ai
     settling.mark_wakings(kernel, _peoples(kernel))
+    constellations.season(kernel)                            # the stewards' realms, read as the dominions stand
     steward_ai.ensure(kernel, _peoples(kernel))              # the board is complete up to the stewards
     gateways.kindling(kernel, logs)
     for j in jobs:
@@ -356,13 +382,13 @@ def _live_ages(kernel: Any, who: str, worlds: List[Any], logs: List[str]) -> Opt
     gens = deficit / gen
     if "hist" not in rec:                                     # its history is kept from its first year
         _history(kernel, who, rec, _stage(kernel, who, home), lived, gen, _speed(kernel, home),
-                 FALL_PER_GENERATION / resilience(kernel, who))
+                 fall_per_generation(kernel, who, home))
     if gens < MIN_GENERATIONS and (guided(kernel, who) or not _due(kernel, who, home, rec, lived, gen)):
         return None                                           # nothing to carry, and no turning of its own is due
     gens = max(gens, 1e-9)
     rec["advanced"] += deficit
     speed = _speed(kernel, home)
-    fall_rate = FALL_PER_GENERATION / resilience(kernel, who)
+    fall_rate = fall_per_generation(kernel, who, home)
     stage = _stage(kernel, who, home)
     hist = _history(kernel, who, rec, stage, lived, gen, speed, fall_rate)
     fall_rate = hist["rate"]                                  # set at its last turning: its knowledge since counts at
@@ -398,7 +424,7 @@ def _live_ages(kernel: Any, who: str, worlds: List[Any], logs: List[str]) -> Opt
         hist["P"] += speed * to_turn
         hist["H"] += fall_rate * to_turn
         hist["since"] = hist["P"]                             # the next wait is counted from here
-        fall_rate = hist["rate"] = FALL_PER_GENERATION / resilience(kernel, who)
+        fall_rate = hist["rate"] = fall_per_generation(kernel, who, home)
         if kind in ("embodiment", "genetics"):
             _tech.stats(kernel)["of"].setdefault(who, {})[kind] = kernel.cycle_count
             speed = _speed(kernel, home)                      # it has hands, or can rewrite itself, now

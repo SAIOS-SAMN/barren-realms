@@ -8,25 +8,26 @@ and rules. The reading is a set of BOOKS, each the candidate's own measure again
 own peoples (the worst it already holds - a candidate need be no worse than those already among it; the realm's
 keeper alone where it has no others), signed - a deficit where it falls short of the realm it would join. Need orders: the first book in deficit leads; no book is weighed against another.
 
-  SUFFICIENCY  what it takes of its worlds against what they regrow: its numbers over what its worlds can carry
-               (syntropy: crowding). A scarcity-only, extractive people overdraws its own ground.
+  SUFFICIENCY  what it takes of its worlds against what they regrow: its numbers past what its worlds can carry
+               (syntropy: crowding above one). A scarcity-only, extractive people overdraws its own ground.
   RESTRAINT    what its few take of its many against what the many will bear (rent over rent.bearable)
   ORDER        its whole history: order destroyed against made (alignment.character)
   SELF         whether it can read its own mind (introspect: self-knowledge)
-  HISTORY      whether it remembers its own world truly (memory: the truth of what it keeps)
+  HISTORY      whether it remembers its own world truly (memory: the truth of what it keeps - or, where it kept no
+               records the engine saw, how much of its past its best medium holds a generation)
   MINDS        the means to make minds (transfer, cyber, robotics) held beyond its self-knowledge: a people that would
                set loose minds it cannot read - or reads its own kind as a stage to be discarded - is not ready
   MONEY        the debasement of its own money - and of the realm's reserve, which tightens every reading: a realm
                whose reserve is inflating takes on no new weight lightly
   COOPERATION  the treaties it has broken against those it has kept (its sovereigns' conduct: integrity)
 
-All books in balance: the steward CHARTERS it - it ascends, its network grows, it may bond and trade. Any in deficit:
+All books in balance: the steward lets it ASCEND - its network grows, it may bond and trade. Any in deficit:
 QUARANTINE - its ships go no further than its own system, its network does not grow, and no one may make war on it
 (the steward shields the young). It makes no OPEN CONTACT: no new meeting with any other people, no treaty, no trade
 beyond its own kin - whatever reaches it reaches it covertly (covert.py: exploiters of its resources, dark hands that
 would keep it down, smugglers - and the steward's counter-watch). Where a book in deficit makes its works a danger to
 the realm's order - minds it cannot read (MINDS: transfer, cyber, robotics), a history of destroying (ORDER: the atom,
-cyber) - the steward INTERDICTS them: found, but stopped (technology.has reads them as absent) until it is chartered. The steward reads it again every term and rules again: a people earns its way out
+cyber) - the steward INTERDICTS them: found, but stopped (technology.has reads them as absent) until it has ascended. The steward reads it again every term and rules again: a people earns its way out
 book by book, but only a steward's ruling lets it out. A player who keeps the realm rules for it (command.py).
 
 CO-ASCENSION. A people that rises on a world others already hold - natives reaching their First Flight beside
@@ -80,7 +81,8 @@ def measures(kernel: Any, who: str) -> Dict[str, float]:
         return {}
     worlds = relations._peoples(kernel).get(who) or [home]
     out: Dict[str, float] = {}
-    out["sufficiency"] = float(syntropy.index(kernel, who, worlds)["crowding"])
+    # taking more of its worlds than they regrow: its numbers past what they can carry (at what they carry, nothing)
+    out["sufficiency"] = max(0.0, float(syntropy.index(kernel, who, worlds)["crowding"]) - 1.0)
     try:
         out["restraint"] = max(0.0, rent.of(home) - rent.bearable(kernel, home))
     except Exception:
@@ -89,8 +91,12 @@ def measures(kernel: Any, who: str) -> Dict[str, float]:
     out["order"] = (1.0 - alignment.character(civ)) / 2.0 if civ is not None else 0.5
     skill = introspect.self_knowledge(kernel, who) if introspect.introspective(kernel, who) else 0.0
     out["self"] = 1.0 - max(0.0, min(1.0, skill))
+    # what it remembers truly: its records' truth - or, a people the annals carried with no records kept in the
+    # engine, how much of its past its best medium keeps a generation (memory.character_keep): no record is no
+    # evidence of a false memory
     recs = memory.records(kernel, who) if "memory" in kernel.state else []
-    out["history"] = 1.0 - (sum(memory.truth(r) for r in recs) / len(recs) if recs else 0.0)
+    truth = sum(memory.truth(r) for r in recs) / len(recs) if recs else memory.character_keep(kernel, who, home)
+    out["history"] = 1.0 - truth
     held = sum(1 for cap in MIND_MAKING if technology.found(kernel, who, cap))
     out["minds"] = held * out["self"]
     out["money"] = _debasement(kernel, home.currency)
@@ -129,7 +135,7 @@ def books(kernel: Any, who: str, realm: str) -> mc.Chain:
     mine = measures(kernel, who)
     if not mine:
         return {}
-    if realm.startswith("line:"):                          # a line's ward: read against the line's own people
+    if realm.startswith("line:"):                          # a people a line stewards: read against the line's own
         peers, keeper = [], realm[len("line:"):]
     else:
         peers = [p for p in stewardship.peoples_of(kernel, realm) if p != who]
@@ -191,7 +197,7 @@ def _suppressed(kernel: Any, who: str, host: str) -> bool:
                for e in history.of_people(kernel, who))
 
 
-def coascend(kernel: Any, who: str, rec: Dict[str, Any], chartered: bool, logs: Optional[List[str]] = None) -> None:
+def coascend(kernel: Any, who: str, rec: Dict[str, Any], ascended: bool, logs: Optional[List[str]] = None) -> None:
     """The co-ascension hearing: one world, two peoples - each one's ascension is its own; what the steward settles is
     how they stand to each other. A host that held the newcomer down is bound by a ceasefire (protection); peoples
     whose doctrines can live together stand under a shared charter (a federation of the one world); else each has
@@ -204,7 +210,7 @@ def coascend(kernel: Any, who: str, rec: Dict[str, Any], chartered: bool, logs: 
             kind = "protection" if _suppressed(kernel, who, host) else "standing"
         elif _suppressed(kernel, who, host):
             kind = "protection"
-        elif not chartered:
+        elif not ascended:
             continue
         else:
             def card(p: str) -> str:
@@ -234,7 +240,7 @@ def coascend(kernel: Any, who: str, rec: Dict[str, Any], chartered: bool, logs: 
 
 
 def ruling(kernel: Any, who: Optional[str]) -> Optional[str]:
-    """'chartered', 'quarantine', 'pending' - or None for a people no realm has to rule on."""
+    """'ascended', 'quarantine', 'pending' - or None for a people no realm has to rule on."""
     if not who or "ascendance" not in getattr(kernel, "state", {}):
         return None
     rec = stats(kernel)["of"].get(who)
@@ -242,8 +248,8 @@ def ruling(kernel: Any, who: Optional[str]) -> Optional[str]:
 
 
 def free(kernel: Any, who: Optional[str]) -> bool:
-    """May this people go among the stars: no realm to ask, or chartered."""
-    return ruling(kernel, who) in (None, "chartered")
+    """May this people go among the stars: no realm to ask, or ascended."""
+    return ruling(kernel, who) in (None, "ascended")
 
 
 def isolated(kernel: Any, a: Optional[str], b: Optional[str]) -> bool:
@@ -262,7 +268,7 @@ def stopped(kernel: Any, who: Optional[str]) -> List[str]:
 
 
 def _interdict(kernel: Any, who: str, rec: Dict[str, Any], logs: Optional[List[str]]) -> None:
-    """Quarantined: the works its books in deficit make a danger are stopped; chartered: all are free again."""
+    """Quarantined: the works its books in deficit make a danger are stopped; ascended: all are free again."""
     from xylarium.kernel import history, technology
     stop: List[str] = []
     if rec["ruling"] == "quarantine":
@@ -287,10 +293,12 @@ def confined(kernel: Any, who: Optional[str], a: int, b: int) -> bool:
 
 
 def rule(kernel: Any, who: str, verdict: str, by: str, logs: Optional[List[str]] = None) -> Dict[str, Any]:
-    """A steward's ruling on a petition: 'chartered' or 'quarantine'."""
+    """A steward's ruling on a petition: 'ascended' or 'quarantine'."""
     from xylarium.kernel import history, stewardship
     rec = stats(kernel)["of"].get(who)
-    if rec is None or verdict not in ("chartered", "quarantine"):
+    if verdict == "chartered":
+        verdict = "ascended"                                # the word it was first given
+    if rec is None or verdict not in ("ascended", "quarantine"):
         return {"ok": False, "why": "no such petition, or no such ruling"}
     old = rec["ruling"]
     rec.update(ruling=verdict, ruled=kernel.cycle_count, by=by)
@@ -298,8 +306,8 @@ def rule(kernel: Any, who: str, verdict: str, by: str, logs: Optional[List[str]]
     _interdict(kernel, who, rec, logs)
     name, realm = who.split(":", 1)[-1], stewardship.realm_name(rec["realm"])
     if verdict != old:
-        history.event(kernel, "ASCENDED" if verdict == "chartered" else "QUARANTINED",
-                      f"The {name} are {'chartered among the stars of' if verdict == 'chartered' else 'held at home by'}"
+        history.event(kernel, "ASCENDED" if verdict == "ascended" else "QUARANTINED",
+                      f"The {name} {'ascend among the stars of' if verdict == 'ascended' else 'are held at home by'}"
                       f" {realm}", actors=[who],
                       cause=f"the steward read their books: {rec.get('lead') or 'all in balance'}"
                       if verdict == "quarantine" else "the steward read their books and found them in balance",
@@ -312,7 +320,7 @@ def rule(kernel: Any, who: str, verdict: str, by: str, logs: Optional[List[str]]
 def _due(kernel: Any, rec: Dict[str, Any]) -> bool:
     """A petition is read on arrival, then again every term of the realm's steward."""
     from xylarium.kernel import stewardship
-    if rec["realm"].startswith("line:"):                  # a line reads its wards every one of its generations
+    if rec["realm"].startswith("line:"):                  # a line reads its peoples every one of its generations
         from xylarium.kernel import clocks, spheres
         span = clocks.lived_span(kernel, spheres.generation(kernel, rec["realm"][len("line:"):]))
         return rec["ruled"] is None or kernel.cycle_count - rec["ruled"] >= span
@@ -342,20 +350,20 @@ def season(kernel: Any) -> List[str]:
             continue
         # a player's line is ruled by its standing policy while its player is away: by the books, unless it chose
         # to rule by hand (command: the progenitor's seat plays asynchronously)
-        verdict = "chartered" if lead is None else "quarantine"
+        verdict = "ascended" if lead is None else "quarantine"
         if lead is not None:
             mc.intend(rec["mind"], lead, res[lead], "quarantine", "candidate")
         if line is not None:
             by = (board.progenitors(kernel).get(line) or {}).get("name") or f"the {line.split(':', 1)[-1]}"
-            ledger = board.stats(kernel).setdefault("wards", {}).setdefault(line, {"chartered": 0, "quarantine": 0})
-            ledger[verdict] += 1                               # each line's record: how its wards were ruled
+            ledger = board.stats(kernel).setdefault("stewarded", {}).setdefault(line, {"ascended": 0, "quarantine": 0})
+            ledger[verdict] += 1                               # each line's record: how the peoples it stewards were ruled
         else:
             sent = stewardship.mind(kernel, rec["realm"])
             by = sent["name"] if sent else "the realm"
         was = rec["ruling"]
         rule(kernel, who, verdict, by, logs)
         if (verdict != was or rec.get("coascension") is None) and (rec.get("hosts") or hosts(kernel, who)):
-            coascend(kernel, who, rec, verdict == "chartered", logs)
+            coascend(kernel, who, rec, verdict == "ascended", logs)
     return logs
 
 

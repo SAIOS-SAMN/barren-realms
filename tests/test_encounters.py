@@ -38,7 +38,7 @@ class TestNoFloor(unittest.TestCase):
 
 
 class TestAncients(unittest.TestCase):
-    def test_the_ancients_are_the_first_minds_by_age_and_by_their_rings_first_stars(self):
+    def test_the_ancients_are_the_first_minds_by_age_and_by_the_galaxys_first_stars(self):
         from xylarium.kernel import cosmos, roles
         from xylarium.kernel.engine import GameKernel
         k = GameKernel(seed=7, genesis="cosmic:neighbourly")
@@ -49,7 +49,7 @@ class TestAncients(unittest.TestCase):
         first = float(minds[0]["epoch"])
         for m in minds:
             inside = float(m["epoch"]) - first <= cosmos.ancient_window(k)
-            own = cosmos.first_of_its_ring(k, tuple(m["cell"]), int(m["k"]))
+            own = cosmos.first_of_the_galaxy(k, tuple(m["cell"]), int(m["k"]))
             listed = any(a["cell"] == list(m["cell"]) and a["k"] == int(m["k"]) for a in anc)
             self.assertEqual(listed, inside and own)
 

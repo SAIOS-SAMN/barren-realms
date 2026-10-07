@@ -44,14 +44,14 @@ class TestQuarantineAndCovert(unittest.TestCase):
         polity._bend(self.k)
         self.assertNotIn("S-A|S-B", polity.stats(self.k)["treaties"])             # the open treaty lapses
 
-    def test_works_a_book_in_deficit_makes_dangerous_are_interdicted_until_chartered(self):
+    def test_works_a_book_in_deficit_makes_dangerous_are_interdicted_until_ascended(self):
         technology.stats(self.k)["of"].setdefault(self.target, {})["cyber"] = 0
         rec = ascendance.stats(self.k)["of"][self.target]
         rec["books"] = {"minds": "1/2"}
         ascendance._interdict(self.k, self.target, rec, None)
         self.assertTrue(technology.found(self.k, self.target, "cyber"))
         self.assertFalse(technology.has(self.k, self.target, "cyber"))           # found, but stopped
-        rec["ruling"] = "chartered"
+        rec["ruling"] = "ascended"
         ascendance._interdict(self.k, self.target, rec, None)
         self.assertTrue(technology.has(self.k, self.target, "cyber"))
 

@@ -20,7 +20,7 @@ reach. Every order returns {"ok": bool, "why"/...} and is written in the history
 from typing import Any, Dict, Optional, Tuple
 
 ORDERS = {"progenitor": ("send", "recall", "fold", "handle", "forge"), "steward": ("claim", "withdraw", "grant"),
-          "steward_ascent": ("charter", "quarantine", "fortify"),
+          "steward_ascent": ("ascend", "quarantine", "fortify"),
           "sovereign": ("order", "commission", "dismiss", "exchange"), "captain": ("swear", "forswear", "way")}
 
 
@@ -178,8 +178,8 @@ def grant(kernel: Any, pid: str, house: str) -> Dict[str, Any]:
     return {"ok": True, "house": h["name"], "granted": h["grants"]}
 
 
-def charter(kernel: Any, pid: str, who: str, verdict: str = "chartered") -> Dict[str, Any]:
-    """A player who keeps a realm rules on a people that petitions it: chartered among the stars, or held at home."""
+def ascend(kernel: Any, pid: str, who: str, verdict: str = "ascended") -> Dict[str, Any]:
+    """A player who keeps a realm rules on a people that petitions it: ascended among the stars, or held at home."""
     from xylarium.kernel import ascendance, stewardship
     realm = stewardship.realm_held(kernel, pid)
     rec = ascendance.stats(kernel)["of"].get(who)
@@ -352,8 +352,8 @@ def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
           "claim": lambda: claim(kernel, pid, str(kw.get("realm", ""))),
           "withdraw": lambda: withdraw(kernel, pid),
           "grant": lambda: grant(kernel, pid, str(kw.get("house", ""))),
-          "charter": lambda: charter(kernel, pid, str(kw.get("people", "")), "chartered"),
-          "quarantine": lambda: charter(kernel, pid, str(kw.get("people", "")), "quarantine"),
+          "ascend": lambda: ascend(kernel, pid, str(kw.get("people", "")), "ascended"),
+          "quarantine": lambda: ascend(kernel, pid, str(kw.get("people", "")), "quarantine"),
           "fortify": lambda: fortify(kernel, pid, int(kw.get("sector", 0) or 0), float(kw.get("units", 0) or 0)),
           "order": lambda: order(kernel, pid, kw.get("book")),
           "commission": lambda: commission(kernel, pid, str(kw.get("captain", ""))),

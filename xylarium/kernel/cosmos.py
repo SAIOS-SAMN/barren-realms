@@ -198,11 +198,21 @@ def ancient_window(kernel: Any) -> float:
     return creation.infall_gyr(cosmos_seed(kernel), 0.0)
 
 
+def first_of_the_galaxy(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
+    """Was this slot's star of the galaxy's first generation - born within one core assembly time of the galaxy's
+    first stars? The galaxy forms inside-out, so only the inner rings had stars that early: age and place at once."""
+    from xylarium.kernel import creation
+    s = cosmos_seed(kernel)
+    slot = creation.cell(s, int(cell[0]), int(cell[1]))[int(k)]
+    return "born" in slot and slot["born"] - creation.first_stars(s) <= ancient_window(kernel)
+
+
 def is_ancient(kernel: Any, mind: Dict[str, Any], first_dawn: float) -> bool:
-    """An ancient, by age and by place: it woke within one core assembly time of the galaxy's first mind, on a star
-    of its own ring's first generation."""
+    """An ancient by birth, by age and by place: it woke within one core assembly time of the galaxy's first mind, on
+    a star of the galaxy's first generation - which the inside-out galaxy holds near its core. (A people may also
+    become an ancient by its deeds: board.ancient_peoples.)"""
     return (float(mind["epoch"]) - first_dawn <= ancient_window(kernel)
-            and first_of_its_ring(kernel, tuple(mind["cell"]), int(mind["k"])))
+            and first_of_the_galaxy(kernel, tuple(mind["cell"]), int(mind["k"])))
 
 
 def omega(r: float) -> float:

@@ -301,7 +301,7 @@ def _begin(kernel: Any, who: str, logs: List[str]) -> None:
     line = steward_ai.line_of(kernel, who)
     if owner(kernel, home.sector_id) is not None:              # it crosses inside a realm another keeps: it asks
         ascendance.petition(kernel, who, owner(kernel, home.sector_id))   # that realm's steward to let it go
-    elif line not in (None, "elders", who):                    # it crosses under a line's steward: it asks that line
+    elif line not in (None, "elders", who):                    # it crosses in a realm another line keeps: it asks
         _hold(kernel, who, net, home.sector_id)
         ascendance.petition(kernel, who, f"line:{line}")
     else:

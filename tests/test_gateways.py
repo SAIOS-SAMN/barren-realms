@@ -81,9 +81,14 @@ class TestKindling(unittest.TestCase):
         from xylarium.kernel import settling
         k = _galaxy({1: (8.0, 0.0)})
         b = _bubble(k, "civ:A", 1, 1.0)
-        before = settling.held(k, "civ:A", 1.0001)
-        b["room"] = 1e10
-        self.assertAlmostEqual(settling.held(k, "civ:A", 1.0001) - before, 1e10 * b["share"], delta=1.0)
+        with mock.patch("xylarium.kernel.cosmos.cosmos_seed", lambda kernel: 7):
+            before = settling.held(k, "civ:A", 1.0001)
+            b["children"] = [{"n": 1, "epoch": 1.0001, "room": 1e10}]
+            self.assertAlmostEqual(settling.held(k, "civ:A", 1.0001), before, delta=1.0)   # at its own Big Bang: none
+            self.assertEqual(settling.room_to_come(k, b, 1.0001), 1e10)                   # all of it still to come
+            self.assertGreater(settling.room_formed(k, b, 3.0), 0.1e10)                   # its stars are forming,
+            self.assertLess(settling.room_to_come(k, b, 3.0), 0.9e10)                     # inside-out, over Gyr
+            self.assertTrue(settling.forming(k, b, 3.0))
 
 
 if __name__ == "__main__":
