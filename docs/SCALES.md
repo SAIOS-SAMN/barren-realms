@@ -2,6 +2,12 @@
 
 Largest first. Each tier exists in detail only where it is witnessed; everywhere else it is a formula.
 
+These are the **physical** terms of the shared lexicon (mycelium `docs/MU-LEXICON.md`, v1), which keeps three
+vocabularies apart: physical (this ladder and what is in it), civic (peoples, realms, the seats, value channels,
+stardocks, the ledger tree) and network (domains, tiers, μ). A **region** here is a physical cell of the disc; a
+**realm** is civic - a group of constellations a line's stewards watch (constellations.py) - and never a region.
+"World" is informal: an inhabited body.
+
 | Tier | What it is | How it is carried | Its clock |
 |---|---|---|---|
 | **Universe** | a closed 3-sphere of galactic clusters: one seed, one Big Bang, one clock | `creation.py` (the Big Bang's draw, the expansion law), `sphere.py` (the nearest 64 clusters, analytic); lockstep (scheduler.py) | the clock (100 cycles a year); light between clusters on conformal time |
