@@ -137,6 +137,14 @@ def density(r: float) -> float:
     return math.exp((R0_KPC - r) / R_D_KPC)
 
 
+def cosmic_rays(r: float) -> float:
+    """The galaxy's cosmic-ray flux where a system circles, relative to R0's: supernovae make them, and the dying stars
+    are the stars there - every component's number density (encounters.components: disc, bulge, nuclear cluster) over
+    the disc's at R0. The disc alone (density) misses the bulge, where most of the inner galaxy's stars are."""
+    from xylarium.kernel import encounters
+    return sum(n for n, _ in encounters.components(r)) / encounters.DISC_N_R0
+
+
 def formed_gyr(r: float) -> float:
     """Inside-out: a radius's star-formation timescale in our universe, Gyr (Chiappini et al. 2001's infall; at
     least 0.3 Gyr - the age of the oldest stars measured). Each universe scales it (creation.infall_gyr)."""

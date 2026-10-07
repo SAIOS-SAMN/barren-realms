@@ -306,6 +306,8 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
     flux = bright * s["lum"] / max(1e-6, a_au) ** 2 / math.sqrt(max(1e-6, 1.0 - e_now * e_now))   # a year's mean
     t_form = T_UNIT * (s["lum"] / max(1e-6, a_au) ** 2) ** 0.25    # the nebula's temperature where it formed
     env = cosmos.density(r_kpc)                                 # its neighbourhood: flybys, the tide, supernovae
+    cr = round(cosmos.cosmic_rays(r_kpc), 6)                     # the galaxy's cosmic rays where it circles
+    sw = activity(s["mass"] / L.star_mass, age_gyr) / activity(1.0, 4.57) / max(1e-6, a_au) ** 2   # its star's wind
     zz = max(0.0, z)
     if ices is None:                                           # a world laid out before formation was physics
         ices = {k: v * zz for k, v in condensed(t_form, L).items()}
@@ -316,7 +318,7 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
         return {"flux": flux, "t_form": round(t_form, 1), "t_surf": round(t_eq0, 1), "p_bar": 1.0e3, "air": {},
                 "seas": {}, "ices": ices, "heat": 0.0, "q": 0.0, "field": 0.0, "giant": True, "mass": mass,
                 "radius": radius, "env": env, "star_t": s["t_eff"], "albedo": 0.3, "light": 0.0, "e": round(e_now, 4),
-                "laws": L}
+                "cr": cr, "sw": sw, "laws": L}
     # the interior: isotopes from its star's birth, warmth from its formation, tides from its host
     ice_share = sum(ices.values()) / (1.0 + sum(ices.values()))
     core = SOLIDS["core"] * (1.0 - ice_share) if core is None else core
@@ -394,6 +396,7 @@ def build(seed: Any, star: Dict[str, Any], a_au: float, radius: float, mass: flo
             "escaped": round(1.0 - sum(gas.values()) / held0, 6) if held0 > 0 else 0.0,
             "air_escaped": round(max(0.0, 1.0 - p_bar / air0), 6) if air0 > 0 else 0.0,
             "env": env, "star_t": s["t_eff"], "albedo": round(albedo, 3), "e": round(e_now, 4), "g": g,
+            "cr": cr, "sw": sw,
             "light": flux * (1.0 - albedo) * math.exp(-0.1 * p_bar ** 0.5), "laws": L}   # what reaches the surface
 
 
@@ -537,11 +540,13 @@ def solvents(w: Dict[str, Any]) -> List[Dict[str, Any]]:
     t, p = w["t_surf"], max(w["p_bar"], 1e-9)
     drive = band(w.get("star_t", 5772.0), L)["drive"]
     light = w["light"] * drive
+    from xylarium.kernel import hydromagnetics
+    rad = hydromagnetics.radiolysis(w)              # what the particles that reach its surface split into fuel
     for sp, amount in w["seas"].items():
         ph = phase(sp, t, p, L)
         if ph == "liquid" or ph == "supercritical":
-            out.append({"solvent": sp, "where": "surface", "t": t, "energy": light + free_heat(w, t),
-                        "amount": amount, "dark": False})
+            out.append({"solvent": sp, "where": "surface", "t": t, "energy": light + free_heat(w, t) + rad,
+                        "amount": amount, "dark": False, "radiolysis": rad})
         elif ph == "solid" and sp in ("H2O", "NH3") and not w["giant"]:
             # a liquid ocean under an ice shell, where the world's heat (and tides) keep the shell's base melted: the
             # shell a heat flow can hold is thinner than the ice there is (water's ice; ammonia an antifreeze)
@@ -549,8 +554,9 @@ def solvents(w: Dict[str, Any]) -> List[Dict[str, Any]]:
             layer_km = amount * BAR / (UNIT_G * max(1e-6, w.get("g", 1.0)) * 1000.0) / 1000.0
             q = float(w.get("q") or geothermal(w) * 340.0)
             if interior.shell_km(q, t, t_under) < layer_km:
-                out.append({"solvent": sp, "where": "under_ice", "t": t_under, "energy": free_heat(w, t_under),
-                            "amount": amount, "dark": True})
+                # the shell's face, split by the particles that reach it, sends its oxidants down as the ice turns
+                out.append({"solvent": sp, "where": "under_ice", "t": t_under, "energy": free_heat(w, t_under) + rad,
+                            "amount": amount, "dark": True, "radiolysis": rad})
     for sp, pp in w["air"].items():
         if phase(sp, t, p, L) == "supercritical":
             out.append({"solvent": sp, "where": "supercritical", "t": t, "energy": light + free_heat(w, t),

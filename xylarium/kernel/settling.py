@@ -33,6 +33,12 @@ may make it a sanctuary (ascendance.sanctuary). A people that wakes on such a wo
 
 What a people can live on is its metabolism's worlds (universe.habitability) and always the kind it evolved on - until
 the board's yield-over-erasure language replaces the table.
+
+Where it can live them is its band (band, fit): radiation is food and harm at once. A people whose seas are fed by
+what its sky's particles split (hydromagnetics.radiolysis) has less to eat where the galaxy's cosmic rays are fewer;
+one living under an open sky has its repair tuned to its home's dose - widened by how far its year swings it
+(plasticity: a variable world selects for retuning within a life) - and loses newborns where the dose runs beyond
+that (hydromagnetics.health's law). Each ring of the galaxy counts as the share of a colony there its people keeps.
 """
 
 import functools
@@ -63,9 +69,49 @@ def systems_per_pc3(r_kpc: float) -> float:
 
 
 N_DISC_R, N_DISC_A, N_SHELL = 48, 24, 96    # the rings and arcs a bubble's disc is counted on; its spheroid's shells
+Band = Optional[Tuple[float, ...]]
 
 
-def _disc_in_ball(r0: float, reach: float) -> float:
+def band(kernel: Any, home: Any) -> List[float]:
+    """A people's band, read from its home: [the galaxy's cosmic rays there, the share of its fuel the galaxy's rays
+    make, whether it lives under the open sky (1/0), the cosmic share of its dose, its plastic tolerance (the dose
+    over its home's it retunes to within a life)]. A people with no medium of its own lives enclosed: no band."""
+    from xylarium.kernel import biosphere, cosmos, hydromagnetics, worlds
+    g = _place(kernel, home.sector_id) or {}
+    cr0 = cosmos.cosmic_rays(float(g.get("r", cosmos.R0_KPC)))
+    try:
+        w = worlds.state_of_planet(kernel, home)["world"]
+        med = worlds.best(worlds.of_planet(kernel, home), biosphere.metabolism_of(kernel, home))
+    except Exception:
+        return [cr0, 0.0, 0.0, 0.0, 1.0]
+    if med is None:
+        return [cr0, 0.0, 0.0, 0.0, 1.0]
+    parts = hydromagnetics.dose_parts(w)
+    food = float(med.get("radiolysis", 0.0)) / max(1e-30, float(med.get("energy", 0.0)))
+    open_sky = med.get("where") not in ("under_ice", "deep")
+    e = min(0.99, float(w.get("e") or 0.0))
+    plastic = ((1.0 + e) / (1.0 - e)) ** 2 if open_sky else 1.0      # its year's swing of light and wind
+    return [round(cr0, 6), round(food * parts["power_cosmic"], 9), 1.0 if open_sky else 0.0,
+            round(parts["cosmic"], 6), round(plastic, 6)]
+
+
+def fit(bd: Band, r_kpc: float) -> float:
+    """The share of a colony at radius r a people of this band keeps, 0 .. 1: what it has to eat there (its home's
+    fuel, the galaxy's part scaled by the cosmic rays there over home's) x the newborns the dose there spares
+    (hydromagnetics.health's law beyond its plastic tolerance). 1 everywhere for a people with no band."""
+    if not bd:
+        return 1.0
+    from xylarium.kernel import cosmos, hydromagnetics
+    cr0, food, open_sky, cosmic, plastic = bd
+    q = cosmos.cosmic_rays(r_kpc) / max(1e-12, cr0)
+    eat = min(1.0, 1.0 - food + food * q)
+    if not open_sky:
+        return eat
+    excess = max(0.0, ((1.0 - cosmic) + cosmic * q) / max(1.0, plastic) - 1.0)
+    return eat * math.exp(-excess * hydromagnetics.HOME_LIFETIME_RISK)
+
+
+def _disc_in_ball(r0: float, reach: float, bd: Band = None) -> float:
     """The disc's systems in a ball of radius `reach` (kpc) about a home at r0: over galactocentric rings, the arc of
     each ring within the ball, each column as deep as the ball is there and no deeper than the disc."""
     from xylarium.kernel import cosmos, encounters
@@ -81,7 +127,7 @@ def _disc_in_ball(r0: float, reach: float) -> float:
         th_max = math.pi if c <= -1.0 else (0.0 if c >= 1.0 else math.acos(c))
         if th_max <= 0:
             continue
-        n = encounters.DISC_N_R0 * cosmos.density(r) * 1e9            # per kpc^3
+        n = encounters.DISC_N_R0 * cosmos.density(r) * 1e9 * fit(bd, r)   # per kpc^3, as much as its band keeps
         dth = th_max / N_DISC_A
         col = 0.0
         for j in range(N_DISC_A):
@@ -92,41 +138,56 @@ def _disc_in_ball(r0: float, reach: float) -> float:
     return total / STARS_PER_SYSTEM
 
 
-def _spheroid_in_ball(r0: float, reach: float) -> float:
+def _spheroid_in_ball(r0: float, reach: float, bd: Band = None) -> float:
     """The bulge's and nuclear cluster's systems in the ball: the whole of them within reach - r0 of the centre, and of
-    each shell beyond it the share inside the ball, (reach^2 - (r0 - s)^2) / (4 r0 s)."""
+    each shell beyond it the share inside the ball, (reach^2 - (r0 - s)^2) / (4 r0 s) - each shell weighted by the
+    share its band keeps (fit)."""
     from xylarium.kernel import encounters
     ab, an = encounters.BULGE_A_KPC, encounters.NUCLEUS_A_PC / 1000.0
     mb, mn = encounters.BULGE_M, encounters.NUCLEUS_M
     enc = lambda s: mb * s * s / (s + ab) ** 2 + mn * s ** 3 / (s * s + an * an) ** 1.5           # noqa: E731
     rho = lambda s: mb * ab / (2.0 * math.pi * s * (s + ab) ** 3) \
         + 3.0 * mn / (4.0 * math.pi * an ** 3) * (1.0 + s * s / (an * an)) ** -2.5           # noqa: E731
+    def whole(s_out: float) -> float:
+        """Every shell within s_out of the centre, as much as its band keeps."""
+        if not bd or s_out <= 0:
+            return enc(s_out)
+        lo_w = min(1e-5, s_out)
+        kw = math.log(s_out / lo_w) / N_SHELL
+        got = enc(lo_w) * fit(bd, lo_w)
+        for i in range(N_SHELL):
+            s0, s1 = lo_w * math.exp(i * kw), lo_w * math.exp((i + 1) * kw)
+            s = math.sqrt(s0 * s1)
+            got += rho(s) * 4.0 * math.pi * s * s * (s1 - s0) * fit(bd, s)
+        return got
     if r0 < 1e-9:
-        return enc(reach) / encounters.MEAN_STAR / STARS_PER_SYSTEM
+        return whole(reach) / encounters.MEAN_STAR / STARS_PER_SYSTEM
     inner = max(0.0, reach - r0)
-    total = enc(inner)
+    total = whole(inner)
     lo, hi = max(abs(r0 - reach), 1e-6), r0 + reach
     k = math.log(hi / lo) / N_SHELL
     for i in range(N_SHELL):
         s0, s1 = lo * math.exp(i * k), lo * math.exp((i + 1) * k)
         s = math.sqrt(s0 * s1)
         frac = max(0.0, min(1.0, (reach * reach - (r0 - s) ** 2) / (4.0 * r0 * s)))
-        total += rho(s) * 4.0 * math.pi * s * s * frac * (s1 - s0)
+        total += rho(s) * 4.0 * math.pi * s * s * frac * (s1 - s0) * fit(bd, s)
     return total / encounters.MEAN_STAR / STARS_PER_SYSTEM
 
 
 @functools.lru_cache(maxsize=65536)
-def _systems_in(r0_kpc: float, reach_kpc: float) -> float:
-    """The systems within reach of a home at r0 (both kpc): disc and spheroid, never more than the galaxy holds."""
-    return min(galaxy_systems(), _disc_in_ball(r0_kpc, reach_kpc) + _spheroid_in_ball(r0_kpc, reach_kpc))
+def _systems_in(r0_kpc: float, reach_kpc: float, bd: Band = None) -> float:
+    """The systems within reach of a home at r0 (both kpc) a people of band bd keeps: disc and spheroid, never more
+    than the galaxy holds."""
+    return min(galaxy_systems(), _disc_in_ball(r0_kpc, reach_kpc, bd) + _spheroid_in_ball(r0_kpc, reach_kpc, bd))
 
 
-def systems_in(r0_kpc: float, reach_kpc: float) -> float:
+def systems_in(r0_kpc: float, reach_kpc: float, bd: Any = None) -> float:
     """_systems_in, its arguments rounded so nearby reaches share a count."""
     if reach_kpc <= 0:
         return 0.0
     k = 10 ** (3 - int(math.floor(math.log10(reach_kpc))))
-    return _systems_in(round(r0_kpc, 3), round(reach_kpc * k) / k)
+    key = tuple(float(f"{x:.3g}") for x in bd) if bd else None
+    return _systems_in(round(r0_kpc, 3), round(reach_kpc * k) / k, key)
 
 
 # ---------------------------------------------------------------------- a people's pace and reach
@@ -221,7 +282,7 @@ def begin(kernel: Any, who: str, home: Any, t0: float, gen_years: float) -> Dict
                               "home_type": home.planet_type,
                               "share": share, "hop": hop,
                               "g": settle_rate(kernel, home) * gens_per_gyr, "rmax": r0 + cosmos.R_MAX_KPC,
-                              "cuts": {}, "enclosed": None, "fell": None}
+                              "cuts": {}, "enclosed": None, "fell": None, "band": band(kernel, home)}
     b["v"] = b["hop"] * b["g"]                                 # kpc per Gyr
     sec = kernel.sectors.get(home.sector_id)                   # the worlds of its own system it can live on: what
     b["home_worlds"] = max(1, sum(1 for p in (sec.planets if sec is not None else [])   # no neighbour takes from it
@@ -265,7 +326,8 @@ def _cut_on(kernel: Any, c: Dict[str, Any], t: float) -> bool:
 def held(kernel: Any, who: str, t: float) -> float:
     """The systems a people holds at coordinate epoch t: within its front, less what its neighbours have settled of
     the worlds both can live on - beyond each seam, or all around it where it began inside another's dominion. Kind
-    by kind of world, a world is lost once however many neighbours could take it."""
+    by kind of world, a world is lost once however many neighbours could take it, and only as far as each could keep
+    a colony there (its band's fit, read where this people began: the contested worlds lie about it)."""
     b = stats(kernel).get(who)
     if b is None or not alive(b, t):
         return 1.0
@@ -274,7 +336,7 @@ def held(kernel: Any, who: str, t: float) -> float:
     if reach <= 0:
         return floor
     st = stats(kernel)
-    takers = [(st[c["by"]], _cut_fraction(c["a"], reach))
+    takers = [(st[c["by"]], _cut_fraction(c["a"], reach) * fit(st[c["by"]].get("band"), b["r0"]))
               for c in b["cuts"].values() if _cut_on(kernel, c, t) and c["by"] in st]
     left = 0.0
     for kind, w in niche(kernel, b.get("metab", "biotic"), b.get("home_type")).items():
@@ -284,7 +346,7 @@ def held(kernel: Any, who: str, t: float) -> float:
                 free *= 1.0 - frac
         left += w * free
     room = room_formed(kernel, b, t) * b["share"]           # what it has kindled beyond a white hole (gateways)
-    return max(floor, systems_in(b["r0"], reach) * b["share"] * left + room)
+    return max(floor, systems_in(b["r0"], reach, b.get("band")) * b["share"] * left + room)
 
 
 def room_formed(kernel: Any, b: Dict[str, Any], t: float) -> float:
@@ -441,8 +503,11 @@ def settled_by(kernel: Any, sector_id: int, t: float, planet_type: Optional[str]
 def settled_at(kernel: Any, p: Tuple[float, float], t: float, planet_type: Optional[str] = None,
                home: Optional[int] = None) -> Optional[str]:
     """The people whose dominion covers a point of the disc (kpc) at coordinate epoch t (the first to settle it);
-    a people's own home system (`home`) is never its own."""
+    a people's own home system (`home`) is never its own. Where its band keeps only a share of a colony (fit), it has
+    settled that share of the systems there - which ones, fixed by the seed (the system and the people)."""
+    import zlib
     st = stats(kernel)
+    r_here = math.hypot(p[0], p[1])
     for who in sorted(st, key=lambda w: st[w]["crossed"]):
         b = st[who]
         if b["sid"] == home or not alive(b, t):
@@ -452,6 +517,9 @@ def settled_at(kernel: Any, p: Tuple[float, float], t: float, planet_type: Optio
         c0 = xy(kernel, b["sid"], t)
         if c0 is None or math.hypot(p[0] - c0[0], p[1] - c0[1]) > radius(b, t):
             continue
+        kept = fit(b.get("band"), r_here)
+        if kept < 1.0 and zlib.crc32(f"{who}|{home if home is not None else p}".encode()) / 2.0 ** 32 >= kept:
+            continue                                       # its band keeps no colony on this one
         beyond = False
         for c in b["cuts"].values():
             if not _cut_on(kernel, c, t) or c["a"] is None:

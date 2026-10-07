@@ -79,11 +79,18 @@ def resilience(kernel: Any, who: str) -> float:
 
 def world_hazard_per_gyr(kernel: Any, home: Any) -> float:
     """The life-ending events a world's people faces per Gyr - the same physics its life climbed against
-    (creation.chemistries): a supernova pulse (life.STERILISE_AT_R0 over 10 Gyr) or an impact
-    (life.EXTINCTIONS_PER_GYR) beyond what its kind adapted to. Both come in scale-free spectra, so relative to the
-    background a people evolved under the crowding of its stars cancels: these are the rates wherever it lives."""
-    from xylarium.kernel import life
-    return life.STERILISE_AT_R0 / 10.0 + life.EXTINCTIONS_PER_GYR
+    (creation.chemistries): an impact beyond what its kind adapted to (life.EXTINCTIONS_PER_GYR: scale-free, so the
+    same relative to any background), and - for a people under an open sky - a sterilising pulse, which comes with
+    the dying stars where its world circles (life.sterilise_per_gyr)."""
+    from xylarium.kernel import biosphere, cosmos, life, worlds
+    g = cosmos.stats(kernel)["place"].get(str(home.sector_id), {}) if cosmos.is_cosmic(kernel) else {}
+    crowd = cosmos.cosmic_rays(float(g.get("r", cosmos.R0_KPC)))
+    try:
+        med = worlds.best(worlds.of_planet(kernel, home), biosphere.metabolism_of(kernel, home))
+    except Exception:
+        med = None
+    dark = med is not None and med.get("where") in ("under_ice", "deep")
+    return life.sterilise_per_gyr(crowd, dark) + life.EXTINCTIONS_PER_GYR
 
 
 def fall_per_generation(kernel: Any, who: str, home: Any) -> float:

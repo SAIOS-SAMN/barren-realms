@@ -36,6 +36,13 @@ CR_MEDIAN_GV = 4.0              # median rigidity of the galactic cosmic rays at
 COLUMN_PER_BAR = 1033.0         # g/cm^2 of air over each bar at the unit world's gravity
 ATTENUATION = 185.0             # g/cm^2: the cosmic-ray dose's attenuation through air, its cascade included (the
                                 # unit world's sea level takes ~1/270 of the dose its field lets into its sky)
+SW_POWER = 2.7e-4               # W/m^2: the unit star's wind's kinetic power through the unit orbit (~5 protons per
+                                # cm^3 at ~400 km/s: measured)
+GCR_POWER = 1.2e-5              # W/m^2: the galaxy's cosmic rays' power through a surface at R0 (their ~1 eV/cm^3
+                                # energy density x c/4: measured)
+RADIOLYSIS_YIELD = 0.03         # the share of absorbed particle energy water ice stores as fuel (G ~ 2 oxidant
+                                # molecules per 100 eV, ~1.5 eV free energy each: measured)
+FLUX_UNIT_W = 340.0             # W/m^2: the flux unit worlds.py reckons energy in (the unit world's mean insolation)
 
 
 def margin(w: Dict[str, Any]) -> float:
@@ -111,6 +118,35 @@ def _dose_raw(w: Dict[str, Any], pressure: float, galactic: float) -> float:
     return (stellar + cosmic) * _through_air(w)
 
 
+def particle_power(w: Dict[str, Any]) -> float:
+    """The particles' power reaching a world's surface (W/m^2): its star's wind through the share of sky its field
+    leaves open, the galaxy's cosmic rays (worlds.build's "cr") above its field's cutoff - both through its air."""
+    sw = float(w.get("sw") or 0.0)
+    stellar = SW_POWER * sw * exposure(w, sw) if sw > 0 else 0.0
+    cosmic = GCR_POWER * float(w.get("cr", 1.0)) * _gcr_through_field(w)
+    return (stellar + cosmic) * _through_air(w)
+
+
+def dose_parts(w: Dict[str, Any]) -> Dict[str, float]:
+    """A world's surface dose split by source, each a share of the whole: its star's wind and the galaxy's cosmic rays
+    (the part that scales with where it circles: cosmos.cosmic_rays) - and the same split of the particles' power."""
+    sw = float(w.get("sw") or 0.0)
+    stellar = sw * exposure(w, sw) if sw > 0 else 0.0
+    cosmic = float(w.get("cr", 1.0)) * _gcr_through_field(w)
+    total = stellar + cosmic
+    p_st = SW_POWER * stellar
+    p_cr = GCR_POWER * cosmic
+    return {"stellar": stellar / total if total > 0 else 0.0, "cosmic": cosmic / total if total > 0 else 0.0,
+            "power_cosmic": p_cr / (p_st + p_cr) if p_st + p_cr > 0 else 0.0}
+
+
+def radiolysis(w: Dict[str, Any]) -> float:
+    """The fuel those particles make of a world's surface ices and seas (flux units): radiation as food - a dark sea
+    under a shell its star's wind and the galaxy's rays split can live on what they make, more of it where the
+    stars crowd (the inner galaxy) or its star is young and near."""
+    return RADIOLYSIS_YIELD * particle_power(w) / FLUX_UNIT_W
+
+
 def dose(w: Dict[str, Any], pressure: float = 1.0, galactic: float = 1.0) -> float:
     """Particles reaching the surface, in the unit world's dose under one bar of its own air. galactic: cosmic-ray
     flux where the world circles (cosmos.density - supernovae make them), 1 at the unit radius."""
@@ -139,7 +175,7 @@ def of_planet(kernel: Any, planet: Any, cycle: Optional[int] = None, swell: Opti
     if kernel is not None and cosmos.is_cosmic(kernel):
         g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {})
         if g.get("r") is not None:
-            galactic = cosmos.density(float(g["r"]))
+            galactic = cosmos.cosmic_rays(float(g["r"]))
     return {"margin": round(margin(w), 4), "field": round(surface_field(w), 4), "standoff": round(standoff(w, p), 2),
             "exposure": round(exposure(w, p), 4), "dose": round(dose(w, p, galactic), 4)}
 

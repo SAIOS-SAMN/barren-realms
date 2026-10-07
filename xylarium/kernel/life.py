@@ -68,9 +68,20 @@ EJECTA_ORBITS = 1.0e6           # ejecta cross a system in about a million orbit
 EXTINCTIONS_PER_GYR = 2.0       # impacts per Gyr beyond what a lineage adapted to (declared, measured at the Sun's
                                 # radius; scale-free, so the same relative to any lineage's own background:
                                 # creation.chemistries)
-STERILISE_AT_R0 = 0.1           # chance a supernova pulse beyond a lineage's adapted background erases it over 10 Gyr
-                                # (measured at the Sun's radius; the same everywhere, relative to its own background)
+STERILISE_AT_R0 = 0.1           # chance a supernova pulse sterilises an open world's surface over 10 Gyr at the Sun's
+                                # radius (measured) - an event no adaptation absorbs: it scales with the dying stars
+                                # around (sterilise_per_gyr)
 MAX_RUNGS = 12                  # a chemistry needing more rungs than this never reaches a mind within any star's life
+
+
+def sterilise_per_gyr(crowd: float, dark: bool) -> float:
+    """How often a world's life is sterilised, per Gyr. Two kinds of disturbance erase a lineage. Those a biosphere can
+    be tuned to - impacts, a pulse it meets about once each adaptation time - come in scale-free spectra, so relative
+    to its own background the crowding of its stars cancels (EXTINCTIONS_PER_GYR, the same everywhere). One it cannot
+    be tuned to is a nearby supernova or burst stripping its sky: no repair outlasts a dead surface, so that rate grows
+    with the dying stars around (crowd: cosmos.cosmic_rays, x how much of its orbit it spends among them). A sea under
+    ice or in the deep is shielded from it."""
+    return 0.0 if dark else STERILISE_AT_R0 / 10.0 * max(0.0, crowd)
 
 
 def _laws(laws: Any = None) -> Any:
