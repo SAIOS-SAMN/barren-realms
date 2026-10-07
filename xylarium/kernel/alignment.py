@@ -211,7 +211,7 @@ def standing(kernel: Any, who: str, among: List[str]) -> float:
         civ = getattr(max(ws, key=lambda p: p.population), "civilization", None) if ws else None
         return character(civ) if civ is not None else None
     mine = d(who)
-    others = [x for x in (d(h) for h in set(among) - {who}) if x is not None]
+    others = [x for x in (d(h) for h in sorted(set(among) - {who})) if x is not None]
     if mine is None or not others:
         return 0.5
     return (sum(1 for x in others if x < mine) + 0.5 * sum(1 for x in others if x == mine)) / len(others)

@@ -396,10 +396,10 @@ def _smooth_demand(kernel: Any) -> None:
     st = stats(kernel)
     dem = st.setdefault("demand", {})
     drawn_q = st.get("drawn", {})
-    for sid in set(dem) | set(drawn_q):
+    for sid in sorted(set(dem) | set(drawn_q)):                # never hash order
         now = drawn_q.get(sid, {})
         old = dem.setdefault(sid, {})
-        for comm in set(old) | set(now):
+        for comm in sorted(set(old) | set(now)):
             v = 0.7 * old.get(comm, 0.0) + 0.3 * now.get(comm, 0)
             if v < 0.01:
                 old.pop(comm, None)

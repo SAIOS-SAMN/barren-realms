@@ -192,7 +192,7 @@ def declared(kind: str, idle: Optional[Any] = None):
                 after, n1 = totals(k), ACTIVE.net()
                 # every commodity counted or declared: one made and destroyed within the event (worlds charted and
                 # engulfed at once) is in neither census, but its inner declarations must still be balanced
-                for c in set(before) | set(after) | set(n0) | set(n1):
+                for c in sorted(set(before) | set(after) | set(n0) | set(n1)):
                     d = (after.get(c, 0) - before.get(c, 0)) - (n1.get(c, 0) - n0.get(c, 0))
                     if d > 0:
                         source(kind, c, d)
@@ -228,9 +228,9 @@ def audit(kernel: Any) -> None:
     from xylarium.kernel import state
     rec = state.of(kernel, "matter_audit")
     base = rec.get("base")
-    now = {c: t.get(c, 0) - n.get(c, 0) for c in set(t) | set(n)}
+    now = {c: t.get(c, 0) - n.get(c, 0) for c in sorted(set(t) | set(n))}
     if base is not None:
-        for c in set(now) | set(base):
+        for c in sorted(set(now) | set(base)):
             d = now.get(c, 0) - base.get(c, 0)
             if d:
                 v = rec["violations"]

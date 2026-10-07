@@ -233,7 +233,7 @@ def survey(kernel: Any) -> None:
             zones.touch(kernel, p)                            # its folded seasons first, then what it is found to hold
             held, why = inventory(kernel, sec, p)
             delivered = p.society.get("delivered") or {}             # what the galaxy brought since: kept
-            for sym in set(held) | {s for s in p.element_deposits if s in TABLE}:
+            for sym in sorted(set(held) | {s for s in p.element_deposits if s in TABLE}):   # never hash order
                 old, new = p.element_deposits.get(sym, 0), held.get(sym, 0) + int(delivered.get(sym, 0))
                 if new > old:
                     matter.source("planetary_survey", sym, new - old)

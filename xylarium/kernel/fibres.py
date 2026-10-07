@@ -101,7 +101,7 @@ def season(kernel: Any) -> None:
     """Close the season: lanes remember three quarters of their development and add this season's traffic."""
     st = state(kernel)
     dev = st["dev"]
-    for k in set(dev) | set(st["q"]):
+    for k in sorted(set(dev) | set(st["q"])):                  # never hash order
         v = dev.get(k, 0.0) * SEASON_MEMORY + st["q"].get(k, 0.0)
         if v < 1.0:
             dev.pop(k, None)
