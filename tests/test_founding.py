@@ -1,6 +1,6 @@
 """
-In a cosmic universe money, the exchange and the Reserve are founded by peoples: a state strikes its coin when it
-founds itself, the exchange opens when two monies meet or the first starport opens, the Reserve when two banks
+In a cosmic universe money, the exchange and the Reserve are founded by peoples: a people strikes its coin when it
+must settle with others (institutions.need), the exchange opens when two monies meet or the first starport opens, the Reserve when two banks
 trade through the exchange. Before that there is nothing to circulate, and the money seasons do nothing.
 """
 
@@ -100,3 +100,35 @@ class TestRehome(unittest.TestCase):
         institutions.rehome(k, p, "SOL", "test")
         self.assertEqual(p.currency, "SOL")
         self.assertEqual({c: v for c, v in residual().items() if v}, {c: v for c, v in before.items() if v})
+
+
+class TestCoinOnNeed(unittest.TestCase):
+    """A coin is struck when value must move between holders who cannot settle it otherwise - not at a stage."""
+
+    def setUp(self):
+        self.k = GameKernel(seed=7, genesis="cosmic")
+        self.k.activate()
+        self.home = next(p for s in self.k.sectors.values() for p in s.planets if p.population > 0)
+
+    def test_a_state_alone_strikes_no_coin(self):
+        self.home.society["way"] = "state"
+        self.assertIsNone(institutions.need(self.k, self.home))
+        institutions.quarter(self.k)
+        self.assertNotIn(self.home.currency, institutions.stats(self.k)["currencies"])
+
+    def test_a_stateless_people_that_meets_strangers_strikes_one(self):
+        from xylarium.kernel import contact, knowledge
+        self.home.society["way"] = "farm"
+        me = knowledge.holder_of_planet(self.home)
+        contact.stats(self.k)["familiarity"][contact._key(me, "civ:Strangers")] = 0.5
+        self.assertEqual(institutions.need(self.k, self.home), "strangers")
+        institutions.quarter(self.k)
+        self.assertIn(self.home.currency, institutions.stats(self.k)["currencies"])
+
+    def test_kin_settle_among_themselves(self):
+        from xylarium.kernel import contact, descent, knowledge
+        me = knowledge.holder_of_planet(self.home)
+        descent.stats(self.k)["of"]["civ:Daughters"] = {"root": descent.line(self.k, me)["root"], "parent": me,
+                                                        "split": 0.0, "chemistry": None}
+        contact.stats(self.k)["familiarity"][contact._key(me, "civ:Daughters")] = 0.5
+        self.assertIsNone(institutions.need(self.k, self.home))

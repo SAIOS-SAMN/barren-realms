@@ -5,8 +5,10 @@ In a cosmic universe (cosmos.py) nothing of the money layer exists at the clock'
 circulation, no central bank, no exchange, no Reserve, no great powers' vaults. Each is founded when the problem it
 solves first appears:
 
-  COIN      a people founds its money when it founds its state (ways.py): a state taxes, and a tax needs a unit.
-            It is issued by the people's own treasury on commodity backing (the reserve regime - a coin is a claim
+  COIN      a people founds its money when value must move between holders who cannot settle it the ways they
+            already have (need): it has met strangers of another line, strangers trade at a port in its system, or
+            its own worlds lie beyond settling face to face. Not when it founds a state - a state may tax in kind, a
+            people without one may trade far; money and its other works are not ordered. It is issued by the people's own treasury on commodity backing (the reserve regime - a coin is a claim
             on the staple or metal at par, regimes.py); its supply is what its taxes mint from then on. A people
             takes up a money already in its region only if it has met that money's issuers (contact.py: one cannot
             use a coin from people one has never traded with) - a union, recorded as such; otherwise it strikes its
@@ -85,6 +87,34 @@ def _event(kernel: Any, kind: str, title: str, actors: List[str], planet: Any = 
     history.event(kernel, kind, title, actors=actors, planet=planet, cause=cause)
     if what:
         primordial.first(kernel, what, title)
+
+
+def need(kernel: Any, planet: Any) -> Optional[str]:
+    """Why a people needs a money of its own, if it does: value must move between holders who cannot settle it the
+    ways they already have - kin settle by giving and owing within their own line (descent: one root), and a people
+    of one system settles face to face. A coin is struck for:
+      "strangers"  it has met a people of another line, whom no tie of kin obliges to settle
+      "market"     strangers' ships trade at a port in its own system
+      "distance"   its own worlds lie in more than one system, beyond settling face to face
+    None: whatever it has (gift, barter, a store of goods) clears what it moves. Not a stage of its society: a people
+    without a state may need one, and a state with no one outside to pay may never."""
+    from xylarium.kernel import contact, descent, knowledge, relations
+    holder = knowledge.holder_of_planet(planet)
+    if not holder:
+        return None
+    root = descent.line(kernel, holder)["root"]
+    for key in contact.stats(kernel).get("familiarity", {}):
+        a, _, b = key.partition("|")
+        other = b if a == holder else (a if b == holder else None)
+        if other and other != holder and descent.line(kernel, other)["root"] != root:
+            return "strangers"
+    sec = kernel.sectors.get(planet.sector_id)
+    if sec is not None and getattr(sec, "port", None) is not None:
+        return "market"
+    systems = {w.sector_id for w in (relations._peoples(kernel).get(holder) or []) if w.population > 0}
+    if len(systems) > 1:
+        return "distance"
+    return None
 
 
 def found_currency(kernel: Any, planet: Any) -> Optional[str]:
@@ -200,10 +230,8 @@ def _rebase(kernel: Any, holder: str, cur: str) -> None:
 
 
 def _issuers(kernel: Any, cur: str) -> List[Any]:
-    from xylarium.kernel import ways
     return [p for s in kernel.sectors.values() for p in s.planets
-            if p.currency == cur and p.population > 0 and getattr(p, "civilization", None) is not None
-            and not ways.stateless(p)]
+            if p.currency == cur and p.population > 0 and getattr(p, "civilization", None) is not None]
 
 
 def _open_pool(kernel: Any, cur: str) -> bool:
@@ -272,10 +300,10 @@ def quarter(kernel: Any) -> List[str]:
     from xylarium.kernel import contact, ways
     logs: List[str] = []
     st = stats(kernel)
-    for s in kernel.sectors.values():                       # a state founded outside ways (seeded, freed) mints too
+    for s in kernel.sectors.values():                       # a people that must settle with others strikes its coin
         for p in s.planets:
-            if p.population > 0 and getattr(p, "civilization", None) is not None and not ways.stateless(p) \
-                    and p.currency not in st["currencies"]:
+            if p.population > 0 and getattr(p, "civilization", None) is not None \
+                    and p.currency not in st["currencies"] and need(kernel, p):
                 line = found_currency(kernel, p)
                 if line:
                     logs.append(line)

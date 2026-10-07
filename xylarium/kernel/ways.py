@@ -180,11 +180,7 @@ def quarter(kernel: Any) -> List[str]:
             value = decide.worth(kernel, max(0, room) * pressure / 4.0, m)
             cost = decide.worth(kernel, p.population * (1.0 - HOUSEHOLD_INCOME_SHARE) * (1.0 - pressure) / 4.0, m)
             if decide.choose(kernel, [decide.option("found_state", cost, value, aim="deepen")], m, p.id, "state") is not None:
-                p.society["way"] = "state"
-                from xylarium.kernel import institutions
-                line = institutions.found_currency(kernel, p)        # a state taxes: it strikes its coin
-                if line:
-                    logs.append(line)
+                p.society["way"] = "state"                 # it taxes in kind; a coin waits on a need (institutions.need)
                 st["states"] += 1
                 primordial.first(kernel, "first_state", name)
                 from xylarium.kernel import history, knowledge
