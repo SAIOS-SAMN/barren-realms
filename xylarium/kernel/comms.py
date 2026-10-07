@@ -140,18 +140,23 @@ def known_to(kernel: Any, captain: Any, sid: int, comm: str) -> Optional[Tuple[i
     return (int(best[2]) if len(best) > 2 else 0), int(best[0]), int(kernel.cycle_count - best[1])
 
 
-def sol(kernel: Any, sid: int, price: float) -> float:
-    """A port's price in SOL at the exchanges' rate (its money's units per SOL)."""
+def sol(kernel: Any, sid: int, price: float, units: int = 1) -> float:
+    """What a port's price really fetches, per unit, in the exchange's unit of account (institutions.hub_unit): the
+    lot's proceeds through the pool (its fee and depth: fx.quote_via_sol), not a quoted rate."""
+    from xylarium.kernel import institutions
+    hub = institutions.hub_unit(kernel)
     port = getattr(kernel.sectors.get(sid), "port", None)
-    cur = getattr(port, "currency", "SOL") if port is not None else "SOL"
-    if cur == "SOL":
+    cur = getattr(port, "currency", hub) if port is not None else hub
+    if cur == hub or price <= 0:
         return float(price)
     fx = getattr(kernel, "fx_market", None)
+    n = max(1, int(units))
     try:
-        r = float(fx.rate(cur)) if fx is not None else 1.0
+        if fx is None or not fx.can_convert(cur, hub):
+            return 0.0                                          # no market carries its money: it fetches nothing
+        return float(fx.quote_via_sol(cur, hub, int(price * n))) / n
     except Exception:
-        r = 1.0
-    return float(price) / max(1e-9, r)
+        return 0.0
 
 
 def best_heard_bid(kernel: Any, captain: Any, comm: str, exclude: Optional[int] = None) -> float:

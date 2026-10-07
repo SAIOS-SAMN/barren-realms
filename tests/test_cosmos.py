@@ -110,6 +110,7 @@ class TestNativesAndPrimeDirective(unittest.TestCase):
         random.seed(7)
         self.kernel = GameKernel(seed=42)
         self.cap = self.kernel.register_player("envoy", "Envoy")
+        self.cap.ship.fighters = 10 ** 4               # armed past what any raider would risk (the envoy, not a raid)
         self.cap.turns_left = 400
         self.cap.ship.cargo.capacity = 300
         self.cap.ship.cargo.equipment = 60

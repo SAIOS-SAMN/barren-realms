@@ -11,7 +11,7 @@ only chance left in a choice is that misjudgement - never a coin deciding what a
               any bounty on it, half its cargo); cost: the hull lost if it loses, the attrition if it wins (at the
               shipyard's prices), and the warrant for opening fire in protected space.
   a place     what a sector holds for this captain's calling (prey, bounties, a port's spread, claimable worlds,
-              unsolved anomalies), seen across its reach and discounted by distance as strength is (1/(1+hops)^2),
+              unsolved anomalies), seen across its reach and discounted by distance (1/(1+hops)),
               less the crew's wages to get there. Nothing worth the trip: it stays and waits (the scheduler lets
               an idle mind look again later).
   knowledge   priced by the market for it: what decoding an anomaly costs over the knowledge it yields.
@@ -109,6 +109,40 @@ def _captains_in(kernel: Any, sec: Any, captain: Any) -> List[Any]:
     return [kernel.captains[c] for c in sec.captains if c != captain.id and c in kernel.captains]
 
 
+def free_cargo(kernel: Any, captain: Any, comm: str) -> int:
+    """What of a good aboard is its own to sell: what it holds, less what its crew eats of it and what it carries
+    under contract."""
+    metab = getattr(captain, "metabolism", "biotic")
+    keep = 5 if (comm == "ORGANICS" and metab == "biotic") or (comm == "ORE" and metab == "mineral") else 0
+    mm = getattr(kernel, "market_manager", None)
+    owed = sum(c.amount for c in (mm.contracts.get(cid) for cid in getattr(captain, "active_contracts", []))
+               if c is not None and c.commodity == comm) if mm is not None else 0
+    return max(0, getattr(captain.ship.cargo, comm.lower(), 0) - keep - owed)
+
+
+def carried_on(kernel: Any, captain: Any, sid: int, comm: str, q: int, reach: int = 3) -> float:
+    """What a lot of `q` taken from `sid` fetches at the best port the captain has word of within `reach` warps of
+    it, in the exchange's unit through the pool, net of the wages to carry it there and the drift its word's age
+    leaves (news.age_cost)."""
+    from xylarium.kernel import comms, news, topology
+    if q <= 0:
+        return 0.0
+    dist, _ = topology.tree(kernel, sid, reach)
+    wage = float(kernel.crew_wage(captain)) if hasattr(kernel, "crew_wage") else 1.0
+    best = 0.0
+    for other in sorted(dist):
+        h = dist[other]
+        if h == 0:
+            continue
+        w = comms.known_to(kernel, captain, other, comm)
+        if w is None or w[0] <= 0:
+            continue
+        each = comms.sol(kernel, other, w[0], q)
+        each -= news.age_cost(each, w[2] / 100.0, news.sigma(kernel, other, comm))
+        best = max(best, each * q - wage * h)
+    return best
+
+
 def prospects(kernel: Any, captain: Any, sid: int, calling: str) -> float:
     """What sector `sid` holds for a captain of this calling, in Cr."""
     from xylarium.config import COMMODITY_CONFIG
@@ -131,9 +165,10 @@ def prospects(kernel: Any, captain: Any, sid: int, calling: str) -> float:
         port = sec.port
         if port is None:
             return 0.0
-        # route arbitrage on heard word, in SOL: what the goods aboard fetch there over what they fetch where it
-        # stands, and what it can buy there against the best any port it has word of pays - spreads between places,
-        # never a catalogue price
+        # route arbitrage on heard word, in the exchange's unit through the pool: what its own goods aboard fetch
+        # there over what they fetch where it stands, and what it can afford to buy there against what that lot
+        # fetches carried on to the best port it has word of near it (net of wages and of its word's age) - spreads
+        # between places, never a catalogue price
         from xylarium.kernel import comms
         cargo = captain.ship.cargo
         here = captain.sector_id == sid
@@ -143,16 +178,16 @@ def prospects(kernel: Any, captain: Any, sid: int, calling: str) -> float:
             if word is None:
                 continue                                            # an unheard port is weighed by destination's prior
             buy_p, sell_p, _ = word
-            held = getattr(cargo, comm.lower(), 0)
+            held = free_cargo(kernel, captain, comm)
             if held and port.buys.get(comm, False) and buy_p > 0:
                 stands = comms.known_to(kernel, captain, captain.sector_id, comm)
-                here_bid = comms.sol(kernel, captain.sector_id, stands[0]) if stands and stands[0] > 0 else 0.0
-                v += held * max(0.0, comms.sol(kernel, sid, buy_p) - here_bid)
+                here_bid = comms.sol(kernel, captain.sector_id, stands[0], held) if stands and stands[0] > 0 else 0.0
+                v += held * max(0.0, comms.sol(kernel, sid, buy_p, held) - here_bid)
             if port.sells.get(comm, False) and sell_p > 0:
+                each = comms.sol(kernel, sid, sell_p)
                 stock = port.stock.get(comm, 0) if here else cargo.available_space   # far stock is not known
-                room = min(cargo.available_space, stock)
-                v += room * max(0.0, comms.best_heard_bid(kernel, captain, comm, exclude=sid)
-                                - comms.sol(kernel, sid, sell_p))
+                q = int(min(cargo.available_space, stock, surplus(kernel, captain) // max(1e-9, each)))
+                v += max(0.0, carried_on(kernel, captain, sid, comm, q) - q * each)
         return v
     if calling == "industrialist":
         v = 0.0
@@ -197,6 +232,36 @@ def _heard_of(kernel: Any, captain: Any, sid: int) -> bool:
 
 def destination(kernel: Any, captain: Any, sector: Any, calling: Optional[str] = None, reach: int = 3,
                 score: Optional[Callable[[int], float]] = None, here: bool = False) -> Optional[int]:
+    """The first jump toward the place most worth going to (or None) - destination_option's hop."""
+    got = destination_option(kernel, captain, sector, calling, reach, score, here)
+    if got is None:
+        return None
+    if (calling or calling_of(captain)) == "trader" and score is None:
+        _plan_trip(kernel, captain, got)
+    return got["hop"]
+
+
+def _plan_trip(kernel: Any, captain: Any, opt: Dict[str, Any]) -> None:
+    from xylarium.kernel import comms
+    ages = [w[2] for w in (comms.known_to(kernel, captain, opt["sid"], c) for c in ("ORE", "ORGANICS", "EQUIPMENT"))
+            if w is not None]
+    comms.plan(kernel, captain, opt["sid"], opt["gross"], max(ages) if ages else 0)
+
+
+def destination_option(kernel: Any, captain: Any, sector: Any, calling: Optional[str] = None, reach: int = 3,
+                       score: Optional[Callable[[int], float]] = None, here: bool = False,
+                       wider: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """The trip most worth making as a priced option - {value, cost, sid, hop, gross} - or None (nowhere is worth
+    it). Worth falls as 1/(1+hops) over the trip, its cost the crew's wages a jump. If nothing within `reach` is
+    worth it, it looks out as far as `wider` (its news radius)."""
+    got = _destination_option(kernel, captain, sector, calling, reach, score, here)
+    if got is None and wider and wider > reach:
+        got = _destination_option(kernel, captain, sector, calling, wider, score, here)
+    return got
+
+
+def _destination_option(kernel: Any, captain: Any, sector: Any, calling: Optional[str], reach: int,
+                        score: Optional[Callable[[int], float]], here: bool) -> Optional[Dict[str, Any]]:
     """The first jump toward the place most worth going to (or None: nowhere is worth the trip). With
     `here`, staying is weighed too (its prospects at no cost) and returns None when it wins."""
     from xylarium.kernel import topology
@@ -225,17 +290,12 @@ def destination(kernel: Any, captain: Any, sector: Any, calling: Optional[str] =
         v = seen[sid]
         if v <= 0:
             continue
-        opts.append(decide.option(f"go:{sid}", wage * h, v / (1.0 + h) ** 2, sid=sid))
+        opts.append(decide.option(f"go:{sid}", wage * h, v / (1.0 + h), sid=sid))
     best = pick(kernel, captain, opts, "destination")
     if best is None or best["sid"] == sector.id:
         return None
-    if calling == "trader" and score is None:                 # it sets out on word: measured when it arrives
-        from xylarium.kernel import comms
-        ages = [w[2] for w in (comms.known_to(kernel, captain, best["sid"], c) for c in ("ORE", "ORGANICS", "EQUIPMENT"))
-                if w is not None]
-        comms.plan(kernel, captain, best["sid"], best["value"] * (1.0 + dist[best["sid"]]) ** 2,
-                   max(ages) if ages else 0)
-    return topology.first_hop(parent, sector.id, best["sid"])
+    return dict(best, hop=topology.first_hop(parent, sector.id, best["sid"]),
+                gross=best["value"] * (1.0 + dist[best["sid"]]))
 
 
 # ---------------------------------------------------------------------- money management (its own risk profile)

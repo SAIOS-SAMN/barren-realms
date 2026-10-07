@@ -60,6 +60,7 @@ class TestArchaeology(unittest.TestCase):
         self.assertEqual(before, after)  # the treasury is buried, not destroyed
 
     def test_survey_then_excavate_yields_artifacts_and_consumes_tools(self):
+        self.cap.ship.fighters = 10 ** 4           # armed past what any raider here would risk (the dig, not a raid)
         _move(self.kernel, self.cap, self.site.sector_id)
         self.assertFalse(self.kernel.dispatch("digger", ActionType.EXCAVATE).success)  # unsurveyed
         self.assertTrue(self.kernel.dispatch("digger", ActionType.SURVEY_RUINS).success)

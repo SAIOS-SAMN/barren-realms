@@ -72,17 +72,18 @@ def utility(gain: float, presence: float, temper: Dict[str, float], alignment: f
 
 
 # ---------------------------------------------------------------------- captains
-def consider(kernel: Any, captain: Any, sector: Any) -> bool:
-    """An autonomous captain weighs the opportunities outside the law here. Returns True if it acted."""
+def offer(kernel: Any, captain: Any, sector: Any) -> Optional[Dict[str, Any]]:
+    """The best opportunity outside the law here, as a priced option for the captain's turn (its utility: the gain as
+    its temperament and conscience weigh it against the law's presence) - or None where none occurs to it."""
     if captain.faction_id or not captain.is_ai:
-        return False
+        return None
     rng = _rng("consider", captain.id, kernel.cycle_count)
     if rng.random() > CONSIDER_CHANCE:
-        return False
+        return None
     strk = streak(kernel, captain)
     if rng.random() > strk:
-        return False                        # it does not occur to them
-    from xylarium.kernel import law
+        return None                         # it does not occur to them
+    from xylarium.kernel import decide, law
     from xylarium.kernel.cognition import temperament
     temper = temperament(captain, kernel)
     pres = law.presence(kernel, sector)
@@ -92,8 +93,23 @@ def consider(kernel: Any, captain: Any, sector: Any) -> bool:
         if u > 0 and (best is None or u > best[0]):
             best = (u, kind, act)
     if best is None:
+        return None
+    u, kind, act = best
+    return decide.option(f"crime:{kind}", 0.0, u, act=lambda: commit(kernel, captain, kind, act))
+
+
+def consider(kernel: Any, captain: Any, sector: Any) -> bool:
+    """An autonomous captain weighs the opportunities outside the law here and takes the best. Returns True if it
+    acted."""
+    opt = offer(kernel, captain, sector)
+    if opt is None:
         return False
-    _, kind, act = best
+    opt["act"]()
+    return True
+
+
+def commit(kernel: Any, captain: Any, kind: str, act: Dict[str, Any]) -> bool:
+    """Carry out an opportunity outside the law."""
     stats = _stats(kernel)
     stats["attempted"][kind] = stats["attempted"].get(kind, 0) + 1
     act = dict(act)

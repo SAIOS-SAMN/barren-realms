@@ -91,6 +91,13 @@ def _event(kernel: Any, kind: str, title: str, actors: List[str], planet: Any = 
         primordial.first(kernel, what, title)
 
 
+def hub_unit(kernel: Any) -> str:
+    """The exchange's own unit of account: what every money is quoted against. (Its name is the one point the rest of
+    the code reads it from - so that when the exchange's founders name it, nothing else changes.)"""
+    from xylarium.kernel.fx import SOL
+    return SOL
+
+
 def friction(kernel: Any, planet: Any) -> Dict[str, Any]:
     """What settling without a money of its own costs a people, a quarter, in SOL - measured, never staged.
 
