@@ -2021,9 +2021,12 @@ def main() -> None:
     ap.add_argument("--profile", action="store_true", help="Include cProfile hotspots")
     ap.add_argument("--out", default=None, help="Write full JSON report here")
     ap.add_argument("--save-state", default=None, help="Also save the final universe to this path (never the live save)")
-    ap.add_argument("--determinism-cycles", type=int, default=300,
-                    help="Cycles for the cross-process determinism law (0 to skip)")
+    ap.add_argument("--determinism-cycles", type=int, default=None,
+                    help="Cycles for the cross-process determinism law (default: the run's own horizon; 0 to skip) - "
+                         "a set-order defect can surface late (seed 7's first showed at cycle 600)")
     args = ap.parse_args()
+    if args.determinism_cycles is None:
+        args.determinism_cycles = args.cycles
 
     print(f"Xylarium playtest: {args.cycles:,} cycles, seed {args.seed}, bots {BOT_CLADES}")
     report = run(args.cycles, args.seed, args.actions_per_cycle, args.profile, args.save_state,
