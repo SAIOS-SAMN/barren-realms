@@ -5,10 +5,13 @@ In a cosmic universe (cosmos.py) nothing of the money layer exists at the clock'
 circulation, no central bank, no exchange, no Reserve, no great powers' vaults. Each is founded when the problem it
 solves first appears:
 
-  COIN      a people founds its money when value must move between holders who cannot settle it the ways they
-            already have (need): it has met strangers of another line, strangers trade at a port in its system, or
-            its own worlds lie beyond settling face to face. Not when it founds a state - a state may tax in kind, a
-            people without one may trade far; money and its other works are not ordered. It is issued by the people's own treasury on commodity backing (the reserve regime - a coin is a claim
+  COIN      each season every people weighs a money of its own through its own mind (weigh_money): what settling
+            without one costs it (friction: the share of its output passing between holders its ways do not oblige
+            - strangers of another line, strangers at its ports, its own systems apart - times what barter loses on
+            it) against the backing a money would lock. Never a stage: a state may tax in kind, a people without
+            one may trade far; money and its other works are not ordered, and how it is then governed is weighed
+            again each year (regimes.py: no ladder). Its founding issue is minted against backing moved from its
+            ground into its bank (a genesis mint, never from nothing). It is issued by the people's own treasury on commodity backing (the reserve regime - a coin is a claim
             on the staple or metal at par, regimes.py); its supply is what its taxes mint from then on. A people
             takes up a money already in its region only if it has met that money's issuers (contact.py: one cannot
             use a coin from people one has never traded with) - a union, recorded as such; otherwise it strikes its
@@ -88,32 +91,94 @@ def _event(kernel: Any, kind: str, title: str, actors: List[str], planet: Any = 
         primordial.first(kernel, what, title)
 
 
-def need(kernel: Any, planet: Any) -> Optional[str]:
-    """Why a people needs a money of its own, if it does: value must move between holders who cannot settle it the
-    ways they already have - kin settle by giving and owing within their own line (descent: one root), and a people
-    of one system settles face to face. A coin is struck for:
-      "strangers"  it has met a people of another line, whom no tie of kin obliges to settle
-      "market"     strangers' ships trade at a port in its own system
-      "distance"   its own worlds lie in more than one system, beyond settling face to face
-    None: whatever it has (gift, barter, a store of goods) clears what it moves. Not a stage of its society: a people
-    without a state may need one, and a state with no one outside to pay may never."""
-    from xylarium.kernel import contact, descent, knowledge, relations
+def friction(kernel: Any, planet: Any) -> Dict[str, Any]:
+    """What settling without a money of its own costs a people, a quarter, in SOL - measured, never staged.
+
+      moved    the share of its output that must pass between holders its ways do not oblige: familiarity with
+               peoples of another line (descent: kin settle by giving and owing), strangers trading at a port in
+               a system of its own (each a full familiarity), saturating as f / (1 + f); and its own output that
+               must cross between its systems, 1 - 1/systems (a people of one system settles face to face)
+      loss     what barter loses on what it moves: the double coincidence of wants - with n goods to offer, a
+               trade finds its match one time in n (Jevons), 1 - 1/n
+      value    output x moved x loss: what a money would save it
+      turnover output x moved: what it must hold as money to settle a quarter - the backing a money would lock"""
+    from xylarium.kernel import commerce, contact, descent, knowledge, relations
     holder = knowledge.holder_of_planet(planet)
-    if not holder:
-        return None
+    worlds = [w for w in (relations._peoples(kernel).get(holder) or []) if w.population > 0] if holder else []
+    if not worlds:
+        return {"value": 0.0, "turnover": 0.0, "moved": 0.0, "loss": 0.0}
     root = descent.line(kernel, holder)["root"]
-    for key in contact.stats(kernel).get("familiarity", {}):
+    f = 0.0
+    for key, fam in contact.stats(kernel).get("familiarity", {}).items():
         a, _, b = key.partition("|")
         other = b if a == holder else (a if b == holder else None)
         if other and other != holder and descent.line(kernel, other)["root"] != root:
-            return "strangers"
-    sec = kernel.sectors.get(planet.sector_id)
-    if sec is not None and getattr(sec, "port", None) is not None:
-        return "market"
-    systems = {w.sector_id for w in (relations._peoples(kernel).get(holder) or []) if w.population > 0}
-    if len(systems) > 1:
-        return "distance"
-    return None
+            f += float(fam)
+    systems = sorted({w.sector_id for w in worlds})
+    f += sum(1.0 for sid in systems if getattr(kernel.sectors.get(sid), "port", None) is not None)
+    moved = min(1.0, f / (1.0 + f) + (1.0 - 1.0 / len(systems)))
+    n = len({g for w in worlds for g in commerce._goods(kernel, w)})
+    loss = 1.0 - 1.0 / max(1, n)
+    output = relations._output_sol(kernel, worlds)
+    return {"value": output * moved * loss, "turnover": output * moved, "moved": moved, "loss": loss}
+
+
+def weigh_money(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
+    """A people weighs striking a money of its own, each season, through its own mind (decide.choose): what it would
+    save (friction's value) against what it would lock and forgo (the turnover's backing, at its money's rate) -
+    and only where its ground holds that backing (a money is a claim on goods it has). Not a stage: a people without
+    a state may strike one, a state with no one outside to pay may never. Returns the option chosen, or None."""
+    from fractions import Fraction
+    from xylarium.config import COMMODITY_CONFIG, POLICY_RATE_BASE
+    from xylarium.kernel import decide, knowledge
+    fr = friction(kernel, planet)
+    if fr["value"] <= 0:
+        return None
+    par = float(COMMODITY_CONFIG.get("ORE", {}).get("base_price", 1) or 1)       # a new money's first backing
+    if planet.element_deposits.get("ORE", 0) * par < fr["turnover"]:
+        return None                                                             # nothing in its ground to back it
+    m = decide.mind_of_planet(kernel, planet)
+    holder = knowledge.holder_of_planet(planet)
+    opt = decide.option("found_money", decide.worth(kernel, fr["turnover"] * POLICY_RATE_BASE, m),
+                        decide.worth(kernel, fr["value"], m))
+    pick = decide.choose(kernel, [opt], m, holder, "found_money", kernel.cycle_count // 25)
+    stats(kernel).setdefault("weighed", {})[holder] = {
+        "cycle": kernel.cycle_count, "chose": pick is not None,
+        "value": str(Fraction(fr["value"]).limit_denominator(10 ** 6)),
+        "turnover": str(Fraction(fr["turnover"]).limit_denominator(10 ** 6))}
+    return {"option": pick, "turnover": fr["turnover"]} if pick is not None else None
+
+
+def _issue_against_backing(kernel: Any, planet: Any, turnover_sol: float) -> int:
+    """A money's founding issue: the backing a quarter's turnover needs, moved from the founder's ground into its
+    bank's warehouse, and that much money minted into its treasury at par - a genesis mint, never from nothing."""
+    from xylarium.kernel import ledger, regimes
+    cur = planet.currency
+    bank = kernel.banking.banks.get(cur)
+    rec = regimes.stats(kernel)["by_currency"].get(cur) or {}
+    comm, par = rec.get("commodity"), float(rec.get("par") or 0.0)
+    if bank is None or not comm or par <= 0:
+        return 0
+    units = min(int(planet.element_deposits.get(comm, 0)), int(turnover_sol / par))
+    if units <= 0:
+        return 0
+    planet.element_deposits[comm] -= units
+    bank.warehouse[comm] = bank.warehouse.get(comm, 0) + units
+    pay = int(units * par)
+    planet.treasury += pay
+    ledger.mint("founding_issue", pay, cur)
+    return pay
+
+
+def strike_if_weighed(kernel: Any, planet: Any) -> Optional[str]:
+    """Weigh, and if chosen, found the money and issue it against its backing."""
+    got = weigh_money(kernel, planet)
+    if got is None:
+        return None
+    line = found_currency(kernel, planet)
+    if line:
+        _issue_against_backing(kernel, planet, got["turnover"])
+    return line
 
 
 def found_currency(kernel: Any, planet: Any) -> Optional[str]:
@@ -297,11 +362,11 @@ def quarter(kernel: Any) -> List[str]:
     from xylarium.kernel import contact, ways
     logs: List[str] = []
     st = stats(kernel)
-    for s in kernel.sectors.values():                       # a people that must settle with others strikes its coin
+    for s in kernel.sectors.values():                       # every people weighs a money of its own, each season
         for p in s.planets:
             if p.population > 0 and getattr(p, "civilization", None) is not None \
-                    and p.currency not in st["currencies"] and need(kernel, p):
-                line = found_currency(kernel, p)
+                    and p.currency not in st["currencies"]:
+                line = strike_if_weighed(kernel, p)
                 if line:
                     logs.append(line)
     if not st["exchange"]:

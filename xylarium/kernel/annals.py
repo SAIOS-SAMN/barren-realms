@@ -136,9 +136,9 @@ def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
         soc["crop_z"] = max(float(soc.get("crop_z", 0.0)), math.log(1.0 / ways.TROPHIC_EFFICIENCY))
     if idx >= 2 and soc.get("way") != "state":
         soc["way"] = "state"
-    if home.currency not in institutions.stats(kernel).get("currencies", {}) and institutions.need(kernel, home):
+    if home.currency not in institutions.stats(kernel).get("currencies", {}):
         try:
-            institutions.found_currency(kernel, home)            # a coin when it must settle with others, not a stage
+            institutions.strike_if_weighed(kernel, home)         # a money when it weighs one worth it, not a stage
         except Exception:
             pass
     if idx >= 3:

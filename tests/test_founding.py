@@ -102,33 +102,60 @@ class TestRehome(unittest.TestCase):
         self.assertEqual({c: v for c, v in residual().items() if v}, {c: v for c, v in before.items() if v})
 
 
-class TestCoinOnNeed(unittest.TestCase):
-    """A coin is struck when value must move between holders who cannot settle it otherwise - not at a stage."""
+class TestCoinWeighed(unittest.TestCase):
+    """A money is weighed, never staged: what settling without one costs a people against what one would lock."""
 
     def setUp(self):
         self.k = GameKernel(seed=7, genesis="cosmic")
         self.k.activate()
         self.home = next(p for s in self.k.sectors.values() for p in s.planets if p.population > 0)
 
-    def test_a_state_alone_strikes_no_coin(self):
-        self.home.society["way"] = "state"
-        self.assertIsNone(institutions.need(self.k, self.home))
-        institutions.quarter(self.k)
-        self.assertNotIn(self.home.currency, institutions.stats(self.k)["currencies"])
-
-    def test_a_stateless_people_that_meets_strangers_strikes_one(self):
+    def _meet(self, other="civ:Strangers"):
         from xylarium.kernel import contact, knowledge
-        self.home.society["way"] = "farm"
         me = knowledge.holder_of_planet(self.home)
-        contact.stats(self.k)["familiarity"][contact._key(me, "civ:Strangers")] = 0.5
-        self.assertEqual(institutions.need(self.k, self.home), "strangers")
-        institutions.quarter(self.k)
-        self.assertIn(self.home.currency, institutions.stats(self.k)["currencies"])
+        contact.stats(self.k)["familiarity"][contact._key(me, other)] = 0.5
+
+    def test_a_state_with_no_one_outside_to_pay_has_nothing_to_save(self):
+        self.home.society["way"] = "state"
+        sec = self.k.sectors[self.home.sector_id]
+        if sec.port is not None:
+            self.skipTest("a port in its system")
+        self.assertEqual(institutions.friction(self.k, self.home)["value"], 0.0)
+        self.assertIsNone(institutions.weigh_money(self.k, self.home))
+
+    def test_strangers_make_barter_costly_and_more_goods_cost_more(self):
+        self._meet()
+        fr = institutions.friction(self.k, self.home)
+        self.assertGreater(fr["value"], 0.0)
+        self.assertLess(fr["moved"], 1.0)
+        self.assertGreaterEqual(fr["loss"], 0.0)
 
     def test_kin_settle_among_themselves(self):
-        from xylarium.kernel import contact, descent, knowledge
+        from xylarium.kernel import descent, knowledge
         me = knowledge.holder_of_planet(self.home)
         descent.stats(self.k)["of"]["civ:Daughters"] = {"root": descent.line(self.k, me)["root"], "parent": me,
                                                         "split": 0.0, "chemistry": None}
-        contact.stats(self.k)["familiarity"][contact._key(me, "civ:Daughters")] = 0.5
-        self.assertIsNone(institutions.need(self.k, self.home))
+        self._meet("civ:Daughters")
+        if self.k.sectors[self.home.sector_id].port is None:
+            self.assertEqual(institutions.friction(self.k, self.home)["moved"], 0.0)
+
+    def test_no_backing_in_its_ground_no_money(self):
+        self._meet()
+        self.home.element_deposits["ORE"] = 0
+        self.assertIsNone(institutions.weigh_money(self.k, self.home))
+
+    def test_a_chosen_money_is_minted_only_against_backing_moved_from_its_ground(self):
+        from unittest import mock
+        from xylarium.kernel import decide, matter
+        self._meet()
+        self.home.element_deposits["ORE"] = 10 ** 9
+        matter0 = matter.totals(self.k)
+        with mock.patch.object(decide, "choose", side_effect=lambda k, opts, m, *s: opts[0]):
+            line = institutions.strike_if_weighed(self.k, self.home)
+        self.assertIsNotNone(line)
+        cur = self.home.currency
+        bank = self.k.banking.banks[cur]
+        held = sum(bank.warehouse.values())
+        self.assertGreater(held, 0)
+        self.assertEqual(_money(self.k).get(cur, 0), self.home.treasury)     # its whole supply: the founding issue
+        self.assertEqual(matter.totals(self.k), matter0)                     # the backing moved, not made
