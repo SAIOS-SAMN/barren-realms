@@ -14,6 +14,7 @@ from xylarium.client.ansi import (
 from xylarium.client.renderer import TerminalRenderer
 from xylarium.kernel.routes import TradeRouteOptimizer
 from xylarium.persistence.store import StatePersistence
+from xylarium.kernel.fx import hub as _hub
 
 
 class TerminalClient:
@@ -634,7 +635,7 @@ class TerminalClient:
                 drift = fxv.get("drift", {}).get(cur, 1.0)
                 trend = c_red(f"weakened {100 * (drift - 1):.1f}%") if drift > 1 else c_green(f"strengthened {100 * (1 - drift):.1f}%")
                 print(f"  1 SOL = {rate:,.4f} {cur}   ({trend} vs genesis price level)")
-            print(f"  Local currency here: {c_cyan(fxv.get('local_currency', 'SOL'))}")
+            print(f"  Local currency here: {c_cyan(fxv.get('local_currency', _hub()))}")
             if fxv.get("local_rate"):
                 print(f"  {c_cyan('Local exchange here')}: 1 SOL = {fxv['local_rate']:,.4f} {fxv.get('local_currency')} "
                       f"(the federation's elsewhere) - a gap is a currency route")

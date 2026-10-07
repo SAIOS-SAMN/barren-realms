@@ -26,6 +26,7 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import decide, fx as fx_mod, laws
+from xylarium.kernel.fx import hub as _hub
 
 ISSE = "isse"
 PROVIDE_SHARE = 0.25          # of a provider's spare (or position) it moves in one pool in a quarter: not all at once
@@ -61,7 +62,7 @@ def position_value_sol(kernel: Any, holder: str) -> float:
 def hurdle(kernel: Any, cur: str) -> float:
     """What a provider of the SOL/cur pool could earn a quarter by waiting instead: half its capital is in each
     money, each earning its own bank's rate."""
-    return 0.5 * (decide.rate(kernel, "SOL") + decide.rate(kernel, cur))
+    return 0.5 * (decide.rate(kernel, _hub()) + decide.rate(kernel, cur))
 
 
 def spread(kernel: Any, cur: str) -> Optional[float]:
@@ -88,7 +89,7 @@ def spread(kernel: Any, cur: str) -> Optional[float]:
 def goods_route(kernel: Any, cur: str) -> Optional[float]:
     """A trader's alternative to swapping SOL for `cur`: buy goods in one money and sell them for the other - half
     each money's spread. The exchange cannot charge more than this: past it, trade goes through the goods."""
-    a, b = spread(kernel, "SOL"), spread(kernel, cur)
+    a, b = spread(kernel, _hub()), spread(kernel, cur)
     if a is None or b is None:
         return None
     return 0.5 * (a + b)
@@ -221,7 +222,7 @@ def _purse(kernel: Any, who: Any, kind: str, cur: str):
         def take_local(n): who.fx_wallet[cur] = who.fx_wallet.get(cur, 0) - n
         def give_local(n): who.fx_wallet[cur] = who.fx_wallet.get(cur, 0) + n
         return max(0, who.credits), max(0, who.fx_wallet.get(cur, 0)), take_sol, take_local, give_sol, give_local
-    home = getattr(who, "home_currency", "") or "SOL"
+    home = getattr(who, "home_currency", "") or _hub()
 
     def take_sol(n): who.treasury -= n
     def give_sol(n): who.treasury += n
@@ -232,7 +233,7 @@ def _purse(kernel: Any, who: Any, kind: str, cur: str):
         # rescue) takes it home through the exchange, not as if it were its own
         if home == cur:
             who.home_cash += n
-        elif home == "SOL":
+        elif home == _hub():
             who.treasury += kernel.fx_market.swap_to_sol(cur, n)
         else:
             got, _ = kernel.fx_market.convert(cur, home, n)

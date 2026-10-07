@@ -50,6 +50,7 @@ from xylarium.kernel.models import (
 from xylarium.kernel.civilization import CivilizationIntelligenceEngine, CIVIC_PROJECTS
 from xylarium.kernel.elements import PeriodicTable
 from xylarium.kernel.experience import ExperienceManager
+from xylarium.kernel.fx import hub as _hub
 
 
 _BASE_ORE = COMMODITY_CONFIG["ORE"]["base_price"]
@@ -83,10 +84,10 @@ class ColonyManager:
         kernel = ledger.active_kernel()
         target = planet if to_vault else cls._contractor_port(planet, kernel)
         if target is None:
-            ledger.burn("colony_construction", sol_amount, "SOL")
+            ledger.burn("colony_construction", sol_amount, _hub())
             return
         cur = planet.currency if to_vault else target.currency
-        if cur != "SOL" and fx_mod.ACTIVE_FX is not None:
+        if cur != _hub() and fx_mod.ACTIVE_FX is not None:
             target.treasury += fx_mod.ACTIVE_FX.swap_sol_to(cur, sol_amount)
         else:
             target.treasury += sol_amount
@@ -897,9 +898,9 @@ class ColonyManager:
         sec = kernel.sectors.get(planet.sector_id)
         dock_sol = 0.0
         if sec is not None and sec.port is None:
-            rate_sol = kernel.fx_market.rate(planet.currency) if planet.currency != "SOL" else 1.0
+            rate_sol = kernel.fx_market.rate(planet.currency) if planet.currency != _hub() else 1.0
             dock_sol = PORT_START_TREASURY * level / max(1e-9, rate_sol) / 3
-        dock_local = dock_sol * (kernel.fx_market.rate(planet.currency) if planet.currency != "SOL" else 1.0)
+        dock_local = dock_sol * (kernel.fx_market.rate(planet.currency) if planet.currency != _hub() else 1.0)
         if planet.treasury < PLANETARY_SPACEFLIGHT_COST + dock_local:
             return None
         if decide.choose(kernel, [decide.option("commission_ship", PLANETARY_SPACEFLIGHT_COST + dock_local, worth,
@@ -929,12 +930,12 @@ class ColonyManager:
         # Deduct commissioning cost (local money). Part of it becomes the crew's operating float,
         # cleared into SOL through the ISSE FX desk; the rest is spent building the vessel.
         from xylarium.kernel import fx as fx_mod
-        rate = fx_mod.ACTIVE_FX.rate(planet.currency) if (fx_mod.ACTIVE_FX and planet.currency != "SOL") else 1.0
+        rate = fx_mod.ACTIVE_FX.rate(planet.currency) if (fx_mod.ACTIVE_FX and planet.currency != _hub()) else 1.0
         planet.treasury -= PLANETARY_SPACEFLIGHT_COST
         float_local = min(PLANETARY_SPACEFLIGHT_COST // 2, int(4000 * rate))
         cls._pay_local(planet, kernel, PLANETARY_SPACEFLIGHT_COST - float_local)   # the yard that built the ship
         crew_float = (fx_mod.ACTIVE_FX.swap_to_sol(planet.currency, float_local)
-                      if (fx_mod.ACTIVE_FX and planet.currency != "SOL") else float_local)
+                      if (fx_mod.ACTIVE_FX and planet.currency != _hub()) else float_local)
         planet.last_spaceflight_cycle = kernel.cycle_count
 
         civ = getattr(planet, "civilization", None)

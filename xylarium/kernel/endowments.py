@@ -25,6 +25,7 @@ ASCENSION. When a steward lets a people ascend, its escrow is released at its ho
 
 import math
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 BASKET = ("ORE", "ORGANICS", "EQUIPMENT")        # what a new dock's shelves are stocked with (a waystation's trade)
 
@@ -110,7 +111,7 @@ def _buy(kernel: Any, esc: Dict[str, Any]) -> None:
     from xylarium.kernel.economy import EconomyManager
     for sec in sorted(kernel.sectors.values(), key=lambda s: s.id):
         port = sec.port
-        if port is None or getattr(port, "currency", "SOL") != "SOL":
+        if port is None or getattr(port, "currency", _hub()) != _hub():
             continue
         for comm in BASKET:
             share = esc["sol"] / max(1, len(BASKET))
@@ -222,7 +223,9 @@ def _list(kernel: Any, who: str) -> Optional[str]:
         return None
     cur = home.currency
     fxm = kernel.fx_market
-    if cur == "SOL" or cur in fxm.pools:
+    if _hub() is None:
+        return None                                       # no exchange founded yet: nothing to list it on
+    if cur == _hub() or cur in fxm.pools:
         st["listing"].pop(who)
         return None
     sec = kernel.sectors.get(home.sector_id)

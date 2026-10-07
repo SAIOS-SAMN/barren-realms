@@ -63,6 +63,7 @@ from xylarium.config import (
     ARCH_SHORE_EQUIPMENT,
 )
 from xylarium.kernel.economy import EconomyManager
+from xylarium.kernel.fx import hub as _hub
 
 if TYPE_CHECKING:
     from xylarium.kernel.engine import GameKernel
@@ -459,7 +460,7 @@ class SeatSurvive:
     def _spendable_local(kernel: "GameKernel", captain: Captain, cur: str) -> float:
         """What the captain can pay at a counter settling in ``cur``: local balance plus SOL at the live rate."""
         fxm = kernel.fx_market
-        if cur == "SOL":
+        if cur == _hub():
             return float(captain.credits)
         return captain.fx_wallet.get(cur, 0) + captain.credits * fxm.rate(cur) * (1 - 0.01)
 
@@ -470,7 +471,7 @@ class SeatSurvive:
         fxm = kernel.fx_market
         short = max(0.0, need - captain.fx_wallet.get(keep, 0)) if need > 0 else None
         for cur, amt in list(captain.fx_wallet.items()):
-            if cur in (keep, "SOL") or amt <= 0:
+            if cur in (keep, _hub()) or amt <= 0:
                 continue
             if short is not None:
                 if short <= 0:
@@ -845,7 +846,7 @@ class SeatSurvive:
         # 1b. WORKING FLOAT: liquid money below the floor while wealth sits in stock -> sell some shares
         liquid_sol = captain.credits + sum(kernel.fx_market.to_sol_value(c, a) for c, a in captain.fx_wallet.items())
         if liquid_sol < AI_CASH_FLOOR and captain.portfolio:
-            float_deed = cls._liquidate_shares(kernel, captain, 0.0, "SOL")
+            float_deed = cls._liquidate_shares(kernel, captain, 0.0, _hub())
             if float_deed is not None:
                 return float_deed
 
@@ -1065,7 +1066,7 @@ class SeatSurvive:
         from xylarium.kernel.colony import ColonyManager
         m = decide.mind_of_captain(kernel, captain)
         horizon = decide.horizon(m)
-        rate = decide.rate(kernel, "SOL")
+        rate = decide.rate(kernel, _hub())
         options = []
         # A. a world of one's own: its tax at full growth, from when its colonists have half filled it
         if COLONY_KIT_CREDITS <= spare:
@@ -1078,7 +1079,7 @@ class SeatSurvive:
             if best is not None:
                 p, k = best
                 from xylarium.kernel.demography import _tax_per_head_quarter
-                fx_rate = kernel.fx_market.to_sol_value(p.currency, 1.0) if p.currency != "SOL" else 1.0
+                fx_rate = kernel.fx_market.to_sol_value(p.currency, 1.0) if p.currency != _hub() else 1.0
                 fill = math.log(k / COLONY_KIT_COLONISTS) / max(1e-6, fertility.birth_share_quarter())
                 delay = fill / 2
                 worth = 0.0 if delay >= horizon else laws.present_value(
@@ -1101,8 +1102,8 @@ class SeatSurvive:
             for c in mm.companies.values():
                 if capacity(c) < 10 or c.share_price <= 0:
                     continue
-                cur = getattr(c, "home_currency", None) or "SOL"
-                div = c.last_dividend * (kernel.fx_market.to_sol_value(cur, 1.0) if cur != "SOL" else 1.0)
+                cur = getattr(c, "home_currency", None) or _hub()
+                div = c.last_dividend * (kernel.fx_market.to_sol_value(cur, 1.0) if cur != _hub() else 1.0)
                 per_share = laws.present_value(div, horizon, rate)
                 if best is None or per_share / c.share_price > best[1] / best[0].share_price:
                     best = (c, per_share, capacity(c))
@@ -1121,8 +1122,8 @@ class SeatSurvive:
             from xylarium.kernel import liquidation
 
             def held_value(c: Any) -> float:
-                cur = getattr(c, "home_currency", None) or "SOL"
-                div = c.last_dividend * (kernel.fx_market.to_sol_value(cur, 1.0) if cur != "SOL" else 1.0)
+                cur = getattr(c, "home_currency", None) or _hub()
+                div = c.last_dividend * (kernel.fx_market.to_sol_value(cur, 1.0) if cur != _hub() else 1.0)
                 return max(laws.present_value(div, horizon, rate), liquidation.fair_price(kernel, c))
 
             for t, n in list((getattr(captain, "portfolio", {}) or {}).items()):
@@ -1190,7 +1191,7 @@ class SeatGrow:
     @staticmethod
     def _sol(cur: str, amount: float) -> float:
         from xylarium.kernel.fx import ACTIVE_FX
-        return ACTIVE_FX.to_sol_value(cur, amount) if (ACTIVE_FX is not None and cur != "SOL") else float(amount)
+        return ACTIVE_FX.to_sol_value(cur, amount) if (ACTIVE_FX is not None and cur != _hub()) else float(amount)
 
     @staticmethod
     def _base_value(comm: str) -> float:
@@ -1216,7 +1217,7 @@ class SeatGrow:
                 int(port.stock.get(comm, 0)),
             ]
         mem = captain.price_memory
-        mem[str(sector.id)] = {"c": cls._cycle(kernel), "cur": getattr(port, "currency", "SOL"),
+        mem[str(sector.id)] = {"c": cls._cycle(kernel), "cur": getattr(port, "currency", _hub()),
                                "liq": int(getattr(port, "treasury", 0)), "p": prices}
         if len(mem) > AI_PRICE_MEMORY_PORTS:
             oldest = min(mem, key=lambda k: mem[k].get("c", 0))
@@ -1286,7 +1287,7 @@ class SeatGrow:
                 continue
             if entry.get("liq", 10 ** 9) < row[0] * 5:
                 continue  # it buys, but it couldn't pay last time we looked
-            value = cls._sol(entry.get("cur", "SOL"), row[0]) / (dist[sid] + 2)
+            value = cls._sol(entry.get("cur", _hub()), row[0]) / (dist[sid] + 2)
             if best is None or value > best[0]:
                 best = (value, sid)
         if best:
@@ -1476,7 +1477,7 @@ class SeatGrow:
                 row = entry["p"].get(comm)
                 if not row or not row[2]:
                     continue
-                margin = cls._sol(entry.get("cur", "SOL"), row[0]) - cost_sol
+                margin = cls._sol(entry.get("cur", _hub()), row[0]) - cost_sol
                 if margin <= 0:
                     continue
                 units = min(qty, int(entry.get("liq", 10 ** 9) // max(1, row[0])))

@@ -27,6 +27,7 @@ giant hold none.
 
 import heapq
 from typing import Any, Dict, List, Optional, Tuple
+from xylarium.kernel.fx import hub as _hub
 
 TRIAD = ("ORE", "ORGANICS", "EQUIPMENT")                         # the tri-commodity ports keep their classes
 PHYSICAL = ("METALS", "VOLATILES", "EXOTICS", "MINERALS")         # goods the galaxy's elements make
@@ -160,7 +161,7 @@ def _source_price(kernel: Any, port: Any, comm: str) -> float:
     from xylarium.kernel import prices
     from xylarium.kernel.economy import EconomyManager
     sells = EconomyManager.get_unit_prices(port, comm)[1]
-    return float(sells) / max(1e-9, prices.level(getattr(port, "currency", "SOL"), kernel))
+    return float(sells) / max(1e-9, prices.level(getattr(port, "currency", _hub()), kernel))
 
 
 def landed(kernel: Any, comm: str) -> Dict[int, Tuple[float, int]]:

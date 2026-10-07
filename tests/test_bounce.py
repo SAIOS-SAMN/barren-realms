@@ -24,12 +24,19 @@ class TestBounce(unittest.TestCase):
         st = blackhole.stats(self.k)
         ch = blackhole.child(self.k)
         self.assertEqual(ch["elements"], {"Fe": 100, "Si": 50})                 # a tenth crosses
-        self.assertEqual(st["reservoir"], {"Fe": 1000, "Si": 500})             # the rest feeds the jets - and the
-        self.assertEqual(st["inbound"], 150)                                   # paired sphere sends back as much
+        self.assertEqual(st["reservoir"], {"Fe": 900, "Si": 450})              # only the rest feeds the jets: once
+        self.assertEqual(st.get("inbound", 0), 0)                              # nothing is sent back unless sent
         self.assertIsNotNone(ch["born"])
         self.assertEqual(ch["records"][0]["peoples"], ["civ:Fallen"])         # no information is destroyed
         kinds = [e.get("kind") for e in history.stats(self.k).get("recent", [])]
         self.assertIn("CHILD_UNIVERSE", kinds)
+
+    def test_a_paired_universe_sends_only_what_it_sends(self):
+        got = blackhole.receive(self.k, {"Fe": 40}, "a paired sphere")
+        st = blackhole.stats(self.k)
+        self.assertEqual(got, 40)
+        self.assertEqual(st["reservoir"].get("Fe"), 40)
+        self.assertEqual(st["inbound"], 40)
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ rises. Nobody decrees it:
 """
 
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -49,7 +50,7 @@ def value_sol(kernel: Any, comm: str) -> float:
         got = []
         for sec in kernel.sectors.values():
             port = getattr(sec, "port", None)
-            if port is None or port.currency != "SOL" or len(getattr(port, "stock", None) or {}) < len(COMMODITY_CONFIG):
+            if port is None or port.currency != _hub() or len(getattr(port, "stock", None) or {}) < len(COMMODITY_CONFIG):
                 continue
             try:
                 buy, sell = EconomyManager.get_unit_prices(port, comm)
@@ -93,7 +94,7 @@ def measure(kernel: Any) -> Dict[str, Dict[str, float]]:
     for cur in sorted(set(goods) | set(supply)):
         s, g = supply.get(cur, 0.0), goods.get(cur, 0.0)
         out[cur] = {"backing_sol": round(g, 1), "supply": s, "per_unit": g / s if s > 0 else 0.0}
-    sol = out.get("SOL", {}).get("per_unit", 0.0)
+    sol = out.get(_hub(), {}).get("per_unit", 0.0)
     for cur, rec in out.items():
         rec["fair"] = (sol / rec["per_unit"]) if rec["per_unit"] > 0 and sol > 0 else None
     return out
@@ -132,7 +133,7 @@ def _reserve_for(kernel: Any, world: Any) -> Optional[str]:
         for cur, who in res.items():
             if who == keeper:
                 return cur
-    return "SOL" if "SOL" in res or not res else sorted(res)[0]
+    return _hub() if _hub() in res or not res else sorted(res)[0]
 
 
 def leave(kernel: Any, world: Any, to_cur: str, logs: List[str]) -> bool:
@@ -175,7 +176,7 @@ def _weigh(kernel: Any, logs: List[str]) -> None:
                 m = decide.mind_of_planet(kernel, w)
                 held_sol = fx.to_sol_value(cur, held)
                 loss_q = held_sol * (1.0 - pow(2.718281828, -drift))     # what the fall takes a quarter
-                cost = held_sol * (fx.fee(cur) + (fx.fee(to) if to != "SOL" else 0.0))   # converting today
+                cost = held_sol * (fx.fee(cur) + (fx.fee(to) if to != _hub() else 0.0))   # converting today
                 if decide.choose(kernel, [decide.option("leave", cost, decide.worth(kernel, loss_q, m, cur))],
                                  m, w.id, cur, "leave") is not None:
                     leave(kernel, w, to, logs)
@@ -218,7 +219,7 @@ def arbitrage(kernel: Any) -> Dict[str, float]:
     from xylarium.config import CLEARING_BAND, CROSS_REANCHOR_RATE
     fx = kernel.fx_market
     gaps: Dict[str, float] = {}
-    sol_ports = _ports(kernel, "SOL")
+    sol_ports = _ports(kernel, _hub())
     for cur, p in sorted(fx.pools.items()):
         r_star = fair(kernel, cur)
         if not r_star or p["sol"] <= 0 or p["local"] <= 0:
@@ -300,7 +301,7 @@ def summary(kernel: Any) -> Dict[str, Any]:
     fx = getattr(kernel, "fx_market", None)
     out = {}
     for cur, rec in st["of"].items():
-        mk = fx.rate(cur) if fx is not None and cur in fx.pools else (1.0 if cur == "SOL" else None)
+        mk = fx.rate(cur) if fx is not None and cur in fx.pools else (1.0 if cur == _hub() else None)
         out[cur] = {"backing_sol": rec.get("backing_sol"), "fair": rec.get("fair"), "market": mk}
     return {"moneys": out, "worlds_left": {c: len(v) for c, v in st["left"].items()},
             "gaps": dict(st.get("gaps", {})), "routed_sol": {c: round(v) for c, v in st.get("routed", {}).items()}}

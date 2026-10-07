@@ -5,6 +5,7 @@ Data models and Enums for the Xylarium core kernel.
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Any
+from xylarium.kernel.fx import LEGACY_HUB, hub as _hub
 import time
 import math
 from xylarium.config import CLADE_RANK_MATRIX, RANK_PROMOTION_THRESHOLDS
@@ -324,7 +325,7 @@ class Port:
     sells: Dict[str, bool]        # True if port sells this commodity to captain
     # Ports are real balance sheets: they pay for what they buy out of this treasury
     treasury: int = 0
-    currency: str = "SOL"         # Settlement currency of the port's region
+    currency: Optional[str] = field(default_factory=_hub)   # its region's money
     remoteness: float = 0         # Fibre distance from Sol (developed lanes count less); drives the price gradient
     faction_id: Optional[str] = None  # Great power operating this starport (Imperial ports gouge xenos)
     consumed: Dict[str, int] = field(default_factory=dict)  # goods consumed this quarter (sold on to the region)
@@ -363,7 +364,7 @@ class Port:
             buys=dict(data["buys"]),
             sells=dict(data["sells"]),
             treasury=int(data.get("treasury", 0)),
-            currency=data.get("currency", "SOL"),
+            currency=data.get("currency", LEGACY_HUB),   # saved before money was named: the settled board's
             remoteness=float(data.get("remoteness", 0)),
             faction_id=data.get("faction_id"),
             regional_income=float(data.get("regional_income", 0.0)),
@@ -403,7 +404,7 @@ class Planet:
     garrison_troops: int = 20
     surface_grid: Optional[Dict[str, Any]] = None
     planet_type: str = "TERRESTRIAL"
-    currency: str = "SOL"         # Vault currency (the region's money)
+    currency: Optional[str] = field(default_factory=_hub)   # vault money (its region's)
     habitability: float = 1.0     # How well the governing population's biology suits this world
     ruins: Optional[Dict[str, Any]] = None  # Archaeological site left by a dead civilization
     last_levy_cycle: int = -10 ** 9          # Governor's last sovereign levy (once per fiscal quarter)
@@ -514,7 +515,7 @@ class Planet:
             garrison_troops=int(data.get("garrison_troops", 20)),
             surface_grid=data.get("surface_grid"),
             planet_type=data.get("planet_type", "TERRESTRIAL"),
-            currency=data.get("currency", "SOL"),
+            currency=data.get("currency", LEGACY_HUB),   # saved before money was named: the settled board's
             habitability=float(data.get("habitability", 1.0)),
             ruins=data.get("ruins"),
             last_levy_cycle=int(data.get("last_levy_cycle", -10 ** 9)),

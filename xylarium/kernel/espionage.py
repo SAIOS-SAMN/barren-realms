@@ -20,6 +20,7 @@ from xylarium.kernel.models import (
     ActionResult,
     ActionType,
 )
+from xylarium.kernel.fx import hub as _hub
 
 if TYPE_CHECKING:
     from xylarium.kernel.engine import GameKernel
@@ -346,7 +347,7 @@ class EspionageManager:
                         attacker.score += max(10, siphoned // 50)
                         if kernel is not None:
                             from xylarium.kernel import law, fx as _fx
-                            harm = int(_fx.ACTIVE_FX.to_sol_value(planet.currency, siphoned)) if (_fx.ACTIVE_FX and planet.currency != "SOL") else siphoned
+                            harm = int(_fx.ACTIVE_FX.to_sol_value(planet.currency, siphoned)) if (_fx.ACTIVE_FX and planet.currency != _hub()) else siphoned
                             law.file(kernel, "theft", attacker, kernel.sectors.get(planet.sector_id), harm,
                                      {"kind": "planet", "id": planet.id})
                         data["siphoned_credits"] = siphoned

@@ -41,6 +41,7 @@ from fractions import Fraction
 from typing import Any, Dict, List, Optional
 
 from xylarium.kernel import mindcore as mc
+from xylarium.kernel.fx import hub as _hub
 
 BOOKS = ("sufficiency", "restraint", "order", "self", "history", "minds", "money", "cooperation")
 MIND_MAKING = ("transfer", "cyber", "robotics")
@@ -111,7 +112,7 @@ def _debasement(kernel: Any, cur: str) -> float:
         return 0.0
     debased = float(regimes.stats(kernel).get("debased_sol", {}).get(cur, 0.0))
     total = float((ledger.money_supply(kernel).get(cur) or {}).get("total", 0.0))
-    held = kernel.fx_market.to_sol_value(cur, total) if cur != "SOL" and total else total
+    held = kernel.fx_market.to_sol_value(cur, total) if cur != _hub() and total else total
     return max(0.0, debased / held) if held > 0 else 0.0
 
 

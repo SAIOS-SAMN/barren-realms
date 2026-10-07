@@ -20,6 +20,7 @@ all at once (decide.choose: no thresholds, no scripted priorities):
 """
 
 from typing import Any, Dict, List
+from xylarium.kernel.fx import hub as _hub
 
 RATION_DEEDS = ("LIQUIDATE_CARGO_FOR_RATIONS", "PURCHASE_RATIONS", "FORAGE_DEEP_VOID", "SEEK_RATION_PORT")
 GOODS = ("ORE", "ORGANICS", "EQUIPMENT")
@@ -217,7 +218,7 @@ def _charter(kernel: Any, captain: Any, sector: Any) -> List[Dict[str, Any]]:
     path = kernel.find_path(sector.id, c["dest_sector"]) or []
     if len(path) < 2:
         return []
-    pay = _in_hub(kernel, c.get("currency", "SOL"), float(c.get("escrow", 0)))
+    pay = _in_hub(kernel, c.get("currency", _hub()), float(c.get("escrow", 0)))
     return [_opt("charter", _wage(kernel, captain) * (len(path) - 1), pay,
                  lambda: kernel.dispatch(captain.id, ActionType.MOVE, destination=path[1]))]
 

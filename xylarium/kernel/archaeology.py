@@ -42,6 +42,7 @@ from xylarium.config import (
 )
 from xylarium.kernel.models import ActionResult, ActionType, Captain, Planet, Sector, SecurityLevel
 from xylarium.kernel.experience import ExperienceManager
+from xylarium.kernel.fx import hub as _hub
 
 ERA_NAMES = {1: "Late Collapse", 2: "Classical", 3: "Formative", 4: "Primordial", 5: "Precursor Deep Time"}
 ANTIQUITY_FORMS = ["votive figurine", "glyph tablet", "ceremonial mask", "reliquary", "star chart mosaic",
@@ -57,11 +58,11 @@ def bury(planet: Any, new: Dict[str, Any]) -> Dict[str, Any]:
         return new
     if not new.get("hoard"):
         new["hoard"], new["hoard_currency"] = old["hoard"], old.get("hoard_currency")
-    elif (old.get("hoard_currency") or "SOL") == (new.get("hoard_currency") or "SOL"):
+    elif (old.get("hoard_currency") or _hub()) == (new.get("hoard_currency") or _hub()):
         new["hoard"] += old["hoard"]
     else:
         from xylarium.kernel import fx
-        out, _ = fx.ACTIVE_FX.convert(old.get("hoard_currency") or "SOL", new.get("hoard_currency") or "SOL", old["hoard"])
+        out, _ = fx.ACTIVE_FX.convert(old.get("hoard_currency") or _hub(), new.get("hoard_currency") or _hub(), old["hoard"])
         new["hoard"] += out
     new["strata"] = list(new.get("strata", [])) + list(old.get("strata", []))
     return new
@@ -303,7 +304,7 @@ class ArchaeologyManager:
         mult *= 1.0 + min(ARCH_EXOTICISM_MAX, ARCH_EXOTICISM_PER_HOP * hops)
         from xylarium.kernel.fx import ACTIVE_FX
         level = PRICE_LEVEL.get(port.currency, 1.0)
-        if ACTIVE_FX is not None and port.currency != "SOL":
+        if ACTIVE_FX is not None and port.currency != _hub():
             level = ACTIVE_FX.rate(port.currency)
         return int(artifact["appraisal_sol"] * mult * level), None
 

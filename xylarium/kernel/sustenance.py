@@ -36,6 +36,7 @@ from xylarium.config import (
     SUSTENANCE_SMOOTHING,
 )
 from xylarium.kernel import staples, topology
+from xylarium.kernel.fx import hub as _hub
 
 HUNGRY = ("expanding", "pressed", "stranded")
 RAIDERS = ("pressed", "stranded")
@@ -267,7 +268,7 @@ def raid(kernel: Any, planet: Any, gauge: Optional[Dict[str, Any]] = None, plund
             by = relations._peoples(kernel)
             t = relations._terms(kernel, them_people, people_of(planet), by, relations._pressed_share(kernel))
             if t is not None:
-                rate = kernel.fx_market.rate(planet.currency) if planet.currency != "SOL" else 1.0
+                rate = kernel.fx_market.rate(planet.currency) if planet.currency != _hub() else 1.0
                 options.append(decide.option("parley", 0.0, understood * t["tribute"] * rate))
         pick = decide.choose(kernel, options, m, planet.id, "plunder")
         if pick is None:

@@ -14,8 +14,8 @@ The galaxy's central black hole therefore takes matter in by two roads:
   HORIZON   a share of what falls crosses the horizon (HORIZON_SHARE; the rest is carried off by the hot disc's own
             outflow before it gets there) - it bounces, and is the matter of the child universe beyond: its elements
             and the RECORDS of what fell (the worlds, the stars, the peoples) are carried whole (child()).
-  INBOUND   the bounce runs both ways: the paired sphere's white hole sends back as much as crosses, into the centre's
-            reservoir (the waves between the spheres feed the core) - the web of spheres loses nothing at its joins.
+  INBOUND   a paired universe's white hole may send matter our way (receive): a declared source into the centre's
+            reservoir, counted only when it is actually sent - never assumed as an echo of what crossed.
 
   CAPTURE   within the bulge (cosmos.R_BULGE_KPC) a dying star's shed matter, and the worlds its death unbinds (a
             supernova's ejected planets, a giant's engulfed ones), fall to the centre instead of drifting into the void:
@@ -74,10 +74,10 @@ def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
             ch = child(kernel)
             ch["elements"][el] = ch["elements"].get(el, 0) + through
             crossed += through
-        # the bounce runs both ways: the paired sphere's white hole sends back as much as crossed - the waves between
-        # the spheres feed the core (its own laws, so its centre's mix is ours)
-        st["reservoir"][el] = st["reservoir"].get(el, 0) + q
-        st["inbound"] = st.get("inbound", 0) + through
+        # what crossed is the child's; only what the disc's outflow carried off before the horizon is the jets' to
+        # return - counted once
+        if q - through:
+            st["reservoir"][el] = st["reservoir"].get(el, 0) + (q - through)
         total += q
     st["fed_season"] = st.get("fed_season", 0) + total
     st["captured"] += total
@@ -85,6 +85,25 @@ def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
     if total:
         st["last_meal"] = what
         _carry(kernel, what, records or [], crossed)
+
+
+def receive(kernel: Any, units: Dict[str, int], sender: str) -> int:
+    """Matter a paired universe's white hole actually sends: a declared source into the centre's reservoir (the jets
+    return it like any other). Returns the units received."""
+    st = stats(kernel)
+    got = 0
+    for el, q in sorted(units.items()):
+        q = int(q)
+        if q <= 0:
+            continue
+        matter.source("paired_white_hole", el, q)
+        matter.sink("central_engine", el, q)               # into the reservoir the ledger tracks
+        st["reservoir"][el] = st["reservoir"].get(el, 0) + q
+        got += q
+    st["inbound"] = st.get("inbound", 0) + got
+    if got:
+        st["last_inbound"] = sender
+    return got
 
 
 def child(kernel: Any) -> Dict[str, Any]:

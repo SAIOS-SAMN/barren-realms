@@ -20,6 +20,7 @@ import math
 from typing import Any, Dict, Optional
 
 from xylarium.kernel import interior
+from xylarium.kernel.fx import hub as _hub
 
 EU_J = 1361.0 * math.pi * interior.R_EARTH_M ** 2 * 0.25 * 3.156e7 / 1.0e6   # one energy unit (energy.py), joules
 COUPLING = 0.1                  # share of a weapon's energy that lifts air rather than heating rock (declared)
@@ -106,7 +107,7 @@ def worth_striking(kernel: Any, captain: Any, planet: Any) -> Optional[Dict[str,
     units = min(held, max(1, need))
     share = min(1.0, units / max(1, need))
     fx = kernel.fx_market
-    wealth = fx.to_sol_value(planet.currency, planet.treasury) if planet.currency != "SOL" else planet.treasury
+    wealth = fx.to_sol_value(planet.currency, planet.treasury) if planet.currency != _hub() else planet.treasury
     sc = alignment.scales(kernel)
     lives = planet.population * share
     weight = max(0.0, 1.0 + float(getattr(captain, "cosmic_alignment", 0.0)))   # how dear a life is to this mind

@@ -99,6 +99,7 @@ from xylarium.config import (
 from xylarium.kernel.models import (
     ActionType, AIPersonality, Captain, CargoHold, Planet, Sector, SecurityLevel, Ship,
 )
+from xylarium.kernel.fx import LEGACY_HUB, hub as _hub
 
 FISCAL_QUARTER = 25
 GREAT_POWERS = ("IMPERIUM", "ZEALOT")
@@ -121,7 +122,7 @@ class Faction:
     territory: List[int] = field(default_factory=list)
     worlds: List[str] = field(default_factory=list)
     vault: Dict[str, int] = field(default_factory=dict)
-    currency: str = "SOL"
+    currency: Optional[str] = field(default_factory=_hub)
     dogma: float = 0.0
     stability: float = 1.0
     last_expansion_cycle: int = 0
@@ -168,7 +169,7 @@ class Faction:
         f.territory = list(d.get("territory", []))
         f.worlds = list(d.get("worlds", []))
         f.vault = {k: int(v) for k, v in d.get("vault", {}).items()}
-        f.currency = d.get("currency", "SOL")
+        f.currency = d.get("currency", LEGACY_HUB)   # saved before money was named: the settled board's
         f.dogma = float(d.get("dogma", 0.0))
         f.stability = float(d.get("stability", 1.0))
         f.last_expansion_cycle = int(d.get("last_expansion_cycle", 0))
@@ -433,7 +434,7 @@ class FactionManager:
         fxm = kernel.fx_market
         total = 0
         for cur, amt in amounts.items():
-            total += amt if cur == "SOL" else fxm.swap_to_sol(cur, amt)
+            total += amt if cur == _hub() else fxm.swap_to_sol(cur, amt)
         return total
 
     def note_expansion(self, kernel: Any, fid: str, sector_id: Optional[int] = None) -> None:
@@ -592,7 +593,7 @@ class FactionManager:
         hull = "Gothic Battle-Cruiser" if has_hauler else "Bulk Goliath"
         crew_float = self._pay_from_vault(kernel, f, IMPERIUM_CREW_FLOAT)   # paid in the realm's own money
         cap = self._spawn_ship(kernel, f, hull, IMPERIAL_CAPTAIN_NAMES, AIPersonality.IMPERIAL, "IMPERIAL",
-                               "human-imperial", fortress.sector_id, crew_float.pop("SOL", 0))
+                               "human-imperial", fortress.sector_id, crew_float.pop(_hub(), 0))
         for cur, amt in crew_float.items():
             cap.fx_wallet[cur] = cap.fx_wallet.get(cur, 0) + amt
         cap.ship.hull_matter = made
@@ -668,7 +669,7 @@ class FactionManager:
             if cap is not None and cap.credits > 5000:
                 excess = cap.credits - 3000
                 cap.credits -= excess
-                f.vault["SOL"] = f.vault.get("SOL", 0) + excess
+                f.vault[_hub()] = f.vault.get(_hub(), 0) + excess
         return [l for l in logs if l]
 
     def _commission_crusader(self, kernel: Any, f: Faction) -> List[str]:
@@ -692,8 +693,8 @@ class FactionManager:
                 if cur == yard.currency:
                     yard.treasury += amt
                 else:
-                    sol = amt if cur == "SOL" else fxm.swap_to_sol(cur, amt)
-                    yard.treasury += sol if yard.currency == "SOL" else fxm.swap_sol_to(yard.currency, sol)
+                    sol = amt if cur == _hub() else fxm.swap_to_sol(cur, amt)
+                    yard.treasury += sol if yard.currency == _hub() else fxm.swap_sol_to(yard.currency, sol)
         else:
             # No yard: the capital's own works build it - every coin of the cost reaches the capital's treasury
             fxm = kernel.fx_market
@@ -701,11 +702,11 @@ class FactionManager:
                 if cur == capital.currency:
                     capital.treasury += amt
                 else:
-                    sol = amt if cur == "SOL" else fxm.swap_to_sol(cur, amt)
-                    capital.treasury += sol if capital.currency == "SOL" else fxm.swap_sol_to(capital.currency, sol)
+                    sol = amt if cur == _hub() else fxm.swap_to_sol(cur, amt)
+                    capital.treasury += sol if capital.currency == _hub() else fxm.swap_sol_to(capital.currency, sol)
         crew_float = self._pay_from_vault(kernel, f, 1500)                  # paid in the faith's own money
         cap = self._spawn_ship(kernel, f, "Fanatic Boarding Vessel", CRUSADER_NAMES, AIPersonality.CRUSADER, "BIOTIC",
-                               "ardent-bimaniform", capital.sector_id, crew_float.pop("SOL", 0))
+                               "ardent-bimaniform", capital.sector_id, crew_float.pop(_hub(), 0))
         for cur, amt in crew_float.items():
             cap.fx_wallet[cur] = cap.fx_wallet.get(cur, 0) + amt
         cap.troops = 200
@@ -1000,7 +1001,7 @@ class FactionManager:
                 if h.ship.fighters < cap.ship.fighters * 0.7 and h.credits > 500:
                     tribute = int(h.credits * ZEALOT_TRIBUTE_SHARE)
                     h.credits -= tribute
-                    f.vault["SOL"] = f.vault.get("SOL", 0) + tribute
+                    f.vault[_hub()] = f.vault.get(_hub(), 0) + tribute
                     f.bump("tribute", tribute)
                     from xylarium.kernel import alignment
                     alignment.act(kernel, cap, "tribute_extorted", harmed_sol=tribute)
@@ -1064,8 +1065,8 @@ class FactionManager:
                 if cur == planet.currency:
                     planet.treasury += amt
                 else:
-                    sol = amt if cur == "SOL" else fxm.swap_to_sol(cur, amt)
-                    planet.treasury += sol if planet.currency == "SOL" else fxm.swap_sol_to(planet.currency, sol)
+                    sol = amt if cur == _hub() else fxm.swap_to_sol(cur, amt)
+                    planet.treasury += sol if planet.currency == _hub() else fxm.swap_sol_to(planet.currency, sol)
             self.hallow_world(kernel, f, planet, settlers=ZEALOT_HALLOW_TROOPS)
             return True
         if plan["mode"] == "siege" and planet.owner_id and planet.faction_id != "ZEALOT":

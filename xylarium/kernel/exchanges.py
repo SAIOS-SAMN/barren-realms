@@ -28,10 +28,10 @@ place's own - it moves with what the place buys and sells.
 Its pools are money, counted in the census (ledger.money_supply: "local_exchanges"); nothing is minted.
 """
 
+from xylarium.kernel.fx import hub as _hub
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
-SOL = "SOL"
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -51,7 +51,7 @@ def holdings(kernel: Any) -> Dict[str, int]:
     if kernel is None or "exchanges" not in getattr(kernel, "state", {}):
         return out
     for ex in stats(kernel)["of"].values():
-        out[SOL] = out.get(SOL, 0) + int(ex["sol"])
+        out[_hub()] = out.get(_hub(), 0) + int(ex["sol"])
         out[ex["cur"]] = out.get(ex["cur"], 0) + int(ex["local"])
     return out
 
@@ -101,8 +101,8 @@ def convert_at(kernel: Any, sector_id: Optional[int], from_cur: str, to_cur: str
     fee = _fee(kernel, ex["cur"])
     if from_cur == ex["cur"]:
         sol = _swap(ex, "local", amount, fee)
-        return sol if to_cur == SOL else fx.convert(SOL, to_cur, sol)[0]
-    sol = amount if from_cur == SOL else fx.convert(from_cur, SOL, amount)[0]
+        return sol if to_cur == _hub() else fx.convert(_hub(), to_cur, sol)[0]
+    sol = amount if from_cur == _hub() else fx.convert(from_cur, _hub(), amount)[0]
     return _swap(ex, "sol", sol, fee)
 
 
@@ -146,7 +146,7 @@ def _found(kernel: Any, sec: Any, flow: List[float], logs: List[str], chosen: bo
     from xylarium.kernel import decide, history
     port = sec.port
     cur = port.currency
-    if cur == SOL:
+    if cur == _hub():
         return False                                          # SOL's own market is the federation's
     fx = kernel.fx_market
     council = max((w for w in sec.planets if w.population > 0 and w.currency == cur),
@@ -174,10 +174,10 @@ def _found(kernel: Any, sec: Any, flow: List[float], logs: List[str], chosen: bo
         return False
     half = capital_local // 2
     council.treasury -= half
-    sol_side = fx.convert(cur, SOL, half)[0]                  # its SOL side, bought at the federation exchanges
+    sol_side = fx.convert(cur, _hub(), half)[0]                  # its SOL side, bought at the federation exchanges
     local_side = min(int(council.treasury), int(sol_side * fx.rate(cur)))   # opened at the federation's rate
     if sol_side <= 0 or local_side <= 0:
-        council.treasury += fx.convert(SOL, cur, sol_side)[0] if sol_side > 0 else 0
+        council.treasury += fx.convert(_hub(), cur, sol_side)[0] if sol_side > 0 else 0
         return False
     council.treasury -= local_side
     stats(kernel)["of"][str(sec.id)] = {"cur": cur, "sol": float(sol_side), "local": float(local_side),
@@ -227,7 +227,7 @@ def _dividend(kernel: Any, sid: str, ex: Dict[str, Any]) -> None:
     loc, sol = int(float(ex["local"]) * share), int(float(ex["sol"]) * share)
     ex["local"] = float(ex["local"]) - loc
     ex["sol"] = float(ex["sol"]) - sol
-    got = loc + (kernel.fx_market.convert(SOL, founder.currency, sol)[0] if sol > 0 else 0)
+    got = loc + (kernel.fx_market.convert(_hub(), founder.currency, sol)[0] if sol > 0 else 0)
     founder.treasury += got
 
 

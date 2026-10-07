@@ -47,6 +47,7 @@ import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import COMMODITY_CONFIG, PRICE_LEVEL
+from xylarium.kernel.fx import hub as _hub
 
 MILLI = 1000                       # the ledger counts milli-EU
 TERRA_INSOLATION = 1_000_000       # EU a season: the unit's definition
@@ -319,8 +320,8 @@ def _trade(kernel: Any, sb: Dict[str, Any], bb: Dict[str, Any], meu: int, loss: 
         return 0                                                   # no market between their moneys: no settlement
     v_buy = value_short(b)                                         # buyer's money per EU
     v_sell = value_surplus(s)                                      # seller's money per EU
-    v_sell_in_buyer = (fxm.to_sol_value(s.currency, v_sell) if s.currency != "SOL" else v_sell) * \
-        (fxm.rate(b.currency) if b.currency != "SOL" else 1.0)
+    v_sell_in_buyer = (fxm.to_sol_value(s.currency, v_sell) if s.currency != _hub() else v_sell) * \
+        (fxm.rate(b.currency) if b.currency != _hub() else 1.0)
     from xylarium.kernel import contact
     from xylarium.kernel import relations
     # a contract half understood is half kept - unless the bloc's law keeps it

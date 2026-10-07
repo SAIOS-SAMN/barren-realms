@@ -40,6 +40,7 @@ from xylarium.kernel.models import (
 from xylarium.kernel.civilization import FOUNDING_POLITIES, CivilizationIntelligenceEngine
 from xylarium.kernel.elements import PeriodicTable
 from xylarium.kernel import physics
+from xylarium.kernel.fx import hub as _hub
 
 
 PORT_NAMES = [
@@ -446,7 +447,7 @@ def _found_sol_core_worlds(sec: Sector) -> None:
             element_deposits=_deposits_for(spec["type"], random.Random(1 + i)),
             element_reserves={"H2O": 500, "Fe": 300},
             planet_type=spec["type"],
-            currency="SOL",
+            currency=_hub(),
             garrison_troops=5000,
             body=spec.get("body"),
             moon_of=spec.get("moon_of"),

@@ -31,6 +31,7 @@ institutions their genesis gives them.
 """
 
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 DEPOSIT_SHARE = 0.25            # of an issuing state's treasury, put up as its money's side of the exchange pool
 
@@ -45,7 +46,7 @@ def founding(kernel: Any) -> bool:
 
 
 def issued(kernel: Any, cur: str) -> bool:
-    return not founding(kernel) or cur in stats(kernel)["currencies"] or (cur == "SOL" and stats(kernel)["exchange"])
+    return not founding(kernel) or cur in stats(kernel)["currencies"] or (cur == hub_unit(kernel) and bool(stats(kernel)["exchange"]))
 
 
 def reserve_founded(kernel: Any) -> bool:
@@ -66,6 +67,7 @@ def genesis(kernel: Any) -> None:
     fxm = kernel.fx_market
     fxm.pools.clear()
     fxm.cross_pools.clear()
+    fxm.hub = None                                          # no exchange, no unit to quote against
     kernel.banking.banks.clear()
     fed = kernel.federal_reserve
     fed.treasury = 0
@@ -91,11 +93,40 @@ def _event(kernel: Any, kind: str, title: str, actors: List[str], planet: Any = 
         primordial.first(kernel, what, title)
 
 
-def hub_unit(kernel: Any) -> str:
-    """The exchange's own unit of account: what every money is quoted against. (Its name is the one point the rest of
-    the code reads it from - so that when the exchange's founders name it, nothing else changes.)"""
-    from xylarium.kernel.fx import SOL
-    return SOL
+def hub_unit(kernel: Any) -> Optional[str]:
+    """The exchange's own unit of account - its identity, what every pool pairs with and every book keys on - or None
+    where no exchange has been founded (nothing is quoted across moneys: barter and each people's own coin). Its
+    founders name it (found_exchange); the settled board's was founded with that board."""
+    fxm = getattr(kernel, "fx_market", None)
+    return fxm.hub if fxm is not None else None
+
+
+def name_of(kernel: Any, money: Optional[str]) -> str:
+    """A money's name for display. Books key on its identity; a people may rename its coin and nothing they hold
+    moves."""
+    if money is None:
+        return "-"
+    return stats(kernel).get("names", {}).get(money, money)
+
+
+def _people_of(kernel: Any, cur: str) -> str:
+    rec = stats(kernel)["currencies"][cur]
+    planet = kernel.get_planet(rec.get("world")) if hasattr(kernel, "get_planet") and rec.get("world") else None
+    civ = getattr(planet, "civilization", None) if planet is not None else None
+    return getattr(civ, "name", None) or str(rec["issuer"]).split(":")[-1]
+
+
+def _deposit(kernel: Any, cur: str) -> int:
+    """What a money's issuers would bring to the exchange (their treasuries' deposit share)."""
+    return sum(int(p.treasury * DEPOSIT_SHARE) for p in _issuers(kernel, cur))
+
+
+def _name_the_unit(kernel: Any, founders: List[str]) -> str:
+    """The exchange's founders name its unit: the people whose money brings the deepest deposit (in its own price
+    level), by the law every money is named by (a code from its people's name, unique among all codes)."""
+    from xylarium.config import PRICE_LEVEL
+    deepest = max(founders, key=lambda c: (_deposit(kernel, c) / PRICE_LEVEL.get(c, 1.0), c))
+    return _code_for(kernel, _people_of(kernel, deepest))
 
 
 def friction(kernel: Any, planet: Any) -> Dict[str, Any]:
@@ -325,7 +356,7 @@ def rehome(kernel: Any, p: Any, cur: str, why: str = "currency_reform") -> None:
 def exchange(amount: int, cur: str, p: Any) -> int:
     """Money paid to a world in another currency is exchanged into its own at par (the old retired, the new issued,
     both declared) - never relabelled. Returns what the world receives in its own money."""
-    own = getattr(p, "currency", "SOL") or "SOL"
+    own = getattr(p, "currency", _hub()) or _hub()
     if amount <= 0 or own == cur:
         return amount
     from xylarium.config import PRICE_LEVEL
@@ -357,6 +388,8 @@ def _open_pool(kernel: Any, cur: str) -> bool:
     from xylarium.kernel import ledger
     if cur in kernel.fx_market.pools:
         return True
+    if hub_unit(kernel) is None:
+        return False                                          # no exchange founded: no unit to pair a pool with
     local = 0
     for p in _issuers(kernel, cur):
         put = int(p.treasury * DEPOSIT_SHARE)
@@ -369,7 +402,7 @@ def _open_pool(kernel: Any, cur: str) -> bool:
         for p in _issuers(kernel, cur)[:1]:
             p.treasury += local                               # too little to make a market: given back
         return False
-    ledger.mint("exchange_founding", sol, "SOL")              # the house's own unit, issued against the deposit
+    ledger.mint("exchange_founding", sol, hub_unit(kernel))   # the house's own unit, issued against the deposit
     fxm = kernel.fx_market
     fxm.pools[cur] = {"sol": float(sol), "local": float(local)}
     from xylarium.config import FX_FEE
@@ -384,10 +417,17 @@ def found_exchange(kernel: Any, why: str) -> Optional[str]:
     st = stats(kernel)
     if not founding(kernel) or st["exchange"] or not st["currencies"]:
         return None
-    opened = [cur for cur in sorted(st["currencies"]) if _open_pool(kernel, cur)]
-    if not opened:
+    founders = [cur for cur in sorted(st["currencies"]) if _deposit(kernel, cur) > 0]
+    if not founders:
         return None
-    st["exchange"] = {"founded": kernel.cycle_count, "why": why}
+    fxm = kernel.fx_market
+    unit = fxm.hub = _name_the_unit(kernel, founders)        # named before a pool opens: everything keys on it
+    opened = [cur for cur in founders if _open_pool(kernel, cur)]
+    if not opened:
+        fxm.hub = None
+        return None
+    st["exchange"] = {"founded": kernel.cycle_count, "why": why, "hub": unit}
+    st.setdefault("names", {})[unit] = unit
     _event(kernel, "EXCHANGE", "The first exchange opens", [st["currencies"][c]["issuer"] for c in opened],
            cause=why, what="first_exchange")
     return f"[MONEY] The first exchange opens ({why}): {', '.join(opened)} trade through it."
@@ -398,9 +438,10 @@ def found_reserve(kernel: Any) -> Optional[str]:
     st = stats(kernel)
     if not founding(kernel) or st["reserve"] or not st["exchange"]:
         return None
-    if len([c for c in kernel.banking.banks if c != "SOL"]) < 2:
+    hub = hub_unit(kernel)
+    if hub is None or len([c for c in kernel.banking.banks if c != hub]) < 2:
         return None
-    kernel.banking.banks["SOL"] = CentralBank(currency="SOL", name="the Reserve of the exchange",
+    kernel.banking.banks[hub] = CentralBank(currency=hub, name="the Reserve of the exchange",
                                               federation="the exchange", governor="the Reserve's board",
                                               alignment=0.0, reserves=0)
     st["reserve"] = {"founded": kernel.cycle_count}

@@ -27,6 +27,7 @@ what is left of them, when the route ends.
 
 import math
 from typing import Any, Dict, List, Optional, Tuple
+from xylarium.kernel.fx import hub as _hub
 
 FIGHTER_PRICE = 60               # what a world pays to station one fighter (colony.recruit_fighters)
 HAZARD = {"FEDERATION": 0.0, "BORDERLAND": 0.15, "ANARCHY": 0.4}   # share a trip does not keep (cognition's discount)
@@ -109,7 +110,7 @@ def hire(kernel: Any, captain: Any, planet: Any, fighters: int, until: int, haza
         return False, f"An escort of {fighters} costs {fee:,} Cr."
     captain.credits -= fee
     fx = kernel.fx_market
-    planet.treasury += fee if planet.currency == "SOL" else fx.convert("SOL", planet.currency, fee)[0]
+    planet.treasury += fee if planet.currency == _hub() else fx.convert(_hub(), planet.currency, fee)[0]
     planet.fighters -= fighters
     captain.escort = {"fighters": fighters, "from": planet.id, "until": int(until)}
     st = stats(kernel)
@@ -235,7 +236,7 @@ def step(kernel: Any, captain: Any, plan: Dict[str, Any]) -> Optional[Tuple[str,
         plan["credits0"] = int(captain.credits)
         plan["sol"] = amount
         plan["stage"] = 1
-        return "fx", {"from": "SOL", "to": cur, "amount": amount}
+        return "fx", {"from": _hub(), "to": cur, "amount": amount}
     held = int((getattr(captain, "fx_wallet", {}) or {}).get(cur, 0))
     if held <= 0:                                             # lost on the way (or never bought)
         release(kernel, captain)
@@ -251,7 +252,7 @@ def step(kernel: Any, captain: Any, plan: Dict[str, Any]) -> Optional[Tuple[str,
                                   "hazard": plan.get("hazard", "BORDERLAND")}
         return "move", {"to": sell_at}
     plan["stage"] = 2
-    return "fx", {"from": cur, "to": "SOL", "amount": held}
+    return "fx", {"from": cur, "to": _hub(), "amount": held}
 
 
 def done(kernel: Any, captain: Any, plan: Dict[str, Any], back_sol: float) -> None:

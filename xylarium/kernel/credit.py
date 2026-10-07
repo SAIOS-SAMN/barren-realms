@@ -18,6 +18,7 @@ Xylarium credit: leverage, margin calls and ruin - where temperament becomes for
 """
 
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 MAINTENANCE = 1.25          # collateral must stay worth 125% of the loan (the desk's own safety margin)
 
@@ -68,8 +69,8 @@ def quarter(kernel: Any) -> List[str]:
     st = _stats(kernel)
     rate = 0.01
     banking = getattr(kernel, "banking", None)
-    if banking is not None and "SOL" in banking.banks:
-        rate = banking.banks["SOL"].policy_rate
+    if banking is not None and _hub() in banking.banks:
+        rate = banking.banks[_hub()].policy_rate
     for cap in list(kernel.captains.values()):
         loans = getattr(cap, "margin_loans", None)
         if not loans:
@@ -156,7 +157,7 @@ def _levy(kernel: Any, comp: Any) -> None:
         return
     comp.treasury -= amount
     from xylarium.kernel import fx
-    if home.currency != "SOL" and fx.ACTIVE_FX is not None:
+    if home.currency != _hub() and fx.ACTIVE_FX is not None:
         home.treasury += fx.ACTIVE_FX.swap_sol_to(home.currency, amount)
     else:
         home.treasury += amount

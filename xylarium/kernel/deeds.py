@@ -16,6 +16,7 @@ from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import law as law_mod
 from xylarium.kernel import lineage as lineage_mod
 from xylarium.kernel.models import ActionResult, ActionType
+from xylarium.kernel.fx import hub as _hub
 
 BEFORE: Dict[ActionType, Callable[..., Dict[str, Any]]] = {}
 AFTER: Dict[ActionType, Callable[..., None]] = {}
@@ -86,7 +87,7 @@ def _before_bombard(kernel, captain, sector, kwargs, pre):
         pre["owner"] = planet.owner_id
         pre["population"] = planet.population
         pre["treasury_sol"] = kernel.fx_market.to_sol_value(planet.currency, planet.treasury) \
-            if planet.currency != "SOL" else planet.treasury
+            if planet.currency != _hub() else planet.treasury
 
 
 @before(ActionType.SELL_ARTIFACT)

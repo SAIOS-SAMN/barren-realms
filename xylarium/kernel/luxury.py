@@ -34,6 +34,7 @@ from xylarium.config import (
     PRICE_LEVEL,
 )
 from xylarium.kernel import matter, topology
+from xylarium.kernel.fx import hub as _hub
 
 _ADJECTIVE = {"TERRESTRIAL": ["Verdant", "Rainroot", "Meadow"], "OCEANIC": ["Tidal", "Brine", "Deepwater"],
               "ICE": ["Rime", "Glacier", "Stillcold"], "VOLCANIC": ["Ember", "Caldera", "Ashen"],
@@ -357,7 +358,7 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
             st["bought"][t] = st["bought"].get(t, 0) + units
             st["spend"][planet.currency] = st["spend"].get(planet.currency, 0) + bill
             st["spend_sol"] += fx.ACTIVE_FX.to_sol_value(planet.currency, bill) if (
-                fx.ACTIVE_FX is not None and planet.currency != "SOL") else bill
+                fx.ACTIVE_FX is not None and planet.currency != _hub()) else bill
         if need > 0 and budget > 0:
             from xylarium.kernel import demography
             ext_ports = [kernel.sectors[sid].port for sid in topology.reach(kernel, planet.sector_id, 5)
@@ -389,7 +390,7 @@ def shop(kernel: Any, planet: Any, ports: List[Any]) -> None:
                 st["bought"][t] = st["bought"].get(t, 0) + units
                 st["spend"][planet.currency] = st["spend"].get(planet.currency, 0) + bill
                 st["spend_sol"] += fx.ACTIVE_FX.to_sol_value(planet.currency, bill) if (
-                    fx.ACTIVE_FX is not None and planet.currency != "SOL") else bill
+                    fx.ACTIVE_FX is not None and planet.currency != _hub()) else bill
         if need > 0:
             unmet[t] = unmet.get(t, 0) + 1
         else:

@@ -18,6 +18,7 @@ import math
 from typing import Any, Dict
 
 from xylarium.config import FX_PRICE_PASS_THROUGH, PRICE_LEVEL
+from xylarium.kernel.fx import hub as _hub
 
 STICKY = 0.25                 # the share of the gap to the target level closed each quarter (in log)
 
@@ -35,13 +36,13 @@ def _kernel(kernel: Any = None) -> Any:
 
 def target(kernel: Any, cur: str) -> float:
     base = PRICE_LEVEL.get(cur, 1.0)
-    if cur == "SOL":
+    if cur == _hub():
         pol = getattr(kernel, "monetary_policy", None)
-        mstar = (getattr(pol, "current", {}) or {}).get("SOL")
+        mstar = (getattr(pol, "current", {}) or {}).get(_hub())
         if not mstar:
             return base
         from xylarium.kernel.ledger import money_supply
-        m = money_supply(kernel).get("SOL", {}).get("total", 0)
+        m = money_supply(kernel).get(_hub(), {}).get("total", 0)
         return base * max(1e-6, m / mstar) ** FX_PRICE_PASS_THROUGH
     fxm = getattr(kernel, "fx_market", None)
     if fxm is None or cur not in getattr(fxm, "pools", {}):
@@ -53,13 +54,13 @@ def level(cur: str, kernel: Any = None) -> float:
     """What goods cost in this money now (genesis level x its measured inflation since)."""
     k = _kernel(kernel)
     if k is None or "prices" not in getattr(k, "state", {}):
-        if k is not None and cur != "SOL":
+        if k is not None and cur != _hub():
             return target(k, cur)
         return PRICE_LEVEL.get(cur, 1.0)
     lv = _st(k)["level"].get(cur)
     if lv is not None:
         return lv
-    return PRICE_LEVEL.get(cur, 1.0) if cur == "SOL" else target(k, cur)
+    return PRICE_LEVEL.get(cur, 1.0) if cur == _hub() else target(k, cur)
 
 
 def inflation(kernel: Any, cur: str) -> float:
@@ -83,12 +84,12 @@ def carry(kernel: Any, cur: str) -> float:
 
 def quarter(kernel: Any) -> list:
     st = _st(kernel)
-    curs = {"SOL", *getattr(kernel.fx_market, "pools", {}).keys()}
+    curs = {_hub(), *getattr(kernel.fx_market, "pools", {}).keys()}
     for cur in curs:
         tgt = target(kernel, cur)
         # a money with no reading yet starts where its prices stood: SOL at its genesis level, the regional monies
         # at their exchange pass-through (what they were already charged at)
-        old = st["level"].get(cur, PRICE_LEVEL.get(cur, 1.0) if cur == "SOL" else tgt)
+        old = st["level"].get(cur, PRICE_LEVEL.get(cur, 1.0) if cur == _hub() else tgt)
         new = math.exp(math.log(old) + STICKY * (math.log(tgt) - math.log(old)))
         st["level"][cur] = round(new, 6)
         h = st["hist"].setdefault(cur, [])

@@ -58,6 +58,7 @@ from xylarium.config import (
     get_commodity_stack_multiplier,
 )
 from xylarium.kernel.experience import ExperienceManager
+from xylarium.kernel.fx import LEGACY_HUB, hub as _hub
 
 # Fiscal quarter interval in universal cycles
 FISCAL_QUARTER_CYCLES: int = 25
@@ -279,7 +280,7 @@ class FreightContract:
     # Payout is escrowed at posting ("company:TICKER" or "planet:ID") and refunded if voided
     escrow_source: Optional[str] = None
     escrow_amount: int = 0
-    currency: str = "SOL"     # Payout currency (issuer's money)
+    currency: Optional[str] = field(default_factory=_hub)   # payout money (the issuer's)
     kind: str = "FREIGHT"     # "FREIGHT": load at origin port; "EXTRACTION": mine it in null space yourself
 
     def to_dict(self) -> Dict[str, Any]:
@@ -328,7 +329,7 @@ class FreightContract:
             accepted_by=data.get("accepted_by"),
             escrow_source=data.get("escrow_source"),
             escrow_amount=int(data.get("escrow_amount", 0)),
-            currency=data.get("currency", "SOL"),
+            currency=data.get("currency", LEGACY_HUB),   # saved before money was named: the settled board's
             kind=data.get("kind", "FREIGHT"),
             status=data.get("status", "OPEN"),
         )
@@ -351,7 +352,7 @@ def kernel_sector_port(sector_id: int) -> Any:
 
 def ledger_sol_of(port: Any) -> int:
     from xylarium.kernel import fx
-    if port.currency == "SOL" or fx.ACTIVE_FX is None:
+    if port.currency == _hub() or fx.ACTIVE_FX is None:
         return int(port.treasury)
     return int(fx.ACTIVE_FX.to_sol_value(port.currency, port.treasury))
 
@@ -361,7 +362,7 @@ def ledger_debit_port_sol(port: Any, sol: int) -> None:
     from xylarium.kernel import fx
     if sol <= 0:
         return
-    if port.currency == "SOL" or fx.ACTIVE_FX is None:
+    if port.currency == _hub() or fx.ACTIVE_FX is None:
         port.treasury -= sol
         return
     local = min(port.treasury, int(sol * fx.ACTIVE_FX.rate(port.currency) * 1.02) + 1)
@@ -545,7 +546,7 @@ class MarketManager:
                             continue
                         planet.treasury -= local_capital
                         from xylarium.kernel.fx import ACTIVE_FX
-                        if planet.currency != "SOL" and ACTIVE_FX is not None:
+                        if planet.currency != _hub() and ACTIVE_FX is not None:
                             capital = ACTIVE_FX.swap_to_sol(planet.currency, local_capital)
                         else:
                             capital = local_capital
@@ -935,7 +936,7 @@ class MarketManager:
                     comp.home_cash = 0
                     home_port.treasury += spend
                     comp.last_outflow_q = int(ACTIVE_FX.to_sol_value(comp.home_currency, spend)) if (
-                        ACTIVE_FX and comp.home_currency != "SOL") else spend
+                        ACTIVE_FX and comp.home_currency != _hub()) else spend
                     self._consume_inputs(home_port, spend)
             budget = int(max(0, comp.treasury - COMPANY_OPEX_RESERVE) * COMPANY_OPEX_RATE)
             comp.last_outflow_q = getattr(comp, "last_outflow_q", 0) + max(0, budget)
@@ -946,7 +947,7 @@ class MarketManager:
             if port is None:
                 continue
             comp.treasury -= budget
-            local = ACTIVE_FX.swap_sol_to(port.currency, budget) if (port.currency != "SOL" and ACTIVE_FX) else budget
+            local = ACTIVE_FX.swap_sol_to(port.currency, budget) if (port.currency != _hub() and ACTIVE_FX) else budget
             port.treasury += local
             self._consume_inputs(port, local)
 
@@ -971,7 +972,7 @@ class MarketManager:
     @staticmethod
     def _fx_rate(currency: str) -> float:
         from xylarium.kernel.fx import ACTIVE_FX
-        return ACTIVE_FX.rate(currency) if (ACTIVE_FX is not None and currency != "SOL") else 1.0
+        return ACTIVE_FX.rate(currency) if (ACTIVE_FX is not None and currency != _hub()) else 1.0
 
     def generate_extraction_contracts(self, kernel: Any) -> List[FreightContract]:
         """
@@ -1056,11 +1057,11 @@ class MarketManager:
             return
         if source.startswith("company:"):
             comp = self.companies.get(source.split(":", 1)[1])
-            cur = getattr(contract, "currency", "SOL") or "SOL"
-            if comp and cur != "SOL" and comp.home_currency == cur:
+            cur = getattr(contract, "currency", _hub()) or _hub()
+            if comp and cur != _hub() and comp.home_currency == cur:
                 comp.home_cash += amount              # escrowed in the firm's home money, returned there
                 return
-            if comp and cur == "SOL":
+            if comp and cur == _hub():
                 comp.treasury += amount
                 return
         elif source.startswith("planet:") and kernel is not None:
@@ -1068,8 +1069,8 @@ class MarketManager:
             if planet:
                 planet.treasury += amount
                 return
-        cur = getattr(contract, "currency", "SOL") or "SOL"
-        if cur != "SOL" and kernel is not None:
+        cur = getattr(contract, "currency", _hub()) or _hub()
+        if cur != _hub() and kernel is not None:
             # unclaimed escrow in a regional money stays in that money: to the world it was bound for, else
             # cleared into SOL through the exchange before it reaches the Reserve
             dest = kernel.get_planet(contract.destination_planet_id) if contract.destination_planet_id else None
@@ -1299,9 +1300,9 @@ class MarketManager:
         from xylarium.kernel import ledger
         from xylarium.kernel.fx import ACTIVE_FX
         vault_infusion = raised_capital // 2
-        if planet.currency != "SOL" and ACTIVE_FX is not None:
+        if planet.currency != _hub() and ACTIVE_FX is not None:
             vault_infusion = int(vault_infusion * ACTIVE_FX.rate(planet.currency))
-        ledger.mint("ipo_capital", raised_capital // 2, "SOL")
+        ledger.mint("ipo_capital", raised_capital // 2, _hub())
         ledger.mint("ipo_capital", vault_infusion, planet.currency)
         planet.treasury += vault_infusion
         captain.score += 500
@@ -1342,11 +1343,11 @@ class MarketManager:
         if goods_local <= 0 or contract.escrow_amount <= 0:
             return 0
         def to_sol(cur, amt):
-            return ACTIVE_FX.to_sol_value(cur, amt) if (ACTIVE_FX and cur != "SOL") else amt
+            return ACTIVE_FX.to_sol_value(cur, amt) if (ACTIVE_FX and cur != _hub()) else amt
         # Cap the goods bill at 60% of the escrow so the courier is always paid for the haul
         max_escrow_spend = int(contract.escrow_amount * 0.6)
         goods_in_escrow_cur = int(to_sol(port.currency, goods_local) * (ACTIVE_FX.rate(contract.currency)
-                                  if (ACTIVE_FX and contract.currency != "SOL") else 1))
+                                  if (ACTIVE_FX and contract.currency != _hub()) else 1))
         spend = min(max_escrow_spend, goods_in_escrow_cur)
         if spend <= 0:
             return 0
@@ -1355,8 +1356,8 @@ class MarketManager:
         if contract.currency == port.currency:
             port.treasury += spend
         elif ACTIVE_FX is not None:
-            sol = spend if contract.currency == "SOL" else ACTIVE_FX.swap_to_sol(contract.currency, spend)
-            port.treasury += sol if port.currency == "SOL" else ACTIVE_FX.swap_sol_to(port.currency, sol)
+            sol = spend if contract.currency == _hub() else ACTIVE_FX.swap_to_sol(contract.currency, spend)
+            port.treasury += sol if port.currency == _hub() else ACTIVE_FX.swap_sol_to(port.currency, sol)
         return spend
 
     def forfeit_freight(self, captain: Any, kernel: Any = None) -> List[str]:
@@ -1918,8 +1919,8 @@ class MarketManager:
         short = need - company.treasury
         if short <= 0 or spare <= 0 or ACTIVE_FX is None:
             return
-        cur = company.home_currency or "SOL"
-        if cur == "SOL":
+        cur = company.home_currency or _hub()
+        if cur == _hub():
             move = min(spare, short)
             company.home_cash -= move
             company.treasury += move
@@ -3034,7 +3035,7 @@ class MarketManager:
         if units <= 0:
             return 0.0
         cost = buy_p * units
-        if market and src.currency != "SOL":
+        if market and src.currency != _hub():
             if not market.ensure_local(owner, src.currency, cost):
                 return 0.0
         elif owner.credits < cost:
@@ -3093,7 +3094,7 @@ class MarketManager:
                         owner_c.credits -= paid
                         holder, toll, tithe = _transit.charge_cr(kernel, hauler.sector_id, next_sec)
                         _transit.settle(kernel, holder, f"captain:{owner_c.id}", hauler.sector_id, next_sec,
-                                        toll * paid / owed, tithe * paid / owed, paid=(paid, "SOL"))
+                                        toll * paid / owed, tithe * paid / owed, paid=(paid, _hub()))
                 _fib.record_flow(kernel, hauler.sector_id, next_sec, _fib.SHIP_TRAFFIC)   # the lane remembers it
                 hauler.sector_id = next_sec
                 hauler.status = "IN_TRANSIT"
@@ -3316,7 +3317,7 @@ class MarketManager:
                     comp.home_currency = home.currency
                     comp.home_cash += local
                     from xylarium.kernel.fx import ACTIVE_FX
-                    sales = int(ACTIVE_FX.to_sol_value(home.currency, local)) if (ACTIVE_FX and home.currency != "SOL") else local
+                    sales = int(ACTIVE_FX.to_sol_value(home.currency, local)) if (ACTIVE_FX and home.currency != _hub()) else local
                 comp.quarterly_revenue += sales
                 div_local = int(local * comp.dividend_rate)
                 comp.last_outflow_q = getattr(comp, "last_outflow_q", 0) + int(sales * comp.dividend_rate)
@@ -3334,7 +3335,7 @@ class MarketManager:
                             break
                         comp.home_cash -= payout
                         fx_credit(cap, comp.home_currency, payout)
-                        dividends_paid += int(ACTIVE_FX.to_sol_value(comp.home_currency, payout)) if (ACTIVE_FX and comp.home_currency != "SOL") else payout
+                        dividends_paid += int(ACTIVE_FX.to_sol_value(comp.home_currency, payout)) if (ACTIVE_FX and comp.home_currency != _hub()) else payout
                 div_pool = 0
 
                 # Disburse the dividend pool pro rata to captains holding shares, out of the company treasury

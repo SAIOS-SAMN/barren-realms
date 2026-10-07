@@ -42,6 +42,7 @@ from xylarium.config import (
 )
 from xylarium.kernel import hulls
 from xylarium.kernel import matter, topology
+from xylarium.kernel.fx import hub as _hub
 
 BURN_MASS_PER_UNIT = 50      # tonnes (holds + cargo units) moved one jump per unit of reaction mass (torch)
 COAST_EXTRA_TURNS = 2        # the cost of a jump on reserve cells
@@ -134,7 +135,7 @@ def bunker(kernel: Any, captain: Any, sector: Any) -> int:
     _, price = EconomyManager.get_unit_prices(port, fuel)
     if price <= 0:
         return 0
-    price_sol = fx.ACTIVE_FX.to_sol_value(port.currency, price) if (fx.ACTIVE_FX and port.currency != "SOL") else price
+    price_sol = fx.ACTIVE_FX.to_sol_value(port.currency, price) if (fx.ACTIVE_FX and port.currency != _hub()) else price
     affordable = int(max(0, captain.credits - 200) // max(1e-9, price_sol))
     units = min(want, have, affordable)
     if units <= 0:
@@ -260,7 +261,7 @@ def refit_cost_sol(kernel: Any, sector: Any, drive: str) -> int:
         return DRIVE_INSTALL_FEE
     port = sector.port
     _, price = EconomyManager.get_unit_prices(port, part)
-    price_sol = fx.ACTIVE_FX.to_sol_value(port.currency, price) if (fx.ACTIVE_FX and port.currency != "SOL") else price
+    price_sol = fx.ACTIVE_FX.to_sol_value(port.currency, price) if (fx.ACTIVE_FX and port.currency != _hub()) else price
     return int(price_sol) + DRIVE_INSTALL_FEE
 
 

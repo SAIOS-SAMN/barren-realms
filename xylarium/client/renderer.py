@@ -23,6 +23,7 @@ from xylarium.config import (
     CREDIT_TIER_THRESHOLDS,
 )
 from xylarium.kernel.elements import PeriodicTable
+from xylarium.kernel.fx import hub as _hub
 
 
 def _render_bar(curr: int, maximum: int, length: int = 10, fill_char: str = "█", empty_char: str = "░") -> str:
@@ -421,7 +422,7 @@ class TerminalRenderer:
         out.append(f"\n{c_cyan('SECTOR')} {c_gold(f'#{s_id:03d}')} [cluster: {c_magenta(cluster_name)}]: {bold(c_white(name))}")
         space = view.get("space", {})
         fx_view = view.get("fx", {})
-        local_cur = fx_view.get("local_currency", "SOL")
+        local_cur = fx_view.get("local_currency", _hub())
         if space.get("kind") == "NULL":
             out.append(f"  {c_gray('░ NULL SPACE')} - deep space between star systems. {c_red('Open fire zone: no Federal protection.')}")
         elif space:
@@ -613,10 +614,10 @@ class TerminalRenderer:
                     f"    Citadel: {c_white(citadel_name)} │ Pop: {c_gold(f'{p_pop:,}')} │ "
                     f"Shields: {c_cyan(str(p.get('shields', 0)))}/{p.get('max_shields', 200)} │ "
                     f"Garrison: {c_red(str(p.get('fighters', 0)))} Fighters │ "
-                    f"Vault: {c_gold(f'{p_treasury:,} ' + p.get('currency', 'SOL'))}"
+                    f"Vault: {c_gold(f'{p_treasury:,} ' + p.get('currency', _hub()))}"
                 )
                 out.append(f"    World: {c_white(p.get('planet_type', 'TERRESTRIAL').replace('_', ' ').title())} │ "
-                           f"Currency: {c_cyan(p.get('currency', 'SOL'))}")
+                           f"Currency: {c_cyan(p.get('currency', _hub()))}")
                 life = p.get("life")
                 if life:
                     out.append(f"    {c_green('❦ LIFE:')} {life['stage']} ({life['region']}) │ rung {life['rung']} of "

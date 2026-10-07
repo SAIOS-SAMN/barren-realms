@@ -22,6 +22,7 @@ from xylarium.kernel.models import ActionResult, ActionType
 from xylarium.kernel.natives import NativeManager
 from xylarium.kernel.nullspace import NullSpaceManager
 from xylarium.kernel.surface import DistrictType
+from xylarium.kernel.fx import hub as _hub
 
 
 class Entry(NamedTuple):
@@ -662,7 +663,7 @@ def _surface_invade(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str,
 def _fx_exchange(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     from xylarium.kernel import fxroutes
     ok, msg, out = fxroutes.exchange(k, captain, getattr(current_sector, "id", None),
-                                     kwargs.get("from_currency", "SOL"), kwargs.get("to_currency", "FRN"),
+                                     kwargs.get("from_currency", _hub()), kwargs.get("to_currency", "FRN"),
                                      int(kwargs.get("amount", 0)))      # where it is docked: the place's own desk
     result = ActionResult(success=ok, action=action, message=msg, data={"received": out})
     return result

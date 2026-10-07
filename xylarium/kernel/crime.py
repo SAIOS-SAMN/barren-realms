@@ -25,6 +25,7 @@ from xylarium.kernel import hulls
 import random
 import zlib
 from typing import Any, Dict, List, Optional, Tuple
+from xylarium.kernel.fx import hub as _hub
 
 CONSIDER_CHANCE = 0.2          # an autonomous turn in which a captain even weighs its options outside the law
 HONEST_STREAK = 0.2            # the streak an honest house's blood carries on average
@@ -137,7 +138,7 @@ def _opportunities(kernel: Any, captain: Any, sector: Any) -> List[Tuple[float, 
             if p.owner_id == captain.id or p.treasury <= 0 or getattr(p, "natives", None):
                 continue
             gain = p.treasury * 0.25
-            if fx.ACTIVE_FX is not None and p.currency != "SOL":
+            if fx.ACTIVE_FX is not None and p.currency != _hub():
                 gain = fx.ACTIVE_FX.to_sol_value(p.currency, gain)
             out.append((gain, 0.0, "siphon", {"action": ActionType.COVERT_OP, "target_type": "PLANET", "target_id": p.id,
                                          "op_type": "siphon", "operatives": 3}))
@@ -188,10 +189,10 @@ def quarter(kernel: Any) -> List[str]:
                 if rng.random() < strk:
                     share = 0.05 * strk
                     local = int(p.treasury * share)
-                    gain = fx.ACTIVE_FX.to_sol_value(p.currency, local) if (fx.ACTIVE_FX and p.currency != "SOL") else local
+                    gain = fx.ACTIVE_FX.to_sol_value(p.currency, local) if (fx.ACTIVE_FX and p.currency != _hub()) else local
                     if local > 0 and utility(gain, pres, temperament(owner, kernel), owner.cosmic_alignment, strk) > 0:
                         p.treasury -= local
-                        sol = fx.ACTIVE_FX.swap_to_sol(p.currency, local) if (fx.ACTIVE_FX and p.currency != "SOL") else local
+                        sol = fx.ACTIVE_FX.swap_to_sol(p.currency, local) if (fx.ACTIVE_FX and p.currency != _hub()) else local
                         owner.credits += sol
                         st["skimmed_sol"] += sol
                         law.file(kernel, "embezzlement", owner, sec, sol, {"kind": "planet", "id": p.id})

@@ -18,7 +18,12 @@ from typing import Any, Dict, Optional, Tuple
 
 from xylarium.config import CURRENCIES, FX_POOL_SEED, FX_FEE, PRICE_LEVEL
 
-SOL = "SOL"
+LEGACY_HUB = "SOL"   # the settled board's exchange unit, founded with that board (its founders' name, kept as data)
+
+
+def hub() -> Optional[str]:
+    """The live exchange's unit (its identity), or None where no exchange has been founded yet."""
+    return ACTIVE_FX.hub if ACTIVE_FX is not None else LEGACY_HUB
 import os as _os
 FX_TRACE: Optional[Dict[str, Dict[str, float]]] = {} if _os.environ.get("XYL_FX_TRACE") else None
 
@@ -28,11 +33,12 @@ def currency_for_security(security: Any) -> str:
     for code, info in CURRENCIES.items():
         if info["zone"] == zone:
             return code
-    return SOL
+    return hub()
 
 
 class FXMarket:
     def __init__(self) -> None:
+        self.hub: Optional[str] = LEGACY_HUB     # the unit every pool pairs with (None until an exchange is founded)
         self.pools: Dict[str, Dict[str, float]] = {
             cur: {"sol": float(s), "local": float(l)} for cur, (s, l) in FX_POOL_SEED.items()
         }
@@ -55,13 +61,13 @@ class FXMarket:
     # ------------------------------------------------------------------ quotes
     def rate(self, cur: str) -> float:
         """Mid rate: local units per 1 SOL."""
-        if cur == SOL or cur not in self.pools:
+        if cur == self.hub or cur not in self.pools:
             return 1.0
         p = self.pools[cur]
         return p["local"] / p["sol"]
 
     def to_sol_value(self, cur: str, amount: float) -> float:
-        return amount if cur == SOL else amount / self.rate(cur)
+        return amount if cur == self.hub else amount / self.rate(cur)
 
     def price_level_drift(self, cur: str) -> float:
         """How far the live rate has moved from the genesis price level (>1: local currency weakened)."""
@@ -137,11 +143,29 @@ class FXMarket:
         """What routing through the two federation exchanges (and SOL) would pay, without trading."""
         def out_of(pool_in: float, pool_out: float, x: float, fee: float) -> float:
             return pool_out - pool_in * pool_out / (pool_in + x * (1 - fee))
-        sol = amount if from_cur == SOL else out_of(self.pools[from_cur]["local"], self.pools[from_cur]["sol"], amount,
+        sol = amount if from_cur == self.hub else out_of(self.pools[from_cur]["local"], self.pools[from_cur]["sol"], amount,
                                                     self.fee(from_cur))
-        if to_cur == SOL:
+        if to_cur == self.hub:
             return int(sol)
         return int(out_of(self.pools[to_cur]["sol"], self.pools[to_cur]["local"], sol, self.fee(to_cur)))
+
+    def value_in(self, from_cur: str, to_cur: str, amount: float) -> float:
+        """What an amount of one money fetches in another through the pools (fees and depth), unrounded - how a mind
+        carries a sum into its own unit of account. 0 where no pool carries either money."""
+        if from_cur == to_cur or amount == 0:
+            return float(amount)
+        if not self.can_convert(from_cur, to_cur):
+            return 0.0
+        sign = 1.0 if amount > 0 else -1.0
+        x = abs(float(amount))
+
+        def out_of(pool_in: float, pool_out: float, v: float, fee: float) -> float:
+            return pool_out - pool_in * pool_out / (pool_in + v * (1 - fee))
+        hubv = x if from_cur == self.hub else out_of(self.pools[from_cur]["local"], self.pools[from_cur]["sol"], x,
+                                                     self.fee(from_cur))
+        if to_cur == self.hub:
+            return sign * hubv
+        return sign * out_of(self.pools[to_cur]["sol"], self.pools[to_cur]["local"], hubv, self.fee(to_cur))
 
     def swap_cross(self, from_cur: str, to_cur: str, amount: int) -> int:
         key, side_in, side_out = self._cross(from_cur, to_cur)
@@ -185,7 +209,7 @@ class FXMarket:
 
     def can_convert(self, from_cur: str, to_cur: str) -> bool:
         """Is there a market between these moneys? (A money issued before any exchange lists it has none.)"""
-        return from_cur == to_cur or all(c == SOL or c in self.pools for c in (from_cur, to_cur))
+        return from_cur == to_cur or all(c == self.hub or c in self.pools for c in (from_cur, to_cur))
 
     def convert(self, from_cur: str, to_cur: str, amount: int) -> Tuple[int, str]:
         """Best execution across the federation exchanges and the Galactic ISSE. Returns (out, venue).
@@ -196,19 +220,19 @@ class FXMarket:
         from xylarium.kernel import ledger
         kernel = getattr(ledger, "ACTIVE_KERNEL", None)
         for c in (from_cur, to_cur):
-            if c != SOL and c not in self.pools and kernel is not None and kernel.fx_market is self:
+            if c != self.hub and c not in self.pools and kernel is not None and kernel.fx_market is self:
                 from xylarium.kernel import institutions
                 institutions._open_pool(kernel, c)
         if not self.can_convert(from_cur, to_cur):
             self.unsettled = getattr(self, "unsettled", {})
             self.unsettled[from_cur] = self.unsettled.get(from_cur, 0) + amount
             return 0, "unsettled"
-        if SOL not in (from_cur, to_cur):
+        if self.hub not in (from_cur, to_cur):
             direct = self.quote_cross(from_cur, to_cur, amount)
             if direct is not None and direct > self.quote_via_sol(from_cur, to_cur, amount):
                 return self.swap_cross(from_cur, to_cur, amount), "Galactic ISSE"
-        sol = amount if from_cur == SOL else self.swap_to_sol(from_cur, amount)
-        out = sol if to_cur == SOL else self.swap_sol_to(to_cur, sol)
+        sol = amount if from_cur == self.hub else self.swap_to_sol(from_cur, amount)
+        out = sol if to_cur == self.hub else self.swap_sol_to(to_cur, sol)
         return out, "federation exchanges via SOL"
 
     # ------------------------------------------------------------------ captain desk
@@ -217,8 +241,8 @@ class FXMarket:
         if from_cur == to_cur or amount <= 0:
             return False, "Choose two different currencies and a positive amount.", 0
         for c in (from_cur, to_cur):
-            if c != SOL and c not in self.pools:
-                return False, f"Unknown currency '{c}'. Listed: {', '.join(['SOL'] + sorted(self.pools))}.", 0
+            if c != self.hub and c not in self.pools:
+                return False, f"Unknown currency '{c}'. Listed: {', '.join([self.hub or ''] + sorted(self.pools))}.", 0
         if balance(captain, from_cur) < amount:
             return False, f"Insufficient {from_cur}: you hold {balance(captain, from_cur):,}.", 0
         from xylarium.kernel import ledger, regimes
@@ -230,12 +254,12 @@ class FXMarket:
         return True, (
             f"ISSE FX: exchanged {amount:,} {from_cur} for {out:,} {to_cur} on the {venue} "
             f"(mid {self.rate(to_cur) / self.rate(from_cur):.4f} {to_cur}/{from_cur}, "
-            f"fee {self.fee(to_cur if to_cur != SOL else from_cur):.2%})."
+            f"fee {self.fee(to_cur if to_cur != self.hub else from_cur):.2%})."
         ), out
 
     def ensure_local(self, captain: Any, cur: str, needed: int) -> bool:
         """Auto-converts a SOL shortfall into local currency for a purchase. Returns True if covered."""
-        if cur == SOL:
+        if cur == self.hub:
             return captain.credits >= needed
         short = needed - captain.fx_wallet.get(cur, 0)
         if short <= 0:
@@ -280,7 +304,7 @@ class FXMarket:
         if kernel is None:
             return 0.0
         from xylarium.kernel import prices
-        return prices.inflation(kernel, cur) - prices.inflation(kernel, SOL)
+        return prices.inflation(kernel, cur) - prices.inflation(kernel, self.hub)
 
     def advantage(self, kernel: Any, cur: str) -> float:
         """Uncovered interest parity, as a holder sees it: what this money pays a quarter (its central bank's
@@ -347,9 +371,9 @@ class FXMarket:
 
     # ------------------------------------------------------------------ persistence
     def pool_holdings(self) -> Dict[str, int]:
-        out = {SOL: 0}
+        out: Dict[str, int] = {self.hub: 0} if self.hub is not None else {}
         for cur, p in self.pools.items():
-            out[SOL] += int(p["sol"])
+            out[self.hub] += int(p["sol"])
             out[cur] = out.get(cur, 0) + int(p["local"])
         for p in getattr(self, "cross_pools", {}).values():
             out[p["ca"]] = out.get(p["ca"], 0) + int(p["a"])
@@ -357,7 +381,7 @@ class FXMarket:
         return out
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"pools": {c: dict(p) for c, p in self.pools.items()},
+        return {"hub": self.hub, "pools": {c: dict(p) for c, p in self.pools.items()},
                 "volume_sol": dict(self.volume_sol), "fees_collected": dict(self.fees_collected),
                 "fees": dict(self.fees),
                 "cross_pools": {k: dict(p) for k, p in self.cross_pools.items()},
@@ -367,6 +391,7 @@ class FXMarket:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "FXMarket":
         fx = cls()
+        fx.hub = data.get("hub", LEGACY_HUB)  # a save from before the hub was data: the settled board's unit
         if "pools" in data:
             fx.pools = {}                     # exactly the pools saved (a founding universe may have none yet)
         for c, p in data.get("pools", {}).items():
@@ -386,13 +411,13 @@ class FXMarket:
 
 # ---------------------------------------------------------------------- wallets
 def balance(captain: Any, cur: str) -> int:
-    return int(captain.credits) if cur == SOL else int(captain.fx_wallet.get(cur, 0))
+    return int(captain.credits) if cur == hub() else int(captain.fx_wallet.get(cur, 0))
 
 
 def credit(captain: Any, cur: str, amount: int) -> None:
     if amount <= 0:
         return
-    if cur == SOL:
+    if cur == hub():
         captain.credits += amount
     else:
         captain.fx_wallet[cur] = captain.fx_wallet.get(cur, 0) + amount
@@ -401,7 +426,7 @@ def credit(captain: Any, cur: str, amount: int) -> None:
 def debit(captain: Any, cur: str, amount: int) -> None:
     if amount <= 0:
         return
-    if cur == SOL:
+    if cur == hub():
         captain.credits -= amount
     else:
         captain.fx_wallet[cur] = captain.fx_wallet.get(cur, 0) - amount
@@ -432,7 +457,7 @@ def settle_in(captain: Any, cur: str):
     Temporarily presents the captain's balance in ``cur`` as ``captain.credits`` so
     single-currency trade code settles in the port's local money.
     """
-    if cur == SOL:
+    if cur == hub():
         yield
         return
     sol_balance = captain.credits

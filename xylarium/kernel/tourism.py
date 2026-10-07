@@ -52,6 +52,7 @@ from xylarium.config import (
     TOURIST_SPEND_PER_HEAD,
 )
 from xylarium.kernel import matter, topology
+from xylarium.kernel.fx import hub as _hub
 
 STATION_HULL_UNITS = 90      # the matter a station's hull takes (units; what it is made of is its people's: uses.py)
 
@@ -66,7 +67,7 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 def _sol(cur: str, amount: float) -> float:
     from xylarium.kernel import fx
-    return fx.ACTIVE_FX.to_sol_value(cur, amount) if (fx.ACTIVE_FX is not None and cur != "SOL") else float(amount)
+    return fx.ACTIVE_FX.to_sol_value(cur, amount) if (fx.ACTIVE_FX is not None and cur != _hub()) else float(amount)
 
 
 def _convert(kernel: Any, from_cur: str, to_cur: str, amount: int) -> int:
@@ -195,7 +196,7 @@ def build_station(kernel: Any, investor: Any, planet: Any) -> str:
         raise ValueError(f"A station at {planet.name} costs {cost_sol:,} Cr.")
     investor.credits -= cost_sol
     # the region's builders are paid (households of the world; the port's contractors take the rest)
-    local = _convert(kernel, "SOL", planet.currency, cost_sol)
+    local = _convert(kernel, _hub(), planet.currency, cost_sol)
     planet.household_purse += local // 2
     port.treasury += _convert(kernel, planet.currency, port.currency, local - local // 2)
     uses.draw(kernel, planet, hull, "construction")          # its own stores first, then the yards'

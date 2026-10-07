@@ -8,6 +8,7 @@ import hashlib
 from xylarium.config import COMMODITY_CONFIG, EMBARGO_TARIFF_BUY_MULT, EMBARGO_TARIFF_SELL_MULT, get_commodity_stack_multiplier
 from xylarium.kernel import matter
 from xylarium.kernel.models import Port, CommodityType, Captain, ActionResult, ActionType, PortClass
+from xylarium.kernel.fx import hub as _hub
 
 
 _COMM_LOOKUP = {k.upper(): k for k in COMMODITY_CONFIG.keys()}
@@ -207,7 +208,7 @@ class EconomyManager:
 
     @staticmethod
     def liquidity_factor(port: Port) -> float:
-        cur = getattr(port, "currency", "SOL")
+        cur = getattr(port, "currency", _hub())
         base = (STARDOCK_START_TREASURY if port.sector_id == 1 else PORT_START_TREASURY) * PRICE_LEVEL.get(cur, 1.0)
         lo, hi = PORT_LIQUIDITY_BID_RANGE
         ratio = getattr(port, "treasury", base) / max(1.0, base)
@@ -217,7 +218,7 @@ class EconomyManager:
     def regional_factor(port: Port, category: str, landed: bool = False) -> float:
         """Price level of the port's currency x remoteness gradient (manufactures dearer, raw goods cheaper) - a good
         priced at its landed cost carries its distance already (supply.py)."""
-        cur = getattr(port, "currency", "SOL")
+        cur = getattr(port, "currency", _hub())
         from xylarium.kernel import prices
         level = prices.level(cur)             # MV = PY, sticky (prices.py)
         if landed:
@@ -248,7 +249,7 @@ class EconomyManager:
                 "port_sells": port.sells.get(comm, False),
                 "buy_price": buy_price if port.buys.get(comm, False) else None,
                 "sell_price": sell_price if port.sells.get(comm, False) else None,
-                "currency": getattr(port, "currency", "SOL"),
+                "currency": getattr(port, "currency", _hub()),
             }
         return catalog
 
@@ -258,8 +259,8 @@ class EconomyManager:
         Captain buys from the port, paying in the port's currency into the port's treasury.
         A SOL shortfall is converted through the ISSE FX desk automatically.
         """
-        cur = getattr(port, "currency", "SOL")
-        if cur != "SOL" and fx.ACTIVE_FX is not None and amount > 0:
+        cur = getattr(port, "currency", _hub())
+        if cur != _hub() and fx.ACTIVE_FX is not None and amount > 0:
             # Convert enough for the real counter price (reputation friction, xeno surcharges, rounding)
             _, unit = cls.get_unit_prices(port, commodity)
             unit = max(1, int(round(unit * cls.counterparty_factor(captain, port, "buy")))) + 1
@@ -285,7 +286,7 @@ class EconomyManager:
             if bought > 0:
                 from xylarium.kernel import enterprise, ledger
                 enterprise.drawn(ledger.active_kernel(), port, commodity, bought)
-                paid_sol = fx.ACTIVE_FX.to_sol_value(cur, paid) if (fx.ACTIVE_FX and cur != "SOL") else paid
+                paid_sol = fx.ACTIVE_FX.to_sol_value(cur, paid) if (fx.ACTIVE_FX and cur != _hub()) else paid
                 cargo.cost_basis[key] = (units_before * basis_before + paid_sol) / (units_before + bought)
         return res
 
@@ -295,7 +296,7 @@ class EconomyManager:
         Captain sells to the port, which pays in its currency out of its own treasury:
         an illiquid port can only buy what it can afford.
         """
-        cur = getattr(port, "currency", "SOL")
+        cur = getattr(port, "currency", _hub())
         unit, _ = cls.get_unit_prices(port, commodity)
         if unit > 0 and amount > 0 and unit * amount > port.treasury:
             affordable = port.treasury // unit
@@ -317,7 +318,7 @@ class EconomyManager:
             sold = held_before - captain.ship.cargo.held(commodity)
             res.message = cls._in_currency(res.message, cur)
             if basis_sol > 0 and sold > 0:               # profit in the reserve currency, cost and proceeds alike
-                got_sol = fx.ACTIVE_FX.to_sol_value(cur, got) if (fx.ACTIVE_FX and cur != "SOL") else got
+                got_sol = fx.ACTIVE_FX.to_sol_value(cur, got) if (fx.ACTIVE_FX and cur != _hub()) else got
                 profit = got_sol - basis_sol * sold
                 import re
                 res.message = re.sub(r" \[Net Profit: [^\]]*\]",
@@ -328,7 +329,7 @@ class EconomyManager:
     def _in_currency(msg: str, cur: str) -> str:
         """A trade's message in the money it was paid in (the port's), not a generic credit."""
         import re
-        return msg if cur == "SOL" else re.sub(r"(\d) Cr\b", rf"\1 {cur}", msg)
+        return msg if cur == _hub() else re.sub(r"(\d) Cr\b", rf"\1 {cur}", msg)
 
     @staticmethod
     def counterparty_factor(captain: Captain, port: Port, direction: str) -> float:

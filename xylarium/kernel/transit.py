@@ -57,6 +57,7 @@ from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
+from xylarium.kernel.fx import hub as _hub
 
 YEAR_S = 3.156e7                 # seconds in a standard year
 MOUTH_BASE = 9_000_000          # sector ids for mouths beyond the charts: the centre, then the other galaxies' centres
@@ -309,11 +310,11 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
     total = int(toll + tithe)
     if total <= 0 and not paid:
         return
-    amount, money = paid if paid else (total, "SOL")
+    amount, money = paid if paid else (total, _hub())
     if tithe > 0 and amount > 0:                             # the tithe is the progenitors': it goes to the fund
         from xylarium.kernel import endowments, steward_ai   # their realm's stewards keep (endowments.py)
         part = int(amount * tithe / max(1e-9, toll + tithe))
-        sol = part if money == "SOL" else kernel.fx_market.convert(money, "SOL", part)[0]
+        sol = part if money == _hub() else kernel.fx_market.convert(money, _hub(), part)[0]
         endowments.credit(kernel, steward_ai.line_of(kernel, holder) or holder, sol)
         amount -= part
     got, cur = _pay_owner(kernel, holder, amount, money)     # the toll: the payer's own money, exchanged
@@ -330,7 +331,7 @@ def reserves(kernel: Any) -> Dict[str, str]:
         home = spheres._home(kernel, who) if line.get("ancient") else None
         if home is not None:
             out[home.currency] = who
-    return out or {"SOL": "elders"}
+    return out or {_hub(): "elders"}
 
 
 def charge_cr(kernel: Any, a: int, b: int) -> Tuple[Optional[str], float, float]:
@@ -366,16 +367,17 @@ def flow_passage(kernel: Any, payer: Optional[str], a: int, b: int, transits: in
     return (toll + tithe) * transits
 
 
-def _pay_owner(kernel: Any, who: str, amount: int, currency: str = "SOL") -> Tuple[int, str]:
-    """Into the holder's capital world's treasury, in its money."""
+def _pay_owner(kernel: Any, who: str, amount: int, currency: Optional[str] = None) -> Tuple[int, str]:
+    """Into the holder's capital world's treasury, in its money (the exchange's unit where none is named)."""
+    currency = currency or _hub()
     from xylarium.kernel import spheres
     home = spheres._home(kernel, who)
     fx = getattr(kernel, "fx_market", None)
     if home is None:
         from xylarium.kernel import ledger
-        sol = amount if currency == "SOL" or fx is None else fx.convert(currency, "SOL", amount)[0]
+        sol = amount if currency == _hub() or fx is None else fx.convert(currency, _hub(), amount)[0]
         ledger.pay_service(sol, institution="transit")
-        return sol, "SOL"
+        return sol, _hub()
     if home.currency != currency and fx is not None:
         got, _ = fx.convert(currency, home.currency, amount)  # a money no exchange lists yet is listed, or held
         home.treasury += got

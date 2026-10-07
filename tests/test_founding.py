@@ -21,6 +21,7 @@ class TestFounding(unittest.TestCase):
         self.home = next(p for s in self.k.sectors.values() for p in s.planets if p.population > 0)
 
     def test_nothing_exists_before_anyone_founds_it(self):
+        self.assertIsNone(institutions.hub_unit(self.k))                            # no exchange, no unit
         self.assertEqual(_money(self.k), {})
         self.assertEqual(self.k.banking.banks, {})
         self.assertEqual(self.k.fx_market.pools, {})
@@ -40,6 +41,12 @@ class TestFounding(unittest.TestCase):
         pool = self.k.fx_market.pools[cur]
         self.assertEqual(before - p.treasury, pool["local"])                       # a deposit: moved, not made
         self.assertGreater(pool["sol"], 0)                                         # the house's unit, minted against it
+        hub = institutions.hub_unit(self.k)
+        self.assertNotIn(hub, ("SOL", None, cur))                                 # its founders' name, its own unit
+        self.assertEqual(institutions.stats(self.k)["exchange"]["hub"], hub)
+        self.assertGreater(ledger.money_supply(self.k).get(hub, {}).get("total", 0), 0)   # books key on it
+        people = institutions._people_of(self.k, cur)
+        self.assertEqual(hub[0], [ch for ch in people.upper() if "A" <= ch <= "Z"][0])   # named from that people
         self.assertIsNone(institutions.found_reserve(self.k))                       # one bank: no Reserve yet
 
     def test_a_stranger_coin_is_not_taken_up_and_a_saved_founding_reloads_as_it_was(self):
@@ -169,3 +176,14 @@ class TestCoinWeighed(unittest.TestCase):
         self.assertGreater(held, 0)
         self.assertEqual(_money(self.k).get(cur, 0), self.home.treasury)     # its whole supply: the founding issue
         self.assertEqual(matter.totals(self.k), matter0)                     # the backing moved, not made
+
+
+class TestHubIsData(unittest.TestCase):
+    def test_a_save_from_before_the_hub_was_data_loads_as_the_settled_boards_unit(self):
+        from xylarium.kernel.fx import FXMarket, LEGACY_HUB
+        old = FXMarket().to_dict()
+        old.pop("hub")                                                           # written before the hub was data
+        self.assertEqual(FXMarket.from_dict(old).hub, LEGACY_HUB)
+        fresh = FXMarket()
+        fresh.hub = "KRX"
+        self.assertEqual(FXMarket.from_dict(fresh.to_dict()).hub, "KRX")           # and a named one round-trips

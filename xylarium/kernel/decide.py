@@ -18,6 +18,7 @@ import zlib
 from typing import Any, Callable, Dict, List, Optional
 
 from xylarium.kernel import laws
+from xylarium.kernel.fx import hub as _hub
 
 # How far ahead a mind plans: across its own people's generation (the span in which its choices come back to the
 # choosers - fertility.generation_years: its strategy's ceiling, at its substrate's pace), shortened as its
@@ -84,9 +85,10 @@ def rate(kernel: Any, currency: str) -> float:
     return float(getattr(bank, "policy_rate", 0.0) or 0.0) if bank is not None else 0.01
 
 
-def worth(kernel: Any, flow_per_quarter: float, m: Dict[str, float], currency: str = "SOL") -> float:
-    """A flow's present worth to this mind: discounted at its money's rate over its planning horizon."""
-    return laws.present_value(flow_per_quarter, horizon(m), rate(kernel, currency))
+def worth(kernel: Any, flow_per_quarter: float, m: Dict[str, float], currency: Optional[str] = None) -> float:
+    """A flow's present worth to this mind: discounted at its money's rate over its planning horizon (the exchange's
+    unit where no money is named)."""
+    return laws.present_value(flow_per_quarter, horizon(m), rate(kernel, currency or _hub()))
 
 
 def option(name: str, cost: float, value: float, act: Optional[Callable[[], Any]] = None, **data: Any) -> Dict[str, Any]:
@@ -151,8 +153,8 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     # an option that puts cash to work spares it the carrying cost of idle money (prices.carry: inflation less what
     # deposits pay) - over this mind's horizon; under deflation the same term makes waiting worth something
     swing = 1.0 + mood(kernel, holder)                 # what its minds, hearing each other, all feel this season
-    nets = [o["value"] * swing * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", "SOL")), m,
-                                            o.get("currency", "SOL")) if o.get("cash") else 0.0)
+    nets = [o["value"] * swing * steward.weight(kernel, holder, o, len(options)) * lz - o["cost"] + (worth(kernel, o["cash"] * prices.carry(kernel, o.get("currency", _hub())), m,
+                                            o.get("currency", _hub())) if o.get("cash") else 0.0)
             for o, lz in zip(options, lesson)]
     scale = max(abs(n) for n in nets) or 1.0
     from xylarium.kernel import scheduler

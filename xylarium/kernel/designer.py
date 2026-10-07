@@ -38,6 +38,7 @@ body; the people chooses its path.
 
 import math
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 FOUNDERS = 500                  # Franklin (1980) 50/500: the long-term minimum viable population
 
@@ -114,11 +115,11 @@ def build(kernel: Any, holder: Optional[str], asked: Dict[str, float], full: boo
             for a, e in exp.items()}
 
 
-def cost(kernel: Any, holder: Optional[str], got: Dict[str, float], currency: str = "SOL") -> float:
+def cost(kernel: Any, holder: Optional[str], got: Dict[str, float], currency: Optional[str] = None) -> float:
     from xylarium.config import HABITAT_COST, PRICE_LEVEL
     from xylarium.kernel import genome, knowledge
     step = genome.distance(got, {a: 0.0 for a in genome.AXES})
-    level = PRICE_LEVEL.get(currency, 1.0)
+    level = PRICE_LEVEL.get(currency or _hub(), 1.0)
     return HABITAT_COST * level * (step * knowledge.cost_multiplier(kernel, holder, "genome_editing") + 1.0)
 
 
@@ -130,7 +131,7 @@ def preview(kernel: Any, holder: Optional[str], design: Dict[str, Any], planet: 
     got = build(kernel, holder, design.get("genome", {}), design.get("full", False))
     niche = cohabit.niche(planet, metab)
     out = {"genome": got, "foresight": expect(kernel, holder, design.get("genome", {}), design.get("full", False)),
-           "mathematics": round(mathematics(kernel, holder), 3), "niche": niche, "cost": round(cost(kernel, holder, got, getattr(planet, "currency", "SOL"))),
+           "mathematics": round(mathematics(kernel, holder), 3), "niche": niche, "cost": round(cost(kernel, holder, got, getattr(planet, "currency", _hub()))),
            "mastery": round(mastery(kernel, holder) if not design.get("full") else 1.0, 3)}
     saved_genome, saved_civ = planet.society.get("genome"), getattr(planet, "civilization", None)
     planet.society["genome"] = got
@@ -164,7 +165,7 @@ def _leave_vault(planet: Any) -> None:
     """Whatever money the world's last people left in its vaults stays in the ground as a hoard (or, where no ruins
     keep it, is declared lost) - a new people does not inherit it, and it does not vanish."""
     from xylarium.kernel import ledger
-    cur = getattr(planet, "currency", "SOL") or "SOL"
+    cur = getattr(planet, "currency", _hub()) or _hub()
     for attr in ("treasury", "household_purse"):
         held = int(getattr(planet, attr, 0) or 0)
         if not held:

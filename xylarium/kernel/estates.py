@@ -17,6 +17,7 @@ trade).
 """
 
 from typing import Any, Dict, Optional
+from xylarium.kernel.fx import hub as _hub
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -51,7 +52,7 @@ def accrue(kernel: Any, who: str, home: Any, rho: float, years: float) -> int:
     from xylarium.kernel.regimes import FX_FEE
     if rho <= 0 or years <= 0 or home is None or home.population <= 0:
         return 0
-    cur = getattr(home, "currency", "SOL")
+    cur = getattr(home, "currency", _hub())
     b = _board(kernel, cur)
     if b is None:
         return 0

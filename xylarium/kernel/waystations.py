@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from xylarium.config import COMMODITY_CONFIG, PORT_START_TREASURY, PRICE_LEVEL
 from xylarium.kernel import decide
+from xylarium.kernel.fx import hub as _hub
 
 FOUNDER_SHARE = 0.5          # of the treasury's growth beyond its capital paid to the founder each year
 
@@ -49,7 +50,7 @@ def visit_value(kernel: Any) -> float:
             continue
         inc = float(getattr(sec.port, "regional_income", 0.0) or 0.0)
         cur = sec.port.currency
-        inc_sol = kernel.fx_market.to_sol_value(cur, inc) if cur != "SOL" else inc
+        inc_sol = kernel.fx_market.to_sol_value(cur, inc) if cur != _hub() else inc
         vals.append(inc_sol / n)
     vals.sort()
     return vals[len(vals) // 2] if vals else 0.0
@@ -62,7 +63,7 @@ def _founder(kernel: Any, sec: Any) -> Optional[Any]:
               and (p.owner_id is None or getattr(kernel.captains.get(p.owner_id), "is_ai", False))]
     if worlds:
         return max(worlds, key=lambda p: kernel.fx_market.to_sol_value(p.currency, p.treasury)
-                   if p.currency != "SOL" else p.treasury)
+                   if p.currency != _hub() else p.treasury)
     caps = [kernel.captains[c] for c in sec.captains if c in kernel.captains
             and getattr(kernel.captains[c], "is_ai", False) and not kernel.captains[c].faction_id]
     return max(caps, key=lambda c: c.credits) if caps else None
@@ -83,18 +84,18 @@ def found(kernel: Any, sec: Any, founder: Any, capital_sol: float) -> str:
     cur = dock_currency(sec)
     # the founder's capital becomes the dock's working treasury, in the dock's own money (through the exchange)
     if hasattr(founder, "population"):                                       # a world's council
-        own = int(capital_sol * (fxm.rate(founder.currency) if founder.currency != "SOL" else 1.0))
+        own = int(capital_sol * (fxm.rate(founder.currency) if founder.currency != _hub() else 1.0))
         founder.treasury -= own
         if founder.currency == cur:
             local = own
         else:
-            sol = fxm.swap_to_sol(founder.currency, own) if founder.currency != "SOL" else own
-            local = fxm.swap_sol_to(cur, sol) if cur != "SOL" else sol
+            sol = fxm.swap_to_sol(founder.currency, own) if founder.currency != _hub() else own
+            local = fxm.swap_sol_to(cur, sol) if cur != _hub() else sol
         owner = f"planet:{founder.id}"
         who = founder.name
     else:                                                                    # a captain
         founder.credits -= int(capital_sol)
-        local = kernel.fx_market.swap_sol_to(cur, int(capital_sol)) if cur != "SOL" else int(capital_sol)
+        local = kernel.fx_market.swap_sol_to(cur, int(capital_sol)) if cur != _hub() else int(capital_sol)
         owner = f"captain:{founder.id}"
         who = founder.name
     comms = [c for c, cfg in COMMODITY_CONFIG.items() if cfg.get("category") != "WASTE"]
@@ -130,7 +131,7 @@ def _pay_founders(kernel: Any) -> None:
             cap = kernel.captains.get(oid)
             if cap is None:
                 continue
-            if port.currency == "SOL":
+            if port.currency == _hub():
                 cap.credits += pay
             else:
                 fx.credit(cap, port.currency, pay)
@@ -177,9 +178,9 @@ def quarter(kernel: Any) -> List[str]:
             continue
         cur = dock_currency(sec)
         capital = PORT_START_TREASURY * PRICE_LEVEL.get(cur, 1.0) / max(1e-9, kernel.fx_market.rate(cur)
-                                                                      if cur != "SOL" else 1.0) / 3
+                                                                      if cur != _hub() else 1.0) / 3
         afford = (founder.credits if hasattr(founder, "credits") else
-                  (kernel.fx_market.to_sol_value(founder.currency, founder.treasury) if founder.currency != "SOL"
+                  (kernel.fx_market.to_sol_value(founder.currency, founder.treasury) if founder.currency != _hub()
                    else founder.treasury))
         if afford < capital * 2:
             continue

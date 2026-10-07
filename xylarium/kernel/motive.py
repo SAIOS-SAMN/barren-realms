@@ -19,6 +19,7 @@ only chance left in a choice is that misjudgement - never a coin deciding what a
 
 import math
 from typing import Any, Callable, Dict, List, Optional
+from xylarium.kernel.fx import hub as _fx_hub
 
 from xylarium.kernel import decide
 
@@ -35,8 +36,29 @@ def mind(kernel: Any, captain: Any) -> Dict[str, float]:
                       lambda: decide.mind_of_captain(kernel, captain), max_age=25)
 
 
+def account(kernel: Any, captain: Any) -> Optional[str]:
+    """The money a captain reckons in: its home's (the port it was raised at), where the exchange carries it - no mind
+    thinks in a stranger's unit; the exchange's unit only where its home's money has no market."""
+    hub = _fx_hub()
+    sec = kernel.sectors.get(getattr(captain, "home_sector", None))
+    own = getattr(getattr(sec, "port", None), "currency", None) if sec is not None else None
+    fxm = getattr(kernel, "fx_market", None)
+    if own and own != hub and fxm is not None and own in fxm.pools:
+        return own
+    return hub
+
+
 def pick(kernel: Any, captain: Any, options: List[Dict[str, Any]], why: str) -> Optional[Dict[str, Any]]:
-    """The option this captain finds worth most over its cost (its own misjudgement included); None: nothing."""
+    """The option this captain finds worth most over its cost (its own misjudgement included); None: nothing. Options
+    are built in the exchange's unit (the bridge every price crosses); the mind weighs them in its own money of
+    account, each sum carried there through the pools."""
+    own, hub = account(kernel, captain), _fx_hub()
+    if own is not None and own != hub and options:
+        fxm = kernel.fx_market
+        mine = [dict(o, value=fxm.value_in(hub, own, o["value"]), cost=fxm.value_in(hub, own, o["cost"]))
+                for o in options]
+        got = decide.choose(kernel, mine, mind(kernel, captain), "captain", captain.id, why)
+        return next((o for o, m in zip(options, mine) if m is got), None)
     return decide.choose(kernel, options, mind(kernel, captain), "captain", captain.id, why)
 
 

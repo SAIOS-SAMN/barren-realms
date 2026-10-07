@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from xylarium.config import PROCESSES
 from xylarium.kernel import hulls, topology
+from xylarium.kernel.fx import hub as _hub
 
 TRADE_REACH = 3              # jumps within which a sale is worth planning from here
 TOP_TRADES = 3
@@ -20,7 +21,7 @@ TOP_TRADES = 3
 
 def _sol(kernel: Any, cur: str, amount: float) -> float:
     fxm = getattr(kernel, "fx_market", None)
-    return fxm.to_sol_value(cur, amount) if (fxm is not None and cur != "SOL") else float(amount)
+    return fxm.to_sol_value(cur, amount) if (fxm is not None and cur != _hub()) else float(amount)
 
 
 def _op(kind: str, title: str, detail: str, command: str, value: float = 0.0, urgent: bool = False) -> Dict[str, Any]:
@@ -33,7 +34,7 @@ def spendable(kernel: Any, captain: Any, cur: str) -> float:
     """What a captain can spend at a port of `cur`, in SOL: its SOL (which the desk converts on the spot) and what
     it already holds in the port's own money."""
     from xylarium.kernel import fx
-    local = captain.fx_wallet.get(cur, 0) if cur != "SOL" else 0
+    local = captain.fx_wallet.get(cur, 0) if cur != _hub() else 0
     m = fx.ACTIVE_FX or getattr(kernel, "fx_market", None)
     return float(captain.credits) + (m.to_sol_value(cur, local) if (m is not None and local) else 0.0)
 

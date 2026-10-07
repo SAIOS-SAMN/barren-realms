@@ -25,6 +25,7 @@ so if the border falls out of repair, and a well-kept one never does.
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
+from xylarium.kernel.fx import hub as _hub
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -142,7 +143,7 @@ def _pay_yards(kernel: Any, planet: Any, amount: int) -> None:
         port.treasury += got
         return
     from xylarium.kernel import ledger
-    sol = amount if planet.currency == "SOL" or fx is None else fx.convert(planet.currency, "SOL", amount)[0]
+    sol = amount if planet.currency == _hub() or fx is None else fx.convert(planet.currency, _hub(), amount)[0]
     ledger.pay_service(sol, institution="borders")
 
 

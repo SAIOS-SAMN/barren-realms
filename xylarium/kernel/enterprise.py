@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import COMMODITY_CONFIG, COLONY_TAX_PER_CAPITA, HABITAT_COST, PRICE_LEVEL
 from xylarium.kernel import decide, ledger, matter
+from xylarium.kernel.fx import hub as _hub
 
 RECIPES = {c: dict(cfg["recipe"]) for c, cfg in COMMODITY_CONFIG.items() if cfg.get("recipe")}
 WORKERS_PER_BATCH = 50          # hands a batch takes for a quarter
@@ -193,7 +194,7 @@ def operate(kernel: Any, comp: Any, rec: Dict[str, Any]) -> float:
     if comp.treasury > 0 and comp.home_cash < need:
         sol = min(comp.treasury, int(kernel.fx_market.to_sol_value(planet.currency, need - comp.home_cash)) + 1)
         comp.treasury -= sol
-        comp.home_cash += kernel.fx_market.swap_sol_to(planet.currency, sol) if planet.currency != "SOL" else sol
+        comp.home_cash += kernel.fx_market.swap_sol_to(planet.currency, sol) if planet.currency != _hub() else sol
     batches = 0
     LOT = 5
     # make in lots, re-pricing as its own buying and selling move the port: stop when the next lot no longer pays
@@ -265,7 +266,7 @@ def _pay_out(kernel: Any, comp: Any, amount: int, rec: Dict[str, Any]) -> int:
     for cap, n in _holders(kernel, comp):
         share = amount * n // total
         if share > 0:
-            if comp.home_currency == "SOL":
+            if comp.home_currency == _hub():
                 cap.credits += share
             else:
                 fx.credit(cap, comp.home_currency, share)
@@ -453,9 +454,9 @@ def convert(kernel: Any, comp: Any) -> Optional[str]:
         return None
     out, econ = pick
     fxm = kernel.fx_market
-    rate = fxm.rate(planet.currency) if planet.currency != "SOL" else 1.0
+    rate = fxm.rate(planet.currency) if planet.currency != _hub() else 1.0
     have_sol = max(0, comp.treasury) + (fxm.to_sol_value(comp.home_currency, comp.home_cash)
-                                        if (comp.home_currency and comp.home_currency != "SOL") else comp.home_cash)
+                                        if (comp.home_currency and comp.home_currency != _hub()) else comp.home_cash)
     unit = plant_cost(planet, 1)
     batches = min(int(residual_demand(kernel, port, out)), int(have_sol * rate // max(1e-9, 2 * unit)))
     if batches < 1:
@@ -473,7 +474,7 @@ def convert(kernel: Any, comp: Any) -> Optional[str]:
     if comp.treasury > 0:
         sol = comp.treasury
         comp.treasury = 0
-        comp.home_cash += fxm.swap_sol_to(planet.currency, sol) if planet.currency != "SOL" else sol
+        comp.home_cash += fxm.swap_sol_to(planet.currency, sol) if planet.currency != _hub() else sol
     batches = min(batches, int(comp.home_cash // max(1e-9, 2 * unit)))
     if batches < 1:
         return None                                      # the exchange gave less than it hoped: it tries again

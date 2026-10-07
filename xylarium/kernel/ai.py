@@ -23,6 +23,7 @@ from xylarium.kernel.models import (
     CargoHold,
     ActionType,
 )
+from xylarium.kernel.fx import hub as _hub
 
 if TYPE_CHECKING:
     from xylarium.kernel.engine import GameKernel
@@ -141,9 +142,9 @@ class AIManager:
                     stake = int(min(budget, fxm.to_sol_value(a, pool["a"] if a == pool["ca"] else pool["b"]) * frac))
                     if stake < 100:
                         continue
-                    got = fxm.quote_via_sol("SOL", a, stake)                  # SOL -> a (federation exchange)
+                    got = fxm.quote_via_sol(_hub(), a, stake)                  # SOL -> a (federation exchange)
                     got = fxm.quote_cross(a, b, got) or 0                      # a -> b (Galactic ISSE)
-                    back = fxm.quote_via_sol(b, "SOL", got)                    # b -> SOL (federation exchange)
+                    back = fxm.quote_via_sol(b, _hub(), got)                    # b -> SOL (federation exchange)
                     edge = (back - stake) / stake
                     if edge > FINANCIER_ARBITRAGE_MIN_EDGE and (best is None or back - stake > best[0]):
                         best = (back - stake, a, b, stake)

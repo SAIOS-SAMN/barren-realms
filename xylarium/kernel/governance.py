@@ -17,6 +17,7 @@ from xylarium.config import (
     SENATE_EDICT_COOLDOWN,
 )
 from xylarium.kernel.models import ActionResult, ActionType, Captain, Planet
+from xylarium.kernel.fx import hub as _hub
 
 
 class SenateOffice(str, Enum):
@@ -176,7 +177,7 @@ class SenateManager:
         fed = kernel.factions.factions.get("FEDERATION") if (kernel is not None and hasattr(kernel, "factions")) else None
         from xylarium.kernel import institutions
         if fed is not None and genesis and not institutions.founding(kernel):   # a cosmic universe has no Federation yet
-            fed.vault["SOL"] = fed.vault.get("SOL", 0) + self._treasury
+            fed.vault[_hub()] = fed.vault.get(_hub(), 0) + self._treasury
 
     def _fed(self) -> Any:
         k = self.kernel
@@ -185,20 +186,20 @@ class SenateManager:
     @property
     def federal_treasury(self) -> int:
         fed = self._fed()
-        return int(fed.vault.get("SOL", 0)) if fed is not None else self._treasury
+        return int(fed.vault.get(_hub(), 0)) if fed is not None else self._treasury
 
     @federal_treasury.setter
     def federal_treasury(self, value: int) -> None:
         fed = self._fed()
         if fed is not None:
-            fed.vault["SOL"] = int(value)
+            fed.vault[_hub()] = int(value)
         else:
             self._treasury = int(value)
 
     def _pay_planet(self, planet: Any, sol: int) -> None:
         """A SOL payout to a world lands in its own money (cleared through the exchanges)."""
-        cur = getattr(planet, "currency", "SOL")
-        if cur != "SOL" and self.kernel is not None:
+        cur = getattr(planet, "currency", _hub())
+        if cur != _hub() and self.kernel is not None:
             sol = self.kernel.fx_market.swap_sol_to(cur, sol)
         planet.treasury += sol
 

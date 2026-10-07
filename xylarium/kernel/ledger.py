@@ -10,7 +10,8 @@ that the money supply never grows by more than the declared mints.
 """
 
 from collections import Counter
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+from xylarium.kernel.fx import hub as _hub
 
 
 class MoneyLedger:
@@ -18,11 +19,13 @@ class MoneyLedger:
         self.minted: Counter = Counter()   # (source, currency) -> amount
         self.burned: Counter = Counter()
 
-    def mint(self, source: str, amount: int, currency: str = "SOL") -> None:
+    def mint(self, source: str, amount: int, currency: Optional[str] = None) -> None:
+        currency = currency or _hub()
         if amount > 0:
             self.minted[(source, currency)] += int(amount)
 
-    def burn(self, sink: str, amount: int, currency: str = "SOL") -> None:
+    def burn(self, sink: str, amount: int, currency: Optional[str] = None) -> None:
+        currency = currency or _hub()
         if amount > 0:
             self.burned[(sink, currency)] += int(amount)
 
@@ -56,12 +59,12 @@ def set_active(ledger: Optional[MoneyLedger]) -> None:
     ACTIVE_LEDGER = ledger
 
 
-def mint(source: str, amount: int, currency: str = "SOL") -> None:
+def mint(source: str, amount: int, currency: Optional[str] = None) -> None:
     if ACTIVE_LEDGER is not None:
         ACTIVE_LEDGER.mint(source, amount, currency)
 
 
-def burn(sink: str, amount: int, currency: str = "SOL") -> None:
+def burn(sink: str, amount: int, currency: Optional[str] = None) -> None:
     if ACTIVE_LEDGER is not None:
         ACTIVE_LEDGER.burn(sink, amount, currency)
 
@@ -75,45 +78,50 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     Transfers between stocks leave these totals unchanged; changes are mints or burns.
     """
     supply: Dict[str, Dict[str, int]] = {}
+    unheld: List[Tuple[str, int]] = []                       # sums booked to an exchange not yet founded
 
-    def add(cur: str, stock: str, amount: float) -> None:
+    def add(cur: Optional[str], stock: str, amount: float) -> None:
+        if cur is None:                                   # no exchange yet: nothing can be held in its unit
+            if int(amount):
+                unheld.append((stock, int(amount)))
+            return
         bucket = supply.setdefault(cur, {})
         bucket[stock] = bucket.get(stock, 0) + int(amount)
 
     for c in kernel.captains.values():
-        add("SOL", "captains", c.credits)
+        add(_hub(), "captains", c.credits)
         for cur, amt in getattr(c, "fx_wallet", {}).items():
             add(cur, "captains", amt)
     for s in kernel.sectors.values():
         for p in s.planets:
-            add(getattr(p, "currency", "SOL"), "planet_vaults", p.treasury)
+            add(getattr(p, "currency", _hub()), "planet_vaults", p.treasury)
             if getattr(p, "diaspora_escrow", 0):
-                add(getattr(p, "currency", "SOL"), "diaspora_escrow", p.diaspora_escrow)
+                add(getattr(p, "currency", _hub()), "diaspora_escrow", p.diaspora_escrow)
             if getattr(p, "household_purse", 0):
-                add(getattr(p, "currency", "SOL"), "households", p.household_purse)
+                add(getattr(p, "currency", _hub()), "households", p.household_purse)
             owed = (getattr(p, "society", None) or {}).get("tribute_escrow", 0)
             if owed:
-                add(getattr(p, "currency", "SOL"), "tribute_escrow", owed)
+                add(getattr(p, "currency", _hub()), "tribute_escrow", owed)
             ruins = getattr(p, "ruins", None)
             if ruins and ruins.get("hoard"):
-                add(ruins.get("hoard_currency") or "SOL", "buried_hoards", ruins["hoard"])
+                add(ruins.get("hoard_currency") or _hub(), "buried_hoards", ruins["hoard"])
         if s.port is not None:
-            add(getattr(s.port, "currency", "SOL"), "port_treasuries", getattr(s.port, "treasury", 0))
+            add(getattr(s.port, "currency", _hub()), "port_treasuries", getattr(s.port, "treasury", 0))
     mm = kernel.market_manager
     for comp in mm.companies.values():
-        add("SOL", "company_treasuries", getattr(comp, "treasury", 0))
+        add(_hub(), "company_treasuries", getattr(comp, "treasury", 0))
         if getattr(comp, "home_cash", 0):
-            add(comp.home_currency or "SOL", "company_treasuries", comp.home_cash)
+            add(comp.home_currency or _hub(), "company_treasuries", comp.home_cash)
     for c in mm.contracts.values():
         if c.status in ("OPEN", "IN_TRANSIT") and getattr(c, "escrow_amount", 0):
-            add(getattr(c, "currency", "SOL"), "contract_escrow", c.escrow_amount)
+            add(getattr(c, "currency", _hub()), "contract_escrow", c.escrow_amount)
     from xylarium.kernel import tourism
     for ch in (tourism.charters(kernel) if hasattr(kernel, "state") else {}).values():
         if ch["status"] in ("OPEN", "IN_TRANSIT"):
             add(ch["currency"], "contract_escrow", ch["escrow"])
     fed = getattr(kernel, "federal_reserve", None)
     if fed is not None:
-        add("SOL", "federal_reserve", fed.total_holdings)
+        add(_hub(), "federal_reserve", fed.total_holdings)
     fxm = getattr(kernel, "fx_market", None)
     if fxm is not None:
         for cur, amt in fxm.pool_holdings().items():
@@ -126,7 +134,7 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     banking = getattr(kernel, "banking", None)
     if banking is not None:
         for cur, bank in banking.banks.items():
-            if cur != "SOL" and bank.reserves:          # SOL's central bank is the Federal Reserve (counted above)
+            if cur != _hub() and bank.reserves:          # SOL's central bank is the Federal Reserve (counted above)
                 add(cur, "central_banks", bank.reserves)
             for other, amt in getattr(bank, "fx_reserves", {}).items():
                 if amt:
@@ -134,7 +142,7 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
     from xylarium.kernel import endowments
     held = endowments.holdings(kernel)
     if held:
-        add("SOL", "steward_funds", held)
+        add(_hub(), "steward_funds", held)
     factions = getattr(kernel, "factions", None)
     if factions is not None:
         for f in factions.factions.values():
@@ -142,6 +150,9 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
                 add(cur, "faction_vaults", amt)
     for cur, bucket in supply.items():
         bucket["total"] = sum(v for k, v in bucket.items() if k != "total")
+    if unheld:                                             # money in a unit no exchange has issued: a broken book
+        import logging
+        logging.getLogger(__name__).warning("money held before any exchange: %s", unheld[:5])
     return supply
 
 
@@ -151,7 +162,7 @@ def supply_in_sol(kernel: Any, supply: Optional[Dict[str, Dict[str, int]]] = Non
     fxm = getattr(kernel, "fx_market", None)
     total = 0.0
     for cur, bucket in supply.items():
-        total += bucket["total"] if (cur == "SOL" or fxm is None) else fxm.to_sol_value(cur, bucket["total"])
+        total += bucket["total"] if (cur == _hub() or fxm is None) else fxm.to_sol_value(cur, bucket["total"])
     return total
 
 
@@ -202,7 +213,7 @@ def endow_exchange_depth(kernel: Any) -> None:
             burn("exchange_endowment", -d_local, cur)
     d_sol = int(sol_total) - assigned
     if d_sol:
-        (burn if d_sol > 0 else mint)("exchange_endowment", abs(d_sol), "SOL")
+        (burn if d_sol > 0 else mint)("exchange_endowment", abs(d_sol), _hub())
 
 
 class MonetaryPolicy:
@@ -389,7 +400,7 @@ def pay_service(amount_sol: int, sector_id: Optional[int] = None, institution: O
         kernel.federal_reserve.receive(int(amount_sol), "services")
         return
     from xylarium.kernel import fx
-    if port.currency != "SOL" and fx.ACTIVE_FX is not None:
+    if port.currency != _hub() and fx.ACTIVE_FX is not None:
         port.treasury += fx.ACTIVE_FX.swap_sol_to(port.currency, int(amount_sol))
     else:
         port.treasury += int(amount_sol)

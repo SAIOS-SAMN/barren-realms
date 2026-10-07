@@ -22,6 +22,7 @@ stalled dynamo's starved are.
 
 import math
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 ROCKY = ("TERRESTRIAL", "OCEANIC", "VOLCANIC", "ICE", "DESERT", "BARREN")
 MIXING_YEARS = 1.0             # an atmosphere mixes in about a year: at most one e-fold of change a year
@@ -74,7 +75,7 @@ def price(kernel: Any, holder: Optional[str], planet: Any, dt: float) -> float:
     from xylarium.kernel import knowledge, physics
     per_area = HABITAT_COST / float(Fraction(HABITAT_AREA))
     area = float(physics.surface_area(planet))
-    return per_area * area * dt * PRICE_LEVEL.get(getattr(planet, "currency", "SOL"), 1.0) * \
+    return per_area * area * dt * PRICE_LEVEL.get(getattr(planet, "currency", _hub()), 1.0) * \
         knowledge.cost_multiplier(kernel, holder, "terraforming")
 
 

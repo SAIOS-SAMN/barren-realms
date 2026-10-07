@@ -24,6 +24,7 @@ Xylarium law: jurisdictions, presence, a docket, courts - and money that can be 
 import random
 import zlib
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 COURTS = ("FEDERATION", "COMPACT", "IMPERIUM", "ZEALOT")
 NON_COOPERATING = {"VOID"}            # central banks that refuse foreign garnishment (except their own court)
@@ -77,7 +78,7 @@ def file(kernel: Any, kind: str, offender: Any, sector: Any, harm_sol: int, vict
             st["haven"] += 1
         return None
     case = {"id": d["next"], "kind": kind, "offender": offender.id, "court": auth.id,
-            "currency": getattr(auth, "currency", "SOL") or "SOL", "sector": getattr(sector, "id", None),
+            "currency": getattr(auth, "currency", _hub()) or _hub(), "sector": getattr(sector, "id", None),
             "harm_sol": int(harm_sol), "victim": victim or {}, "cycle": kernel.cycle_count, "status": "OPEN",
             "note": note, "recovered_sol": 0}
     d["next"] += 1
@@ -166,13 +167,13 @@ def garnish(kernel: Any, cap: Any, owed_sol: int, court: str, court_currency: st
     """Recall up to ``owed_sol`` (SOL value) from the offender's wallets into SOL held for the court."""
     fxm = kernel.fx_market
     got = 0
-    order = [court_currency] + ["SOL"] + [c for c in cap.fx_wallet if c not in (court_currency, "SOL")]
+    order = [court_currency] + [_hub()] + [c for c in cap.fx_wallet if c not in (court_currency, _hub())]
     for cur in order:
         if got >= owed_sol:
             break
         if cur in NON_COOPERATING and court_currency != cur:
             continue
-        if cur == "SOL":
+        if cur == _hub():
             take = min(max(0, cap.credits), owed_sol - got)
             cap.credits -= take
             got += take
@@ -241,7 +242,7 @@ def _pay(kernel: Any, victim: Dict[str, Any], sol: int) -> bool:
     if kind == "planet":
         p = kernel.get_planet(vid)
         if p is not None:
-            p.treasury += fx.ACTIVE_FX.swap_sol_to(p.currency, sol) if (fx.ACTIVE_FX and p.currency != "SOL") else sol
+            p.treasury += fx.ACTIVE_FX.swap_sol_to(p.currency, sol) if (fx.ACTIVE_FX and p.currency != _hub()) else sol
             return True
     return False
 
@@ -251,9 +252,9 @@ def _pay_court(kernel: Any, court: str, sol: int) -> None:
     if f is None:
         kernel.federal_reserve.receive(sol, "fines")
         return
-    cur = getattr(f, "currency", "SOL") or "SOL"
+    cur = getattr(f, "currency", _hub()) or _hub()
     from xylarium.kernel import fx
-    amount = fx.ACTIVE_FX.swap_sol_to(cur, sol) if (fx.ACTIVE_FX and cur != "SOL") else sol
+    amount = fx.ACTIVE_FX.swap_sol_to(cur, sol) if (fx.ACTIVE_FX and cur != _hub()) else sol
     f.vault[cur] = f.vault.get(cur, 0) + amount
 
 

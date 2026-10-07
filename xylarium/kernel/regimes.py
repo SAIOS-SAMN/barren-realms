@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional
 
 from xylarium.config import COMMODITY_CONFIG, FX_FEE, POLICY_RATE_BASE, RELIEF_LIGHT_THRESHOLD
 from xylarium.kernel import decide, laws, ledger
+from xylarium.kernel.fx import hub as _hub
 
 REGIMES = ("central_bank", "algorithmic", "reserve", "free")
 REVIEW_QUARTERS = 4                 # a governor reviews its regime once a year
@@ -95,7 +96,7 @@ def _value_change(kernel: Any, cur: str, st: Dict[str, Any]) -> float:
     """Log change of the money's SOL value this quarter (SOL against the mean of the others)."""
     fxm = kernel.fx_market
     last = st.setdefault("last_rates", {})
-    if cur == "SOL":
+    if cur == _hub():
         moves = []
         for c in fxm.pools:
             r0, r1 = last.get(c), fxm.rate(c)
@@ -147,7 +148,7 @@ def review(kernel: Any) -> List[str]:
         return logs
     for cur, rec in st["by_currency"].items():
         bank = kernel.banking.banks[cur]
-        if cur != "SOL" and cur not in kernel.fx_market.pools:
+        if cur != _hub() and cur not in kernel.fx_market.pools:
             continue                              # a money with no market cannot be judged by its holders' returns
         m = decide.mind(kernel, "biotic")
         own = growth(rec["returns"])
@@ -173,7 +174,7 @@ def review(kernel: Any) -> List[str]:
             logs.append(adopt(kernel, cur, pick["regime"]))
         # Controls are a governor's character as much as its arithmetic: a governor who weighs its holders'
         # freedom (alignment >= 0) never bars the door; one who doesn't closes it while its money bleeds
-        fleeing = kernel.fx_market.advantage(kernel, cur) < 0 if cur != "SOL" else False
+        fleeing = kernel.fx_market.advantage(kernel, cur) < 0 if cur != _hub() else False
         want = bank.alignment < 0 and fleeing
         if want != rec["controls"]:
             rec["controls"] = want
@@ -277,7 +278,7 @@ def _non_exit_balances(kernel: Any, cur: str, controls: bool) -> float:
             total += max(0, sec.port.treasury)
     if controls:
         for c in kernel.captains.values():
-            total += max(0, c.credits if cur == "SOL" else c.fx_wallet.get(cur, 0))
+            total += max(0, c.credits if cur == _hub() else c.fx_wallet.get(cur, 0))
     return total
 
 
@@ -304,8 +305,8 @@ def _measure_debasement(kernel: Any) -> None:
         if held <= 0:
             continue
         moved = excess * held
-        value = kernel.fx_market.to_sol_value(cur, abs(moved)) if cur != "SOL" else abs(moved)
-        held_sol = kernel.fx_market.to_sol_value(cur, held) if cur != "SOL" else held
+        value = kernel.fx_market.to_sol_value(cur, abs(moved)) if cur != _hub() else abs(moved)
+        held_sol = kernel.fx_market.to_sol_value(cur, held) if cur != _hub() else held
         shift = (alignment.measure(kernel, harmed_sol=value, relative_to=held_sol) if excess > 0
                  else alignment.measure(kernel, helped_sol=value, relative_to=held_sol))
         bank = kernel.banking.banks[cur]
@@ -315,21 +316,21 @@ def _measure_debasement(kernel: Any) -> None:
 
 # ---------------------------------------------------------------------- help between neighbours
 def _sol_of(kernel: Any, bank: Any) -> int:
-    return kernel.federal_reserve.treasury if bank.currency == "SOL" else bank.fx_reserves.get("SOL", 0)
+    return kernel.federal_reserve.treasury if bank.currency == _hub() else bank.fx_reserves.get(_hub(), 0)
 
 
 def _take_sol(kernel: Any, bank: Any, n: int) -> None:
-    if bank.currency == "SOL":
+    if bank.currency == _hub():
         kernel.federal_reserve.treasury -= n
     else:
-        bank.fx_reserves["SOL"] = bank.fx_reserves.get("SOL", 0) - n
+        bank.fx_reserves[_hub()] = bank.fx_reserves.get(_hub(), 0) - n
 
 
 def _give_sol(kernel: Any, bank: Any, n: int) -> None:
-    if bank.currency == "SOL":
+    if bank.currency == _hub():
         kernel.federal_reserve.treasury += n
     else:
-        bank.fx_reserves["SOL"] = bank.fx_reserves.get("SOL", 0) + n
+        bank.fx_reserves[_hub()] = bank.fx_reserves.get(_hub(), 0) + n
 
 
 def distressed(kernel: Any, cur: str) -> bool:
@@ -337,7 +338,7 @@ def distressed(kernel: Any, cur: str) -> bool:
     its slide is real (depreciation beyond what it pays, by more than the rate's own quarterly noise), or its pool
     has thinned to under a quarter of its two-year median depth (trade about to lock up), and it holds no SOL of
     its own to defend with."""
-    if cur == "SOL":
+    if cur == _hub():
         return False
     from xylarium.kernel import liquidity
     bank = kernel.banking.banks[cur]
@@ -368,7 +369,7 @@ def _help(kernel: Any) -> List[str]:
         for hcur, helper in banks.items():
             if hcur == cur or helper.alignment < RELIEF_LIGHT_THRESHOLD:
                 continue
-            spare = _sol_of(kernel, helper) - (kernel.banking.reserve_floor(helper) if hcur == "SOL" else 0)
+            spare = _sol_of(kernel, helper) - (kernel.banking.reserve_floor(helper) if hcur == _hub() else 0)
             give = min(need, max(0, spare) // 2)
             if give <= 0:
                 continue

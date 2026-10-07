@@ -72,7 +72,7 @@ from xylarium.kernel.phylogeny import PHYLOGENY_MANAGER
 from xylarium.kernel.federal import FederalReserve
 from xylarium.kernel import fx as fx_mod
 from xylarium.kernel import ledger as ledger_mod
-from xylarium.kernel.fx import FXMarket
+from xylarium.kernel.fx import FXMarket, hub as _hub
 from xylarium.kernel.ledger import MoneyLedger
 from xylarium.kernel.nullspace import NullSpaceManager
 from xylarium.kernel.archaeology import ArchaeologyManager
@@ -530,7 +530,7 @@ class GameKernel:
             toll = min(captain.credits, int(fibres_mod.cargo_value(captain) * tariff_pct / 100))   # customs: its rate on the goods brought in
             captain.credits -= toll
             from xylarium.kernel.fx import ACTIVE_FX
-            if toll_planet.currency != "SOL" and ACTIVE_FX is not None:
+            if toll_planet.currency != _hub() and ACTIVE_FX is not None:
                 toll_planet.treasury += ACTIVE_FX.swap_sol_to(toll_planet.currency, toll)
             else:
                 toll_planet.treasury += toll
@@ -722,7 +722,7 @@ class GameKernel:
         tax = int(value * TRADE_SALES_TAX)
         if tax <= 0:
             return 0
-        if cur != "SOL" and fx_mod.balance(captain, cur) < tax:
+        if cur != _hub() and fx_mod.balance(captain, cur) < tax:
             self.fx_market.ensure_local(captain, cur, tax)
         tax = min(tax, max(0, fx_mod.balance(captain, cur)))
         if tax <= 0:
@@ -1642,7 +1642,7 @@ class GameKernel:
                 continue
             f = self.factions.factions.get(cap.faction_id or "")
             if f is not None and cap.credits > 0:
-                f.vault["SOL"] = f.vault.get("SOL", 0) + cap.credits
+                f.vault[_hub()] = f.vault.get(_hub(), 0) + cap.credits
             for cur, amt in cap.fx_wallet.items():
                 if f is not None and amt > 0:
                     f.vault[cur] = f.vault.get(cur, 0) + amt
@@ -1740,7 +1740,7 @@ class GameKernel:
             return
         if port is None or sol_amount <= 0:
             return
-        if port.currency != "SOL":
+        if port.currency != _hub():
             port.treasury += self.fx_market.swap_sol_to(port.currency, sol_amount)
         else:
             port.treasury += sol_amount

@@ -36,6 +36,7 @@ SOLVENCY - one test for every listed company, so that no company ends without wa
 """
 
 from typing import Any, Dict, List, Optional, Tuple
+from xylarium.kernel.fx import hub as _hub
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -43,7 +44,7 @@ def stats(kernel: Any) -> Dict[str, Any]:
 
 
 def _sol(kernel: Any, cur: str, amount: float) -> float:
-    return kernel.fx_market.to_sol_value(cur, amount) if cur != "SOL" else float(amount)
+    return kernel.fx_market.to_sol_value(cur, amount) if cur != _hub() else float(amount)
 
 
 def _world(kernel: Any, comp: Any):
@@ -139,11 +140,11 @@ def _distribute(kernel: Any, comp: Any, founder: Optional[Tuple[Any, int]], rec:
         h, s = home * n // total, sol * n // total
         if kind == "world":
             # a people's share comes home to its vault, in its own money
-            who.treasury += h + (kernel.fx_market.swap_sol_to(who.currency, s) if (s > 0 and who.currency != "SOL")
+            who.treasury += h + (kernel.fx_market.swap_sol_to(who.currency, s) if (s > 0 and who.currency != _hub())
                                  else s)
         else:
             if h > 0:
-                if comp.home_currency == "SOL":
+                if comp.home_currency == _hub():
                     who.credits += h
                 else:
                     fx.credit(who, comp.home_currency, h)
@@ -159,7 +160,7 @@ def _distribute(kernel: Any, comp: Any, founder: Optional[Tuple[Any, int]], rec:
         comp.home_cash = 0
     if comp.home_cash > 0:                        # no home of that money left: through the exchange to the Reserve
         comp.treasury += kernel.fx_market.swap_to_sol(comp.home_currency, comp.home_cash) \
-            if comp.home_currency != "SOL" else comp.home_cash
+            if comp.home_currency != _hub() else comp.home_cash
         comp.home_cash = 0
     if comp.treasury > 0:
         kernel.federal_reserve.receive(comp.treasury, "escheat")

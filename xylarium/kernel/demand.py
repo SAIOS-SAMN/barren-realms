@@ -18,6 +18,7 @@ is answered when the goods land.
 """
 
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "demand")
@@ -76,7 +77,7 @@ def _buy_at_port(kernel: Any, planet: Any, comm: str, n: int) -> int:
 
 def _to_sol(kernel: Any, cur: str, amount: float) -> float:
     fx = getattr(kernel, "fx_market", None)
-    return amount if cur == "SOL" or fx is None else fx.to_sol_value(cur, amount)
+    return amount if cur == _hub() or fx is None else fx.to_sol_value(cur, amount)
 
 
 def _pay(kernel: Any, src_cur: str, dst: Any, amount: int, at: Any = None) -> None:

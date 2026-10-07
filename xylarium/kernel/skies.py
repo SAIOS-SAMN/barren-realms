@@ -25,6 +25,7 @@ import math
 from typing import Any, Dict, List, Optional
 
 from xylarium.kernel import interior
+from xylarium.kernel.fx import hub as _hub
 
 MU0 = 4.0e-7 * math.pi
 WIND_PA_1AU = 1.5e-9            # the solar wind's dynamic pressure at 1 AU (measured; ~ a star's light / a^2)
@@ -129,7 +130,7 @@ def _options(kernel: Any, planet: Any) -> List[Dict[str, Any]]:
     # missing one costs its industry
     spare = soc.get("grid_meu", 0) / energy.MILLI > energy.need_eu(planet, kernel)
     per_eu = energy.value_surplus(planet) if spare else energy.value_short(planet)
-    per_eu = fx.to_sol_value(planet.currency, per_eu) if planet.currency != "SOL" else per_eu
+    per_eu = fx.to_sol_value(planet.currency, per_eu) if planet.currency != _hub() else per_eu
     base = biosphere._profile(kernel, planet, None, None, None)["k"]
     m = decide.mind_of_planet(kernel, planet)
     out = []

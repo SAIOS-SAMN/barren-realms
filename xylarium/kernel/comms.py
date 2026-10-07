@@ -33,6 +33,7 @@ own information mastery); caught, it is exposed and sanctioned like any covert o
 """
 
 from typing import Any, Dict, List, Optional, Tuple
+from xylarium.kernel.fx import hub as _hub
 
 POST_HOLDS = 25                  # a relay post is a parked scout-class hull: its holds in EQUIPMENT (config catalog)
 
@@ -343,7 +344,7 @@ def _build_on_lanes(kernel: Any, channel: str, spec: Dict[str, Any], cost: float
                 continue
             goods = spec["goods"]
             sol_port = next((s.port for s in sorted(kernel.sectors.values(), key=lambda s: s.id)
-                             if s.port is not None and s.port.currency == "SOL"
+                             if s.port is not None and s.port.currency == _hub()
                              and all(s.port.stock.get(c, 0) >= n for c, n in goods.items())), None)
             if sol_port is None:
                 break                                             # no port sells its goods: nothing is built
@@ -374,7 +375,7 @@ def upkeep(kernel: Any) -> None:
             post["dark"] = True
             continue
         f["sol"] -= due
-        ledger.burn("relay_upkeep", due, "SOL")
+        ledger.burn("relay_upkeep", due, _hub())
         post["dark"] = False
 
 
@@ -500,7 +501,7 @@ def pay_feeds(kernel: Any) -> None:
         if fee <= 0:
             continue
         home.treasury -= fee
-        sol = exchanges.convert_at(kernel, home.sector_id, home.currency, "SOL", fee)
+        sol = exchanges.convert_at(kernel, home.sector_id, home.currency, _hub(), fee)
         endowments.credit(kernel, f["provider"], sol)
 
 

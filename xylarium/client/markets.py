@@ -19,6 +19,7 @@ switches tabs and hands actions to the console's existing desks.
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from xylarium.client.ansi import bold, c_cyan, c_gold, c_gray, c_green, c_magenta, c_red, c_white
+from xylarium.kernel.fx import hub as _hub
 
 TABS = [("1", "ENERGY"), ("2", "COMMODITIES"), ("3", "ELEMENTALS"), ("4", "EQUITIES"), ("5", "FX")]
 WIDTH = 78
@@ -214,7 +215,7 @@ def _goods(kernel: Any, captain: Any, elemental: bool) -> List[str]:
             if c not in p.stock:
                 continue
             bid, ask = EconomyManager.get_unit_prices(p, c)
-            if p.currency != "SOL":                       # compared across monies in SOL
+            if p.currency != _hub():                       # compared across monies in SOL
                 bid = int(kernel.fx_market.to_sol_value(p.currency, bid))
                 ask = int(kernel.fx_market.to_sol_value(p.currency, ask)) if ask > 0 else 0
             b = best.setdefault(c, (0, 0, 10 ** 9, 0))
@@ -324,7 +325,7 @@ def fx_tab(kernel: Any, captain: Any) -> List[str]:
         rg = regimes.summary(kernel).get("regimes", {})
     except Exception:
         rg = {}
-    for cur in ["SOL", *sorted(fxm.pools)]:
+    for cur in [_hub(), *sorted(fxm.pools)]:
         mstar = pol.current.get(cur)
         bank = kernel.banking.banks.get(cur)
         out.append(_row((cur, -6), (f"{supply.get(cur, 0) / mstar:.2f}" if mstar else "-", 7),
@@ -357,7 +358,7 @@ def fx_tab(kernel: Any, captain: Any) -> List[str]:
         out.append(c_gray(f"    cross {key}: {p['b'] / max(1e-9, p['a']):.3f}"))
     out.append(_band("YOURS"))
     wallet = {c: n for c, n in (captain.fx_wallet or {}).items() if n}
-    out.append(_row(("SOL", -6), (_n(captain.credits), 10)))
+    out.append(_row((_hub(), -6), (_n(captain.credits), 10)))
     for c, n in wallet.items():
         out.append(_row((c, -6), (_n(n), 10), (f"≈ {_n(fxm.to_sol_value(c, n))} SOL", -16)))
     out.append(_band("ACTIONS"))

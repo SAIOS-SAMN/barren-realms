@@ -16,6 +16,7 @@ from typing import Dict, Any, List, Optional, Tuple
 import random
 from xylarium.kernel import matter
 from xylarium.kernel.elements import PeriodicTable, PeriodicElement
+from xylarium.kernel.fx import hub as _hub
 
 # 13 Class Archetype Sigils and Words
 CLASS_ARCHETYPES: Dict[int, Tuple[str, str]] = {
@@ -739,7 +740,7 @@ class CivilizationIntelligenceEngine:
             bonus = max(0, min(500, 500000 - planet.treasury))
             planet.treasury += bonus
             from xylarium.kernel import ledger
-            ledger.mint("colony_tax", bonus, getattr(planet, "currency", "SOL"))
+            ledger.mint("colony_tax", bonus, getattr(planet, "currency", _hub()))
 
     @classmethod
     def next_project(cls, civ: Any, planet: Any, completed: Optional[str] = None) -> str:

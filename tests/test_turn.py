@@ -67,3 +67,28 @@ class TestTraderBooks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOwnMoney(unittest.TestCase):
+    def test_a_mind_weighs_in_its_home_money_and_picks_the_same_thing(self):
+        k = fresh()
+        cap = _trader(k)
+        foreign = next((s.id for s in sorted(k.sectors.values(), key=lambda s: s.id)
+                        if s.port is not None and s.port.currency in k.fx_market.pools), None)
+        if foreign is None:
+            self.skipTest("no port in a pooled money")
+        cap.home_sector = foreign
+        own = motive.account(k, cap)
+        self.assertEqual(own, k.sectors[foreign].port.currency)                  # its home's money, not the hub's
+        seen = []
+        real = decide.choose
+        def spy(kn, opts, m, *a):
+            seen.extend(opts)
+            return max(opts, key=lambda o: o["value"] - o["cost"])
+        opts = [decide.option("small", 10.0, 50.0), decide.option("big", 10.0, 500.0)]
+        with mock.patch("xylarium.kernel.decide.choose", side_effect=spy):
+            got = motive.pick(k, cap, opts, "test")
+        self.assertIs(got, opts[1])                                               # the caller's own option back
+        rate = k.fx_market.rate(own)
+        self.assertAlmostEqual(seen[1]["value"] / 500.0, rate, delta=rate * 0.05)  # carried through the pool
+        self.assertEqual(real, decide.choose)

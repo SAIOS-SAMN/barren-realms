@@ -56,6 +56,7 @@ from xylarium.config import (
     CENTRAL_BANK_RESERVE_CEILING,
     CENTRAL_BANK_OMO_RATE,
 )
+from xylarium.kernel.fx import hub as _hub
 
 FEDERATIONS = {
     "SOL": {"federation": "Terran Federation", "bank": "Federal Reserve of the Terran Federation", "authority": "FEDERATION",
@@ -129,22 +130,22 @@ class BankingSystem:
         from xylarium.config import AUTHORITIES
         rng = random.Random(kernel.seed * 613 + 29)
         for cur, spec in FEDERATIONS.items():
-            if cur != "SOL" and cur not in kernel.fx_market.pools:
+            if cur != _hub() and cur not in kernel.fx_market.pools:
                 continue
             base_align = AUTHORITIES.get(spec["authority"], {}).get("alignment", 0.0)
             bank = CentralBank(
                 currency=cur, name=spec["bank"], federation=spec["federation"], governor=spec["governor"],
                 alignment=round(max(-1.0, min(1.0, base_align + genesis_value(rng) * 0.5)), 3),
-                reserves=0 if cur == "SOL" else int(CENTRAL_BANK_FOUNDING_RESERVES * PRICE_LEVEL.get(cur, 1.0)),
+                reserves=0 if cur == _hub() else int(CENTRAL_BANK_FOUNDING_RESERVES * PRICE_LEVEL.get(cur, 1.0)),
             )
             self.banks[cur] = bank
 
     # ------------------------------------------------------------------ reserves (SOL = the Federal Reserve)
     def reserves(self, kernel: Any, bank: CentralBank) -> int:
-        return kernel.federal_reserve.treasury if bank.currency == "SOL" else bank.reserves
+        return kernel.federal_reserve.treasury if bank.currency == _hub() else bank.reserves
 
     def _adjust(self, kernel: Any, bank: CentralBank, delta: int) -> None:
-        if bank.currency == "SOL":
+        if bank.currency == _hub():
             kernel.federal_reserve.treasury += delta
         else:
             bank.reserves += delta
@@ -158,7 +159,7 @@ class BankingSystem:
         reserves above the floor (pro rata when they fall short): a transfer, nothing minted. This is how a
         bank defends its currency - a high rate pays people to hold it."""
         bank.paid_rate = 0.0                          # a quarter that pays nothing earned nothing
-        if bank.currency == "SOL" or bank.policy_rate <= 0:
+        if bank.currency == _hub() or bank.policy_rate <= 0:
             return
         holders = [(c, c.fx_wallet.get(bank.currency, 0)) for c in kernel.captains.values()
                    if c.fx_wallet.get(bank.currency, 0) > 0]
@@ -255,7 +256,7 @@ class BankingSystem:
         returning trapped liquidity to circulation. A transfer - nothing is minted.
         """
         from xylarium.kernel import regimes
-        if bank.currency == "SOL" or not regimes.spends(kernel, bank.currency):
+        if bank.currency == _hub() or not regimes.spends(kernel, bank.currency):
             return  # the Federal Reserve's treasury also underwrites insurance, bounties and relief
         ceiling = int(supply_total * CENTRAL_BANK_RESERVE_CEILING)
         excess = self.reserves(kernel, bank) - max(ceiling, self.reserve_floor(bank))

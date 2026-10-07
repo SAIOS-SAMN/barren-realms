@@ -40,6 +40,7 @@ around the peoples whose strength reaches furthest.
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.config import COMMODITY_CONFIG, PRICE_LEVEL, SURFACE_TROOP_RECRUIT_COST
+from xylarium.kernel.fx import hub as _hub
 
 
 def _quarter() -> int:
@@ -351,7 +352,7 @@ def _read_fiscal(by: Dict[str, List[Any]]) -> None:
 
 
 def _to_sol(kernel: Any, cur: str, amount: float) -> float:
-    return kernel.fx_market.to_sol_value(cur, amount) if cur != "SOL" else float(amount)
+    return kernel.fx_market.to_sol_value(cur, amount) if cur != _hub() else float(amount)
 
 
 def _set_aside(kernel: Any, worlds: List[Any], tribute_sol: float) -> None:
@@ -360,7 +361,7 @@ def _set_aside(kernel: Any, worlds: List[Any], tribute_sol: float) -> None:
     total = sum(v for _, v in takes)
     for w, v in takes:
         share_sol = tribute_sol * (v / total) if total > 0 else 0.0
-        rate = kernel.fx_market.rate(w.currency) if w.currency != "SOL" else 1.0
+        rate = kernel.fx_market.rate(w.currency) if w.currency != _hub() else 1.0
         w.society["tribute_tick"] = round(share_sol * rate / _quarter(), 3)
 
 

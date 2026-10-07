@@ -23,6 +23,7 @@ The terminal client (xylarium/client/roles.py) and the bridge (REGISTER with a r
 """
 
 from typing import Any, Dict, List, Optional
+from xylarium.kernel.fx import hub as _hub
 
 ROLES: List[Dict[str, str]] = [
     {"key": "progenitor", "name": "Progenitor (T0)", "tier": "T0",
@@ -246,7 +247,7 @@ def realm_purse(kernel: Any, captain: Any, planet: Any):
     cur = planet.currency
     local = int(planet.treasury)
     planet.treasury = 0
-    sol = local if cur == "SOL" or fx.ACTIVE_FX is None else fx.ACTIVE_FX.swap_to_sol(cur, local)
+    sol = local if cur == _hub() or fx.ACTIVE_FX is None else fx.ACTIVE_FX.swap_to_sol(cur, local)
     before = captain.credits
     captain.credits += sol
     try:
@@ -256,7 +257,7 @@ def realm_purse(kernel: Any, captain: Any, planet: Any):
         left = max(0, sol - max(0, spent))
         captain.credits = before - max(0, spent - sol)
         if left > 0:
-            planet.treasury += left if cur == "SOL" or fx.ACTIVE_FX is None else fx.ACTIVE_FX.swap_sol_to(cur, left)
+            planet.treasury += left if cur == _hub() or fx.ACTIVE_FX is None else fx.ACTIVE_FX.swap_sol_to(cur, left)
 
 
 def _inherit(kernel: Any, people: str, ruler: str) -> None:
@@ -289,9 +290,9 @@ def realm(kernel: Any, player_id: str) -> Optional[Dict[str, Any]]:
         w = kernel.get_planet(wid)
         if w is None or w.owner_id != player_id:
             continue
-        cur = getattr(w, "currency", "SOL") or "SOL"
+        cur = getattr(w, "currency", _hub()) or _hub()
         t = int(w.treasury)
-        t_sol = t if cur == "SOL" or fx.ACTIVE_FX is None else int(fx.ACTIVE_FX.to_sol_value(cur, t))
+        t_sol = t if cur == _hub() or fx.ACTIVE_FX is None else int(fx.ACTIVE_FX.to_sol_value(cur, t))
         s = society.stress(kernel, w) if w.civilization is not None else {}
         rows.append({"id": w.id, "name": w.name, "sector": w.sector_id, "population": w.population,
                      "room": int(biosphere.carrying_capacity(kernel, w)),
@@ -377,6 +378,13 @@ start_steward = start_sovereign          # the older name of the sovereign's sea
 # ---------------------------------------------------------------------- progenitor: an ancient
 
 
+def _all_minds(kernel: Any) -> List[Dict[str, Any]]:
+    """Every mind this universe raises, earliest first: the whole schedule (a pure function of the seed), never the
+    sliding window of those about to wake - so who is first, and who is ancient, never drifts as the clock runs."""
+    from xylarium.kernel import cosmos, creation
+    return sorted(creation.schedule(cosmos.cosmos_seed(kernel))["minds"], key=lambda m: float(m["epoch"]))
+
+
 def ancients(kernel: Any) -> List[Dict[str, Any]]:
     """The ancients this universe will raise, by age and by place (cosmos.is_ancient): the minds that wake within one
     core assembly time of the core's first mind, each born in the core (inside the bulge). Their number is
@@ -384,7 +392,7 @@ def ancients(kernel: Any) -> List[Dict[str, Any]]:
     how far out its home lies (its ring of the galaxy)."""
     from xylarium.kernel import cosmos
     out = []
-    minds = sorted(cosmos.stats(kernel)["minds"], key=lambda m: float(m["epoch"]))
+    minds = _all_minds(kernel)
     core = [m for m in minds if cosmos.in_core(m)]
     first = float(core[0]["epoch"]) if core else 0.0       # the core's own first mind
     firsts = [m for m in core if cosmos.is_ancient(kernel, m, first)]
@@ -400,7 +408,7 @@ def first_minds(kernel: Any) -> List[Dict[str, Any]]:
     progenitor's seat sits beside one of them. Its ancients by birth are among them; the others may yet become
     ancients by their deeds (board.ancient_by_deed)."""
     from xylarium.kernel import cosmos
-    minds = sorted(cosmos.stats(kernel)["minds"], key=lambda m: float(m["epoch"]))
+    minds = _all_minds(kernel)
     if not minds:
         return []
     first = float(minds[0]["epoch"])
