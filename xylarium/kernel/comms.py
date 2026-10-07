@@ -140,6 +140,41 @@ def known_to(kernel: Any, captain: Any, sid: int, comm: str) -> Optional[Tuple[i
     return (int(best[2]) if len(best) > 2 else 0), int(best[0]), int(kernel.cycle_count - best[1])
 
 
+def sol(kernel: Any, sid: int, price: float) -> float:
+    """A port's price in SOL at the exchanges' rate (its money's units per SOL)."""
+    port = getattr(kernel.sectors.get(sid), "port", None)
+    cur = getattr(port, "currency", "SOL") if port is not None else "SOL"
+    if cur == "SOL":
+        return float(price)
+    fx = getattr(kernel, "fx_market", None)
+    try:
+        r = float(fx.rate(cur)) if fx is not None else 1.0
+    except Exception:
+        r = 1.0
+    return float(price) / max(1e-9, r)
+
+
+def best_heard_bid(kernel: Any, captain: Any, comm: str, exclude: Optional[int] = None) -> float:
+    """The best price, in SOL, any port the captain has word of pays for a good - live where it stands, elsewhere the
+    freshest it carries or its present port holds (0 if none)."""
+    st = stats(kernel)
+    words: Dict[str, List[int]] = {}
+    for v in (st["carried"].get(f"captain:{captain.id}", {}), st["views"].get(str(captain.sector_id), {})):
+        for k, e in v.items():
+            if k.endswith(f"|{comm}") and (k not in words or words[k][1] < e[1]):
+                words[k] = e
+    best = 0.0
+    for k, e in words.items():
+        sid = int(k.split("|", 1)[0])
+        if sid == exclude or len(e) < 3 or e[2] <= 0:
+            continue
+        best = max(best, sol(kernel, sid, e[2]))
+    here = known_to(kernel, captain, captain.sector_id, comm) if captain.sector_id != exclude else None
+    if here is not None and here[0] > 0:
+        best = max(best, sol(kernel, captain.sector_id, here[0]))
+    return best
+
+
 def plan(kernel: Any, captain: Any, sid: int, expected: float, age: int) -> None:
     """A trader sets out on word: what it expects there, and how old that word is (measured on arrival)."""
     stats(kernel).setdefault("plans", {})[str(captain.id)] = {"to": int(sid), "expected": round(expected, 4),

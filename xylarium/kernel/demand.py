@@ -126,6 +126,10 @@ def _bring(kernel: Any, buyer: Any, sector: Any, comm: str, n: int, payer: Optio
         answered(buyer, comm, q)
     st = stats(kernel)
     st["carried"][comm] = st["carried"].get(comm, 0) + q
+    from xylarium.kernel import comms                      # rumour: the goods land with their source's word, and the
+    comms.land(kernel, sector.id, comms.own(kernel, src.id))    # carriers sail home with what they heard here
+    if getattr(sector, "port", None) is not None:
+        comms.land(kernel, src.id, comms.view(kernel, sector.id))
     return q
 
 

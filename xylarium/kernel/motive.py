@@ -131,23 +131,28 @@ def prospects(kernel: Any, captain: Any, sid: int, calling: str) -> float:
         port = sec.port
         if port is None:
             return 0.0
+        # route arbitrage on heard word, in SOL: what the goods aboard fetch there over what they fetch where it
+        # stands, and what it can buy there against the best any port it has word of pays - spreads between places,
+        # never a catalogue price
         from xylarium.kernel import comms
         cargo = captain.ship.cargo
         here = captain.sector_id == sid
         v = 0.0
         for comm in ("ORE", "ORGANICS", "EQUIPMENT"):
-            base = COMMODITY_CONFIG[comm]["base_price"]
             word = comms.known_to(kernel, captain, sid, comm)       # live where it stands; elsewhere, what it heard
             if word is None:
-                continue                                            # an unheard port holds no prospect
+                continue                                            # an unheard port is weighed by destination's prior
             buy_p, sell_p, _ = word
             held = getattr(cargo, comm.lower(), 0)
             if held and port.buys.get(comm, False) and buy_p > 0:
-                v += held * max(0.0, buy_p - base)                 # selling above what it is worth elsewhere
+                stands = comms.known_to(kernel, captain, captain.sector_id, comm)
+                here_bid = comms.sol(kernel, captain.sector_id, stands[0]) if stands and stands[0] > 0 else 0.0
+                v += held * max(0.0, comms.sol(kernel, sid, buy_p) - here_bid)
             if port.sells.get(comm, False) and sell_p > 0:
                 stock = port.stock.get(comm, 0) if here else cargo.available_space   # far stock is not known
                 room = min(cargo.available_space, stock)
-                v += room * max(0.0, base - sell_p)                # buying below
+                v += room * max(0.0, comms.best_heard_bid(kernel, captain, comm, exclude=sid)
+                                - comms.sol(kernel, sid, sell_p))
         return v
     if calling == "industrialist":
         v = 0.0

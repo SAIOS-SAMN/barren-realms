@@ -768,7 +768,9 @@ class AIManager:
                 for comm in ["ORE", "ORGANICS", "EQUIPMENT"]:
                     if port.sells.get(comm, False) and port.stock.get(comm, 0) > 20:
                         _, sell_p = EconomyManager.get_unit_prices(port, comm)
-                        if sell_p <= COMMODITY_CONFIG[comm]["base_price"] * 1.1:
+                        from xylarium.kernel import comms             # bought where it is cheap against where it is
+                        if comms.best_heard_bid(kernel, captain, comm, exclude=sector.id) > \
+                                comms.sol(kernel, sector.id, sell_p):   # heard dear (a spread, not a catalogue price)
                             disposable_cr = int(motive.surplus(kernel, captain))
                             buy_amt = min(captain.ship.cargo.available_space, disposable_cr // sell_p, 25)
                             if buy_amt > 0:
