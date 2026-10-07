@@ -227,3 +227,32 @@ class TestSettlingTheLiving(unittest.TestCase):
         k = _galaxy({1: (8.0, 0.0)})
         with mock.patch.object(settling, "living", return_value=(0.0, 0.0)):
             self.assertEqual(settling.policy(k, "civ:A", SimpleNamespace(), "biotic", "OCEANIC")["policy"], "displace")
+
+
+class TestFront(unittest.TestCase):
+    """The front is a Fisher-KPP wave from a people's own numbers: v = 2 sqrt(r D), D = s hop^2 / (6 T)."""
+
+    def _v(self, r_per_year, hop=0.0015, gens_per_gyr=3e7, reach=None):
+        from fractions import Fraction
+        import xylarium.kernel.biosphere as bio
+        import xylarium.kernel.clocks as clocks
+        with mock.patch.object(bio, "growth_rate", return_value=Fraction(r_per_year).limit_denominator(10 ** 9)), \
+                mock.patch.object(clocks, "lapse", return_value=1.0), \
+                mock.patch.object(settling, "cohort_reach", return_value=reach):
+            return settling.front_speed(None, SimpleNamespace(sector_id=1), hop, gens_per_gyr)
+
+    def test_the_wave_goes_as_the_root_of_growth(self):
+        self.assertAlmostEqual(self._v(4e-4) / self._v(1e-4), 2.0, places=6)
+
+    def test_the_law(self):
+        from xylarium.config import DAUGHTER_EMIGRANT_SHARE
+        r, hop, gpg = 1e-4 * 1e9, 0.0015, 3e7
+        want = 2.0 * math.sqrt(r * DAUGHTER_EMIGRANT_SHARE * hop * hop * gpg / 6.0)
+        self.assertAlmostEqual(self._v(1e-4, hop, gpg), want, delta=want * 1e-6)
+
+    def test_a_short_drive_shortens_the_step(self):
+        self.assertLess(self._v(1e-4, reach=0.0005), self._v(1e-4))
+
+    def test_no_front_outruns_light_and_none_grows_without_increase(self):
+        self.assertLessEqual(self._v(10.0, hop=1.0), settling.C_KPC_PER_GYR)
+        self.assertEqual(self._v(0.0), 0.0)

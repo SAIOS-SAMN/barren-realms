@@ -2,20 +2,17 @@
 Xylarium settling: a crossed people's dominion is the systems it has settled - a bubble around its home that grows
 only as fast as its people can fill a world and send the next party, and stops where it meets another's.
 
-How fast. A people at its full natural increase grows e-fold a generation (fertility.generation_years). A party lands
-a tenth of its parent world (between DAUGHTER_EMIGRANTS_MIN and _MAX: demography, as daughters are founded live) and
-must grow to the world's carrying capacity K before that world can send its own; so each world it holds settles
-another every ln(K / N0) generations:
+How fast. Its front is a travelling wave (Fisher-KPP), set by its own numbers (front_speed): it multiplies at its
+intrinsic rate r (biosphere.growth_rate: what a small colony's land lets it add), and each generation its emigrant
+share s (DAUGHTER_EMIGRANT_SHARE) moves one step - a hop to the nearest system it can live on, (n s')^(-1/3) (n the
+systems per pc^3 where it began, s' the share of systems with a world its metabolism can live on), never further than
+its drive carries a cohort (cohort_reach). That random walk spreads it as D = s hop^2 / (6 T) (Newman & Sagan 1981),
+and the front runs at
 
-    g = 1 / ln(K / N0)  per generation
+    v = 2 sqrt(r D),   R(t) = hop + v (t - t0)
 
-A passage costs E_BRIDGE (mastery.py) - some hundred a generation from a modest grid - so for a people that has
-crossed, its people, not its power, sets the pace. Each settlement is a hop to the nearest system it can live on,
-(n s)^(-1/3) (n the systems per pc^3 where it began, s the share of systems with a world its metabolism can live on:
-universe.habitability, until the board's yield-over-erasure replaces it), so its front moves a hop each time a
-frontier world settles:
-
-    R(t) = hop + hop g (t - t0)
+no faster than its ships (a crossed people's fold: light's speed). Two peoples of different biology and drives make
+different fronts; none is tuned.
 
 What it holds. The systems within R (the disc over galactocentric rings, each column no deeper than the disc; the bulge and
 nuclear cluster over shells about the centre, the share of each inside the ball) - times s. Never more than the galaxy holds.
@@ -343,11 +340,51 @@ def begin(kernel: Any, who: str, home: Any, t0: float, gen_years: float) -> Dict
                               "g": settle_rate(kernel, home) * gens_per_gyr, "rmax": r0 + cosmos.R_MAX_KPC,
                               "cuts": {}, "enclosed": None, "fell": None, "band": band(kernel, home)}
     b.update(policy(kernel, who, home, metab, home.planet_type))
-    b["v"] = b["hop"] * b["g"]                                 # kpc per Gyr
+    b["v"] = front_speed(kernel, home, hop, gens_per_gyr)       # kpc per Gyr
     sec = kernel.sectors.get(home.sector_id)                   # the worlds of its own system it can live on: what
     b["home_worlds"] = max(1, sum(1 for p in (sec.planets if sec is not None else [])   # no neighbour takes from it
                                   if lives_on(metab, home.planet_type, p.planet_type)))
     return b
+
+
+C_KPC_PER_GYR = 1e9 / 3261.56          # light's speed: a kiloparsec in 3,261.56 years (signals.LY_PER_KPC)
+
+
+def cohort_reach(kernel: Any, home: Any) -> Optional[float]:
+    """How far one settler cohort's drive carries it on a bunker (kpc): the jumps a laden hauler's bunker holds
+    (propulsion: bunker over burn, the same range per hold for every cell) x the galaxy's mean lane. None where the
+    galaxy has no charted lanes."""
+    import math as _m
+    from xylarium.config import FUEL_CELLS, SHIP_CATALOG
+    from xylarium.kernel import propulsion, transit
+    from xylarium.kernel.propulsion import BURN_MASS_PER_UNIT
+    lane = transit._mean_lane_kpc(kernel)
+    if not lane:
+        return None
+    holds = max(int(s.get("holds", 30)) for s in SHIP_CATALOG.values())      # its biggest hauler, laden
+    drive = FUEL_CELLS.get(propulsion.world_fuel(kernel, home), FUEL_CELLS["H"])
+    v_e = drive.get("v_e")
+    if not v_e:                                                               # no reaction mass: its core's life
+        return lane * float(drive.get("core_life", 1))
+    jumps = (holds / v_e) / max(1, _m.ceil((1 + 2 * holds // BURN_MASS_PER_UNIT) / v_e))
+    return lane * jumps
+
+
+def front_speed(kernel: Any, home: Any, hop: float, gens_per_gyr: float) -> float:
+    """How fast its settled front advances (kpc per coordinate Gyr): a Fisher-KPP wave, v = 2 sqrt(r D), from the
+    people's own numbers - nothing tuned. r its intrinsic increase (biosphere.growth_rate: the rate a small colony
+    multiplies at, before its land fills); D its dispersal, a random walk of its emigrants (Newman & Sagan 1981): each
+    generation its emigrant share moves one step - to the nearest system it can live on, as far as its drive
+    carries a cohort (cohort_reach) - D = s l^2 / (6 T). Never faster than its ships: a crossed people's fold is a
+    null flow, so light's speed. (Light also bounds who can be told where to go: no front outruns its own news.)"""
+    from xylarium.config import DAUGHTER_EMIGRANT_SHARE
+    from xylarium.kernel import biosphere, clocks
+    lapse = clocks.lapse(kernel, home.sector_id)
+    r = float(biosphere.growth_rate(kernel, home)) * 1e9 * lapse              # per coordinate Gyr
+    reach = cohort_reach(kernel, home)
+    step = min(hop, reach) if reach else hop
+    d = DAUGHTER_EMIGRANT_SHARE * step * step * gens_per_gyr / 6.0            # kpc^2 per Gyr
+    return min(C_KPC_PER_GYR, 2.0 * math.sqrt(max(0.0, r) * d))
 
 
 def alive(b: Dict[str, Any], t: float) -> bool:
