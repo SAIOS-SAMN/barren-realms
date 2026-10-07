@@ -183,6 +183,10 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
     rec["value"] += sol
     rec["tolls"] += route
     rec["stale"] = rec.get("stale", 0.0) + q * stale
+    if stale > 0:                                             # what old word cost this buyer on this port's goods
+        key = f"{buyer['people']}|{sw.sector_id}"
+        sb = stats(kernel).setdefault("stale_by", {})
+        sb[key] = round(sb.get(key, 0.0) + q * stale, 6)
     rec["risk"] = rec.get("risk", 0.0) + q * risk
     rec["units"][comm] = rec["units"].get(comm, 0) + q
     side = rec["flows"].setdefault(f"{seller['id']}>{buyer['id']}", {"value": 0.0, "food": 0, "earned": 0})

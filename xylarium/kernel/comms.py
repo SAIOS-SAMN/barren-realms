@@ -21,6 +21,15 @@ its port. A port always knows its own prices as they stand. Everything else arri
 
 A view's age is what a trader pays for acting on it (news.age_cost); a far port heard of by nothing is not heard at
 all - and goods not priced are not bought.
+
+Information is a market. A line whose network carries a port's word may SELL a FEED of it to a sovereign people
+beyond its standard: each relay cycle the port's word, as the network holds it, reaches the buyer's home system. The
+buyer weighs it against what old word cost it on that port's goods last year (commerce's stale_by); the fee is the
+network's upkeep shared among its feeds (cost, no margin), paid each quarter through the exchanges into the line's
+fund - a transfer, never a mint. No goods move: information is not matter, and it is never faster than its channel.
+A line that withholds its word from a buyer (one it sanctions, is at war with, or holds at home) may still be TAPPED:
+the buyer weighs the same feed plus what being caught would cost it (covert.py's watch: the line's eyes against its
+own information mastery); caught, it is exposed and sanctioned like any covert operation.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -345,12 +354,129 @@ def season(kernel: Any) -> List[str]:
     posts."""
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
     upkeep(kernel)
+    pay_feeds(kernel)
     if stats(kernel)["posts"]:
         for tick in range(FISCAL_QUARTER_CYCLES):
             relay(kernel, tick)
+            deliver(kernel)
     if (kernel.cycle_count // FISCAL_QUARTER_CYCLES) % 4:
         return []
-    return build(kernel)
+    return build(kernel) + subscribe(kernel)
+
+
+# ---------------------------------------------------------------------- feeds (information is a market)
+def _net_has(kernel: Any, line: str, port_sid: int) -> bool:
+    """Does a line's live network carry word of this port?"""
+    for v in stats(kernel)["nets"].get(line, {}).values():
+        if any(k.startswith(f"{port_sid}|") for k in v):
+            return True
+    return False
+
+
+def _withholds(kernel: Any, line: str, buyer: str) -> bool:
+    """A line keeps its word from a people it sanctions, is at war with, or holds at home."""
+    from xylarium.kernel import ascendance, covert
+    if ascendance.ruling(kernel, buyer) in ("quarantine", "pending"):
+        return True
+    try:
+        if covert.sanctioned(kernel, buyer, line):
+            return True
+    except Exception:
+        pass
+    wars = (getattr(kernel, "state", {}).get("realmwars") or {}).get("wars") or {}
+    return any(w.get("status") == "open" and {line, buyer} <= {w.get("by"), w.get("sender"), w.get("taker")}
+               for w in wars.values())
+
+
+def _upkeep_of(kernel: Any, line: str) -> float:
+    from fractions import Fraction
+    return float(sum(Fraction(p["upkeep"]) for p in stats(kernel)["posts"].values()
+                     if p["keeper"] == line and not p.get("dark")))
+
+
+def subscribe(kernel: Any) -> List[str]:
+    """Once a year, each sovereign people weighs a feed of each port whose old word cost it last year, from a line whose
+    network carries that port's word - openly where the line deals with it, covertly where it does not."""
+    from fractions import Fraction
+    from xylarium.kernel import commerce, covert, decide, polity, spheres
+    st = stats(kernel)
+    logs: List[str] = []
+    stale_by = commerce.stats(kernel).get("stale_by", {}) if "commerce" in kernel.state else {}
+    if not stale_by or not st["posts"]:
+        return logs
+    lines = sorted({p["keeper"] for p in st["posts"].values() if not p.get("dark")})
+    taken = {(f["buyer"], f["port"]) for f in st["feeds"].values()}
+    people = {r["people"] for r in polity.sovereigns(kernel).values() if not r.get("ended")}
+    for key, cost_year in sorted(stale_by.items()):
+        buyer, port_sid = key.split("|")[0], int(key.split("|")[1])
+        if buyer not in people or (buyer, port_sid) in taken:
+            continue
+        home = spheres._home(kernel, buyer)
+        if home is None:
+            continue
+        for line in lines:
+            if line == buyer or not _net_has(kernel, line, port_sid):
+                continue
+            n_feeds = sum(1 for f in st["feeds"].values() if f["provider"] == line)
+            fee = _upkeep_of(kernel, line) / (1 + n_feeds)
+            m = decide.mind_of_planet(kernel, home)
+            value = decide.worth(kernel, cost_year / 4.0, m)
+            covertly = _withholds(kernel, line, buyer)
+            risk = 0.0
+            if covertly:
+                p = covert.catch(kernel, buyer, [line])
+                risk = p * covert._exposure(kernel, buyer, None)
+            if decide.choose(kernel, [decide.option("tap" if covertly else "feed",
+                                                    decide.worth(kernel, fee, m) + risk, value)],
+                             m, buyer, line, port_sid, "feed") is None:
+                continue
+            fid = f"{buyer}>{port_sid}@{line}"
+            st["feeds"][fid] = {"buyer": buyer, "at": home.sector_id, "provider": line, "port": port_sid,
+                                "fee": str(Fraction(fee)), "since": kernel.cycle_count, "covert": covertly}
+            if covertly and covert._caught(kernel, covert.catch(kernel, buyer, [line]), buyer, line, "tap"):
+                covert._expose(kernel, buyer, line, line, "tap", cost_year, None, logs)
+                st["feeds"].pop(fid, None)
+                break
+            logs.append(f"[COMMS] The {buyer.split(':', 1)[-1]} {'tap' if covertly else 'buy'} the word of port "
+                        f"{port_sid} from the {line.split(':', 1)[-1]}'s network.")
+            break
+    return logs
+
+
+def pay_feeds(kernel: Any) -> None:
+    """Each quarter every open feed's fee passes from the buyer's home treasury, through the exchanges, into the
+    provider's fund (a transfer); a tap pays nothing to its victim (its cost was the risk); a feed unpaid lapses."""
+    from fractions import Fraction
+    from xylarium.kernel import endowments, exchanges, spheres
+    st = stats(kernel)
+    for fid, f in sorted(st["feeds"].items()):
+        if f["covert"]:
+            continue
+        home = spheres._home(kernel, f["buyer"])
+        fee = int(Fraction(f["fee"]))
+        if home is None or home.treasury < fee:
+            st["feeds"].pop(fid, None)
+            continue
+        if fee <= 0:
+            continue
+        home.treasury -= fee
+        sol = exchanges.convert_at(kernel, home.sector_id, home.currency, "SOL", fee)
+        endowments.credit(kernel, f["provider"], sol)
+
+
+def deliver(kernel: Any) -> int:
+    """A relay cycle's feeds: the port's word, as the provider's network holds it, into the buyer's home view."""
+    st = stats(kernel)
+    n = 0
+    for f in st["feeds"].values():
+        net = st["nets"].get(f["provider"], {})
+        word = {}
+        for v in net.values():
+            word.update({k: e for k, e in v.items() if k.startswith(f"{f['port']}|")
+                         and (k not in word or word[k][1] < e[1])})
+        if word:
+            n += merge(st["views"].setdefault(str(f["at"]), {}), word)
+    return n
 
 
 def market_readout(kernel: Any) -> Dict[str, Any]:
@@ -370,7 +496,9 @@ def market_readout(kernel: Any) -> Dict[str, Any]:
     return {"spread": spreads, "trips": t["n"], "expected_mean": round(t["expected"] / n, 2),
             "found_mean": round(t["found"] / n, 2), "gap_mean": round((t["expected"] - t["found"]) / n, 2),
             "word_age_mean_cycles": round(t["age"] / n, 2),
-            "posts": sum(1 for p in stats(kernel)["posts"].values() if not p.get("dark"))}
+            "posts": sum(1 for p in stats(kernel)["posts"].values() if not p.get("dark")),
+            "feeds": sum(1 for f in stats(kernel).get("feeds", {}).values() if not f["covert"]),
+            "taps": sum(1 for f in stats(kernel).get("feeds", {}).values() if f["covert"])}
 
 
 def summary(kernel: Any) -> Dict[str, Any]:
@@ -383,5 +511,6 @@ def summary(kernel: Any) -> Dict[str, Any]:
 from xylarium.kernel import state  # noqa: E402
 from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
 
-register_subsystem(Subsystem(name="comms", state=lambda: {"views": {}, "carried": {}, "posts": {}, "nets": {}},
+register_subsystem(Subsystem(name="comms", state=lambda: {"views": {}, "carried": {}, "posts": {}, "nets": {},
+                                                          "feeds": {}},
                              season=season, summary=summary))

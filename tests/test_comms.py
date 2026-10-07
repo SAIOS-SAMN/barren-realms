@@ -103,3 +103,55 @@ class TestChannelsAreData(unittest.TestCase):
                 self.assertFalse(any(key.startswith(f"{a}|")
                                      for key in comms.stats(k)["views"].get(str(b), {})))
             self.assertGreater(comms.post_cost_sol(k, "slow"), 0)
+
+
+class TestFeeds(unittest.TestCase):
+    """Information is a market: a feed is paid as a transfer and delivers the network's word; a withheld feed may be
+    tapped at the risk of the watch."""
+
+    def setUp(self):
+        from xylarium.kernel import commerce, spheres
+        self.k = fresh()
+        self.a, self.b = _ports(self.k)[:2]
+        self.home = next(p for p in self.k.sectors[self.b].planets) if self.k.sectors[self.b].planets else None
+        if self.home is None:
+            self.skipTest("no world at the buyer's port")
+        self.home.treasury = 10 ** 6
+        comms.stats(self.k)["posts"][f"relays:{comms._lane(self.a, self.b)}"] = {
+            "keeper": "civ:Line", "channel": "relays", "goods": {"EQUIPMENT": comms.POST_HOLDS}, "upkeep": "40",
+            "dark": False}
+        comms.stats(self.k)["nets"]["civ:Line"] = {str(self.a): comms.own(self.k, self.a)}
+        commerce.stats(self.k).setdefault("stale_by", {})[f"civ:Buyer|{self.a}"] = 10 ** 6
+        self.patch = [mock.patch.object(spheres, "_home", side_effect=lambda k, who: self.home),
+                      mock.patch("xylarium.kernel.polity.sovereigns",
+                                 return_value={"s": {"people": "civ:Buyer", "id": "s"}})]
+        for p in self.patch:
+            p.start()
+
+    def tearDown(self):
+        for p in getattr(self, "patch", []):
+            p.stop()
+
+    def _accept(self):
+        return mock.patch("xylarium.kernel.decide.choose", side_effect=lambda k, opts, m, *s: opts[0])
+
+    def test_a_feed_is_bought_paid_as_a_transfer_and_delivers_word(self):
+        with self._accept(), mock.patch.object(comms, "_withholds", return_value=False):
+            comms.subscribe(self.k)
+        feed = next(iter(comms.stats(self.k)["feeds"].values()))
+        self.assertFalse(feed["covert"])
+        before = {c: b["total"] for c, b in ledger.money_supply(self.k).items()}
+        comms.pay_feeds(self.k)
+        self.assertEqual({c: b["total"] for c, b in ledger.money_supply(self.k).items()}, before)   # a transfer
+        self.assertGreater(endowments.stats(self.k)["funds"]["civ:Line"]["sol"], 0)
+        comms.deliver(self.k)
+        self.assertTrue(any(key.startswith(f"{self.a}|") for key in comms.stats(self.k)["views"][str(self.home.sector_id)]))
+
+    def test_a_withheld_feed_is_tapped_and_the_watch_may_catch_it(self):
+        from xylarium.kernel import covert
+        with self._accept(), mock.patch.object(comms, "_withholds", return_value=True), \
+                mock.patch.object(covert, "_caught", return_value=True), \
+                mock.patch.object(covert, "_expose") as exposed:
+            comms.subscribe(self.k)
+        self.assertTrue(exposed.called)
+        self.assertEqual(comms.stats(self.k)["feeds"], {})
