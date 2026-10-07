@@ -129,6 +129,10 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
             for other, amt in getattr(bank, "fx_reserves", {}).items():
                 if amt:
                     add(other, "central_banks", amt)
+    from xylarium.kernel import endowments
+    held = endowments.holdings(kernel)
+    if held:
+        add("SOL", "steward_funds", held)
     factions = getattr(kernel, "factions", None)
     if factions is not None:
         for f in factions.factions.values():

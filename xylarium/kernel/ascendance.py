@@ -302,6 +302,11 @@ def rule(kernel: Any, who: str, verdict: str, by: str, logs: Optional[List[str]]
         return {"ok": False, "why": "no such petition, or no such ruling"}
     old = rec["ruling"]
     rec.update(ruling=verdict, ruled=kernel.cycle_count, by=by)
+    if verdict == "ascended" and old != "ascended":
+        from xylarium.kernel import endowments
+        got = endowments.release(kernel, who)                 # its steward's escrow, at its home
+        if got and logs is not None:
+            logs.append(got)
     rec["rulings"] += 1
     _interdict(kernel, who, rec, logs)
     name, realm = who.split(":", 1)[-1], stewardship.realm_name(rec["realm"])

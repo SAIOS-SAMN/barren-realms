@@ -624,7 +624,7 @@ def exposure(slot: Dict[str, Any]) -> float:
 def chemistries(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Each chemistry the world's physics allows that can copy itself at all (life.ladder): its best medium's ladder
     to a mind, the chance it is never sterilised, when its window ends (its star's death; never, for a sea in the
-    dark), and its rate of life-ending impacts - all from the world, its star and its place in the galaxy."""
+    dark), and its rate of life-ending impacts - each relative to the background the lineage adapted to (below)."""
     from xylarium.kernel import life
     cosmos = _disc()
     bb = big_bang(seed)
@@ -637,7 +637,6 @@ def chemistries(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[
     # a lit world's window closes as its star leaves the main sequence: the giant branch's swelling light boils its
     # seas (cosmos.AGEING_SHARE - the same branch the game's stars climb)
     star_end = slot["born"] + lifetime(slot, L) * (1.0 - cosmos.AGEING_SHARE)
-    crowd = cosmos.density(slot["r"]) * bb["stars"] * exposure(slot)
     area = area_m2(world)
     out = []
     for region in sorted(by):
@@ -648,9 +647,15 @@ def chemistries(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[
         dark = m["where"] in ("under_ice", "deep")
         end = float("inf") if dark else star_end         # a dark sea runs on its world's heat, not its star
         window = min(HORIZON_GYR, end) - slot["born"]
-        hazard = life.STERILISE_AT_R0 * crowd * window / 10.0 * (0.5 if dark else 1.0)
+        # what erases a lineage is a disturbance beyond what it has adapted to, not a dose fixed by our own tolerance.
+        # Supernova pulses and impacts both come in scale-free spectra, N(>s) ~ crowd s^-b, and a lineage is tuned to
+        # the disturbance it meets about once each adaptation time tau: crowd s_a^-b tau ~ 1. The events that erase
+        # it, some fixed factor k beyond that, then come at crowd (k s_a)^-b = k^-b / tau - the crowding cancels, and
+        # a sea in the dark, its background shielded as its pulses are, is no different. So every lineage, wherever
+        # it lives, meets the rates measured at the Sun's radius, relative to its own background.
+        hazard = life.STERILISE_AT_R0 * window / 10.0
         out.append({"region": region, "ladder": lad, "live": math.exp(-hazard), "end": end,
-                    "mu": life.EXTINCTIONS_PER_GYR * crowd})
+                    "mu": life.EXTINCTIONS_PER_GYR})
     return out
 
 

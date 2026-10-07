@@ -119,16 +119,17 @@ def dose(w: Dict[str, Any], pressure: float = 1.0, galactic: float = 1.0) -> flo
 
 
 # ---------------------------------------------------------------------- a world on the board
-def of_planet(kernel: Any, planet: Any) -> Dict[str, float]:
-    """A world's hydromagnetic state now: its dynamo's margin, surface field, magnetopause, the share of its sky its
-    star's wind reaches, and the dose reaching its surface."""
+def of_planet(kernel: Any, planet: Any, cycle: Optional[int] = None, swell: Optional[float] = None) -> Dict[str, float]:
+    """A world's hydromagnetic state now - or in the season of a clock cycle, with its star's swelling then: its
+    dynamo's margin, surface field, magnetopause, the share of its sky its star's wind reaches, and the dose reaching
+    its surface."""
     from xylarium.kernel import cosmos, physics, worlds
-    w = worlds.state_of_planet(kernel, planet)["world"]
+    w = worlds.state_of_planet(kernel, planet, cycle, swell)["world"]
     sec = kernel.sectors.get(planet.sector_id) if kernel is not None else None
     star = physics.star(sec) if sec is not None else {"mass": 1, "luminosity": 1}
     lum = float(star.get("luminosity", 1) or 1)
     try:
-        act = worlds.activity(float(star.get("mass", 1)), worlds.world_age(kernel, planet))
+        act = worlds.activity(float(star.get("mass", 1)), worlds.world_age(kernel, planet, cycle))
         act0 = worlds.activity(1.0, 4.57)
         act = act / max(1e-12, act0)
     except Exception:

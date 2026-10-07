@@ -38,20 +38,21 @@ class TestNoFloor(unittest.TestCase):
 
 
 class TestAncients(unittest.TestCase):
-    def test_the_ancients_are_the_first_minds_by_age_and_by_the_galaxys_first_stars(self):
+    def test_the_ancients_are_the_earliest_minds_of_the_core(self):
         from xylarium.kernel import cosmos, roles
         from xylarium.kernel.engine import GameKernel
         k = GameKernel(seed=7, genesis="cosmic:neighbourly")
         k.activate()
-        minds = sorted(cosmos.stats(k)["minds"], key=lambda m: float(m["epoch"]))
+        core = sorted((m for m in cosmos.stats(k)["minds"] if cosmos.in_core(m)), key=lambda m: float(m["epoch"]))
         anc = roles.ancients(k)
         self.assertTrue(anc)
-        first = float(minds[0]["epoch"])
-        for m in minds:
+        first = float(core[0]["epoch"])
+        for m in core:
             inside = float(m["epoch"]) - first <= cosmos.ancient_window(k)
-            own = cosmos.first_of_the_galaxy(k, tuple(m["cell"]), int(m["k"]))
-            listed = any(a["cell"] == list(m["cell"]) and a["k"] == int(m["k"]) for a in anc)
-            self.assertEqual(listed, inside and own)
+            listed = any(a["cell"] == list(m["cell"]) and a["k"] == int(m["k"]) and a["w"] == int(m.get("w", 0))
+                         for a in anc)
+            self.assertEqual(listed, inside)
+        self.assertTrue(all(cosmos.ring_radius(a["ring"]) <= cosmos.R_BULGE_KPC for a in anc))
 
 
 if __name__ == "__main__":

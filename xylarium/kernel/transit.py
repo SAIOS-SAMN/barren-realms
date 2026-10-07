@@ -309,7 +309,14 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
     total = int(toll + tithe)
     if total <= 0 and not paid:
         return
-    got, cur = _pay_owner(kernel, holder, *(paid if paid else (total, "SOL")))   # the payer's own money, exchanged
+    amount, money = paid if paid else (total, "SOL")
+    if tithe > 0 and amount > 0:                             # the tithe is the progenitors': it goes to the fund
+        from xylarium.kernel import endowments, steward_ai   # their realm's stewards keep (endowments.py)
+        part = int(amount * tithe / max(1e-9, toll + tithe))
+        sol = part if money == "SOL" else kernel.fx_market.convert(money, "SOL", part)[0]
+        endowments.credit(kernel, steward_ai.line_of(kernel, holder) or holder, sol)
+        amount -= part
+    got, cur = _pay_owner(kernel, holder, amount, money)     # the toll: the payer's own money, exchanged
     hypha.append(kernel, cur, "pouw", payer, holder, got, cur, ref=key(a, b))
 
 

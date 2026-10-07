@@ -211,14 +211,15 @@ def settle(kernel: Any, p: Any, sec: Any = None) -> int:
     for k in range(last + 1, now + 1):
         if system:
             cyc = int(g.get("cycle", kernel.cycle_count)) - (now - k) * Q
-            _world_season(kernel, sec, p, st, _swell(kernel, sec, cyc))
+            _world_season(kernel, sec, p, st, _swell(kernel, sec, cyc), cyc)
         for store, label in ((p.element_deposits, f"g:{p.id}"), (p.element_reserves, f"r:{p.id}")):
             _decay(store, "U", _DECAY_SHARE, carry, label, st)
     at[p.id] = now
     return now - last
 
 
-def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any], swell: Optional[float] = None) -> None:
+def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any], swell: Optional[float] = None,
+                  cycle: Optional[int] = None) -> None:
     deposits = p.element_deposits
     season = 1.0 / _SEASONS_PER_YEAR
     w = _world(kernel, sec, p, swell)
@@ -241,7 +242,7 @@ def _world_season(kernel: Any, sec: Any, p: Any, st: Dict[str, Any], swell: Opti
         if have < cap3:
             from xylarium.kernel import hydromagnetics
             try:
-                reach_wind = hydromagnetics.of_planet(kernel, p)["exposure"]
+                reach_wind = hydromagnetics.of_planet(kernel, p, cycle, swell)["exposure"]   # the field that season
             except Exception:
                 reach_wind = 1.0
             add = int(HE3_IMPLANT_PER_YEAR * flux * area * season * reach_wind * (1.0 - have / cap3))

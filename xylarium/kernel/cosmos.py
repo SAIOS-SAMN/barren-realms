@@ -75,7 +75,6 @@ GALAXIES_IN_CLUSTER = 40        # the home cluster's galaxies (Local Group scale
 # ---------------------------------------------------------------------- laws and measurements
 HARD_STEPS = 4                  # Carter (1983); Watson (2008): ~4 hard steps to intelligence (creation.py)
 SUN_MS_GYR = 10.0               # main-sequence lifetime of a solar-mass star; tau ~ M^-2.5
-STERILISE_AT_R0 = 0.1           # chance a biosphere at R0 is sterilised by a nearby supernova over its window
 KPC_PER_MYR_AT_1KMS = 1.0 / 977.8
 
 # atomic masses (real elements); the exotic elements' lines are their periods
@@ -150,11 +149,6 @@ def metals(r: float) -> float:
     return enrichment.metals(None, r, creation.TODAY_GYR)
 
 
-def survival(r: float) -> float:
-    """The chance a biosphere outlives the supernovae of its neighbourhood (rising with stellar density)."""
-    return math.exp(-STERILISE_AT_R0 * density(r))
-
-
 def mass_of(element: str) -> float:
     """An element's (or a good's) mass per unit: its atomic or formula mass (substances.py)."""
     a = ATOMIC_MASS.get(element)
@@ -207,12 +201,15 @@ def first_of_the_galaxy(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
     return "born" in slot and slot["born"] - creation.first_stars(s) <= ancient_window(kernel)
 
 
-def is_ancient(kernel: Any, mind: Dict[str, Any], first_dawn: float) -> bool:
-    """An ancient by birth, by age and by place: it woke within one core assembly time of the galaxy's first mind, on
-    a star of the galaxy's first generation - which the inside-out galaxy holds near its core. (A people may also
-    become an ancient by its deeds: board.ancient_peoples.)"""
-    return (float(mind["epoch"]) - first_dawn <= ancient_window(kernel)
-            and first_of_the_galaxy(kernel, tuple(mind["cell"]), int(mind["k"])))
+def in_core(mind: Dict[str, Any]) -> bool:
+    """Was a mind born in the galaxy's core - its ring inside the bulge (R_BULGE_KPC)?"""
+    return ring_radius(int(mind["cell"][0])) <= R_BULGE_KPC
+
+
+def is_ancient(kernel: Any, mind: Dict[str, Any], first_core_dawn: float) -> bool:
+    """An ancient by birth: among the earliest minds of the core - born in the core, waking within one core assembly
+    time of the core's first mind. (A people may also become an ancient by its deeds: board.ancient_peoples.)"""
+    return in_core(mind) and float(mind["epoch"]) - first_core_dawn <= ancient_window(kernel)
 
 
 def omega(r: float) -> float:

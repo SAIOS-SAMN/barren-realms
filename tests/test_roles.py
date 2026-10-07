@@ -70,7 +70,7 @@ class TestProgenitorSeat(unittest.TestCase):
         k = roles.start_progenitor(7, "Elder", pick=1, pace="teeming")
         self.assertIsNotNone(k)
         rec = roles.stats(k)["ancients"]["player_1"]
-        self.assertEqual(rec["index"], min(1, len(roles.first_minds(k)) - 1))   # the one asked for, or the last
+        self.assertEqual(rec["index"], min(1, len(roles.ancients(k) or roles.first_minds(k)) - 1))   # asked, or last
         home = ages.homeworld(k, "player_1")
         self.assertIsNotNone(home)
         self.assertIsNotNone(home.civilization)
@@ -89,10 +89,10 @@ class TestProgenitorSeat(unittest.TestCase):
         self.assertTrue(anc or roles.first_minds(k))             # the seed's own number; else its first minds
         self.assertEqual([a["dawn_gyr"] for a in anc], sorted(a["dawn_gyr"] for a in anc))
         from xylarium.kernel import cosmos
-        first = min(float(m["epoch"]) for m in cosmos.stats(k)["minds"])
+        first = min(float(m["epoch"]) for m in cosmos.stats(k)["minds"] if cosmos.in_core(m))   # the core's first
         for a in anc:                                             # by age: within one core assembly time of it
             self.assertLessEqual(a["dawn_gyr"] - first, cosmos.ancient_window(k) + 1e-4)
-            self.assertTrue(cosmos.first_of_the_galaxy(k, tuple(a["cell"]), a["k"]))  # by place: the galaxy's first
+            self.assertTrue(cosmos.ring_radius(a["ring"]) <= cosmos.R_BULGE_KPC)    # by place: the core
 
 
 class TestOpeningMenu(unittest.TestCase):
@@ -409,7 +409,7 @@ class TestFoldedPeoples(unittest.TestCase):
         from xylarium.kernel import relations, zones
         random.seed(5)
         self.k = roles.start_progenitor(7, "Elder", pick=0, pace="neighbourly")
-        ages.sleep(self.k, "player_1", 1e9)                      # a galaxy of peoples
+        ages.sleep(self.k, "player_1", 3e8)                      # a galaxy of peoples (a dozen, by then)
         self.folded = sorted(zones.folded_peoples(self.k))
         self.by = relations._peoples(self.k)
 
@@ -1019,7 +1019,9 @@ class TestAncientsAndProgenitors(unittest.TestCase):
         ages.sleep(k, "player_1", 1e8)
         anc = board.ancient_peoples(k)
         lines = board.progenitors(k)
-        self.assertTrue(anc)
+        raised = board.stats(k).get("progenitors", {})        # every line ever raised, ended ones too
         for who in lines:
-            self.assertIn(who, anc)                             # every progenitor line is an ancient people's
-        self.assertTrue(lines)                                  # and the ancients who crossed raised them
+            self.assertIn(who, anc)                             # every living progenitor line is an ancient people's
+        self.assertTrue(raised)                                 # and the ancients who crossed raised them - a line
+        for who, rec in raised.items():                         # ends with its people (seed 7's core ancient wakes
+            self.assertEqual(rec["ancient"], who)               # inside older outer dominions, and falls)

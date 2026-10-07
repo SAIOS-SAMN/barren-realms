@@ -65,9 +65,11 @@ BITS_PER_GENERATION = 1.0       # selection writes at most a bit a generation (M
 REPRODUCTIVE_EXCESS = 0.5       # the share of each generation selection can remove without the lineage shrinking: a
                                 # lineage that divides in two can lose half (binary fission; Haldane's excess)
 EJECTA_ORBITS = 1.0e6           # ejecta cross a system in about a million orbits (Gladman et al. 1996)
-EXTINCTIONS_PER_GYR = 2.0       # life-ending impacts per Gyr at unit stellar density in the plane (declared: comet
-                                # showers from the Oort cloud, shaken by passing stars and the tide)
-STERILISE_AT_R0 = 0.1           # chance a world at R0 is sterilised by a nearby supernova over 10 Gyr in the plane
+EXTINCTIONS_PER_GYR = 2.0       # impacts per Gyr beyond what a lineage adapted to (declared, measured at the Sun's
+                                # radius; scale-free, so the same relative to any lineage's own background:
+                                # creation.chemistries)
+STERILISE_AT_R0 = 0.1           # chance a supernova pulse beyond a lineage's adapted background erases it over 10 Gyr
+                                # (measured at the Sun's radius; the same everywhere, relative to its own background)
 MAX_RUNGS = 12                  # a chemistry needing more rungs than this never reaches a mind within any star's life
 
 

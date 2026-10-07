@@ -28,7 +28,6 @@ class TestGalaxyLaws(unittest.TestCase):
 
     def test_inside_out_and_the_habitable_zone(self):
         self.assertLess(cosmos.formed_gyr(2.0), cosmos.formed_gyr(10.0))
-        self.assertLess(cosmos.survival(1.0), cosmos.survival(8.0))                      # the core is deadly
         self.assertLess(cosmos.metals(14.0), cosmos.metals(8.0))                         # the rim is metal-poor
 
     def test_the_galaxy_turns_like_clockwork(self):

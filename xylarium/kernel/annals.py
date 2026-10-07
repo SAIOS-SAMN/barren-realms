@@ -78,21 +78,12 @@ def resilience(kernel: Any, who: str) -> float:
 
 
 def world_hazard_per_gyr(kernel: Any, home: Any) -> float:
-    """The life-ending events a world faces per Gyr where it circles - the same physics its life climbed against
-    (creation.chemistries): a nearby supernova (life.STERILISE_AT_R0 over 10 Gyr in the plane; half for a sea in the
-    dark) and a life-ending impact (life.EXTINCTIONS_PER_GYR), each as crowded as the stars about it (the disc's
-    density x the Big Bang's stars x its time in the plane)."""
-    from xylarium.kernel import cosmos, creation, life
-    g = cosmos.stats(kernel)["place"].get(str(home.sector_id)) or {} if cosmos.is_cosmic(kernel) else {}
-    if "cell" in g:
-        seed = cosmos.cosmos_seed(kernel)
-        slot = creation.cell(seed, int(g["cell"][0]), int(g["cell"][1]))[int(g["k"])]
-        crowd = cosmos.density(float(g["r"])) * creation.big_bang(seed)["stars"] * creation.exposure(slot)
-    else:
-        crowd = 1.0
-    medium = str(((getattr(getattr(home, "civilization", None), "traits", None) or {}).get("medium")) or "")
-    dark = "under ice" in medium or " deep" in medium
-    return crowd * (life.STERILISE_AT_R0 / 10.0 * (0.5 if dark else 1.0) + life.EXTINCTIONS_PER_GYR)
+    """The life-ending events a world's people faces per Gyr - the same physics its life climbed against
+    (creation.chemistries): a supernova pulse (life.STERILISE_AT_R0 over 10 Gyr) or an impact
+    (life.EXTINCTIONS_PER_GYR) beyond what its kind adapted to. Both come in scale-free spectra, so relative to the
+    background a people evolved under the crowding of its stars cancels: these are the rates wherever it lives."""
+    from xylarium.kernel import life
+    return life.STERILISE_AT_R0 / 10.0 + life.EXTINCTIONS_PER_GYR
 
 
 def fall_per_generation(kernel: Any, who: str, home: Any) -> float:
@@ -355,6 +346,8 @@ def season(kernel: Any) -> List[str]:
     settling.mark_wakings(kernel, _peoples(kernel))
     constellations.season(kernel)                            # the stewards' realms, read as the dominions stand
     steward_ai.ensure(kernel, _peoples(kernel))              # the board is complete up to the stewards
+    from xylarium.kernel import endowments
+    logs.extend(endowments.season(kernel, _peoples(kernel)))  # the stewards watch, set aside, prepare
     gateways.kindling(kernel, logs)
     for j in jobs:
         _books(kernel, j, logs)

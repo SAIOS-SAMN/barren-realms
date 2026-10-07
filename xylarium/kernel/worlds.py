@@ -715,28 +715,32 @@ _STATES: Dict[Any, Any] = {}
 AGE_STEP_GYR = 0.25             # a world in play is re-read as its star and interior age, a quarter-Gyr at a time
 
 
-def world_age(kernel: Any, planet: Any) -> float:
-    """The age a world in play is read at: in a universe begun at its Big Bang, its star's own age now (its light
-    brightened, its interior cooled, its air gathered and lost since); elsewhere the settled age."""
+def world_age(kernel: Any, planet: Any, cycle: Optional[int] = None) -> float:
+    """The age a world in play is read at: in a universe begun at its Big Bang, its star's own age now - or at the
+    clock cycle given (its light brightened, its interior cooled, its air gathered and lost since); elsewhere the
+    settled age."""
     from xylarium.kernel import cosmos, creation
     if kernel is None or not cosmos.is_cosmic(kernel):
         return creation.SETTLED_GYR
     g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {})
     if "born" not in g:
         return creation.SETTLED_GYR
-    age = cosmos.deep_gyr(kernel, sector_id=planet.sector_id) - float(g["born"])   # its place's own now
+    age = cosmos.deep_gyr(kernel, cycle, sector_id=planet.sector_id) - float(g["born"])   # its place's own now
     return max(creation.CRUST_GYR, round(age / AGE_STEP_GYR) * AGE_STEP_GYR)
 
 
-def state_of_planet(kernel: Any, planet: Any) -> Dict[str, Any]:
-    """The world as physics makes it now (build): its air, seas, temperature, heat - for what acts on it in play."""
+def state_of_planet(kernel: Any, planet: Any, cycle: Optional[int] = None,
+                    swell: Optional[float] = None) -> Dict[str, Any]:
+    """The world as physics makes it now (build): its air, seas, temperature, heat - for what acts on it in play. Given
+    a clock cycle and its star's swelling then, the world as it was in that season (a folded world caught up)."""
     from xylarium.kernel import cosmos, creation, physics
     sec = kernel.sectors.get(planet.sector_id) if kernel is not None else None
     g = cosmos.stats(kernel)["place"].get(str(planet.sector_id), {}) if kernel is not None and cosmos.is_cosmic(
         kernel) else {}
     b = physics.body(planet)
-    age = world_age(kernel, planet)                      # its star's age now: the world as it has become
-    swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
+    age = world_age(kernel, planet, cycle)               # its star's age now: the world as it has become
+    if swell is None:
+        swell = cosmos.lum(planet.sector_id) if kernel is not None and cosmos.is_cosmic(kernel) else 1.0
     seed = creation.universe(kernel) if kernel is not None else None
     key = (seed, planet.id, round(age, 2), planet.planet_type, round(swell, 3), str(b.get("radius")))
     got = _STATES.get(planet.id)
