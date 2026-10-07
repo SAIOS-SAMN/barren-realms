@@ -123,20 +123,53 @@ def friction(kernel: Any, planet: Any) -> Dict[str, Any]:
     return {"value": output * moved * loss, "turnover": output * moved, "moved": moved, "loss": loss}
 
 
+def _stores(planet: Any) -> Dict[str, List[Any]]:
+    """What a world holds that a money could be a claim on: every counted store - its larders and silos, then its
+    ground - by good: {good: [(where, units), ...]}."""
+    out: Dict[str, List[Any]] = {}
+    for comm, n in sorted((planet.element_reserves or {}).items()):
+        if n > 0:
+            out.setdefault(comm, []).append(("reserves", int(n)))
+    for comm, attr in (("ORE", "ore_silo"), ("ORGANICS", "organics_silo")):
+        n = int(getattr(planet, attr, 0) or 0)
+        if n > 0:
+            out.setdefault(comm, []).append((attr, n))
+    for comm, n in sorted((planet.element_deposits or {}).items()):
+        if n > 0:
+            out.setdefault(comm, []).append(("ground", int(n)))
+    return out
+
+
+def backing_for(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
+    """The store a new money would be a claim on: of every good the founder holds (larders, silos, ground - never a
+    metal by default), the one it holds the most worth of, valued at its price (backing.value_sol) - the deepest
+    claim it can stand behind. None if it holds nothing of worth."""
+    from xylarium.kernel import backing
+    best = None
+    for comm, places in sorted(_stores(planet).items()):
+        price = float(backing.value_sol(kernel, comm) or 0.0)
+        if price <= 0:
+            continue
+        units = sum(n for _, n in places)
+        if best is None or units * price > best["worth"]:
+            best = {"commodity": comm, "par": price, "units": units, "worth": units * price}
+    return best
+
+
 def weigh_money(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
     """A people weighs striking a money of its own, each season, through its own mind (decide.choose): what it would
     save (friction's value) against what it would lock and forgo (the turnover's backing, at its money's rate) -
     and only where its ground holds that backing (a money is a claim on goods it has). Not a stage: a people without
     a state may strike one, a state with no one outside to pay may never. Returns the option chosen, or None."""
     from fractions import Fraction
-    from xylarium.config import COMMODITY_CONFIG, POLICY_RATE_BASE
+    from xylarium.config import POLICY_RATE_BASE
     from xylarium.kernel import decide, knowledge
     fr = friction(kernel, planet)
     if fr["value"] <= 0:
         return None
-    par = float(COMMODITY_CONFIG.get("ORE", {}).get("base_price", 1) or 1)       # a new money's first backing
-    if planet.element_deposits.get("ORE", 0) * par < fr["turnover"]:
-        return None                                                             # nothing in its ground to back it
+    back = backing_for(kernel, planet)
+    if back is None or back["worth"] < fr["turnover"]:
+        return None                                                             # nothing it holds can back it
     m = decide.mind_of_planet(kernel, planet)
     holder = knowledge.holder_of_planet(planet)
     opt = decide.option("found_money", decide.worth(kernel, fr["turnover"] * POLICY_RATE_BASE, m),
@@ -144,25 +177,40 @@ def weigh_money(kernel: Any, planet: Any) -> Optional[Dict[str, Any]]:
     pick = decide.choose(kernel, [opt], m, holder, "found_money", kernel.cycle_count // 25)
     stats(kernel).setdefault("weighed", {})[holder] = {
         "cycle": kernel.cycle_count, "chose": pick is not None,
-        "value": str(Fraction(fr["value"]).limit_denominator(10 ** 6)),
-        "turnover": str(Fraction(fr["turnover"]).limit_denominator(10 ** 6))}
-    return {"option": pick, "turnover": fr["turnover"]} if pick is not None else None
+        "value": str(Fraction(fr["value"])), "turnover": str(Fraction(fr["turnover"]))}       # exact
+    return {"option": pick, "turnover": fr["turnover"], "backing": back} if pick is not None else None
 
 
-def _issue_against_backing(kernel: Any, planet: Any, turnover_sol: float) -> int:
-    """A money's founding issue: the backing a quarter's turnover needs, moved from the founder's ground into its
-    bank's warehouse, and that much money minted into its treasury at par - a genesis mint, never from nothing."""
+def _issue_against_backing(kernel: Any, planet: Any, turnover_sol: float, back: Dict[str, Any]) -> int:
+    """A money's founding issue: the backing a quarter's turnover needs, in the store it chose (backing_for), moved
+    from the founder's larders, silos and ground into its bank's warehouse - and the board's claim set on it at its
+    price - and that much money minted into its treasury at par: a genesis mint, never from nothing."""
     from xylarium.kernel import ledger, regimes
     cur = planet.currency
     bank = kernel.banking.banks.get(cur)
-    rec = regimes.stats(kernel)["by_currency"].get(cur) or {}
-    comm, par = rec.get("commodity"), float(rec.get("par") or 0.0)
-    if bank is None or not comm or par <= 0:
+    comm, par = back["commodity"], float(back["par"])
+    if bank is None or par <= 0:
         return 0
-    units = min(int(planet.element_deposits.get(comm, 0)), int(turnover_sol / par))
+    rec = regimes.stats(kernel)["by_currency"].setdefault(cur, {})
+    if rec.get("regime") == "reserve":
+        rec["commodity"], rec["par"] = comm, par                       # its board's claim is on what backs it
+    want = int(turnover_sol / par)
+    units = 0
+    for where, have in _stores(planet).get(comm, []):
+        take = min(have, want - units)
+        if take <= 0:
+            break
+        if where == "reserves":
+            planet.element_reserves[comm] -= take
+            if planet.element_reserves[comm] <= 0:
+                planet.element_reserves.pop(comm, None)
+        elif where == "ground":
+            planet.element_deposits[comm] -= take
+        else:
+            setattr(planet, where, int(getattr(planet, where)) - take)
+        units += take
     if units <= 0:
         return 0
-    planet.element_deposits[comm] -= units
     bank.warehouse[comm] = bank.warehouse.get(comm, 0) + units
     pay = int(units * par)
     planet.treasury += pay
@@ -177,7 +225,7 @@ def strike_if_weighed(kernel: Any, planet: Any) -> Optional[str]:
         return None
     line = found_currency(kernel, planet)
     if line:
-        _issue_against_backing(kernel, planet, got["turnover"])
+        _issue_against_backing(kernel, planet, got["turnover"], got["backing"])
     return line
 
 

@@ -139,16 +139,26 @@ class TestCoinWeighed(unittest.TestCase):
         if self.k.sectors[self.home.sector_id].port is None:
             self.assertEqual(institutions.friction(self.k, self.home)["moved"], 0.0)
 
-    def test_no_backing_in_its_ground_no_money(self):
+    def test_nothing_held_of_worth_no_money(self):
         self._meet()
-        self.home.element_deposits["ORE"] = 0
+        self.home.element_deposits.clear()
+        self.home.element_reserves.clear()
+        self.home.ore_silo = self.home.organics_silo = 0
         self.assertIsNone(institutions.weigh_money(self.k, self.home))
+
+    def test_a_people_with_no_ore_backs_its_money_with_what_it_has(self):
+        self.home.element_deposits.clear()
+        self.home.element_reserves.clear()
+        self.home.ore_silo = 0
+        self.home.element_reserves["H2O"] = 10 ** 9
+        back = institutions.backing_for(self.k, self.home)
+        self.assertEqual(back["commodity"], "H2O")
 
     def test_a_chosen_money_is_minted_only_against_backing_moved_from_its_ground(self):
         from unittest import mock
         from xylarium.kernel import decide, matter
         self._meet()
-        self.home.element_deposits["ORE"] = 10 ** 9
+        self.home.element_reserves["H2O"] = 10 ** 9
         matter0 = matter.totals(self.k)
         with mock.patch.object(decide, "choose", side_effect=lambda k, opts, m, *s: opts[0]):
             line = institutions.strike_if_weighed(self.k, self.home)
