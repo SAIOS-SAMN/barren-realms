@@ -133,6 +133,8 @@ def census(kernel: Any) -> Dict[str, Dict[str, int]]:
     if mm is not None:
         for h in getattr(mm, "trade_haulers", {}).values():
             put(raw["haulers"], getattr(h, "cargo", {}).items())
+    from xylarium.kernel import commerce
+    put(raw["convoys"], commerce.in_transit(kernel).items())             # treaty and brokered goods under way
     out: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for where, stock in raw.items():
         for comm, n in stock.items():

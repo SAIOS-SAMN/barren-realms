@@ -7,8 +7,11 @@ people's staple, their works' ore, a reserve of every element) are offered what 
 what they keep - the deepest want first, the largest surplus first. Goods move; money moves back. Nothing is minted:
 the goods are a transfer between holders, the money passes through the exchanges.
 
-  PRICE     the market's own (transit.price: the mean of the ports' prices) - in SOL, paid in the buyer's money,
-            converted at the exchanges into the seller's (fx.convert). A people that buys more than it sells sells
+  PRICE     the seller's own port's, as the buyer has HEARD it (news.py: word travels at light's speed - near, as it
+            stands; far, as its long mean), or the market's mean where the seller keeps no port - fixed in a forward
+            contract when the deal is struck: the seller takes it only if it is no less than its own port would pay.
+            In SOL, paid in the buyer's money, converted at the exchanges into the seller's (fx.convert): a plain
+            transfer, payer to payee, at the buyer's port. A people that buys more than it sells sells
             its own money to do it, and its money weakens; its imports grow dearer until they balance. That is how
             economic models meet: through the exchanges, not by decree.
   ROUTE     the convoy sails the geodesic from the seller's system to the buyer's and pays every lane's keeper its
@@ -17,7 +20,11 @@ the goods are a transfer between holders, the money passes through the exchanges
             route: the good does not move, unless it is smuggled (covert.py).
   WORTH     what a unit is worth to the buyer: its staple, the output its eaters make while fed (a world's output per
             unit it eats); any other good, what it would pay at its own port. Its council buys as far as that worth
-            exceeds the price and the route (decide.choose), and its treasury pays.
+            exceeds every real cost (decide.choose), and its treasury pays: the contract price, the route, the risk
+            of the road (fxroutes: the share a trip through borderland or anarchy does not keep) and the age of what
+            it heard (news.age_cost: the drift the price can make over the word's light-time).
+  BROKERED  beyond treaties, a line's stewards broker its realms' trade with the line's own house (the ancient people
+            whose line stewards them: constellations), core and realm each buying what the other spares.
   TARIFF    a sovereign whose first need is wealth (polity: its residual leads with the wealth book) takes, on what its
             worlds import, half the gain they make over the price and route (the surplus split evenly, as relations
             splits a tribute) - into its capital's treasury. A sovereign whose people are hungry does not tax bread.
@@ -125,10 +132,23 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
                              transit.price(kernel, comm))
         rec["smuggled"] = rec.get("smuggled", 0) + got
         return got
-    unit = transit.price(kernel, comm)
+    from xylarium.kernel import fxroutes, news
+    from xylarium.kernel.economy import EconomyManager
+    port = getattr(kernel.sectors.get(sw.sector_id), "port", None)
+    word = news.heard(kernel, bw.sector_id, sw.sector_id, comm) if port is not None else None
+    if word is None:                                          # no word of its port: the market's mean, heard as late
+        unit, age, sigma = transit.price(kernel, comm), news.light_years(kernel, bw.sector_id, sw.sector_id), 0.0
+    else:
+        unit, age, sigma = word
+    floor = float(EconomyManager.get_unit_prices(port, comm)[0]) if port is not None else 0.0
+    if floor > 0 and unit < floor:
+        return 0                                              # the seller's own port pays more: it keeps its goods
+    path = [sw.sector_id] + [b for _, b in hops]
+    risk = unit * fxroutes.HAZARD.get(fxroutes._hazard(kernel, path), 0.0)     # what the road does not keep
+    stale = news.age_cost(unit, age, sigma)                   # what acting on old word costs
     tolls = [(a, b, transit.flow_passage(kernel, buyer["people"], a, b)) for a, b in hops]
     route = sum(t for _, _, t in tolls)
-    gain = worth - unit - route / q
+    gain = worth - unit - route / q - risk - stale
     duty = gain / 2.0 if tariff and gain > 0 and capital is not None and capital is not bw else 0.0
     rate = _rate(kernel, bw.currency)
     afford = (float(bw.treasury) / rate - route) / max(1e-9, unit + duty)
@@ -136,7 +156,7 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
     if q <= 0:
         return 0
     m = decide.mind_of_planet(kernel, bw)
-    if decide.choose(kernel, [decide.option("import", q * (unit + duty) + route, q * worth)], m,
+    if decide.choose(kernel, [decide.option("import", q * (unit + duty + risk + stale) + route, q * worth)], m,
                      bw.id, sw.id, comm, "import") is None:
         return 0
     price = int(q * unit * rate)
@@ -156,11 +176,17 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
         bw.treasury -= levied
         capital.treasury += _to(kernel, bw.currency, capital.currency, levied)
         rec["tariff"] += q * duty
-    staples.move(sw, comm, -q)
-    staples.move(bw, comm, q)
+    staples.move(sw, comm, -q)                                # out of the seller's stores, into the convoy
+    if hops:                                                  # a forward: paid now at the price struck, landed when the
+        stats(kernel).setdefault("in_transit", []).append({"to": bw.id, "from": sw.id, "comm": comm, "q": q,   # haul is sailed
+                                            "due": kernel.cycle_count + len(hops), "sector": bw.sector_id})
+    else:
+        staples.move(bw, comm, q)
     sol = q * unit
     rec["value"] += sol
     rec["tolls"] += route
+    rec["stale"] = rec.get("stale", 0.0) + q * stale
+    rec["risk"] = rec.get("risk", 0.0) + q * risk
     rec["units"][comm] = rec["units"].get(comm, 0) + q
     side = rec["flows"].setdefault(f"{seller['id']}>{buyer['id']}", {"value": 0.0, "food": 0, "earned": 0})
     side["value"] += sol
@@ -228,9 +254,76 @@ def model(kernel: Any, people: str) -> Dict[str, Any]:
             "balance": round(t["sold"] - t["bought"], 1)}
 
 
+def _brokered(kernel: Any, sov: Dict[str, Dict[str, Any]], year: Dict[str, Any]) -> List[Tuple[Dict[str, Any],
+                                                                                         Dict[str, Any]]]:
+    """The pairs a line's stewards broker: each line's house (its ancient people's sovereign) with every people its
+    realms hold (constellations: the realm of each people's home, laid by that line) - where no treaty already moves
+    their goods."""
+    from xylarium.kernel import board, constellations, relations
+    if "constellations" not in getattr(kernel, "state", {}):
+        return []
+    by_people: Dict[str, Dict[str, Any]] = {}
+    for rec in sov.values():
+        if not rec.get("ended"):
+            by_people.setdefault(rec["people"], rec)
+    out = []
+    peoples = relations._peoples(kernel)
+    for line in sorted(board.progenitors(kernel)):
+        house = by_people.get(line)
+        if house is None:
+            continue
+        for who in sorted(peoples):
+            if who == line or who not in by_people or not peoples[who]:
+                continue
+            home = max(peoples[who], key=lambda p: (p.population, p.id))
+            if constellations.line_of_realm(kernel, constellations.realm_of(kernel, home.sector_id)) != line:
+                continue
+            other = by_people[who]
+            if _pair(house["id"], other["id"]) not in year:
+                out.append((house, other))
+    return out
+
+
+def land(kernel: Any) -> int:
+    """Convoys whose haul is sailed land their goods: with the buyer, or - its world gone - back with the seller, or
+    adrift where it was bound (debris) if neither stands. Returns the units landed."""
+    from xylarium.kernel import staples
+    st = stats(kernel)
+    keep, landed = [], 0
+    for lot in st["in_transit"]:
+        if lot["due"] > kernel.cycle_count:
+            keep.append(lot)
+            continue
+        to = kernel.get_planet(lot["to"]) or kernel.get_planet(lot["from"])
+        if to is not None:
+            staples.move(to, lot["comm"], lot["q"])
+        else:
+            sec = kernel.sectors.get(lot["sector"])
+            if sec is None:
+                keep.append(lot)
+                continue
+            sec.debris = list(getattr(sec, "debris", []) or []) + [{"cargo": {lot["comm"]: lot["q"]}}]
+        landed += lot["q"]
+    st["in_transit"] = keep
+    return landed
+
+
+def in_transit(kernel: Any) -> Dict[str, int]:
+    """Goods aboard the convoys, by good (the matter census counts them)."""
+    out: Dict[str, int] = {}
+    if "commerce" not in getattr(kernel, "state", {}):
+        return out
+    for lot in stats(kernel).get("in_transit", []):
+        out[lot["comm"]] = out.get(lot["comm"], 0) + int(lot["q"])
+    return out
+
+
 def season(kernel: Any) -> List[str]:
-    """Once a year, after the sovereigns have made their treaties: every treaty of trade moves its goods."""
+    """Each season, convoys land; once a year, after the sovereigns have made their treaties, every treaty of trade
+    - and every pair a line's stewards broker - moves its goods."""
     from xylarium.kernel import polity
+    stats(kernel).setdefault("in_transit", [])
+    land(kernel)
     if (kernel.cycle_count // polity._quarter()) % 4:
         return []
     st = stats(kernel)
@@ -247,6 +340,12 @@ def season(kernel: Any) -> List[str]:
         trade(kernel, a, b, rec)
         trade(kernel, b, a, rec)
         year[_pair(a["id"], b["id"])] = rec
+    for a, b in _brokered(kernel, sov, year):                # a line's stewards broker its realms' trade with its house
+        rec = {"value": 0.0, "tolls": 0.0, "tariff": 0.0, "closed": 0, "units": {}, "flows": {}, "brokered": True}
+        trade(kernel, a, b, rec)
+        trade(kernel, b, a, rec)
+        year[_pair(a["id"], b["id"])] = rec
+    for rec in year.values():
         for flow, f in rec["flows"].items():
             s_id, b_id = flow.split(">")
             peoples.setdefault(sov[s_id]["people"], {"sold": 0.0, "bought": 0.0})["sold"] += f["value"]
@@ -277,7 +376,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="commerce",
-    state=lambda: {"last": {}, "peoples": {}, "history": [], "traded": 0.0},
+    state=lambda: {"last": {}, "peoples": {}, "history": [], "traded": 0.0, "in_transit": []},
     season=season,
     summary=summary,
 ))

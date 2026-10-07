@@ -1,5 +1,5 @@
 """
-Commerce: a treaty of trade moves goods - the seller's surplus against the buyer's want, priced at the market, paid
+Commerce: a treaty of trade moves goods - the seller's surplus against the buyer's want, priced as the buyer heard it, paid
 in the buyer's money through the exchanges, its route's tolls paid to the lanes' keepers. Nothing is minted. A route
 a lane bars (a blockade, an embargo) or a quarantined party closes. A sovereign whose first need is wealth levies a
 tariff into its capital. What a treaty delivered is what moved.
@@ -53,7 +53,11 @@ class TestCommerce(unittest.TestCase):
         self.assertGreater(self.sw.treasury, before_s)
         if self.bw.currency == self.sw.currency:
             self.assertEqual(before_b - self.bw.treasury, self.sw.treasury - before_s)   # paid, not minted
-        self.assertAlmostEqual(rec["value"], moved * transit.price(self.k, self.comm), places=3)
+        from xylarium.kernel import news                                             # priced as the buyer heard it
+        word = news.heard(self.k, self.bw.sector_id, self.sw.sector_id, self.comm) \
+            if self.k.sectors[self.sw.sector_id].port is not None else None
+        unit = word[0] if word is not None else transit.price(self.k, self.comm)
+        self.assertAlmostEqual(rec["value"], moved * unit, places=3)
 
     def test_a_council_that_judges_it_not_worth_buys_nothing(self):
         with mock.patch.object(decide, "choose", return_value=None), \
@@ -114,3 +118,76 @@ class TestCommerce(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHeardPrices(unittest.TestCase):
+    """A far market is weighed on old word: its long mean, and the drift its price can make over the light-time."""
+
+    def setUp(self):
+        random.seed(5)
+        self.k = GameKernel(seed=42)
+        for _ in range(60):
+            self.k.tick_simulation()
+        from xylarium.kernel import news
+        self.news = news
+        self.key = next(iter(sorted(news.stats(self.k)["mem"])))
+        self.sid, self.comm = int(self.key.split("|")[0]), self.key.split("|")[1]
+
+    def test_near_word_is_the_price_as_it_stands_and_far_word_its_long_mean(self):
+        import math
+        m = self.news.stats(self.k)["mem"][self.key]
+        with mock.patch.object(self.news, "light_years", return_value=0.0):
+            self.assertAlmostEqual(self.news.heard(self.k, self.sid, self.sid, self.comm)[0], math.exp(m["last"]))
+        with mock.patch.object(self.news, "light_years", return_value=500.0):
+            price, age, _ = self.news.heard(self.k, 0, self.sid, self.comm)
+        self.assertAlmostEqual(price, math.exp(m["mean"]))
+        self.assertEqual(age, 500.0)
+
+    def test_old_word_costs_more_and_a_still_price_costs_nothing(self):
+        self.assertGreater(self.news.age_cost(100.0, 400.0, 0.1), self.news.age_cost(100.0, 4.0, 0.1))
+        self.assertEqual(self.news.age_cost(100.0, 400.0, 0.0), 0.0)
+        self.assertEqual(self.news.age_cost(100.0, 0.0, 0.3), 0.0)
+
+    def test_a_seller_keeps_goods_its_own_port_pays_more_for(self):
+        live = [s for s in polity.sovereigns(self.k).values() if not s.get("ended") and polity._worlds_of(self.k, s)]
+        if len(live) < 2:
+            self.skipTest("one sovereign")
+        live.sort(key=lambda s: s["id"])
+        buyer, seller = live[0], next(s for s in live[1:] if s["people"] != live[0]["people"])
+        bw, sw = polity._worlds_of(self.k, buyer)[0], polity._worlds_of(self.k, seller)[0]
+        if self.k.sectors[sw.sector_id].port is None:
+            self.skipTest("seller keeps no port")
+        comm = staples.of(self.k, bw)
+        staples.move(sw, comm, staples.reserve(self.k, sw, comm) + 500 - staples.held(sw, comm))
+        bw.treasury = 10 ** 9
+        from xylarium.kernel.economy import EconomyManager
+        with mock.patch.object(self.news, "heard", return_value=(0.001, 0.0, 0.0)), \
+                mock.patch.object(EconomyManager, "get_unit_prices", return_value=(50, 60)), \
+                mock.patch.object(decide, "choose", side_effect=_accept), \
+                mock.patch.object(commerce, "_route", return_value=[]):
+            got = commerce._ship(self.k, buyer, seller, bw, sw, comm, 100, None, False,
+                                 {"value": 0.0, "tolls": 0.0, "tariff": 0.0, "closed": 0, "units": {}, "flows": {}})
+        self.assertEqual(got, 0)
+
+
+class TestConvoys(TestCommerce):
+    """A forward: paid at the price struck, the goods aboard for the haul, counted, and landed when it is sailed."""
+
+    def test_goods_ride_the_haul_and_land(self):
+        from xylarium.kernel import matter
+        a = self.sw.sector_id
+        before = matter.totals(self.k)
+        held = staples.held(self.bw, self.comm)
+        with mock.patch.object(decide, "choose", side_effect=_accept), \
+                mock.patch.object(commerce, "_route", return_value=[(a, a), (a, a)]), \
+                mock.patch.object(commerce, "_taxes", return_value=False), \
+                mock.patch("xylarium.kernel.transit.flow_passage", return_value=0.0):
+            moved = commerce.trade(self.k, self.buyer, self.seller, self._rec())
+        self.assertGreater(moved, 0)
+        self.assertEqual(staples.held(self.bw, self.comm), held)                    # not yet landed
+        self.assertEqual(commerce.in_transit(self.k).get(self.comm), moved)        # aboard, and counted
+        self.assertEqual(matter.totals(self.k), before)
+        self.k.cycle_count += 2
+        self.assertEqual(commerce.land(self.k), moved)
+        self.assertEqual(staples.held(self.bw, self.comm), held + moved)
+        self.assertEqual(matter.totals(self.k), before)
