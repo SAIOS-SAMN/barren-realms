@@ -200,15 +200,12 @@ class TerminalRenderer:
     @classmethod
     def render_banking(cls, banking: Dict[str, Any], fx: Dict[str, Any], chain_tip: Dict[str, Any]) -> str:
         out = [bold(c_cyan("FEDERATIONS, CENTRAL BANKS & THE GALACTIC CLEARING UNION"))]
-        out.append(c_gray(f"  {'Federation':<22}{'Central bank':<34}{'Rate/q':>7}{'Reserves':>13}{'Loans':>11}{'STAMP':>10}"))
+        out.append(c_gray(f"  {'Federation':<22}{'Central bank':<34}{'Rate/q':>7}{'Reserves':>13}{'Loans':>11}"))
         for b in banking.get("banks", []):
             out.append(f"  {b['federation'][:21]:<22}{b['bank'][:33]:<34}{b['policy_rate_q']:>7.2%}"
-                       f"{b['reserves']:>10,} {b['currency']:<3}{b['loans_outstanding']:>10,} {b['stamp_position']:>+10,.0f}")
+                       f"{b['reserves']:>10,} {b['currency']:<3}{b['loans_outstanding']:>10,}")
             out.append(c_gray(f"      governor {b['governor']} ({b['band']}) │ exchange: {b['exchange']} │ "
                               f"{b['borrowers']} borrower(s)"))
-        out.append(f"  Galactic ISSE STAMP position {banking.get('isse_stamp_position', 0):+,.0f} │ union imbalance "
-                   f"{banking.get('clearing_imbalance', 0):+.4f} (always nets to zero) │ deficit penalty "
-                   f"{banking.get('deficit_slope', 0):.4f}")
         rates = fx.get("rates", {})
         if rates:
             out.append("  Federation exchanges: " + " │ ".join(f"{cur} {r:.3f}/SOL" for cur, r in sorted(rates.items())))
@@ -218,9 +215,6 @@ class TerminalRenderer:
         if chain_tip:
             out.append(c_gray(f"  Settlement chain: height {chain_tip.get('height')} at cycle {chain_tip.get('cycle')} │ "
                               f"tip {str(chain_tip.get('hash', ''))[:16]}… │ {chain_tip.get('receipt_count', 0)} receipts last quarter"))
-        out += _wrap("STAMP is the clearing union's unit of account: claims between central banks and the exchanges, "
-                     "never circulating money. A federation that keeps buying back its own currency runs a STAMP "
-                     "deficit, and its central bank lends dearer.")
         return "\n".join(out)
 
     @classmethod

@@ -26,7 +26,6 @@ def _with_board(k, home):
         from xylarium.kernel.banking import CentralBank
         k.banking.banks[cur] = CentralBank(currency=cur, name="Treasury", federation="x", governor="g",
                                            alignment=0.0, reserves=0)
-        k.banking.stamp[cur] = 0.0
     regimes.stats(k)
     regimes.adopt(k, cur, "reserve")
     return regimes.stats(k)["by_currency"][cur]

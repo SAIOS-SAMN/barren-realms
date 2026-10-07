@@ -10,7 +10,7 @@ kernel keeps its own chain-shaped record, so nothing has to be re-plumbed when t
     why, when - with a running sequence number.
   * Settlement blocks: every fiscal quarter the kernel seals a block: height, cycle, the previous
     block's hash, the quarter's receipts (hashed into a receipts root), each currency's money
-    supply and the ledger's declared mints and burns, the clearing union's STAMP positions, and a
+    supply and the ledger's declared mints and burns, and a
     state root hashing every account balance in the universe. Blocks link by hash; any tampering
     with a sealed block breaks verification.
   * Export: ``export_batch`` renders the blocks since a height as the batch a kernel would commit
@@ -94,7 +94,6 @@ class SettlementChain:
             "supply": {cur: b["total"] for cur, b in supply.items()},
             "declared": {f"{src}|{cur}": v for (src, cur), v in kernel.ledger.minted.items()},
             "burned": {f"{src}|{cur}": v for (src, cur), v in getattr(kernel.ledger, "burned", {}).items()},
-            "stamp": {k: round(v, 6) for k, v in (banking.stamp.items() if banking else [])},
             "state_root": self.state_root(kernel),
         }
         block = dict(body, hash=_h(body), receipts=list(self.pending))

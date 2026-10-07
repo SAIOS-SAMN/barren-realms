@@ -64,7 +64,6 @@ def genesis(kernel: Any) -> None:
     fxm.pools.clear()
     fxm.cross_pools.clear()
     kernel.banking.banks.clear()
-    kernel.banking.stamp.clear()
     fed = kernel.federal_reserve
     fed.treasury = 0
     fed.bounty_escrow.clear()
@@ -143,7 +142,6 @@ def found_currency(kernel: Any, planet: Any) -> Optional[str]:
                        governor=f"the first keeper of {planet.name}",
                        alignment=round(float(getattr(planet.civilization, "alignment", 0.0) or 0.0), 3), reserves=0)
     kernel.banking.banks[cur] = bank
-    kernel.banking.stamp[cur] = 0.0
     st["currencies"][cur] = {"name": name, "issuer": holder, "peoples": [holder], "founded": kernel.cycle_count,
                              "world": planet.id}
     regimes.stats(kernel)                                    # its regime record
@@ -285,7 +283,6 @@ def found_reserve(kernel: Any) -> Optional[str]:
     kernel.banking.banks["SOL"] = CentralBank(currency="SOL", name="the Reserve of the exchange",
                                               federation="the exchange", governor="the Reserve's board",
                                               alignment=0.0, reserves=0)
-    kernel.banking.stamp["SOL"] = 0.0
     st["reserve"] = {"founded": kernel.cycle_count}
     _event(kernel, "RESERVE", "The Reserve is founded", sorted(st["currencies"][c]["issuer"] for c in st["currencies"]),
            cause="two central banks trade through one exchange: someone must lend when it runs dry",

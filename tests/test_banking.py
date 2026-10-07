@@ -1,5 +1,5 @@
 """
-Regression tests for federations, central banks, the Galactic Clearing Union (STAMP), the
+Regression tests for federations, central banks, the
 Galactic ISSE's cross pairs, and the chain-shaped settlement record.
 """
 
@@ -31,25 +31,12 @@ class TestCentralBanks(unittest.TestCase):
         for cur in ("FRN", "THR", "VOID"):
             self.assertGreater(self.bs.banks[cur].reserves, 0)
 
-    def test_a_bank_buys_back_a_dumped_currency_and_books_it_in_stamp(self):
-        pool = self.kernel.fx_market.pools["FRN"]
-        pool["local"] = FX_POOL_SEED["FRN"][1] * 2
-        rate_before = self.kernel.fx_market.rate("FRN")
-        before = totals(self.kernel)
-        reserves_before = self.bs.banks["FRN"].reserves
-        self.bs._intervene(self.kernel, self.bs.banks["FRN"], self.kernel.settlement)
-        self.assertGreater(self.bs.banks["FRN"].reserves, reserves_before)
-        self.assertLess(self.kernel.fx_market.rate("FRN"), rate_before)     # the currency firms
-        self.assertLess(self.bs.stamp["FRN"], 0)                            # FRN owes the union...
-        self.assertAlmostEqual(self.bs.clearing_imbalance(), 0.0, places=6)  # ...and the union nets to zero
-        self.assertEqual(before, totals(self.kernel))                       # a transfer, not a mint
-
-    def test_deficit_federations_lend_dearer(self):
+    def test_the_rate_is_the_base_and_the_governors_temper(self):
+        from xylarium.config import POLICY_RATE_BASE
         bank = self.bs.banks["FRN"]
-        calm = self.bs.rate_for(bank)
-        self.bs.stamp["FRN"] = -300_000
-        self.bs.stamp["ISSE"] = 300_000
-        self.assertGreater(self.bs.rate_for(bank), calm)
+        self.assertIsNotNone(self.bs.rate_for(bank))
+        bank.alignment = 0.0
+        self.assertAlmostEqual(self.bs.rate_for(bank), POLICY_RATE_BASE)   # no clearing-union penalty any more
 
     def test_a_dry_port_draws_credit_and_repays_from_later_surplus(self):
         sec = next(s for s in self.kernel.sectors.values() if s.port and s.port.currency == "FRN")

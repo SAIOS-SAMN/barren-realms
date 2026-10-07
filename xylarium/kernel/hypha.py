@@ -24,7 +24,7 @@ import json
 from fractions import Fraction
 from typing import Any, Dict, List, Optional
 
-KINDS = ("pouw", "stamp", "fold")
+KINDS = ("pouw", "stamp", "fold")              # "stamp": the retired clearing union's lane (old ledgers only)
 
 
 def stats(kernel: Any) -> Dict[str, Any]:

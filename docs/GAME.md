@@ -492,7 +492,7 @@ into a Library players can browse and add to.
 
 `simulate_playtest.py` runs the universe with a company of autopilot players and reports, per run:
 - **Laws** (must hold): money conserved per currency (every change declared), matter conserved per commodity,
-  monetary churn, the quantity equation M/M* in band, throughput per sector, the clearing union's STAMP balance,
+  monetary churn, the quantity equation M/M* in band, throughput per sector,
   the settlement chain's integrity, central banks' solvency, the docket's balance, orbits never crossing,
   fertility collapsing under stress, invariant checks, no exceptions, determinism across processes.
 - **Observations** (bands of interest): exchange-rate drift, illiquid ports, wealth inequality, alignment balance,

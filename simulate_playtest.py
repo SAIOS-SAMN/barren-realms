@@ -183,11 +183,10 @@ def cosmos_census(kernel: GameKernel) -> Dict[str, Any]:
         "doctrines": doctrines,
         "chronicle_entries": kernel.chronicle.next_id - 1,
         "banking": {
-            "clearing_imbalance": kernel.banking.clearing_imbalance(),
             "chain_blocks": len(kernel.settlement.blocks),
             "chain_verify": kernel.settlement.verify(),
             "banks": {b.currency: {"reserves": kernel.banking.reserves(kernel, b), "loans": b.loans_outstanding,
-                                   "rate": b.policy_rate, "stamp": round(kernel.banking.stamp.get(b.currency, 0.0)),
+                                   "rate": b.policy_rate,
                                    "stats": dict(b.stats)} for b in kernel.banking.banks.values()},
             "cross_volume_sol": int(sum(kernel.fx_market.cross_volume.values())),
             "arbitrage": dict(getattr(kernel.fx_market, "arbitrage", {}) or {}),
@@ -1694,8 +1693,6 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         gate("native societies develop (stage advances)", ">= 1 by 5,000 cycles", advances,
              None if cycles < 5000 else advances >= 1)
         bk = c1["banking"]
-        gate("clearing union conserves STAMP (accounts net to zero)", "|sum| < 0.01", bk["clearing_imbalance"],
-             abs(bk["clearing_imbalance"]) < 0.01)
         gate("settlement chain seals and verifies", "blocks > 0, intact", f"{bk['chain_blocks']} blocks, "
              f"{bk['chain_verify'] or 'intact'}", bk["chain_blocks"] > 0 and not bk["chain_verify"])
         insolvent = [cur for cur, b in bk["banks"].items() if b["reserves"] < 0]
@@ -1989,11 +1986,11 @@ def print_report(r: Dict[str, Any]) -> None:
                   f"cheapest transit x{fb['cheapest_cost']}")
         bk = ce.get("banking", {})
         if bk:
-            print(f"  clearing union: STAMP imbalance {bk['clearing_imbalance']}, settlement chain {bk['chain_blocks']} blocks "
+            print(f"  settlement chain {bk['chain_blocks']} blocks "
                   f"(verify: {bk['chain_verify'] or 'ok'}), Galactic ISSE cross volume {bk['cross_volume_sol']:,} SOL, "
                   f"arbitrage {bk.get('arbitrage')}, widest cross-rate gap {bk.get('cross_gap_max', 0):.1%}")
             for cur, b in bk["banks"].items():
-                print(f"    {cur}: reserves {b['reserves']:,}  loans {b['loans']:,}  rate/q {b['rate']:.4f}  STAMP {b['stamp']:+,}  {b['stats']}")
+                print(f"    {cur}: reserves {b['reserves']:,}  loans {b['loans']:,}  rate/q {b['rate']:.4f}  {b['stats']}")
         for e in r.get("chronicle_samples", []):
             print(f"    - [{e['kind']}] {e['title']} (cycle {e['cycle']}): {e['body'][:220]}")
     mt = r["money"].get("matter")
