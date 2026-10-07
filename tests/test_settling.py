@@ -182,3 +182,48 @@ class TestOneClock(unittest.TestCase):
         self.assertEqual(whole, cut)
         self.assertIsNotNone(whole["civ:B"][2])                   # B fell...
         self.assertEqual(whole["civ:D"][1][0], "civ:A")          # ...and D crossed inside A's dominion
+
+
+class TestSettlingTheLiving(unittest.TestCase):
+    """How a people settles the living worlds of its chemistry is its own choice, booked on its history."""
+
+    def _pair(self):
+        k = _galaxy({1: (8.0, 0.0), 2: (8.0, 0.0005)})
+        a = _bubble(k, "civ:A", 1, 1.0, metab="cryogenic")
+        return k, a
+
+    def test_passing_the_living_by_holds_less(self):
+        k, a = self._pair()
+        with mock.patch.object(settling, "niche", return_value={"ICE": 1.0}):
+            a.update(policy="displace", living=0.3, depth=0.5)
+            full = settling.held(k, "civ:A", 1.5)
+            a.update(policy="pass")
+            self.assertAlmostEqual(settling.held(k, "civ:A", 1.5), full * 0.7, delta=full * 1e-6)
+
+    def test_a_people_that_passes_the_living_by_never_settles_a_waking_world_of_its_chemistry(self):
+        k, a = self._pair()
+        a.update(policy="pass", living=0.3, depth=0.5)
+        with mock.patch.object(settling, "xy", side_effect=lambda kernel, sid, t: (8.0, 0.0005 * (sid - 1))):
+            self.assertIsNone(settling.settled_at(k, (8.0, 0.0005), 1.5, home=2, alive_with="cryogenic"))
+            self.assertEqual(settling.settled_at(k, (8.0, 0.0005), 1.5, home=2, alive_with="biotic"), "civ:A")
+            a.update(policy="displace")
+            self.assertEqual(settling.settled_at(k, (8.0, 0.0005), 1.5, home=2, alive_with="cryogenic"), "civ:A")
+
+    def test_the_dark_displaces_and_the_light_passes_deep_life_by(self):
+        from xylarium.kernel import alignment, decide
+        home = SimpleNamespace(civilization=SimpleNamespace(alignment=0.0))
+        k = _galaxy({1: (8.0, 0.0)})
+        picks = {}
+        for name, char in (("dark", -1.0), ("light", 1.0)):
+            with mock.patch.object(settling, "living", return_value=(0.3, 0.95)), \
+                    mock.patch.object(alignment, "character", return_value=char), \
+                    mock.patch.object(decide, "mind_of_planet", return_value={"holder": name, "noise": 0.0}), \
+                    mock.patch.object(decide, "choose", side_effect=lambda kernel, opts, m, *s:
+                                      next((o for o in opts if o["value"] > o["cost"] * 1.1), None)):
+                picks[name] = settling.policy(k, name, home, "cryogenic", "ICE")["policy"]
+        self.assertEqual(picks, {"dark": "displace", "light": "pass"})
+
+    def test_where_nothing_of_its_chemistry_lives_there_is_nothing_to_choose(self):
+        k = _galaxy({1: (8.0, 0.0)})
+        with mock.patch.object(settling, "living", return_value=(0.0, 0.0)):
+            self.assertEqual(settling.policy(k, "civ:A", SimpleNamespace(), "biotic", "OCEANIC")["policy"], "displace")

@@ -189,6 +189,23 @@ def _rng(*parts: Any) -> random.Random:
     return random.Random(zlib.crc32(":".join(str(p) for p in parts).encode()))
 
 
+def plasticity(kernel: Any, planet: Any) -> float:
+    """How far its people retune themselves within a life (>= 1: the factor of its year's swing they meet without
+    a change of heredity). A world whose year swings its light and wind - an eccentric orbit, ((1 + e) / (1 - e))^2
+    from nearest to farthest - selects for retuning within a life; a sea under ice or in the deep, buffered from its
+    sky, does not. Read from the world its people live on."""
+    from xylarium.kernel import biosphere, worlds
+    try:
+        w = worlds.state_of_planet(kernel, planet)["world"]
+        med = worlds.best(worlds.of_planet(kernel, planet), biosphere.metabolism_of(kernel, planet))
+    except Exception:
+        return 1.0
+    if med is None or med.get("where") in ("under_ice", "deep"):
+        return 1.0
+    e = min(0.99, float(w.get("e") or 0.0))
+    return ((1.0 + e) / (1.0 - e)) ** 2
+
+
 def evolve(kernel: Any, planet: Any) -> None:
     from xylarium.kernel import fertility
     generations = (_quarter() / 100.0) / fertility.generation_years()
@@ -196,8 +213,11 @@ def evolve(kernel: Any, planet: Any) -> None:
     grad = gradient(kernel, planet)
     rng = _rng("genome", planet.id, kernel.cycle_count)
     n = max(1, planet.population)
+    # a plastic people meets part of its world's mismatch by retuning within a life, so selection on its heredity
+    # sees only what is left (the plastic response absorbs the rest): its line moves more slowly
+    shield = plasticity(kernel, planet)
     for axis in AXES:
-        sel = VARIANCE * grad.get(axis, 0.0) * generations
+        sel = VARIANCE * grad.get(axis, 0.0) * generations / shield
         drift = rng.gauss(0.0, math.sqrt(VARIANCE * generations / n))
         g[axis] = round(g.get(axis, 0.0) + sel + drift, 6)
 
@@ -283,6 +303,9 @@ def speciate(kernel: Any, planet: Any, parent_holder: str) -> Optional[str]:
         planet.society["lineage"] = f"{planet.id}.{strain}"
         who = f"strain {strain} of {planet.name}"
     st["speciations"] += 1
+    if civ is not None and planet.owner_id is None:
+        from xylarium.kernel import biosphere, descent
+        descent.split(kernel, parent_holder, new_holder, biosphere.metabolism_of(kernel, planet))
     born = st.setdefault("born_of", {})
     born[parent_holder] = born.get(parent_holder, 0) + 1
     st["events"].append({"cycle": kernel.cycle_count, "world": planet.id, "from": parent_holder, "as": who})

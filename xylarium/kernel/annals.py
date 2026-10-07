@@ -563,6 +563,16 @@ def _books(kernel: Any, j: Dict[str, Any], logs: List[str]) -> None:
         ss = float(home.society.get("self_sufficiency", 1.0) or 1.0)
         lost = n * ruled * max(0.0, rent.starved(ss, rho) - rent.starved(ss, 0.0))
         alignment.flow(civ, light=n * lived_gens - lost, dark=lost, why="work and rent")
+        # among the stars, a people that displaced the living worlds of its chemistry built that share of its
+        # dominion beyond its own system on their erasure, as deep as their life had climbed (settling.policy)
+        from xylarium.kernel import settling
+        b = settling.stats(kernel).get(who) if j.get("cross") is not None else None
+        if b is not None and b.get("policy") == "displace" and b.get("living"):
+            among = max(0.0, lived_gens - float(j["cross"]))
+            held = settling.held(kernel, who, j["end"] if fell is None else fell)
+            settled = max(0.0, 1.0 - float(b.get("home_worlds", 1)) / max(1.0, held))   # beyond its own system
+            alignment.flow(civ, dark=n * among * settled * float(b["living"]) * float(b.get("depth", 0.0)),
+                           why="settling the living")
     if fell is not None:
         logs.append(_fall(kernel, who, j["worlds"], fell_epoch))
         st["falls"] += 1

@@ -39,6 +39,13 @@ what its sky's particles split (hydromagnetics.radiolysis) has less to eat where
 one living under an open sky has its repair tuned to its home's dose - widened by how far its year swings it
 (plasticity: a variable world selects for retuning within a life) - and loses newborns where the dose runs beyond
 that (hydromagnetics.health's law). Each ring of the galaxy counts as the share of a colony there its people keeps.
+
+How it settles is its own choice, and an act like any other (policy). Some of the worlds it can live on already
+carry life of its own chemistry - the same media, the same food. Displacing it makes room for its own reproduction
+at the cost of a biosphere's climb (erasure: booked dark on its history, as deep as that life had climbed toward a
+mind); passing those worlds by keeps its history clean and its dominion smaller. Life of another chemistry eats
+other media and is never in its way. A mind that counts others' lives as its own (the Light) weighs that erasure
+in full; one that counts nothing (the Dark) does not weigh it at all - decide.choose, as every choice.
 """
 
 import functools
@@ -89,8 +96,8 @@ def band(kernel: Any, home: Any) -> List[float]:
     parts = hydromagnetics.dose_parts(w)
     food = float(med.get("radiolysis", 0.0)) / max(1e-30, float(med.get("energy", 0.0)))
     open_sky = med.get("where") not in ("under_ice", "deep")
-    e = min(0.99, float(w.get("e") or 0.0))
-    plastic = ((1.0 + e) / (1.0 - e)) ** 2 if open_sky else 1.0      # its year's swing of light and wind
+    from xylarium.kernel import genome
+    plastic = genome.plasticity(kernel, home)                      # its year's swing of light and wind
     return [round(cr0, 6), round(food * parts["power_cosmic"], 9), 1.0 if open_sky else 0.0,
             round(parts["cosmic"], 6), round(plastic, 6)]
 
@@ -222,6 +229,58 @@ def lives_on(metabolism: str, home_type: Optional[str], kind: str) -> bool:
     return kind == home_type or universe.habitability(metabolism, kind) > 0
 
 
+def _life_by_kind(kernel: Any) -> Dict[str, Dict[str, List[float]]]:
+    """Of the charted worlds of each kind, the share alive in each chemistry and how far, on average, that life has
+    climbed toward a mind (lifeline.life_of: rungs climbed over rungs needed). {kind: {region: [share, depth]}}."""
+    def count() -> Dict[str, Dict[str, List[float]]]:
+        from xylarium.kernel import lifeline
+        n: Dict[str, int] = {}
+        alive: Dict[str, Dict[str, List[float]]] = {}
+        for sec in kernel.sectors.values():
+            for p in getattr(sec, "planets", []) or []:
+                n[p.planet_type] = n.get(p.planet_type, 0) + 1
+                life = lifeline.life_of(kernel, p)
+                if life and life.get("of"):
+                    a = alive.setdefault(p.planet_type, {}).setdefault(life["region"], [0.0, 0.0])
+                    a[0] += 1.0
+                    a[1] += float(life["rung"]) / float(life["of"])
+        return {kind: {reg: [c / n[kind], d / c] for reg, (c, d) in regs.items()} for kind, regs in alive.items()}
+    if not hasattr(kernel, "caches"):
+        return count()
+    from xylarium.kernel import cache
+    return cache.memo(kernel, "settling_life", "by_kind", count, epoch=kernel.cycle_count)
+
+
+def living(kernel: Any, metabolism: str, home_type: Optional[str] = None) -> Tuple[float, float]:
+    """Of the worlds a people can live on, the share that carry life of its own chemistry, and how far that life has
+    climbed (its mean depth, 0 .. 1)."""
+    life = _life_by_kind(kernel)
+    share = depth = 0.0
+    for kind, w in niche(kernel, metabolism, home_type).items():
+        s, d = (life.get(kind) or {}).get(metabolism, [0.0, 0.0])
+        share += w * s
+        depth += w * s * d
+    return share, (depth / share if share > 0 else 0.0)
+
+
+def policy(kernel: Any, who: str, home: Any, metabolism: str, home_type: Optional[str]) -> Dict[str, Any]:
+    """How a people settles the living worlds of its chemistry, chosen as it crosses: "displace" (they are worth more
+    to it than the erasure costs it, as it counts others' lives) or "pass" (they are not)."""
+    from xylarium.kernel import alignment, decide
+    share, depth = living(kernel, metabolism, home_type)
+    out = {"policy": "pass", "living": round(share, 6), "depth": round(depth, 6)}
+    if share <= 0:
+        out["policy"] = "displace"                         # nothing of its chemistry lives where it goes
+        return out
+    civ = getattr(home, "civilization", None)
+    light = (1.0 + alignment.character(civ)) / 2.0 if civ is not None else 0.5   # 1 the Light, 0 absolute darkness
+    m = decide.mind_of_planet(kernel, home)
+    pick = decide.choose(kernel, [decide.option("displace", light * share * depth, share)], m, who, "settle")
+    if pick is not None:
+        out["policy"] = "displace"
+    return out
+
+
 def niche(kernel: Any, metabolism: str, home_type: Optional[str] = None) -> Dict[str, float]:
     """The worlds a people can live on, by kind, each as its share of them (weighted by how common each kind is
     among charted worlds)."""
@@ -283,6 +342,7 @@ def begin(kernel: Any, who: str, home: Any, t0: float, gen_years: float) -> Dict
                               "share": share, "hop": hop,
                               "g": settle_rate(kernel, home) * gens_per_gyr, "rmax": r0 + cosmos.R_MAX_KPC,
                               "cuts": {}, "enclosed": None, "fell": None, "band": band(kernel, home)}
+    b.update(policy(kernel, who, home, metab, home.planet_type))
     b["v"] = b["hop"] * b["g"]                                 # kpc per Gyr
     sec = kernel.sectors.get(home.sector_id)                   # the worlds of its own system it can live on: what
     b["home_worlds"] = max(1, sum(1 for p in (sec.planets if sec is not None else [])   # no neighbour takes from it
@@ -345,6 +405,8 @@ def held(kernel: Any, who: str, t: float) -> float:
             if lives_on(other.get("metab", "biotic"), other.get("home_type"), kind):
                 free *= 1.0 - frac
         left += w * free
+    if b.get("policy") == "pass":
+        left *= 1.0 - float(b.get("living", 0.0))           # the living worlds of its chemistry it passes by
     room = room_formed(kernel, b, t) * b["share"]           # what it has kindled beyond a white hole (gateways)
     return max(floor, systems_in(b["r0"], reach, b.get("band")) * b["share"] * left + room)
 
@@ -491,17 +553,19 @@ def next_contact(kernel: Any, until: float) -> Optional[Tuple[str, str, Tuple[fl
     return best
 
 
-def settled_by(kernel: Any, sector_id: int, t: float, planet_type: Optional[str] = None) -> Optional[str]:
+def settled_by(kernel: Any, sector_id: int, t: float, planet_type: Optional[str] = None,
+               alive_with: Optional[str] = None) -> Optional[str]:
     """The people whose dominion has settled this system at coordinate epoch t - one that can live on a world of
-    `planet_type`, when given - if any (the first to settle it)."""
+    `planet_type`, when given - if any (the first to settle it). alive_with: the chemistry of the life on that world,
+    which a people that passes living worlds by leaves alone."""
     p = xy(kernel, sector_id, t)
     if p is None:
         return None
-    return settled_at(kernel, p, t, planet_type, home=sector_id)
+    return settled_at(kernel, p, t, planet_type, home=sector_id, alive_with=alive_with)
 
 
 def settled_at(kernel: Any, p: Tuple[float, float], t: float, planet_type: Optional[str] = None,
-               home: Optional[int] = None) -> Optional[str]:
+               home: Optional[int] = None, alive_with: Optional[str] = None) -> Optional[str]:
     """The people whose dominion covers a point of the disc (kpc) at coordinate epoch t (the first to settle it);
     a people's own home system (`home`) is never its own. Where its band keeps only a share of a colony (fit), it has
     settled that share of the systems there - which ones, fixed by the seed (the system and the people)."""
@@ -514,6 +578,8 @@ def settled_at(kernel: Any, p: Tuple[float, float], t: float, planet_type: Optio
             continue
         if planet_type is not None and not lives_on(b.get("metab", "biotic"), b.get("home_type"), planet_type):
             continue
+        if alive_with is not None and b.get("policy") == "pass" and b.get("metab") == alive_with:
+            continue                                       # it passes living worlds of its own chemistry by
         c0 = xy(kernel, b["sid"], t)
         if c0 is None or math.hypot(p[0] - c0[0], p[1] - c0[1]) > radius(b, t):
             continue
@@ -539,14 +605,14 @@ def mark_wakings(kernel: Any, peoples: Dict[str, List[Any]]) -> None:
     """A people whose world another's settlers had reached when its minds woke wakes among their settlements - read on
     the one coordinate clock, whenever the settlers' own annals come to it. Allowed unless a steward kept the system
     a sanctuary (ascendance.sanctuary)."""
-    from xylarium.kernel import ascendance, clocks, history
+    from xylarium.kernel import ascendance, biosphere, clocks, history
     for who, worlds in sorted(peoples.items()):
         home = max(worlds, key=lambda p: p.population)
         arisen = home.society.get("arisen") or {}
         if "epoch" not in arisen or arisen.get("under") or ascendance.sanctuary(kernel, home.sector_id):
             continue
         t = float(arisen["epoch"]) / max(1e-12, clocks.lapse(kernel, home.sector_id))
-        holder = settled_by(kernel, home.sector_id, t, home.planet_type)
+        holder = settled_by(kernel, home.sector_id, t, home.planet_type, biosphere.metabolism_of(kernel, home))
         if holder is None or holder == who:
             continue
         arisen["under"] = holder
