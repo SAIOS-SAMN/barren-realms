@@ -131,17 +131,22 @@ def prospects(kernel: Any, captain: Any, sid: int, calling: str) -> float:
         port = sec.port
         if port is None:
             return 0.0
-        from xylarium.kernel.economy import EconomyManager
+        from xylarium.kernel import comms
         cargo = captain.ship.cargo
+        here = captain.sector_id == sid
         v = 0.0
         for comm in ("ORE", "ORGANICS", "EQUIPMENT"):
             base = COMMODITY_CONFIG[comm]["base_price"]
-            buy_p, sell_p = EconomyManager.get_unit_prices(port, comm)
+            word = comms.known_to(kernel, captain, sid, comm)       # live where it stands; elsewhere, what it heard
+            if word is None:
+                continue                                            # an unheard port holds no prospect
+            buy_p, sell_p, _ = word
             held = getattr(cargo, comm.lower(), 0)
-            if held and port.buys.get(comm, False):
+            if held and port.buys.get(comm, False) and buy_p > 0:
                 v += held * max(0.0, buy_p - base)                 # selling above what it is worth elsewhere
-            if port.sells.get(comm, False) and port.stock.get(comm, 0) > 0:
-                room = min(cargo.available_space, port.stock.get(comm, 0))
+            if port.sells.get(comm, False) and sell_p > 0:
+                stock = port.stock.get(comm, 0) if here else cargo.available_space   # far stock is not known
+                room = min(cargo.available_space, stock)
                 v += room * max(0.0, base - sell_p)                # buying below
         return v
     if calling == "industrialist":
@@ -176,6 +181,15 @@ def calling_of(captain: Any) -> str:
             AIPersonality.INDUSTRIALIST: "industrialist"}.get(captain.personality, "trader")
 
 
+def _heard_of(kernel: Any, captain: Any, sid: int) -> bool:
+    """Has any word of the port at `sid` reached this captain (or does it stand there)?"""
+    sec = kernel.sectors.get(sid)
+    if sec is None or sec.port is None:
+        return True                                               # no port: nothing to hear of
+    from xylarium.kernel import comms
+    return any(comms.known_to(kernel, captain, sid, c) is not None for c in ("ORE", "ORGANICS", "EQUIPMENT"))
+
+
 def destination(kernel: Any, captain: Any, sector: Any, calling: Optional[str] = None, reach: int = 3,
                 score: Optional[Callable[[int], float]] = None, here: bool = False) -> Optional[int]:
     """The first jump toward the place most worth going to (or None: nowhere is worth the trip). With
@@ -185,17 +199,37 @@ def destination(kernel: Any, captain: Any, sector: Any, calling: Optional[str] =
     dist, parent = topology.tree(kernel, sector.id, reach)
     wage = float(kernel.crew_wage(captain)) if hasattr(kernel, "crew_wage") else 1.0
     opts = []
+    seen: Dict[int, float] = {}
+    unheard: List[int] = []
     for sid in sorted(dist):
-        h = dist[sid]
-        if h == 0 and not here:
+        if dist[sid] == 0 and not here:
             continue
-        v = score(sid) if score is not None else prospects(kernel, captain, sid, calling)
+        if score is None and calling == "trader" and not _heard_of(kernel, captain, sid):
+            unheard.append(sid)                                   # a market it has no word of
+            continue
+        seen[sid] = score(sid) if score is not None else prospects(kernel, captain, sid, calling)
+    if unheard:
+        # what it expects of a market it has heard nothing of: what the markets it has heard of offer, on the mean
+        # (its own experience as the prior - no constant); a trader that has heard of none expects nothing
+        heard_vals = [v for v in seen.values()]
+        prior = sum(heard_vals) / len(heard_vals) if heard_vals else 0.0
+        for sid in unheard:
+            seen[sid] = prior
+    for sid in sorted(seen):
+        h = dist[sid]
+        v = seen[sid]
         if v <= 0:
             continue
         opts.append(decide.option(f"go:{sid}", wage * h, v / (1.0 + h) ** 2, sid=sid))
     best = pick(kernel, captain, opts, "destination")
     if best is None or best["sid"] == sector.id:
         return None
+    if calling == "trader" and score is None:                 # it sets out on word: measured when it arrives
+        from xylarium.kernel import comms
+        ages = [w[2] for w in (comms.known_to(kernel, captain, best["sid"], c) for c in ("ORE", "ORGANICS", "EQUIPMENT"))
+                if w is not None]
+        comms.plan(kernel, captain, best["sid"], best["value"] * (1.0 + dist[best["sid"]]) ** 2,
+                   max(ages) if ages else 0)
     return topology.first_hop(parent, sector.id, best["sid"])
 
 

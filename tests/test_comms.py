@@ -84,3 +84,22 @@ class TestRelays(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestChannelsAreData(unittest.TestCase):
+    def test_a_new_kind_is_an_entry_and_its_latency_is_its_rule(self):
+        k = fresh()
+        a, b = _ports(k)[:2]
+        with mock.patch.dict(comms.CHANNELS, {"slow": {"cap": "relays", "goods": {"EQUIPMENT": 1}, "joins": "lane",
+                                                       "latency": "light"}}):
+            comms.stats(k)["posts"][f"slow:{comms._lane(a, b)}"] = {"keeper": "civ:K", "channel": "slow",
+                                                                    "goods": {"EQUIPMENT": 1}, "upkeep": "0",
+                                                                    "dark": False}
+            post = comms.stats(k)["posts"][f"slow:{comms._lane(a, b)}"]
+            with mock.patch("xylarium.kernel.news.light_years", return_value=50.0):
+                self.assertEqual(comms.latency_cycles(k, post, a, b), 5000)
+                with mock.patch.object(comms, "_keeper_of", return_value=None):
+                    comms.relay(k, tick=1)                     # its word has not crossed yet
+                self.assertFalse(any(key.startswith(f"{a}|")
+                                     for key in comms.stats(k)["views"].get(str(b), {})))
+            self.assertGreater(comms.post_cost_sol(k, "slow"), 0)

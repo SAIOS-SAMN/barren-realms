@@ -27,6 +27,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 POST_HOLDS = 25                  # a relay post is a parked scout-class hull: its holds in EQUIPMENT (config catalog)
 
+# Channels are data. Each kind: the capability that lets a people build it (technology: reached by its own path, no
+# order), the counted goods an end is built from, its upkeep (a share of what it cost, burned each quarter at its
+# money's rate), what it joins ("lane": a warp lane's two systems), and how long word takes across one join
+# ("hop": a lane's jump time - one cycle). A new kind - photonic arrays, a throat's relay, anything a people learns
+# to build - is a new entry here, never a new path in the code; its latency is never a constant beyond the
+# physics of what it is.
+CHANNELS: Dict[str, Dict[str, Any]] = {
+    "relays": {"cap": "relays", "goods": {"EQUIPMENT": POST_HOLDS}, "joins": "lane", "latency": "hop"},
+}
+
 
 def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "comms")
@@ -49,19 +59,19 @@ def own(kernel: Any, sid: int) -> Dict[str, List[int]]:
         return {}
     out = {}
     for comm in sorted(port.stock):
-        sell = EconomyManager.get_unit_prices(port, comm)[1]
+        buy, sell = EconomyManager.get_unit_prices(port, comm)
         if sell and sell > 0:
-            out[_key(sid, comm)] = [int(sell), int(kernel.cycle_count)]
+            out[_key(sid, comm)] = [int(sell), int(kernel.cycle_count), int(buy or 0)]   # [sells at, when, pays]
     return out
 
 
 def merge(dst: Dict[str, List[int]], src: Dict[str, List[int]]) -> int:
     """Newer word wins; returns how many entries were renewed."""
     n = 0
-    for k, (price, stamp) in src.items():
+    for k, entry in src.items():
         got = dst.get(k)
-        if got is None or got[1] < stamp:
-            dst[k] = [price, stamp]
+        if got is None or got[1] < entry[1]:
+            dst[k] = list(entry)
             n += 1
     return n
 
@@ -82,6 +92,7 @@ def arrive(kernel: Any, carrier: str, sid: int) -> None:
     c = stats(kernel)["carried"].setdefault(carrier, {})
     merge(v, c)
     merge(c, v)
+    _arrived(kernel, carrier, sid)
 
 
 def land(kernel: Any, sid: int, word: Dict[str, List[int]]) -> None:
@@ -98,6 +109,53 @@ def heard(kernel: Any, at: int, port_sid: int, comm: str) -> Optional[Tuple[int,
         return (got[0], got[1]) if got else None
     got = stats(kernel)["views"].get(str(at), {}).get(_key(port_sid, comm))
     return (got[0], got[1]) if got else None
+
+
+def known_to(kernel: Any, captain: Any, sid: int, comm: str) -> Optional[Tuple[int, int, int]]:
+    """A port's prices of a good as a captain knows them: (pays, sells at, age in cycles) - live where it stands;
+    elsewhere the freshest word it carries or its present port holds. None if no word has reached it."""
+    from xylarium.kernel.economy import EconomyManager
+    if captain.sector_id == sid:
+        port = getattr(kernel.sectors.get(sid), "port", None)
+        if port is None:
+            return None
+        buy, sell = EconomyManager.get_unit_prices(port, comm)
+        return int(buy or 0), int(sell or 0), 0
+    key = _key(sid, comm)
+    st = stats(kernel)
+    cands = [st["carried"].get(f"captain:{captain.id}", {}).get(key),
+             st["views"].get(str(captain.sector_id), {}).get(key)]
+    best = max((c for c in cands if c), key=lambda c: c[1], default=None)
+    if best is None:
+        return None
+    return (int(best[2]) if len(best) > 2 else 0), int(best[0]), int(kernel.cycle_count - best[1])
+
+
+def plan(kernel: Any, captain: Any, sid: int, expected: float, age: int) -> None:
+    """A trader sets out on word: what it expects there, and how old that word is (measured on arrival)."""
+    stats(kernel).setdefault("plans", {})[str(captain.id)] = {"to": int(sid), "expected": round(expected, 4),
+                                                              "age": int(age), "at": int(kernel.cycle_count)}
+
+
+def _arrived(kernel: Any, carrier: str, sid: int) -> None:
+    """A trader that set out on word reaches its port: what it finds there, against what it expected."""
+    if not carrier.startswith("captain:"):
+        return
+    st = stats(kernel)
+    p = st.get("plans", {}).get(carrier.split(":", 1)[1])
+    if p is None or p["to"] != sid:
+        return
+    cap = kernel.captains.get(carrier.split(":", 1)[1])
+    if cap is None:
+        return
+    from xylarium.kernel import motive
+    found = motive.prospects(kernel, cap, sid, "trader")             # now it stands there: live prices
+    t = st.setdefault("trips", {"n": 0, "expected": 0.0, "found": 0.0, "age": 0})
+    t["n"] += 1
+    t["expected"] = round(t["expected"] + p["expected"], 4)
+    t["found"] = round(t["found"] + found, 4)
+    t["age"] += p["age"]
+    st["plans"].pop(carrier.split(":", 1)[1], None)
 
 
 # ---------------------------------------------------------------------- relays
@@ -120,9 +178,26 @@ def _keeper_of(kernel: Any, sid: int) -> Optional[str]:
         return None
 
 
-def relay(kernel: Any) -> int:
-    """Each cycle, word crosses every live post's lane - one hop - within its keeper's network, and passes to a port's
-    own view where the port's realm speaks the keeper's protocol. Returns the entries renewed."""
+def latency_cycles(kernel: Any, post: Dict[str, Any], a: int, b: int) -> int:
+    """How many cycles word takes across one post's join, by its channel's rule (never zero)."""
+    rule = CHANNELS.get(post.get("channel", "relays"), CHANNELS["relays"])["latency"]
+    if rule == "hop":
+        return 1                                                      # a lane's jump time
+    if rule == "light":
+        from xylarium.kernel import news
+        return max(1, int(round(news.light_years(kernel, a, b) * 100)))
+    return 1
+
+
+def _ends(lane: str) -> Tuple[int, int]:
+    a, b = lane.split(":", 1)[-1].split("|")
+    return int(a), int(b)
+
+
+def relay(kernel: Any, tick: int = 0) -> int:
+    """One cycle of the networks: word crosses every live post whose latency this cycle completes - one join - within
+    its keeper's network, and passes to a port's own view where the port's realm speaks the keeper's protocol.
+    Returns the entries renewed."""
     st = stats(kernel)
     nets = st["nets"]
     renewed = 0
@@ -131,7 +206,9 @@ def relay(kernel: Any) -> int:
             continue
         keeper = post["keeper"]
         net = nets.setdefault(keeper, {})
-        a, b = (int(x) for x in lane.split("|"))
+        a, b = _ends(lane)
+        if tick % latency_cycles(kernel, post, a, b):
+            continue
         va, vb = net.setdefault(str(a), {}), net.setdefault(str(b), {})
         tongue = _protocol(kernel, keeper)
         for sid, nv in ((a, va), (b, vb)):
@@ -145,10 +222,10 @@ def relay(kernel: Any) -> int:
     return renewed
 
 
-def post_cost_sol(kernel: Any) -> float:
-    """A post's goods at their price: a scout-class hull's holds of equipment."""
+def post_cost_sol(kernel: Any, channel: str = "relays") -> float:
+    """An end's goods at their price (its channel's goods, valued at backing.value_sol)."""
     from xylarium.kernel import backing
-    return POST_HOLDS * float(backing.value_sol(kernel, "EQUIPMENT") or 0.0)
+    return sum(n * float(backing.value_sol(kernel, c) or 0.0) for c, n in CHANNELS[channel]["goods"].items())
 
 
 def _staleness(kernel: Any, a: int, b: int) -> float:
@@ -159,7 +236,8 @@ def _staleness(kernel: Any, a: int, b: int) -> float:
     now = kernel.cycle_count
     for here, there in ((a, b), (b, a)):
         v = stats(kernel)["views"].get(str(here), {})
-        for k, (price, stamp) in v.items():
+        for k, entry in v.items():
+            stamp = entry[1]
             if not k.startswith(f"{there}|"):
                 continue
             sigma = news.sigma(kernel, there, k.split("|", 1)[1])
@@ -174,16 +252,27 @@ def build(kernel: Any) -> List[str]:
     at a port in the fund's money and held in the post."""
     from fractions import Fraction
     from xylarium.config import POLICY_RATE_BASE
-    from xylarium.kernel import board, decide, endowments, fibres, relations, technology
+    from xylarium.kernel import endowments, relations
     st = stats(kernel)
     logs: List[str] = []
-    cost = post_cost_sol(kernel)
-    if cost <= 0:
-        return logs
     peoples = relations._peoples(kernel)
     fund = endowments.stats(kernel)["funds"] if "endowments" in getattr(kernel, "state", {}) else {}
+    for channel, spec in sorted(CHANNELS.items()):
+        cost = post_cost_sol(kernel, channel)
+        if cost > 0 and spec["joins"] == "lane":
+            logs += _build_on_lanes(kernel, channel, spec, cost, peoples, fund)
+    return logs
+
+
+def _build_on_lanes(kernel: Any, channel: str, spec: Dict[str, Any], cost: float, peoples: Dict[str, Any],
+                    fund: Dict[str, Any]) -> List[str]:
+    from fractions import Fraction
+    from xylarium.config import POLICY_RATE_BASE
+    from xylarium.kernel import board, decide, fibres, technology
+    st = stats(kernel)
+    logs: List[str] = []
     for line in sorted(board.progenitors(kernel)):
-        if not technology.has(kernel, line, "relays") or line not in fund or not peoples.get(line):
+        if not technology.has(kernel, line, spec["cap"]) or line not in fund or not peoples.get(line):
             continue
         home = max(peoples[line], key=lambda p: (p.population, p.id))
         m = decide.mind_of_planet(kernel, home)
@@ -193,29 +282,30 @@ def build(kernel: Any) -> List[str]:
                 a, b = (int(x) for x in str(lane_key).split("-")[:2])     # fibres.key
             except ValueError:
                 continue
-            lane = _lane(a, b)
+            lane = f"{channel}:{_lane(a, b)}"
             if lane in st["posts"] or _keeper_of(kernel, a) != line:
                 continue
             if fund[line]["sol"] < cost:
                 break
             value = decide.worth(kernel, float(flow) * _staleness(kernel, a, b), m)
             upkeep = decide.worth(kernel, cost * POLICY_RATE_BASE, m)
-            if decide.choose(kernel, [decide.option("relay_post", cost + upkeep, value)], m,
-                             line, lane, "relay_post") is None:
+            if decide.choose(kernel, [decide.option(f"{channel}_post", cost + upkeep, value)], m,
+                             line, lane, "post") is None:
                 continue
+            goods = spec["goods"]
             sol_port = next((s.port for s in sorted(kernel.sectors.values(), key=lambda s: s.id)
                              if s.port is not None and s.port.currency == "SOL"
-                             and s.port.stock.get("EQUIPMENT", 0) >= POST_HOLDS), None)
+                             and all(s.port.stock.get(c, 0) >= n for c, n in goods.items())), None)
             if sol_port is None:
-                break                                             # no port sells the equipment: nothing is built
+                break                                             # no port sells its goods: nothing is built
             paid = int(cost)
-            fund[line]["sol"] -= paid                             # the fund pays the port that sells it (a transfer)
+            fund[line]["sol"] -= paid                             # the fund pays the port that sells them (a transfer)
             sol_port.treasury += paid
-            sol_port.stock["EQUIPMENT"] -= POST_HOLDS             # the goods leave the port's shelves, into the post
-            st["posts"][lane] = {"keeper": line, "built": kernel.cycle_count, "goods": {"EQUIPMENT": POST_HOLDS},
-                                 "upkeep": str(Fraction(cost) * Fraction(POLICY_RATE_BASE).limit_denominator(10 ** 9)),
-                                 "dark": False}
-            logs.append(f"[COMMS] The {line.split(':', 1)[-1]} raise a relay post on lane {lane}.")
+            for c, n in goods.items():
+                sol_port.stock[c] -= n                            # the goods leave the port's shelves, into the post
+            st["posts"][lane] = {"keeper": line, "channel": channel, "built": kernel.cycle_count, "goods": dict(goods),
+                                 "upkeep": str(Fraction(paid) * Fraction(POLICY_RATE_BASE)), "dark": False}
+            logs.append(f"[COMMS] The {line.split(':', 1)[-1]} raise a {channel} post on {lane}.")
     return logs
 
 
@@ -227,7 +317,7 @@ def upkeep(kernel: Any) -> None:
     st = stats(kernel)
     fund = endowments.stats(kernel)["funds"] if "endowments" in getattr(kernel, "state", {}) else {}
     for lane, post in sorted(st["posts"].items()):
-        a, b = (int(x) for x in lane.split("|"))
+        a, b = _ends(lane)
         closed = transit.blocks(kernel, post["keeper"], a, b) or transit.blocks(kernel, post["keeper"], b, a)
         due = int(Fraction(post["upkeep"]))
         f = fund.get(post["keeper"])
@@ -256,16 +346,36 @@ def season(kernel: Any) -> List[str]:
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
     upkeep(kernel)
     if stats(kernel)["posts"]:
-        for _ in range(FISCAL_QUARTER_CYCLES):
-            relay(kernel)
+        for tick in range(FISCAL_QUARTER_CYCLES):
+            relay(kernel, tick)
     if (kernel.cycle_count // FISCAL_QUARTER_CYCLES) % 4:
         return []
     return build(kernel)
 
 
+def market_readout(kernel: Any) -> Dict[str, Any]:
+    """What the word is doing to the markets: the spread of each good's price across the ports (max/min - 1, from the
+    ports' own boards), the traders' trips (expected on word, found on arrival, the gap, the word's mean age) and the
+    live posts."""
+    from xylarium.kernel.economy import EconomyManager
+    spreads = {}
+    for comm in ("ORE", "ORGANICS", "EQUIPMENT"):
+        ps = [EconomyManager.get_unit_prices(s.port, comm)[1] for s in kernel.sectors.values()
+              if s.port is not None and s.port.stock.get(comm, 0) > 0]
+        ps = [p for p in ps if p and p > 0]
+        if len(ps) > 1:
+            spreads[comm] = round(max(ps) / min(ps) - 1.0, 4)
+    t = stats(kernel).get("trips", {"n": 0, "expected": 0.0, "found": 0.0, "age": 0})
+    n = max(1, t["n"])
+    return {"spread": spreads, "trips": t["n"], "expected_mean": round(t["expected"] / n, 2),
+            "found_mean": round(t["found"] / n, 2), "gap_mean": round((t["expected"] - t["found"]) / n, 2),
+            "word_age_mean_cycles": round(t["age"] / n, 2),
+            "posts": sum(1 for p in stats(kernel)["posts"].values() if not p.get("dark"))}
+
+
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    return {"views": len(st["views"]), "carriers": len(st["carried"]),
+    return {"views": len(st["views"]), "carriers": len(st["carried"]), "market": market_readout(kernel),
             "posts": sum(1 for p in st["posts"].values() if not p.get("dark")),
             "dark_posts": sum(1 for p in st["posts"].values() if p.get("dark"))}
 
