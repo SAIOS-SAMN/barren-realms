@@ -129,6 +129,15 @@ def pulls(kernel: Any, planet: Any) -> Dict[str, float]:
     return {"energy": energy, "materials": materials, "biology": bio, "information": information}
 
 
+def chance(units_per_year: float, years: float) -> float:
+    """THE ONE LAW of thought becoming a find (coordinator ruling): thought in knowledge units a standard year, over
+    an exact span of years - 1 - exp(-(units_per_year / KNOWLEDGE_UNIT) x years) - so a coarse step and fine steps
+    agree. Every chance a people's thought gives (a crystal, a capability, a relic read, a chemistry) is this."""
+    import math
+    from xylarium.config import KNOWLEDGE_UNIT
+    return 1.0 - math.exp(-max(0.0, units_per_year) / KNOWLEDGE_UNIT * max(0.0, years))
+
+
 def lived(kernel: Any, planet: Any) -> float:
     """Knowledge units a world's people adds a year by living - from the day it wakes, surplus or none: every member
     thinks as it hunts, gathers, tends and raises its young (LIVED_SHARE), in the sciences its life touches

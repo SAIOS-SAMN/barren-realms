@@ -412,7 +412,7 @@ def _learn(kernel: Any, holder: str, rec: Dict[str, Any], neighbours: List[str])
     held = {norm(x) for x in v}
     stocks = knowledge.stocks(kernel, holder)
     rng = _rng("crystals", holder, kernel.cycle_count)
-    thought = 1.0 - math.exp(-rec["effort"])
+    thought = knowledge.chance(rec["effort"] / (_quarter() / 100.0), _quarter() / 100.0)   # its quarter's thought
     # a people thinks first in the dimensions it was born into: volume-dwellers find the stack, surface-dwellers
     # the mirror (its most populous world is its home)
     home = max(rec["worlds"], key=lambda p: p.population) if rec["worlds"] else None

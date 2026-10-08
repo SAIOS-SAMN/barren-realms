@@ -288,7 +288,9 @@ def _discover(kernel: Any, holder: str, worlds: List[Any], effort_q: float) -> L
     st = stats(kernel)
     have = set(known(kernel, holder))
     rng = random.Random(zlib.crc32(f"chem:{holder}:{kernel.cycle_count}".encode()))
-    thought = 1.0 - math.exp(-effort_q)
+    from xylarium.kernel import intellect
+    yq = intellect._quarter() / 100.0
+    thought = knowledge.chance(effort_q / yq, yq)             # its quarter's thought, by the one law
     exp = knowledge.experience(kernel, holder, "materials")
     found = []
     for sym in sorted(_encountered(kernel, holder, worlds) - have):

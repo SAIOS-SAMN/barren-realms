@@ -256,7 +256,7 @@ def season(kernel: Any) -> List[str]:
         home = max(worlds, key=lambda p: p.population)
         held = st["of"].setdefault(who, {})
         stocks = knowledge.stocks(kernel, who)
-        thought = 1.0 - math.exp(-sum(knowledge.effort(kernel, p) + knowledge.lived(kernel, p) for p in worlds) / 1000.0)
+        thought = knowledge.chance(sum(knowledge.effort(kernel, p) + knowledge.lived(kernel, p) for p in worlds), 1.0)
         rng = scheduler.rng(kernel, "technology", who, kernel.cycle_count)
         une = unearned(kernel, who)
         for cap in CAPS:

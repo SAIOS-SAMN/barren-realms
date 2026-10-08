@@ -100,7 +100,7 @@ def _prove(kernel: Any, who: str, worlds: List[Any]) -> None:
     if not held:
         return
     stocks = knowledge.stocks(kernel, who)
-    thought = 1.0 - math.exp(-sum(knowledge.effort(kernel, p) + knowledge.lived(kernel, p) for p in worlds) / 1000.0)
+    thought = knowledge.chance(sum(knowledge.effort(kernel, p) + knowledge.lived(kernel, p) for p in worlds), 1.0)
     rng = scheduler.rng(kernel, "prove", who, kernel.cycle_count)
     for cap in sorted(held):
         if rng.random() < laws.mastery(stocks.get(technology.NEEDS.get(cap, "information"), 0.0),

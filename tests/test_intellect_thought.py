@@ -21,3 +21,10 @@ class TestIntellectThought(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOneThoughtLaw(unittest.TestCase):
+    def test_a_coarse_step_and_fine_steps_agree(self):
+        year = knowledge.chance(50.0, 1.0)
+        quarter = knowledge.chance(50.0, 0.25)
+        self.assertAlmostEqual(1.0 - (1.0 - quarter) ** 4, year)      # four quarters are a year
