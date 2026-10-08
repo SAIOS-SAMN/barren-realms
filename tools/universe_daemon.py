@@ -37,7 +37,7 @@ def observe(k, path: str, t0: float, c0: int) -> None:
     wall = time.time() - t0
     o = vitals(k, wall, (k.cycle_count - c0) / max(1e-9, wall))
     sums = subsystem.summaries(k)
-    for name in ("transit", "commerce", "court", "spheres", "board", "ladder", "phylogeny", "life"):
+    for name in ("transit", "commerce", "court", "spheres", "board", "ladder", "phylogeny", "life", "reserve_banks", "field"):
         if name in sums:
             o[name] = sums[name]
     from xylarium.kernel import cosmos

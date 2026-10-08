@@ -31,3 +31,19 @@ class TestEmissaryFloat(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRefloat(unittest.TestCase):
+    def test_a_stranded_hull_in_service_is_given_its_float_again(self):
+        k = GameKernel(seed=42)
+        hub = k.fx_market.hub
+        p = next(w for s in k.sectors.values() for w in s.planets
+                 if w.population > 0 and w.civilization is not None and w.currency != hub and not w.natives)
+        p.treasury = 10 ** 9
+        cap = next(iter(k.captains.values()))
+        cap.credits, cap.fx_wallet = 0, {}
+        paid = colony.ColonyManager._refloat(k, p, cap)
+        self.assertGreater(paid, 0)
+        self.assertEqual(cap.fx_wallet[p.currency], paid)
+        self.assertEqual(p.treasury, 10 ** 9 - paid)                      # a transfer, nothing minted
+        self.assertEqual(colony.ColonyManager._refloat(k, p, cap), 0)    # not while it holds money

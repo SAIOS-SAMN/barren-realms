@@ -855,6 +855,22 @@ class ColonyManager:
         return res
 
     @classmethod
+    def _refloat(cls, kernel: Any, planet: Planet, cap: Captain) -> int:
+        """A people's hull in service that holds no money at all - no credits, nothing in its wallet - is given its
+        crew's float again from its people's treasury, by the launch's own law (its people's money, in its wallet,
+        never forced through an exchange). Returns what was paid."""
+        if cap.credits > 0 or any(v > 0 for v in (cap.fx_wallet or {}).values()) or planet.currency == _hub():
+            return 0
+        from xylarium.kernel import fx as fx_mod
+        rate = fx_mod.ACTIVE_FX.rate(planet.currency) if fx_mod.ACTIVE_FX else 1.0
+        float_local = min(PLANETARY_SPACEFLIGHT_COST // 2, int(4000 * rate), max(0, int(planet.treasury)))
+        if float_local <= 0:
+            return 0
+        planet.treasury -= float_local
+        cap.fx_wallet[planet.currency] = cap.fx_wallet.get(planet.currency, 0) + float_local
+        return float_local
+
+    @classmethod
     def check_planetary_spaceflight(
         cls,
         kernel: Any,
@@ -876,6 +892,7 @@ class ColonyManager:
             return None                                   # the council sits once a season
         active_id = getattr(planet, "active_indigenous_captain_id", None)
         if active_id and active_id in kernel.captains:
+            cls._refloat(kernel, planet, kernel.captains[active_id])   # its hull in service, stranded with nothing
             return None
         if planet.treasury < PLANETARY_SPACEFLIGHT_COST or not populace.room_for_ai(kernel):
             return None
