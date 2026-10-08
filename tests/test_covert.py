@@ -47,7 +47,7 @@ class TestQuarantineAndCovert(unittest.TestCase):
     def test_works_a_book_in_deficit_makes_dangerous_are_interdicted_until_ascended(self):
         technology.stats(self.k)["of"].setdefault(self.target, {})["cyber"] = 0
         rec = ascendance.stats(self.k)["of"][self.target]
-        rec["books"] = {"minds": "1/2"}
+        rec["books"] = {"minds": {"syntropic": "0", "entropic": "1", "deficit": True}}
         ascendance._interdict(self.k, self.target, rec, None)
         self.assertTrue(technology.found(self.k, self.target, "cyber"))
         self.assertFalse(technology.has(self.k, self.target, "cyber"))           # found, but stopped

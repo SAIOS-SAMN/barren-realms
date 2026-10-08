@@ -212,6 +212,8 @@ def _forecast(kernel: Any, holder: str, rec: Dict[str, Any], g: Dict[str, float]
         naive = sum(abs(prev[x] - g[x]) for x in GAUGES) / len(GAUGES)
         if naive > 1e-6:
             skill = max(-1.0, 1.0 - model / naive)
+            key = "held" if model < naive else "failed"      # a self-forecast held where it beat the naive guess
+            rec[key] = int(rec.get(key, 0)) + 1
             rec["skill"] = round(0.75 * float(rec.get("skill", 0.0)) + 0.25 * skill, 4)
             gen = fertility.generation_of(kernel, p0) * 100
             knows = bool(rec.get("introspective"))

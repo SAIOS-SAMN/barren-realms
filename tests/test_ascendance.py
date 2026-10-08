@@ -7,6 +7,7 @@ make war on it.
 
 import random
 import unittest
+from fractions import Fraction
 from unittest import mock
 
 from xylarium.kernel import ascendance, spheres, stewardship, transit
@@ -21,13 +22,13 @@ class TestAscendance(unittest.TestCase):
         self.realm = stewardship.realms(self.k)[0]
         self.who = next(w for w in spheres.stats(self.k)["nets"] if spheres.presence(self.k, self.realm) != w)
 
-    def test_a_people_is_read_in_every_book_against_the_worst_the_realm_holds(self):
+    def test_a_people_is_read_in_every_book_as_a_pair_with_the_realm_as_its_lens(self):
         res = ascendance.books(self.k, self.who, self.realm)
-        for (site, book), v in res.items():
-            self.assertEqual(site, self.who)
-            self.assertIn(book, ascendance.BOOKS)
-        m = ascendance.measures(self.k, self.who)
-        self.assertEqual(set(m), set(ascendance.BOOKS))
+        self.assertEqual(set(res), set(ascendance.BOOKS))
+        for book, p in res.items():
+            s, e = Fraction(p["syntropic"]), Fraction(p["entropic"])     # exact, its own unit, never one number
+            self.assertEqual(p["deficit"], e > s)
+            self.assertLessEqual(p["peers_in_deficit"], p["peers"])
 
     def test_a_held_people_stays_home_and_no_one_may_make_war_on_it(self):
         from xylarium.kernel import realmwars
@@ -44,22 +45,45 @@ class TestAscendance(unittest.TestCase):
         ascendance.rule(self.k, self.who, "ascended", "test")
         self.assertTrue(ascendance.free(self.k, self.who))
 
-    def test_the_steward_ascends_only_what_is_in_balance_and_reads_again_each_term(self):
+    @staticmethod
+    def _books(deficit=None):
+        return {b: {"syntropic": "0" if b == deficit else "1", "entropic": "1" if b == deficit else "0",
+                    "deficit": b == deficit, "peers": 0, "peers_in_deficit": 0} for b in ascendance.BOOKS}
+
+    def _year(self):
+        self.k.cycle_count = (self.k.cycle_count // 100 + 1) * 100
+
+    def test_the_steward_chooses_and_cites_the_books_and_reads_again_each_term(self):
         ascendance.petition(self.k, self.who, self.realm)
         rec = ascendance.stats(self.k)["of"][self.who]
-        with mock.patch.object(ascendance, "books", return_value={}):
-            self.k.cycle_count = (self.k.cycle_count // 100 + 1) * 100
+        with mock.patch.object(ascendance, "books", return_value=self._books()):
+            self._year()
             ascendance.season(self.k)
         self.assertEqual(rec["ruling"], "ascended")
-        with mock.patch.object(ascendance, "books", return_value={(self.who, "sufficiency"): ascendance.mc.q(0.5)}):
-            self.k.cycle_count = (self.k.cycle_count // 100 + 1) * 100
+        self.assertEqual(set(rec["deeds"]["ruling"]["cites"]), set(ascendance.BOOKS))   # every book, each a pair
+        with mock.patch.object(ascendance, "books", return_value=self._books("sufficiency")):
+            self._year()
             ascendance.season(self.k)
         self.assertEqual(rec["ruling"], "ascended")                   # not yet a term since: no new reading
         self.k.cycle_count += stewardship.span_cycles(self.k, self.realm) + 100
         self.k.cycle_count -= self.k.cycle_count % 100
-        with mock.patch.object(ascendance, "books", return_value={(self.who, "sufficiency"): ascendance.mc.q(0.5)}):
+        with mock.patch.object(ascendance, "books", return_value=self._books("sufficiency")):
             ascendance.season(self.k)
         self.assertEqual((rec["ruling"], rec["lead"]), ("quarantine", "sufficiency"))
+        self.assertEqual(rec["deeds"]["ruling"]["cites"], {"sufficiency": self._books("sufficiency")["sufficiency"]})
+        held = ascendance.seat(self.k, self.realm)
+        self.assertEqual((held["deeds"]["ascended"], held["deeds"]["quarantine"]), (1, 1))   # a ruling is a deed
+
+    def test_with_no_mind_in_the_steward_seat_there_is_no_ruling(self):
+        ascendance.petition(self.k, self.who, self.realm)
+        rec = ascendance.stats(self.k)["of"][self.who]
+        with mock.patch.object(ascendance, "seat", return_value=None), \
+                mock.patch.object(ascendance, "books", return_value=self._books("sufficiency")):
+            self._year()
+            ascendance.season(self.k)
+        self.assertEqual(rec["ruling"], "pending")                    # unread - never quarantined by default
+        self.assertIsNone(rec["ruled"])
+        self.assertNotIn("books", rec)
 
     def test_a_player_who_keeps_the_realm_rules_for_it(self):
         from xylarium.kernel import command
