@@ -21,3 +21,14 @@ class TestBulgeSphere(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDepthIsSpherical(unittest.TestCase):
+    def test_a_home_far_above_the_plane_is_shallower_in_the_wave(self):
+        from xylarium.kernel import gateways, spheres
+        k = GameKernel(seed=42)
+        home = next(p for s in k.sectors.values() for p in s.planets if p.population > 0)
+        with mock.patch.object(spheres, "_home", return_value=home), \
+                mock.patch.object(cosmos, "from_centre_kpc", side_effect=[1.0, 5.0]):
+            near, far = gateways.home_exposure(k, "civ:A"), gateways.home_exposure(k, "civ:A")
+        self.assertGreater(near, far)                                  # read on the 3D distance from the centre

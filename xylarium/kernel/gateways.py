@@ -72,10 +72,11 @@ def _r(kernel: Any, sector_id: int) -> Optional[float]:
 
 
 def home_exposure(kernel: Any, who: str) -> float:
-    """The wave a people's minds evolved under: its home's (0 where it has none on the galaxy's map)."""
-    from xylarium.kernel import spheres
+    """The wave a people's minds evolved under: its home's, by its 3D distance from the centre - one metric for
+    depth, the hub's keeper and the core (coordinator ruling: the bulge is a sphere); 0 where it has no place."""
+    from xylarium.kernel import cosmos, spheres
     home = spheres._home(kernel, who)
-    r = _r(kernel, home.sector_id) if home is not None else None
+    r = cosmos.from_centre_kpc(kernel, home.sector_id) if home is not None else None
     return exposure(r) if r is not None else 0.0
 
 
