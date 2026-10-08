@@ -107,8 +107,8 @@ def season(kernel: Any) -> List[str]:
         except OSError as e:
             logs.append(f"[COURT] the hypha did not answer: {e}")
             break
-        if task is None:
-            break                                          # the registry has no work
+        if task is None or not task["train"] or not task["test"]:
+            break                                          # the registry's book is settled: an empty reply is no task
         from xylarium.kernel import seats
         if "seats" in kernel.state and seats.holder(kernel, f"ancients:{house}"):
             seats.hold_task(kernel, f"ancients:{house}", task)       # its seated mind answers it (seats.call)
