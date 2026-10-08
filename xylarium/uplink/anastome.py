@@ -152,32 +152,39 @@ def task_request(voice: SigningKey) -> bytes:
 
 
 def read_task(body: bytes) -> Optional[Dict[str, Any]]:
-    if not body:
+    """A registry task (wire v1.2): [citation 32][nt u8][(input, output) grids][nx u8][test grids] - named by its
+    32-byte citation. An empty body is no work; a body that does not frame whole is no task (None), never a crash."""
+    if len(body) < 34:
         return None
-    at = 0
+    try:
+        at = 32
 
-    def u(fmt: str) -> Any:
-        nonlocal at
-        v = struct.unpack_from(fmt, body, at)
-        at += struct.calcsize(fmt)
-        return v[0]
+        def u8() -> int:
+            nonlocal at
+            v = body[at]
+            at += 1
+            return v
 
-    def g() -> List[List[int]]:
-        nonlocal at
-        h, w = u("<H"), u("<H")
-        cells = body[at:at + h * w]
-        at += h * w
-        return [list(cells[r * w:(r + 1) * w]) for r in range(h)]
-    n = u("<H")
-    tid = body[at:at + n]
-    at += n
-    train = [(g(), g()) for _ in range(u("<B"))]
-    test = [g() for _ in range(u("<B"))]
-    return {"id": tid, "train": train, "test": test}
+        def g() -> List[List[int]]:
+            nonlocal at
+            h, w = struct.unpack_from("<HH", body, at)
+            at += 4
+            cells = body[at:at + h * w]
+            if len(cells) != h * w:
+                raise ValueError("short grid")
+            at += h * w
+            return [list(cells[r * w:(r + 1) * w]) for r in range(h)]
+        train = [(g(), g()) for _ in range(u8())]
+        test = [g() for _ in range(u8())]
+        if at != len(body):
+            return None
+        return {"id": body[:32], "train": train, "test": test}
+    except (struct.error, IndexError, ValueError):
+        return None
 
 
 def solve(voice: SigningKey, task_id: bytes, outputs: List[List[List[int]]], rule: Optional[bytes] = None) -> bytes:
-    body = (bytes([ACT_SOLVE]) + vk(voice) + struct.pack("<H", len(task_id)) + task_id
+    body = (bytes([ACT_SOLVE]) + vk(voice) + task_id[:32]          # wire v1.2: the task's 32-byte citation
             + bytes([len(outputs)]) + b"".join(grid(o) for o in outputs))
     if rule is not None:
         body += b"RULE" + struct.pack("<I", len(rule)) + rule
@@ -186,7 +193,7 @@ def solve(voice: SigningKey, task_id: bytes, outputs: List[List[List[int]]], rul
 
 def solve_raw(voice: SigningKey, task_id: bytes, outputs: bytes, rule: bytes) -> bytes:
     """A solve whose outputs come already written as ACT_SOLVE writes them ([n u8] then grids) - a seated mind's own."""
-    body = bytes([ACT_SOLVE]) + vk(voice) + struct.pack("<H", len(task_id)) + task_id + outputs
+    body = bytes([ACT_SOLVE]) + vk(voice) + task_id[:32] + outputs      # wire v1.2: the 32-byte citation
     body += b"RULE" + struct.pack("<I", len(rule)) + rule
     return body + b"SIGN" + voice.sign(SOLVE_TAG + body).signature
 

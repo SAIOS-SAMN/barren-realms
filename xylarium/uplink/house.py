@@ -106,8 +106,7 @@ def percept_records(kernel: Any, p: Dict[str, Any]) -> Tuple[list, list]:
         from xylarium.kernel import intellect
         recs += [(3, [(w.COUNT, op)]) for op in intellect.vocabulary(kernel, p["on"]) if isinstance(op, int)]
     if p.get("task"):
-        raw = bytes.fromhex(p["task"]["id"])
-        recs.append((4, ([(w.BYTES, raw)] if w.WIRE_BYTES else []) + [(w.KEY, hashlib.sha256(raw).digest())]))
+        recs.append((4, [(w.KEY, bytes.fromhex(p["task"]["id"])[:32])]))     # wire v1.2: its 32-byte citation
     for realm in p.get("realms") or []:
         recs.append((5, [(w.KEY, w.name_key(realm))]))
     for c in p.get("counsel") or []:

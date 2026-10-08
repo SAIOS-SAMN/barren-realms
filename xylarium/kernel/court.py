@@ -104,8 +104,8 @@ def season(kernel: Any) -> List[str]:
     for house in houses(kernel):
         try:
             task = an.read_task(an.speak((host, int(port)), an.task_request(an.key("ancients"))))
-        except OSError as e:
-            logs.append(f"[COURT] the hypha did not answer: {e}")
+        except Exception as e:                             # the hypha is another node: its fault never stops ours
+            logs.append(f"[COURT] the hypha did not answer: {type(e).__name__}: {e}")
             break
         if task is None or not task["train"] or not task["test"]:
             break                                          # the registry's book is settled: an empty reply is no task

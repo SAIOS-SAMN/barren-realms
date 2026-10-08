@@ -70,3 +70,14 @@ class TestCourt(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWireV12Task(unittest.TestCase):
+    def test_a_task_named_by_its_citation_reads_whole_and_a_misframe_is_no_task(self):
+        from xylarium.uplink import anastome as an
+        cit = bytes(range(32))
+        body = cit + bytes([1]) + an.grid([[1, 2]]) + an.grid([[2, 1]]) + bytes([1]) + an.grid([[3, 4]])
+        t = an.read_task(body)
+        self.assertEqual((t["id"], t["train"], t["test"]), (cit, [([[1, 2]], [[2, 1]])], [[[3, 4]]]))
+        self.assertIsNone(an.read_task(body[:-1]))                   # does not frame whole: no task, no crash
+        self.assertIsNone(an.read_task(b""))
