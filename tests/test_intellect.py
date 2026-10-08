@@ -111,9 +111,10 @@ class TestTheGaugeInTheUniverse(unittest.TestCase):
 
     def test_relics_carry_crystals(self):
         holder = "captain:digger"
-        got = I.relic_crystal(self.k, holder, "R-1")
-        self.assertIn(got, I.DISCOVERABLE)
+        got = next(c for c in (I.relic_crystal(self.k, holder, f"R-{n}") for n in range(1, 40)) if c is not None)
+        self.assertIn(got, I.DISCOVERABLE)                          # a legible relic yields a discoverable crystal
         self.assertIn(got, I.vocabulary(self.k, holder))
+        self.assertTrue(I.grounded(got, set(I.vocabulary(self.k, holder))))
         self.assertIsNone(I.relic_crystal(self.k, holder, "R-1"))      # one crystal is learned once
 
 

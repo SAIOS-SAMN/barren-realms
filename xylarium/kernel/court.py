@@ -73,8 +73,10 @@ def meet(kernel: Any, house: str, task: Dict[str, Any]) -> Dict[str, Any]:
     steps = mind.steps_of(words)
     if steps is None:
         return {"beyond": "its program has no form in the court's language"}
-    return {"program": words, "steps": steps, "work": work,
-            "outputs": [[list(r) for r in C.run(words, t)] for t in tests]}
+    outs = [C.run(words, t) for t in tests]
+    if any(o is None for o in outs):
+        return {"beyond": "its program makes no grid of a test"}
+    return {"program": words, "steps": steps, "work": work, "outputs": [[list(r) for r in o] for o in outs]}
 
 
 def _deed(kernel: Any, house: str, kind: str, data: Dict[str, Any]) -> None:

@@ -41,6 +41,7 @@ NAMES = {ROT90: "rotate90", ROT180: "rotate180", ROT270: "rotate270", FLIPH: "fl
          TRANSPOSE: "transpose", RECOLOR: "recolor", FLIP_STACK: "flip_stack", CYCLE_LAYERS: "cycle_layers",
          HYPER_FLIP: "hyper_flip", HYPER_CYCLE: "hyper_cycle"}
 FRAME_OPS = (ROT90, ROT180, ROT270, FLIPH, FLIPV, TRANSPOSE)
+SCALE, CROP = "scale", "crop"   # the size crystals (mycelium 78.143 Scale and Crop): ("scale", up, down), ("crop", hue)
 STACK_OPS = (FLIP_STACK, CYCLE_LAYERS)
 HYPER_OPS = (HYPER_FLIP, HYPER_CYCLE)
 
@@ -323,7 +324,91 @@ def address(coord, frame_gens: Iterable[int], recolors: bool, stack_gens: Iterab
 def apply_op(op, g):
     if isinstance(op, tuple) and op and op[0] == RECOLOR:
         return recolor(op[1], g)
+    if isinstance(op, tuple) and op and op[0] == SCALE:
+        return scaled(g, op[1], op[2])
+    if isinstance(op, tuple) and op and op[0] == CROP:
+        return cropped(g, op[1])
     return apply_frame(frame_of(op), g)
+
+
+# ---------------------------------------------------------------------- the size crystals
+def scaled(g: Grid, up: int, down: int) -> Optional[Grid]:
+    """Each cell an up x up block (up > 1), or each down x down block one cell (down > 1, the block's own hue - only
+    where every block is of one hue; else no grid)."""
+    if up > 1:
+        return tuple(tuple(c for c in row for _ in range(up)) for row in g for _ in range(up))
+    if down > 1:
+        h, w = len(g), len(g[0]) if g else 0
+        if h % down or w % down:
+            return None
+        out = []
+        for r in range(0, h, down):
+            row = []
+            for c in range(0, w, down):
+                block = {g[r + i][c + j] for i in range(down) for j in range(down)}
+                if len(block) != 1:
+                    return None
+                row.append(block.pop())
+            out.append(tuple(row))
+        return tuple(out)
+    return g
+
+
+def bodies(g: Grid, hue: int) -> List[List[Tuple[int, int]]]:
+    """The connected bodies of a hue (cells sharing an edge)."""
+    h, w = len(g), len(g[0]) if g else 0
+    seen, out = set(), []
+    for r in range(h):
+        for c in range(w):
+            if g[r][c] != hue or (r, c) in seen:
+                continue
+            stack, body = [(r, c)], []
+            seen.add((r, c))
+            while stack:
+                y, x = stack.pop()
+                body.append((y, x))
+                for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < h and 0 <= nx < w and (ny, nx) not in seen and g[ny][nx] == hue:
+                        seen.add((ny, nx))
+                        stack.append((ny, nx))
+            out.append(body)
+    return out
+
+
+def cropped(g: Grid, hue: int) -> Optional[Grid]:
+    """The extent of the one body of a hue - the grid cut to its bounding box (no grid where it is not one body)."""
+    bs = bodies(g, hue)
+    if len(bs) != 1:
+        return None
+    ys, xs = [y for y, _ in bs[0]], [x for _, x in bs[0]]
+    return tuple(tuple(g[r][min(xs):max(xs) + 1]) for r in range(min(ys), max(ys) + 1))
+
+
+def read_scale(pairs: Iterable[Tuple[Grid, Grid]]) -> Optional[Tuple[int, int]]:
+    """The one scale every pair agrees on, read off their sizes and checked cell for cell - or None."""
+    got = None
+    for i, o in pairs:
+        hi, wi, ho, wo = len(i), len(i[0]), len(o), len(o[0])
+        if ho > hi and ho % hi == 0 and wo * hi == wi * ho:
+            k = (ho // hi, 1)
+        elif hi > ho and hi % ho == 0 and wi * ho == wo * hi:
+            k = (1, hi // ho)
+        else:
+            return None
+        if got not in (None, k) or scaled(i, *k) != o:
+            return None
+        got = k
+    return got
+
+
+def read_crop(pairs: Iterable[Tuple[Grid, Grid]]) -> Optional[int]:
+    """The hue whose one body every pair's output is the extent of - or None."""
+    pairs = list(pairs)
+    for hue in range(HUES):
+        if pairs and all(cropped(i, hue) == o for i, o in pairs):
+            return hue
+    return None
 
 
 def run(program: Sequence, x):

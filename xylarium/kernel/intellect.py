@@ -48,9 +48,10 @@ BASE = [C.ROT90]             # every mind can turn a thing around
 DISCOVERABLE = {             # crystal -> the domain whose knowledge reveals it
     C.FLIPH: "information", C.FLIPV: "information", C.TRANSPOSE: "information",
     C.RECOLOR: "biology", C.FLIP_STACK: "energy", C.CYCLE_LAYERS: "energy",
+    C.SCALE: "materials", C.CROP: "information",         # the size crystals: making at a scale; attending to one
     C.HYPER_FLIP: "energy", C.HYPER_CYCLE: "energy",
 }
-RANK_OF = {C.FLIPH: 2, C.FLIPV: 2, C.TRANSPOSE: 2, C.RECOLOR: 2, C.FLIP_STACK: 3, C.CYCLE_LAYERS: 3,
+RANK_OF = {C.FLIPH: 2, C.FLIPV: 2, C.TRANSPOSE: 2, C.RECOLOR: 2, C.SCALE: 2, C.CROP: 2, C.FLIP_STACK: 3, C.CYCLE_LAYERS: 3,
            C.HYPER_FLIP: 4, C.HYPER_CYCLE: 4}
 VOLUMETRIC_WORLDS = ("GAS_GIANT", "OCEANIC")      # peoples born in volumes think in them first
 ABSTRACT_AFTER = 3           # a composite written this many times is crystallised into one generator
@@ -237,7 +238,15 @@ def decompact(vocab: List[Any], task: Dict[str, Any]) -> Optional[List[Any]]:
         coord = C.read_stack(task["train"])
         return None if coord is None else _volumetric(vocab, coord, len(task["test"]))
     coord = C.read(task["train"])
-    if coord is None:
+    if coord is None:                                  # no frame and colour map: perhaps a change of size
+        if C.SCALE in vocab:
+            k = C.read_scale(task["train"])
+            if k is not None:
+                return [(C.SCALE, k[0], k[1])]
+        if C.CROP in vocab:
+            hue = C.read_crop(task["train"])
+            if hue is not None:
+                return [(C.CROP, hue)]
         return None
     frame, cmap = coord
     fw = _chart(vocab).get(frame)

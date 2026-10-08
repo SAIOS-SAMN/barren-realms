@@ -37,8 +37,8 @@ Something reaches a world when its front arrives. The engine should compute it t
    span-robustness ruling).
 5. **Exact at the seam.** The field is internal physics, and may be float (a legacy float, marked as such; the port's
    float crate awaits an operator ruling under 9.1a). Arrival times and field values entering the kernel are put on
-   an exact grid: a Fraction of deep time. Conformance between kernels is by values within a declared tolerance,
-   never by bytes.
+   an exact grid: a Fraction of deep time, or of a value's own float. What crosses the seam is exact and compared
+   exactly (Concordance 9.1: the same exact decoded values; never bytes). Floats stay inside a kernel.
 
 ## The prototype (barren-realms, `xylarium/kernel/field.py`)
 
@@ -50,6 +50,15 @@ Something reaches a world when its front arrives. The engine should compute it t
   Handlers are registered by the laws that take them.
 - `value(kernel, place, t)`: the field at a place and time, the sum over every source whose front has arrived of
   its strength over distance, shaped by its pulse's decay. Closed form, with no walk over worlds.
+
+## Seat readings
+
+A seat's PERCEPT carries the field it hears as typed records in the barren lexicon, all exact Q:
+
+- **kind 6**, an arrival heard: `[Key(bell), Q(arrival, deep Gyr), Q(strength)]`;
+- **kind 7**, the field value at the seat's world: `[Q(deep Gyr now), Q(value)]`.
+
+The tube carriage between universes is the court's (mycelium 78.37 transport); a kernel's own throats are its own.
 
 ## Owed, in order
 

@@ -27,6 +27,10 @@ def steps_of(program: List[Any]) -> Optional[List[dict]]:
             steps.append({"motion": names[op]})
         elif isinstance(op, tuple) and len(op) == 2 and op[0] == C.RECOLOR:
             steps.append({"hue": [(h, int(t)) for h, t in enumerate(op[1]) if int(t) != h]})
+        elif isinstance(op, tuple) and len(op) == 3 and op[0] == C.SCALE:
+            steps.append({"scale": [int(op[1]), int(op[2])]})
+        elif isinstance(op, tuple) and len(op) == 2 and op[0] == C.CROP:
+            steps += [{"select_hue": int(op[1])}, {"crop": "body"}]
         else:
             return None
     return steps
