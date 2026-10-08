@@ -20,7 +20,8 @@ from xylarium.kernel.engine import GameKernel  # noqa: E402
 from xylarium.persistence.store import StatePersistence  # noqa: E402
 from xylarium.uplink import house  # noqa: E402
 
-SAVE_EVERY = 2000
+SAVE_EVERY_S = 300           # saved on the wall clock: the engine's pace varies with how many worlds it ticks
+RELAY_EVERY_S = 15           # the house relay's beat (seat mail), on the wall clock
 REPORT_EVERY = 500
 STOP = {"now": False}
 
@@ -72,6 +73,7 @@ def main() -> None:
     seen = 0
     obs_path = save.replace(".json", ".obs.jsonl")
     t0, c0 = time.time(), k.cycle_count
+    last = {"relay": 0.0, "save": time.time()}
     while not STOP["now"]:
         k.tick_simulation()
         rec = court.stats(k)["of"] if "court" in k.state else {}
@@ -82,14 +84,17 @@ def main() -> None:
                                         for h, r in rec.items()}))
         if k.cycle_count % REPORT_EVERY == 0:
             observe(k, obs_path, t0, c0)
-            if court.endpoint():                          # the house relay, once the hypha speaks the seat wire
-                try:
-                    did = house.on_hypha(k, court.endpoint())
-                    if did and any(did.values()):
-                        log("seats: " + json.dumps(did))
-                except OSError as e:
-                    log(f"seats: the hypha did not answer: {e}")
-        if k.cycle_count % SAVE_EVERY == 0:
+        now = time.time()
+        if court.endpoint() and now - last["relay"] >= RELAY_EVERY_S:   # the house relay (seat wire)
+            last["relay"] = now
+            try:
+                did = house.on_hypha(k, court.endpoint())
+                if did and any(did.values()):
+                    log("seats: " + json.dumps(did))
+            except OSError as e:
+                log(f"seats: the hypha did not answer: {e}")
+        if now - last["save"] >= SAVE_EVERY_S:
+            last["save"] = now
             StatePersistence.save_to_file(k, save)
     StatePersistence.save_to_file(k, save)
     log(f"saved at cycle {k.cycle_count}; stopped")
