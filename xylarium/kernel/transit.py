@@ -344,6 +344,7 @@ def in_game(kernel: Any, sector: int, payer: str, holder: str, amount: Any, cur:
     rec["receipts"] += 1
     rec["paid"][cur] = str(Fraction(rec["paid"].get(cur, "0")) + Fraction(amount))
     rec["last"] = {"payer": payer, "holder": holder, "ref": ref, "cycle": int(getattr(kernel, "cycle_count", 0))}
+    rec.setdefault("first_of", {}).setdefault(payer, dict(rec["last"], realm=realm))   # each payer's first receipt
 
 
 def reserves(kernel: Any) -> Dict[str, str]:
