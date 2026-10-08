@@ -52,3 +52,32 @@ class TestField(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStarAbsorbs(unittest.TestCase):
+    def setUp(self):
+        self.k = GameKernel(seed=42)
+        self.sec = next(s for s in self.k.sectors.values() if len(s.planets) >= 2)
+
+    def test_what_a_pulse_brings_in_equals_light_plus_gravity_plus_burning_out(self):
+        from fractions import Fraction as F
+        from xylarium.kernel import versor
+        pulse = versor.screw(0, 1, F(1, 50), (0, 0, F(1, 1000)))     # a small twist with a pitch
+        led = field.absorb(self.k, self.sec.id, pulse, F(10 ** 6))
+        parts = sum(F(led[k]) for k in ("gravity", "light", "burned_out"))
+        self.assertEqual(parts, F(led["in"]))                          # conserved, exactly
+        self.assertGreater(F(led["gravity"]), 0)                       # its worlds' orbits held
+
+    def test_a_pulse_too_weak_to_relock_leaves_its_worlds_sheared(self):
+        from fractions import Fraction as F
+        from xylarium.kernel import versor
+        led = field.absorb(self.k, self.sec.id, versor.translator((F(1, 2), 0, 0)), F(1, 10 ** 30))
+        self.assertEqual(F(led["light"]), 0)
+        self.assertTrue(led["unlocked"])                               # what it could not re-lock stays sheared
+
+    def test_the_identity_shears_nothing_and_all_is_burned(self):
+        from fractions import Fraction as F
+        from xylarium.kernel import versor
+        led = field.absorb(self.k, self.sec.id, versor.Mv.scalar(1), F(1000))
+        self.assertEqual(F(led["gravity"]), 0)
+        self.assertEqual(F(led["burned_out"]), F(7))                   # its burning's mass defect

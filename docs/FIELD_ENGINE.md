@@ -40,6 +40,27 @@ Something reaches a world when its front arrives. The engine should compute it t
    an exact grid: a Fraction of deep time, or of a value's own float. What crosses the seam is exact and compared
    exactly (Concordance 9.1: the same exact decoded values; never bytes). Floats stay inside a kernel.
 
+## The field law (operator ruling, 2026-10-08; xylarium-kernel docs/FIELD_LAW.md)
+
+The ruling supersedes the scalar field: **a pulse is a versor**, not a strength.
+
+- **The pulse.** Each pulse is an exact versor of Cl(4,1) (`xylarium/kernel/versor.py`, every coefficient a
+  Fraction). It can be bent (a translator), rotated (a rotor through a rational point of the circle, never a float
+  angle), twisted (a screw, whose pitch is its wavelength) or flipped (a reflection, an odd versor). A loop of pulses
+  that fails to close carries its residual translation as **torsion**.
+- **The star absorbs it** (`field.absorb`). The pulse's versor shears each of the star's worlds' orbits. Each world is
+  anchored at its core, a 0D point at its orbit's radius from the star's G point. The star gives out the **gravity**
+  that locks them again: the work to undo each shear, ½ m (M/a³) |dx|², or all it can of what came in. It commits the
+  rest to its burning. Of that, a share **burns out** (hydrogen's mass defect to helium, 7/1000) and the rest leaves
+  as **light**.
+- **Conservation, exact:** energy in = gravity + light + burned out. What the star cannot re-lock stays sheared.
+- **The energy unit** is Earth-mass · AU² · (year/2π)⁻². Kepler's 4π² is absorbed in the unit, so an orbit's stiffness
+  is M/a³ and everything stays a Fraction.
+- **Floats are quarantined.** None touches an orbit.
+- **Owed:** quantum radiation, the bell's harmonic, luminal and quantum state, as a factor in species and planet
+  evolution, strongest near cores and accretion discs; and how torsion's pitch derives from the Einstein–Cartan
+  bounce.
+
 ## The prototype (barren-realms, `xylarium/kernel/field.py`)
 
 - `Source`: a bell. Its kind (`bounce`, `echo`, `death`, `jet`, `word`), its place (galactocentric x, y, z in kpc),

@@ -140,6 +140,60 @@ def value(kernel: Any, at: Sequence[float], t: float) -> float:
     return total
 
 
+# ---------------------------------------------------------------------- the star absorbs the pulse (field law (2))
+# Energy is in the exact unit Earth-mass AU^2 (year / 2 pi)^-2: an orbit's stiffness is then M / a^3 (the 4 pi^2 of
+# Kepler's third law absorbed in the unit), and every quantity below is a Fraction - floats never touch an orbit.
+BURN_OUT = Fraction(7, 1000)     # the share of what a star burns that burns OUT (hydrogen's mass defect to helium)
+
+
+def absorb(kernel: Any, sector_id: int, pulse_versor: Any, energy: Any) -> Dict[str, Any]:
+    """A star absorbs an arriving pulse (field law 2). The pulse's versor shears each of its worlds' orbits - each
+    world anchored at its core, a 0D point at its orbit's radius from the star's G point; the star gives out the
+    GRAVITY that locks them again (the work to undo each shear, 1/2 m (M/a^3) |dx|^2, all it can of what came in),
+    commits the rest to its burning - of which a share burns OUT (mass to energy) and the rest leaves as LIGHT.
+    CONSERVED, exactly: energy in = gravity + light + burned out. What it could not re-lock stays sheared."""
+    from xylarium.kernel import physics, versor
+    sec = kernel.sectors.get(sector_id)
+    if sec is None:
+        return {}
+    st = physics.star(sec)
+    big_m = Fraction(st["mass"])
+    e_in = Fraction(energy)
+    shears = []
+    for w in sec.planets:
+        b = physics.body(w)
+        if "q" not in b:
+            continue
+        a = Fraction(b["q"]) ** 2
+        m = Fraction(b.get("mass", 1))
+        anchor = (a, Fraction(0), Fraction(0))
+        moved = versor.move(pulse_versor, anchor)
+        d2 = sum((x - y) ** 2 for x, y in zip(moved, anchor))
+        shears.append((w.id, m * big_m / a ** 3 * d2 / 2, d2))
+    need = sum((e for _, e, _ in shears), Fraction(0))
+    gravity = min(e_in, need)
+    held = gravity / need if need > 0 else Fraction(1)       # the share of each shear the star could re-lock
+    rest = e_in - gravity
+    burned = rest * BURN_OUT
+    light = rest - burned
+    assert gravity + light + burned == e_in                   # the field law's conservation, exactly
+    ledger = {"in": str(e_in), "gravity": str(gravity), "light": str(light), "burned_out": str(burned),
+              "unlocked": {wid: str(d2 * (1 - held)) for wid, _, d2 in shears if held < 1}}
+    book = stats(kernel).setdefault("stars", {}).setdefault(str(sector_id), {"in": "0", "gravity": "0", "light": "0",
+                                                                            "burned_out": "0"})
+    for k in ("in", "gravity", "light", "burned_out"):
+        book[k] = str(Fraction(book[k]) + Fraction(ledger[k]))
+    return ledger
+
+
+@handles("pulse")
+def _pulse_arrives(kernel: Any, src: Dict[str, Any], arr: Dict[str, Any]) -> None:
+    """A bell's pulse reaches a star: it absorbs it (its versor and its energy, both exact)."""
+    from xylarium.kernel import versor
+    if src.get("versor") and src.get("energy") is not None:
+        absorb(kernel, int(arr["sector"]), versor.from_wire(src["versor"]), src["energy"])
+
+
 def season(kernel: Any) -> List[str]:
     """Each season the fronts the cosmic clock has passed reach their places (each keeps its exact arrival time)."""
     pump(kernel)
