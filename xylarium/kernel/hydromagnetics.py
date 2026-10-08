@@ -212,6 +212,12 @@ def health(kernel: Any, planet: Any) -> float:
     home_world = max(own, key=lambda w: w.population) if own else planet     # where most of its kind still live
     base = here if home_world is planet else lived(home_world)
     excess = max(0.0, here / max(1e-9, base) - 1.0)
+    # the bell's quantum radiation (field.quantum_flux), by the same law: its repair is tuned to its home's flux,
+    # each home flux more erases about what a home dose does - a pressure like any other on whom its world spares
+    from xylarium.kernel import field
+    q_here, q_home = field.quantum_flux(kernel, planet), field.quantum_flux(kernel, home_world)
+    if q_here > 0 and q_home > 0:
+        excess += max(0.0, float(q_here / q_home) - 1.0)
     value = math.exp(-excess * HOME_LIFETIME_RISK)
     soc["_rad"] = [key, round(value, 6)]
     return value

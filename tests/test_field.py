@@ -80,4 +80,15 @@ class TestStarAbsorbs(unittest.TestCase):
         from xylarium.kernel import versor
         led = field.absorb(self.k, self.sec.id, versor.Mv.scalar(1), F(1000))
         self.assertEqual(F(led["gravity"]), 0)
-        self.assertEqual(F(led["burned_out"]), F(7))                   # its burning's mass defect
+        share = field.burn_out_share(self.k, self.sec.id)               # its own fusion step's mass defect
+        self.assertEqual(F(led["burned_out"]), F(1000) * share)
+        self.assertTrue(F(1, 1000) < share < F(1, 100))
+
+    def test_quantum_radiation_is_the_absorbed_flux_at_the_world(self):
+        from fractions import Fraction as F
+        from xylarium.kernel import versor
+        w = next(p for p in self.sec.planets if "q" in (p.body or {}))
+        self.assertEqual(field.quantum_flux(self.k, w), 0)              # no pulse absorbed: none
+        field.absorb(self.k, self.sec.id, versor.Mv.scalar(1), F(10 ** 9))
+        with mock.patch.object(cosmos, "deep_gyr", return_value=float(F(field.stats(self.k)["stars"][str(self.sec.id)]["since"])) + 1e-3):
+            self.assertGreater(field.quantum_flux(self.k, w), 0)

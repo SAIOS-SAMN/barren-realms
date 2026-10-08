@@ -143,7 +143,24 @@ def value(kernel: Any, at: Sequence[float], t: float) -> float:
 # ---------------------------------------------------------------------- the star absorbs the pulse (field law (2))
 # Energy is in the exact unit Earth-mass AU^2 (year / 2 pi)^-2: an orbit's stiffness is then M / a^3 (the 4 pi^2 of
 # Kepler's third law absorbed in the unit), and every quantity below is a Fraction - floats never touch an orbit.
-BURN_OUT = Fraction(7, 1000)     # the share of what a star burns that burns OUT (hydrogen's mass defect to helium)
+NUCLEON_MEV = Fraction("938.272")    # a nucleon's rest energy (MeV): what a fusion step's binding is a share of
+STEPS = {"main": ({"H": 4}, {"He": 1}), "giant": ({"He": 3}, {"C": 1})}   # the burning a star is on, by its stage
+
+
+def burn_out_share(kernel: Any, sector_id: int) -> Fraction:
+    """The share of what a star burns that burns OUT: the mass defect of the fusion step it is on - its stage's
+    reaction, the binding it releases over its inputs' rest energy (substances' binding energies) - its own, never
+    hydrogen's for every star. A remnant burns nothing."""
+    from xylarium.kernel import cosmos, substances
+    sec = kernel.sectors.get(sector_id)
+    if sec is None or "remnant" in (getattr(sec, "star_type", "") or "").lower():
+        return Fraction(0)
+    life = cosmos.star_life(kernel, sector_id) if cosmos.is_cosmic(kernel) else None
+    stage = "giant" if life and cosmos.deep_gyr(kernel) > life[1] else "main"
+    ins, outs = STEPS[stage]
+    released = substances.transmutation_mev(ins, outs)
+    nucleons = sum(Fraction(n) * Fraction(substances.element(s)["A"]) for s, n in ins.items())
+    return max(Fraction(0), Fraction(released) / (nucleons * NUCLEON_MEV))     # exact: a float never leaks in
 
 
 def absorb(kernel: Any, sector_id: int, pulse_versor: Any, energy: Any) -> Dict[str, Any]:
@@ -174,16 +191,33 @@ def absorb(kernel: Any, sector_id: int, pulse_versor: Any, energy: Any) -> Dict[
     gravity = min(e_in, need)
     held = gravity / need if need > 0 else Fraction(1)       # the share of each shear the star could re-lock
     rest = e_in - gravity
-    burned = rest * BURN_OUT
+    burned = rest * burn_out_share(kernel, sector_id)
     light = rest - burned
     assert gravity + light + burned == e_in                   # the field law's conservation, exactly
     ledger = {"in": str(e_in), "gravity": str(gravity), "light": str(light), "burned_out": str(burned),
               "unlocked": {wid: str(d2 * (1 - held)) for wid, _, d2 in shears if held < 1}}
     book = stats(kernel).setdefault("stars", {}).setdefault(str(sector_id), {"in": "0", "gravity": "0", "light": "0",
                                                                             "burned_out": "0"})
+    from xylarium.kernel import cosmos
+    book.setdefault("since", str(Fraction(cosmos.deep_gyr(kernel))))
     for k in ("in", "gravity", "light", "burned_out"):
         book[k] = str(Fraction(book[k]) + Fraction(ledger[k]))
     return ledger
+
+
+def quantum_flux(kernel: Any, planet: Any) -> Fraction:
+    """QUANTUM RADIATION at a world (field law (1)): the bell's pulses its star has absorbed, a year on the mean since
+    it first absorbed one, over the square of the world's orbit - measured, exact; strongest where pulses crowd (near
+    the cores and their discs). 0 where its star has absorbed none."""
+    from xylarium.kernel import cosmos, physics
+    book = (stats(kernel).get("stars") or {}).get(str(planet.sector_id)) if "field" in kernel.state else None
+    b = physics.body(planet)
+    if not book or "q" not in b:
+        return Fraction(0)
+    years = (Fraction(cosmos.deep_gyr(kernel)) - Fraction(book.get("since", "0"))) * 10 ** 9
+    if years <= 0:
+        return Fraction(0)
+    return Fraction(book["in"]) / years / Fraction(b["q"]) ** 4
 
 
 @handles("pulse")
