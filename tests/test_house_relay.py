@@ -72,3 +72,13 @@ class TestHouseRelay(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAnswerWithTape(unittest.TestCase):
+    def test_bytes_args_round_trip_and_answer_carries_the_tape(self):
+        a = w.args([(w.BYTES, b"tape-bytes"), (w.BYTES, b"\x01\x01\x00\x01\x00\x07"), (w.COUNT, 6)])
+        got, _ = w.read_args(a, 0)
+        self.assertEqual(got[0], (w.BYTES, b"tape-bytes"))
+        k = GameKernel(seed=42)
+        self.assertEqual(house.kwargs_of(k, "answer", got), {"tape": b"tape-bytes", "outputs": b"\x01\x01\x00\x01\x00\x07"})
+        self.assertEqual(house.kwargs_of(k, "answer", [(w.COUNT, 6)]), {"steps": [{"motion": "Transpose"}]})

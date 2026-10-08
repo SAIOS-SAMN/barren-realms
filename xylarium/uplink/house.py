@@ -68,8 +68,13 @@ def kwargs_of(kernel: Any, fn: str, args: List[Tuple[int, Any]]) -> Optional[Dic
     if fn == "fortify":
         return {"sector": int(args[0][1]), "units": Fraction(args[1][1])}
     if fn == "answer":
+        blobs = [v for t, v in args if t == w.BYTES]
+        if len(blobs) >= 2:                               # the mind's own rule and its outputs
+            return {"tape": bytes(blobs[0]), "outputs": bytes(blobs[1])}
         steps: List[Dict[str, Any]] = []
-        for _, c in args:
+        for t, c in args:
+            if t != w.COUNT:
+                continue
             c = int(c)
             if 1 <= c <= 6:
                 steps.append({"motion": MOTIONS[c - 1]})
@@ -101,7 +106,8 @@ def percept_records(kernel: Any, p: Dict[str, Any]) -> Tuple[list, list]:
         from xylarium.kernel import intellect
         recs += [(3, [(w.COUNT, op)]) for op in intellect.vocabulary(kernel, p["on"]) if isinstance(op, int)]
     if p.get("task"):
-        recs.append((4, [(w.KEY, hashlib.sha256(bytes.fromhex(p["task"]["id"])).digest())]))
+        raw = bytes.fromhex(p["task"]["id"])
+        recs.append((4, [(w.BYTES, raw), (w.KEY, hashlib.sha256(raw).digest())]))
     for realm in p.get("realms") or []:
         recs.append((5, [(w.KEY, w.name_key(realm))]))
     for c in p.get("counsel") or []:

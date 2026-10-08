@@ -164,9 +164,16 @@ def _answer(kernel: Any, s: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, A
     addr = court.endpoint()
     if task is None or addr is None:
         return {"ok": False, "why": "no court task before the seat" if task is None else "no hypha named"}
-    steps = args.get("steps") or []
-    outputs = [_run_steps(steps, t) for t in task["test"]]
-    v = mind.submit(addr, os.path.join(an.KEYS, "ancients.ed25519"), task, steps, outputs)
+    if args.get("tape"):                                   # the mind's own rule, minted by its own engine
+        host, port = addr.rsplit(":", 1)
+        body = an.speak((host, int(port)), an.solve_raw(an.key("ancients"), task["id"], args["outputs"], args["tape"]))
+        v = an.read_verdict(body)
+        v["verdict"] = {2: "bounty", 1: "floor"}.get(v.get("code"), "nothing")
+        steps = []
+    else:
+        steps = args.get("steps") or []
+        outputs = [_run_steps(steps, t) for t in task["test"]]
+        v = mind.submit(addr, os.path.join(an.KEYS, "ancients.ed25519"), task, steps, outputs)
     kind = "closed" if v.get("verdict") in ("bounty", "floor") else "refused"
     court._deed(kernel, s["on"], kind, {"verdict": v.get("verdict"), "why": v.get("why"), "mu": v.get("mu"),
                                         "steps": steps, "by": "seated mind"})

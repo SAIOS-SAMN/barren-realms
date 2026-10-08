@@ -23,13 +23,15 @@ ACT_SEAT = 0x53
 TAG = b"mycelium seat v1"
 SIGNED_FROM = 1                  # the act tag is not signed; the sub-kind and every field are
 SEATS, TAKE, TAKEN, PERCEPT, CALL, OUTCOME, READ_LISTING, READ_MAIL = range(8)
-Q_, KEY, COUNT, FLAG, MV, BIGQ = range(6)
+Q_, KEY, COUNT, FLAG, MV, BIGQ, BYTES = range(7)
 ROLE = {"progenitor": 0, "ancients": 1, "steward": 2, "sovereign": 3}   # 4..9 the captains' offices
 COUNSEL = 0xFFFF
 
 # barren-realms' functions: typed id -> (name, the argument tags it takes)
 FUNCTIONS: Dict[int, Tuple[str, Tuple[int, ...]]] = {
-    1: ("answer", (COUNT,)),          # each step a Count: 1..6 a motion (crystal op), 0x100 + 16*from + to a hue move
+    # a mind's answer: [Bytes(its rule's Element tape), Bytes(the test outputs as ACT_SOLVE writes them)] and/or its
+    # steps as Counts (1..6 a motion, the crystal ops; 0x100 + 16*from + to a hue move)
+    1: ("answer", (BYTES, BYTES, COUNT)),
     10: ("send", (KEY,)), 11: ("recall", (KEY,)), 12: ("fold", (KEY, FLAG)), 13: ("handle", (COUNT,)),
     14: ("forge", (COUNT, COUNT)),
     20: ("claim", (KEY,)), 21: ("withdraw", ()), 22: ("grant", (KEY,)), 23: ("ascend", (KEY,)),
@@ -40,7 +42,7 @@ FN_ID = {name: i for i, (name, _) in FUNCTIONS.items()}
 RECORDS = {1: "petition: people Key, ruling Count (0 pending, 1 ascended, 2 quarantine)",
            2: "book: people Key, book Count (ascendance.BOOKS index), syntropic Q, entropic Q",
            3: "crystal: op Count",
-           4: "court task: task Key (sha256 of its id)",
+           4: "court task: Bytes(its raw registry id), Key (sha256 of that id)",
            5: "realm covered: realm Key"}
 HANDLE = ("open", "tolled", "guarded", "closed")
 
@@ -67,6 +69,9 @@ def arg(tag: int, v: Any) -> bytes:
         return bytes([COUNT]) + struct.pack("<Q", int(v))
     if tag == FLAG:
         return bytes([FLAG, int(bool(v))])
+    if tag == BYTES:
+        b = bytes(v)
+        return bytes([BYTES]) + struct.pack("<H", len(b)) + b
     raise ValueError("an Mv tape is minted by mycelium, never here")
 
 
@@ -102,6 +107,10 @@ def read_args(b: bytes, at: int) -> Tuple[List[Tuple[int, Any]], int]:
         elif tag == FLAG:
             out.append((FLAG, bool(b[at])))
             at += 1
+        elif tag == BYTES:
+            ln = struct.unpack_from("<H", b, at)[0]
+            out.append((BYTES, b[at + 2:at + 2 + ln]))
+            at += 2 + ln
         else:
             raise ValueError(f"arg tag {tag} not read here")
     return out, at

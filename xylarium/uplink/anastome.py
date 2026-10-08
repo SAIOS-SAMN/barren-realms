@@ -184,6 +184,13 @@ def solve(voice: SigningKey, task_id: bytes, outputs: List[List[List[int]]], rul
     return body + b"SIGN" + voice.sign(SOLVE_TAG + body).signature
 
 
+def solve_raw(voice: SigningKey, task_id: bytes, outputs: bytes, rule: bytes) -> bytes:
+    """A solve whose outputs come already written as ACT_SOLVE writes them ([n u8] then grids) - a seated mind's own."""
+    body = bytes([ACT_SOLVE]) + vk(voice) + struct.pack("<H", len(task_id)) + task_id + outputs
+    body += b"RULE" + struct.pack("<I", len(rule)) + rule
+    return body + b"SIGN" + voice.sign(SOLVE_TAG + body).signature
+
+
 def read_verdict(body: bytes) -> Dict[str, Any]:
     if not body:
         return {"code": None, "why": "silence"}
