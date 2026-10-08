@@ -93,6 +93,8 @@ def main() -> None:
                     log("seats: " + json.dumps(did))
             except OSError as e:
                 log(f"seats: the hypha did not answer: {e}")
+            except Exception as e:                        # a relay fault never stops the universe
+                log(f"seats: relay fault {type(e).__name__}: {e}")
         if now - last["save"] >= SAVE_EVERY_S:
             last["save"] = now
             StatePersistence.save_to_file(k, save)

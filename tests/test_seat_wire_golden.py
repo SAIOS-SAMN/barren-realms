@@ -37,3 +37,18 @@ class TestGolden(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMailFromTheWire(unittest.TestCase):
+    """The first READ-MAIL reply :7500 sent barren-realms' house (aefc6a39): one TAKE, seat 1, signed by its mind."""
+    REPLY = ("0100030000000000000001a4000000e1b241547004a0d44fb8330b23533a99c7121ee2aaaeca9a8d6ae32c677242190100"
+             "0000a1a52d928ca2f114d2b211c3c4cf8c1f88b30f5895c7450117176c6c940276efb33041dcc1649a74e48fbc33565c1e2a"
+             "4bc5c01f3915d90ee635aba40d0067572430a2efd1928ff8d754f02adaee5117dba5422db899acf5074d64172a8ec47e2efc"
+             "d1306c23f681abbcb21d27cdc12c7c5519974c6b4488d45fc8c925a7d207")
+
+    def test_the_take_reads_whole_and_its_signature_holds(self):
+        items = w.read_mail_reply(bytes.fromhex(self.REPLY))
+        self.assertEqual([(s, sub) for s, sub, _ in items], [(3, w.TAKE)])
+        t = w.read_take(items[0][2])
+        self.assertEqual(t["seat"], 1)
+        self.assertTrue(t["ok"])

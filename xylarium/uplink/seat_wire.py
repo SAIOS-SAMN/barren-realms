@@ -195,19 +195,20 @@ def read_call(act: bytes) -> Optional[Dict[str, Any]]:
 
 
 def read_mail_reply(body: bytes) -> Optional[List[Tuple[int, int, bytes]]]:
-    """READ-MAIL's reply: [1][count u16] then per item [seq u64][sub u8][len u32][fields || sig], in seq order;
-    [0][0] an empty box, [0][r>=1] refused (None). Each item comes back as a whole act ([0x53][sub][fields][sig])."""
+    """READ-MAIL's reply, as the relay frames it on the wire (aefc6a39): [count u16] then per item [seq u64][sub u8]
+    [len u32][fields || sig], in seq order - [0][0] an empty box; anything that does not frame whole (a refusal, a
+    deferral) is no mail (None). Each item comes back as a whole act ([0x53][sub][fields][sig])."""
     if len(body) < 2:
         return None
-    if body[0] == 0:
-        return [] if body[1] == 0 and len(body) == 2 else None
-    if body[0] != 1 or len(body) < 3:
-        return None                                    # a deferral or any other shape: no mail read
-    n = struct.unpack_from("<H", body, 1)[0]
-    at, out = 3, []
+    n = struct.unpack_from("<H", body, 0)[0]
+    at, out = 2, []
     for _ in range(n):
+        if at + 13 > len(body):
+            return None
         seq, sub, ln = struct.unpack_from("<QBI", body, at)
         at += 13
+        if at + ln > len(body):
+            return None
         out.append((seq, sub, bytes([ACT_SEAT, sub]) + body[at:at + ln]))
         at += ln
-    return out
+    return out if at == len(body) else None
