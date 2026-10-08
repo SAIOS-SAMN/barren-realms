@@ -74,8 +74,8 @@ def key(a: int, b: int) -> str:
 
 # ---------------------------------------------------------------------- what things cost, by the market
 def price(kernel: Any, commodity: str) -> float:
-    """What a commodity trades at: the mean of the ports' own prices (mid of buy and sell), its listed price where
-    nothing trades it."""
+    """What a commodity trades at, in the exchange's unit (the hub): the mean of the ports' own prices (mid of buy and
+    sell), each carried from its port's money at that money's rate; its listed price where nothing trades it."""
     from xylarium.config import COMMODITY_CONFIG
     from xylarium.kernel import cache
     from xylarium.kernel.economy import EconomyManager
@@ -91,7 +91,10 @@ def price(kernel: Any, commodity: str) -> float:
             except Exception:
                 continue
             if buy > 0 and sell > 0:
-                got.append((buy + sell) / 2.0)
+                fx = getattr(kernel, "fx_market", None)
+                cur = getattr(port, "currency", None)
+                rate = fx.rate(cur) if fx is not None and cur else 1.0
+                got.append((buy + sell) / 2.0 / max(1e-12, rate))      # the port's money, carried to the hub
         return sum(got) / len(got) if got else float(COMMODITY_CONFIG.get(commodity, {}).get("base_price", 0) or 0)
     if not hasattr(kernel, "caches"):
         return build()

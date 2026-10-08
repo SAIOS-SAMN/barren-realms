@@ -62,7 +62,9 @@ class TestCommerce(unittest.TestCase):
         from xylarium.kernel import news                                             # priced as the buyer heard it
         word = news.heard(self.k, self.bw.sector_id, self.sw.sector_id, self.comm) \
             if self.k.sectors[self.sw.sector_id].port is not None else None
-        unit = word[0] if word is not None else transit.price(self.k, self.comm)
+        port = self.k.sectors[self.sw.sector_id].port                               # in the hub: the port's money
+        unit = word[0] / commerce._rate(self.k, port.currency) if word is not None and port is not None \
+            else transit.price(self.k, self.comm)                                    # carried at its rate
         self.assertAlmostEqual(rec["value"], moved * unit, places=3)
 
     def test_a_council_that_judges_it_not_worth_buys_nothing(self):

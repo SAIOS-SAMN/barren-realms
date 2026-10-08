@@ -44,3 +44,17 @@ class TestThriveGates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPricesInOneMoney(unittest.TestCase):
+    def test_a_ports_price_is_carried_to_the_hub_by_its_moneys_rate(self):
+        k = GameKernel(seed=42)
+        sec = next(s for s in k.sectors.values() if s.port is not None and s.port.currency != k.fx_market.hub
+                   and any(w.population > 0 for w in s.planets))
+        w = next(x for x in sec.planets if x.population > 0)
+        from xylarium.kernel.economy import EconomyManager
+        comm = next(c for c in ("ORE", "EQUIPMENT", "ORGANICS") if EconomyManager.get_unit_prices(sec.port, c)[1] > 0)
+        with mock.patch("xylarium.kernel.staples.of", return_value="none"):
+            got = commerce._worth(k, w, comm)
+        sells = EconomyManager.get_unit_prices(sec.port, comm)[1]
+        self.assertAlmostEqual(got, sells / k.fx_market.rate(sec.port.currency))

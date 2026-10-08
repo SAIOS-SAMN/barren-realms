@@ -74,7 +74,7 @@ def _worth(kernel: Any, w: Any, comm: str) -> Optional[float]:
         return float(p) if p > 0 else None
     from xylarium.kernel.economy import EconomyManager
     sells = EconomyManager.get_unit_prices(port, comm)[1]
-    return float(sells) if sells > 0 else None
+    return float(sells) / _rate(kernel, port.currency) if sells > 0 else None     # its port's money, in the hub
 
 
 def _route(kernel: Any, src: int, dst: int, buyer: str, seller: str) -> Optional[List[Tuple[int, int]]]:
@@ -141,10 +141,13 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
         word = news.heard(kernel, bw.sector_id, sw.sector_id, comm)
         if word is None:
             return 0                                          # no word of its price has reached the buyer: not bought
+        r = _rate(kernel, port.currency)                      # the word is in the seller's port's money: to the hub
+        word = (word[0] / r, word[1], word[2])          # its log deviation has no unit
     else:                                                     # a seller with no port sells at the market's mean
         word = (transit.price(kernel, comm), 0, 0.0)
     unit, age, sigma = word
-    floor = float(EconomyManager.get_unit_prices(port, comm)[0]) if port is not None else 0.0
+    floor = float(EconomyManager.get_unit_prices(port, comm)[0]) / _rate(kernel, port.currency) \
+        if port is not None else 0.0
     if floor > 0 and unit < floor:
         return 0                                              # the seller's own port pays more: it keeps its goods
     path = [sw.sector_id] + [b for _, b in hops]
