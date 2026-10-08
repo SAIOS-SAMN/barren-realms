@@ -209,15 +209,29 @@ def first_of_the_galaxy(kernel: Any, cell: Tuple[int, int], k: int) -> bool:
     return "born" in slot and slot["born"] - creation.first_stars(s) <= ancient_window(kernel)
 
 
-def in_core(mind: Dict[str, Any]) -> bool:
-    """Was a mind born in the galaxy's core - its ring inside the bulge (R_BULGE_KPC)?"""
-    return ring_radius(int(mind["cell"][0])) <= R_BULGE_KPC
+def in_core(mind: Dict[str, Any], kernel: Any = None) -> bool:
+    """Was a mind born in the galaxy's core - inside the bulge (R_BULGE_KPC), a SPHERE: its star's distance from the
+    centre in three dimensions when it woke, its ring's radius and its height above the plane then."""
+    r = ring_radius(int(mind["cell"][0]))
+    z = 0.0
+    if kernel is not None:
+        from xylarium.kernel import creation, geometry
+        v = creation.cell(cosmos_seed(kernel), int(mind["cell"][0]), int(mind["cell"][1]))[int(mind["k"])].get("vertical")
+        if v:
+            z = geometry.z_at(v, float(mind["epoch"]), r)
+    return math.hypot(r, z) <= R_BULGE_KPC
+
+
+def from_centre_kpc(kernel: Any, sector_id: int) -> Optional[float]:
+    """A system's distance from the galaxy's centre in three dimensions now (its ring radius and its height)."""
+    p = position(kernel, sector_id)
+    return math.hypot(p["r"], p["z"]) if p else None
 
 
 def is_ancient(kernel: Any, mind: Dict[str, Any], first_core_dawn: float) -> bool:
     """An ancient by birth: among the earliest minds of the core - born in the core, waking within one core assembly
     time of the core's first mind. (A people may also become an ancient by its deeds: board.ancient_peoples.)"""
-    return in_core(mind) and float(mind["epoch"]) - first_core_dawn <= ancient_window(kernel)
+    return in_core(mind, kernel) and float(mind["epoch"]) - first_core_dawn <= ancient_window(kernel)
 
 
 def omega(r: float) -> float:
@@ -770,7 +784,7 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
         m = float(physics.star(sec)["mass"])
     except Exception:
         m = 1.0
-    to_centre = r < R_BULGE_KPC
+    to_centre = (from_centre_kpc(kernel, sid) or r) < R_BULGE_KPC        # the bulge is a sphere
     from xylarium.kernel import zones
     zones.touch_sector(kernel, sid)                           # its worlds are brought to now before their star ends
     lost = 0

@@ -352,7 +352,7 @@ def quarter(kernel: Any) -> List[str]:
     throat(kernel, "parent")
     # the bounce: jets return the reservoir to the witnessed worlds of the bulge
     worlds = [p for s in kernel.sectors.values() for p in s.planets
-              if float(cosmos.stats(kernel)["place"].get(str(s.id), {}).get("r", 99)) < cosmos.R_BULGE_KPC]
+              if (cosmos.from_centre_kpc(kernel, s.id) or 99) < cosmos.R_BULGE_KPC]      # the bulge is a sphere
     if worlds and st["reservoir"]:
         from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
         deep_myr = FISCAL_QUARTER_CYCLES / 100.0 * cosmos.ruler(kernel) / 1.0e6

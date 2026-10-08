@@ -391,7 +391,7 @@ def ancients(kernel: Any) -> List[Dict[str, Any]]:
     from xylarium.kernel import cosmos
     out = []
     minds = _all_minds(kernel)
-    core = [m for m in minds if cosmos.in_core(m)]
+    core = [m for m in minds if cosmos.in_core(m, kernel)]
     first = float(core[0]["epoch"]) if core else 0.0       # the core's own first mind
     firsts = [m for m in core if cosmos.is_ancient(kernel, m, first)]
     for i, m in enumerate(firsts):

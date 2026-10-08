@@ -106,7 +106,7 @@ def bears_hub(kernel: Any, who: str) -> bool:
     if travels_as_information(kernel, who):
         return True
     home = spheres._home(kernel, who)
-    r = _r(kernel, home.sector_id) if home is not None else None
+    r = cosmos.from_centre_kpc(kernel, home.sector_id) if home is not None else None    # the bulge is a sphere
     return r is not None and r <= cosmos.R_BULGE_KPC
 
 
