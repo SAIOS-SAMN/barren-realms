@@ -269,8 +269,7 @@ def policy(kernel: Any, who: str, home: Any, metabolism: str, home_type: Optiona
     if share <= 0:
         out["policy"] = "displace"                         # nothing of its chemistry lives where it goes
         return out
-    civ = getattr(home, "civilization", None)
-    light = (1.0 + alignment.character(civ)) / 2.0 if civ is not None else 0.5   # 1 the Light, 0 absolute darkness
+    light = alignment.regard(getattr(home, "civilization", None))   # 1 the Light, 0 absolute darkness
     m = decide.mind_of_planet(kernel, home)
     pick = decide.choose(kernel, [decide.option("displace", light * share * depth, share)], m, who, "settle")
     if pick is not None:
@@ -445,6 +444,10 @@ def held(kernel: Any, who: str, t: float) -> float:
     if b.get("policy") == "pass":
         left *= 1.0 - float(b.get("living", 0.0))           # the living worlds of its chemistry it passes by
     room = room_formed(kernel, b, t) * b["share"]           # what it has kindled beyond a white hole (gateways)
+    for lp in b.get("leaps") or []:                         # a front begun past an encloser's, through its gateway
+        if t > lp["t"]:
+            far = min(b["rmax"], lp["hop"] + lp["v"] * (t - lp["t"]))
+            room += systems_in(lp["r0"], far, b.get("band")) * b["share"]
     return max(floor, systems_in(b["r0"], reach, b.get("band")) * b["share"] * left + room)
 
 
@@ -482,6 +485,7 @@ def breaks(kernel: Any, who: str, ta: float, tb: float) -> List[float]:
     b = st[who]
     ts = [c["t"] for c in b["cuts"].values()]
     ts += [st[c["by"]]["fell"] for c in b["cuts"].values() if c["by"] in st and st[c["by"]]["fell"] is not None]
+    ts += [lp["t"] for lp in b.get("leaps") or []]          # a gateway opens: a second front begins
     ts.append(b["t0"])
     return sorted({t for t in ts if ta < t < tb})
 
@@ -546,6 +550,8 @@ def meet(kernel: Any, a: str, b: str, when: Tuple[float, float, float, Optional[
                             f"to them while the {name(holder)} stand",
                       data={"epoch": round(tc, 6), "overlap": round(share, 4)})
         logs.append(f"[ANNALS] The {name(enclosed)} cross inside the dominion of the {name(holder)}.")
+        from xylarium.kernel import encircle
+        encircle.respond(kernel, enclosed, holder, tc, logs)        # and they answer it, by their own weighing
         return
     try:
         how = spheres.style(kernel, a, b)

@@ -498,6 +498,12 @@ def _settle(kernel: Any, jobs: List[Dict[str, Any]], logs: List[str]) -> None:
         if meet is None:
             break
         settling.meet(kernel, meet[0], meet[1], meet[2], logs)
+        for j in jobs:                                         # a war or an absorption may end a dominion there
+            fell = settling.stats(kernel)[j["who"]]["fell"]
+            if fell is not None and j["fell"] is None:
+                _run(kernel, j, fell, commit=True)
+                j["fell"] = fell
+                j["hist"]["H"] = j["hist"]["E"]
     for j in jobs:
         if j["fell"] is None:
             _run(kernel, j, j["end"], commit=True)

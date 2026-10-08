@@ -109,6 +109,12 @@ def character(x: Any) -> float:
     return float(_get(x, "alignment", 0.0) or 0.0) if r is None else r
 
 
+def regard(x: Any) -> float:
+    """How fully a people counts others' lives as its own: 1 the Light, 0 absolute darkness, from its character (a
+    people unknown counts them half). Every choice that weighs others' lives weighs them by this."""
+    return (1.0 + character(x)) / 2.0 if x is not None else 0.5
+
+
 def doctrine(x: Any) -> float:
     """What a people tells of itself: its flows as its own records still hold them."""
     r = _ratio(float(_get(x, "told_light", 0.0) or 0.0), float(_get(x, "told_dark", 0.0) or 0.0))
