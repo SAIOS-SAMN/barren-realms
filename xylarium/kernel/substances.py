@@ -265,9 +265,22 @@ def group(z: int) -> int:
 
 
 # ---------------------------------------------------------------------- the nucleus
+# Measured binding energies (MeV) of the light nuclei, where the semi-empirical formula is known to fail - it
+# under-binds the alpha-like nuclei of the light shells (helium-4 most of all), and the burning of stars runs exactly
+# there. Nature's own values (atomic mass evaluation), as the table's melting points are; heavier nuclei take the
+# formula.
+MEASURED_BINDING_MEV = {(2, 1): 2.2246, (3, 1): 8.4818, (3, 2): 7.7180, (4, 2): 28.2957, (6, 3): 31.9940,
+                        (7, 3): 39.2446, (9, 4): 58.1650, (12, 6): 92.1622, (14, 7): 104.6587, (16, 8): 127.6193,
+                        (20, 10): 160.6448, (24, 12): 198.2569, (28, 14): 236.5368, (32, 16): 271.7807,
+                        (56, 26): 492.2579}
+
+
 def binding(a: float, z: int) -> float:
-    """Nuclear binding energy (MeV): Weizsaecker's semi-empirical mass formula. Shell closures are not in it, so it
-    under-binds the islands; it tells how energy runs along the table (rising to iron, falling past it)."""
+    """Nuclear binding energy (MeV): measured for the light nuclei and iron (MEASURED_BINDING_MEV), else Weizsaecker's
+    semi-empirical mass formula - which tells how energy runs along the table (rising to iron, falling past it)."""
+    got = MEASURED_BINDING_MEV.get((int(round(float(a))), int(z)))
+    if got is not None:
+        return got
     a = float(a)
     if a <= 1:
         return 0.0

@@ -144,6 +144,7 @@ def value(kernel: Any, at: Sequence[float], t: float) -> float:
 # Energy is in the exact unit Earth-mass AU^2 (year / 2 pi)^-2: an orbit's stiffness is then M / a^3 (the 4 pi^2 of
 # Kepler's third law absorbed in the unit), and every quantity below is a Fraction - floats never touch an orbit.
 NUCLEON_MEV = Fraction("938.272")    # a nucleon's rest energy (MeV): what a fusion step's binding is a share of
+WEAK_MEV = Fraction("1.29333") - Fraction("0.51100")    # a proton made a neutron: m_n - m_p + m_e, less 2 m_e back
 STEPS = {"main": ({"H": 4}, {"He": 1}), "giant": ({"He": 3}, {"C": 1})}   # the burning a star is on, by its stage
 
 
@@ -158,7 +159,12 @@ def burn_out_share(kernel: Any, sector_id: int) -> Fraction:
     life = cosmos.star_life(kernel, sector_id) if cosmos.is_cosmic(kernel) else None
     stage = "giant" if life and cosmos.deep_gyr(kernel) > life[1] else "main"
     ins, outs = STEPS[stage]
-    released = substances.transmutation_mev(ins, outs)
+    released = Fraction(substances.transmutation_mev(ins, outs))
+    # protons the step turns to neutrons (beta-plus): each costs m_n - m_p + m_e and its positron's annihilation
+    # gives 2 m_e back - net WEAK_MEV each (hydrogen to helium turns two)
+    z_in = sum(n * int(substances.element(s)["Z"]) for s, n in ins.items())
+    z_out = sum(n * int(substances.element(s)["Z"]) for s, n in outs.items())
+    released -= max(0, z_in - z_out) * WEAK_MEV
     nucleons = sum(Fraction(n) * Fraction(substances.element(s)["A"]) for s, n in ins.items())
     return max(Fraction(0), Fraction(released) / (nucleons * NUCLEON_MEV))     # exact: a float never leaks in
 
