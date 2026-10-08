@@ -58,3 +58,14 @@ class TestLadder(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWithdrawnPetition(unittest.TestCase):
+    def test_a_withdrawn_petition_is_still_evidence(self):
+        k = GameKernel(seed=42)
+        spheres.ensure(k)
+        realm = stewardship.realms(k)[0]
+        who = next(w for w in spheres.stats(k)["nets"] if spheres.presence(k, realm) != w)
+        ascendance.petition(k, who, realm)
+        ascendance.stats(k)["of"].pop(who)                       # withdrawn (it became an ancient)
+        self.assertEqual(ladder.rung(k, who)[0], "petitions")

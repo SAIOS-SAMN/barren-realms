@@ -45,8 +45,10 @@ def _observed(kernel: Any, who: str) -> Optional[Dict[str, Any]]:
 
 def _petitions(kernel: Any, who: str) -> Optional[Dict[str, Any]]:
     rec = _petition(kernel, who)
-    if rec is None:
-        return None
+    if rec is None:                                   # a petition once made is evidence, though withdrawn since
+        from xylarium.kernel import history       # (an ancients' house withdraws its own: it answers to no younger line)
+        ev = next((e for e in history.of_people(kernel, who) if e.get("kind") == "PETITION"), None)
+        return {"record": "history.PETITION", "cycle": ev.get("cycle")} if ev else None
     ruling = (rec.get("deeds") or {}).get("ruling")
     if ruling:
         return {"record": "ascendance.ruling", "realm": rec["realm"], "verdict": ruling["verdict"],
