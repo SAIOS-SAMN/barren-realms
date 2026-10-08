@@ -554,6 +554,12 @@ def _books(kernel: Any, j: Dict[str, Any], logs: List[str]) -> None:
         fell_gens, fell_epoch = fell, j["epoch_of"](fell)
     if fell is None:
         _apply(kernel, who, home, j["stage"])
+    # its harvest against its need, as the harvest law reads at its numbers (biosphere.harvest: farmers feed
+    # themselves and a quarter more, up to what its land carries) - a carried world is gauged, never defaulted
+    k_home = max(1, biosphere.carrying_capacity(kernel, home))
+    if home.population > 0:
+        a, b = biosphere.FED_PER_FARMER
+        home.society["self_sufficiency"] = round(min(a / b, k_home / home.population), 4)
     # its history as it lived its ages: its own work, and - once it has a state - what its few took of it, weighed
     # against the growth it made in the stretch (its worlds and its land's room, a year)
     civ = getattr(home, "civilization", None)
@@ -591,6 +597,8 @@ def _books(kernel: Any, j: Dict[str, Any], logs: List[str]) -> None:
     # over the years carried, shared among what it already studies as it studies it - summed, never compounded, so
     # however its time is cut it learns the same
     known = {d: knowledge.stocks(kernel, who).get(d, 0.0) for d in knowledge.DOMAINS}
+    if not any(v > 0 for v in known.values()):
+        known = {d: 1.0 for d in knowledge.DOMAINS}          # a people that studies nothing yet studies everything alike
     total = sum(v for v in known.values() if v > 0)
     if total > 0:
         years = gens * gen

@@ -284,10 +284,13 @@ def growth_rate(kernel: Any, planet: Any) -> F:
     return F(_profile(kernel, planet)["rate_micro_per_cycle"] * _YEAR, MICRO)
 
 
+FED_PER_FARMER = (5, 4)        # a farmer feeds itself and a quarter more (up to what the land carries)
+
+
 def harvest(kernel: Any, planet: Any, k: int) -> int:
     """Organics the farms bring in this cycle: the land's yield, up to what K people would eat.
     Farmers feed themselves and a quarter more, up to the land; the fraction of a unit is carried."""
-    fed = min(planet.population * 5 // 4, k)
+    fed = min(planet.population * FED_PER_FARMER[0] // FED_PER_FARMER[1], k)
     total = int(fed * FOOD_PER_THOUSAND * need_factor(planet, kernel)) + int(getattr(planet, "harvest_carry", 0) or 0)
     planet.harvest_carry = total % 1000
     return total // 1000
