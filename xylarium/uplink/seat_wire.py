@@ -24,6 +24,7 @@ TAG = b"mycelium seat v1"
 SIGNED_FROM = 1                  # the act tag is not signed; the sub-kind and every field are
 SEATS, TAKE, TAKEN, PERCEPT, CALL, OUTCOME, READ_LISTING, READ_MAIL = range(8)
 Q_, KEY, COUNT, FLAG, MV, BIGQ, BYTES = range(7)
+WIRE_BYTES = False              # the hypha's relay reads ARG tag 6 (Bytes) - on once mycelium ships it
 ROLE = {"progenitor": 0, "ancients": 1, "steward": 2, "sovereign": 3}   # 4..9 the captains' offices
 COUNSEL = 0xFFFF
 
@@ -31,7 +32,7 @@ COUNSEL = 0xFFFF
 FUNCTIONS: Dict[int, Tuple[str, Tuple[int, ...]]] = {
     # a mind's answer: [Bytes(its rule's Element tape), Bytes(the test outputs as ACT_SOLVE writes them)] and/or its
     # steps as Counts (1..6 a motion, the crystal ops; 0x100 + 16*from + to a hue move)
-    1: ("answer", (BYTES, BYTES, COUNT)),
+    1: ("answer", (BYTES, BYTES, COUNT) if WIRE_BYTES else (COUNT,)),
     10: ("send", (KEY,)), 11: ("recall", (KEY,)), 12: ("fold", (KEY, FLAG)), 13: ("handle", (COUNT,)),
     14: ("forge", (COUNT, COUNT)),
     20: ("claim", (KEY,)), 21: ("withdraw", ()), 22: ("grant", (KEY,)), 23: ("ascend", (KEY,)),
