@@ -28,6 +28,28 @@ def log(msg: str) -> None:
     print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}", flush=True)
 
 
+def observe(k, path: str, t0: float, c0: int) -> None:
+    """The game's vital signs (tools/live.py's line, with the roads, trade and the court) appended to the
+    observations log; a short line to the journal: minds, peoples, crystals, species, trade, roads, the court."""
+    from tools.live import observe as vitals
+    wall = time.time() - t0
+    o = vitals(k, wall, (k.cycle_count - c0) / max(1e-9, wall))
+    sums = subsystem.summaries(k)
+    for name in ("transit", "commerce", "court", "spheres", "board", "ladder", "phylogeny", "life"):
+        if name in sums:
+            o[name] = sums[name]
+    from xylarium.kernel import cosmos
+    o["deep_gyr"] = cosmos.deep_gyr(k) if cosmos.is_cosmic(k) else None
+    with open(path, "a") as f:
+        f.write(json.dumps(o, default=str) + "\n")
+    intel = o.get("intellect") or {}
+    log(f"c{k.cycle_count} gyr {o['deep_gyr']:.4f} people {o['people']:,} worlds {o['worlds']} "
+        f"minds {(o.get('cosmos') or {}).get('minds_arisen', '?')}/{(o.get('cosmos') or {}).get('minds_expected_by_now', '?')} peoples {(o.get('cosmos') or {}).get('peoples', 0)} "
+        f"fluid {intel.get('mean_fluid', {})} genome {json.dumps(o.get('genome', {}), default=str)[:120]} "
+        f"trade {json.dumps(o.get('commerce', {}), default=str)[:100]} roads {json.dumps(o.get('transit', {}), default=str)[:100]} "
+        f"court {json.dumps(o.get('court', {}))}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=42)
@@ -47,6 +69,8 @@ def main() -> None:
     k.activate()
     log(f"hypha: {court.endpoint() or 'none (no court traffic)'}")
     seen = 0
+    obs_path = save.replace(".json", ".obs.jsonl")
+    t0, c0 = time.time(), k.cycle_count
     while not STOP["now"]:
         k.tick_simulation()
         rec = court.stats(k)["of"] if "court" in k.state else {}
@@ -56,7 +80,7 @@ def main() -> None:
             log("court: " + json.dumps({h: {x: r[x] for x in ("met", "closed", "refused", "beyond", "mu")}
                                         for h, r in rec.items()}))
         if k.cycle_count % REPORT_EVERY == 0:
-            log(f"cycle {k.cycle_count}: houses {len(court.houses(k))}, " + json.dumps(court.summary(k)))
+            observe(k, obs_path, t0, c0)
         if k.cycle_count % SAVE_EVERY == 0:
             StatePersistence.save_to_file(k, save)
     StatePersistence.save_to_file(k, save)
