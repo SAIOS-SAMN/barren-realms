@@ -1078,8 +1078,10 @@ def arise(kernel: Any, rec: Dict[str, Any]) -> Optional[str]:
     civ = CivilizationIntelligenceEngine.create_civilization({
         "name": name, "species_name": f"{plan}-{name.lower()}", "clade": traits["body"], "class_code": 0,
         "sigil": "*",
-        "metabolism": metab, "disposition": "industry", "motto": "we looked up", "station": "arisen", "tech_level": 0})
+        "metabolism": metab, "disposition": "industry", "motto": "", "station": "arisen", "tech_level": 0})
     civ.traits = traits
+    from xylarium.kernel import mottos
+    civ.motto = mottos.motto(kernel, f"civ:{name}", p, traits)    # said in its own tongue, from its own waking
     p.civilization = civ
     biosphere.adapt(kernel, civ, p)                       # it evolved under this light, on this ground
     p.owner_id = None
