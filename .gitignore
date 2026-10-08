@@ -4,3 +4,4 @@ __pycache__/
 *.log
 runs/
 .keys/
+uplink-rs/target/

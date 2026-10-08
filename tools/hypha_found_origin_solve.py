@@ -30,8 +30,11 @@ def main() -> None:
         import hashlib
         out["task"] = {"id_bytes": len(task["id"]), "id_sha256": hashlib.sha256(task["id"]).hexdigest(),
                        "train": len(task["train"]), "test": len(task["test"])}
-        outputs = [t for t in task["test"]]          # no rule of its own yet: its first answer is the test as given
-        out["solve"] = an.read_verdict(an.speak(addr, an.solve(voice, task["id"], outputs)))
+        from xylarium.uplink import mind
+        steps = mind.steps_for(task["train"])        # its mind's steps, or none: no rule, nothing sent
+        out["steps"] = steps
+        if steps is not None:
+            out["solve"] = mind.submit(f"{host}:{port}", os.path.join(an.KEYS, "captains.ed25519"), task, steps)
     print(json.dumps(out, indent=2))
 
 
