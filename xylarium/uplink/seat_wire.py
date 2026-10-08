@@ -222,3 +222,38 @@ def read_mail_reply(body: bytes) -> Optional[List[Tuple[int, int, bytes]]]:
         out.append((seq, sub, bytes([ACT_SEAT, sub]) + body[at:at + ln]))
         at += ln
     return out if at == len(body) else None
+
+
+def read_arg(b: bytes, at: int) -> Tuple[Tuple[int, Any], int]:
+    """One tagged value (a fixed Q field is written as an argument is)."""
+    got, end = read_args(bytes([1]) + b[at:], 0)
+    return got[0], at + end - 1
+
+
+def read_percept(act: bytes, house_vk: bytes) -> Optional[Dict[str, Any]]:
+    """PERCEPT read to its typed values: [domain][seat u32][mind][local time Q][seq u64][n u16] REC... ; a COUNSEL is
+    kind 0xFFFF: [fn u16][ARGS][worth Q][cost Q]. "ok" is whether the house's signature verifies."""
+    if len(act) < 2 + 32 + 4 + 32 + 64 or act[1] != PERCEPT:
+        return None
+    at = 2
+    domain, seat, mind = act[at:at + 32], struct.unpack_from("<I", act, at + 32)[0], act[at + 36:at + 68]
+    (_, local), at = read_arg(act, at + 68)
+    seq, n = struct.unpack_from("<QH", act, at)
+    at += 10
+    records, counsel = [], []
+    for _ in range(n):
+        kind = struct.unpack_from("<H", act, at)[0]
+        at += 2
+        if kind == COUNSEL:
+            fn = struct.unpack_from("<H", act, at)[0]
+            a, at = read_args(act, at + 2)
+            (_, worth), at = read_arg(act, at)
+            (_, cost), at = read_arg(act, at)
+            counsel.append((fn, a, worth, cost))
+        else:
+            a, at = read_args(act, at)
+            records.append((kind, a))
+    if at != len(act) - 64:
+        return None
+    return {"domain": domain, "seat": seat, "mind": mind, "local": local, "seq": seq, "records": records,
+            "counsel": counsel, "ok": opened(act, house_vk)}
