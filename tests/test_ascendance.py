@@ -134,3 +134,15 @@ class TestCoAscension(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLineCouncil(unittest.TestCase):
+    def test_a_line_that_is_no_progenitors_is_ruled_by_its_peoples_council(self):
+        from xylarium.kernel import relations
+        k = GameKernel(seed=42)
+        spheres.ensure(k)
+        line = sorted(relations._peoples(k))[0]
+        held = ascendance.seat(k, f"line:{line}")
+        self.assertIsNotNone(held)                                      # a living people's council holds its line
+        self.assertEqual(held["sender"], line)
+        self.assertIsNone(ascendance.seat(k, "line:civ:NoSuchPeople"))

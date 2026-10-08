@@ -334,10 +334,20 @@ def _line(realm: str) -> Optional[str]:
 def seat(kernel: Any, realm: str) -> Optional[Dict[str, Any]]:
     """The mind holding a realm's steward seat (Concordance 3.8): the progenitor line that stewards it, or its
     steward of record (an envoy, a player where one keeps it) - None where no mind holds it."""
-    from xylarium.kernel import board, stewardship
+    from xylarium.kernel import board, relations, stewardship
     line = _line(realm)
     if line is not None:
-        return board.progenitors(kernel).get(line)
+        held = board.progenitors(kernel).get(line)
+        if held is not None:
+            return held
+        # a people that is no ancient keeps its own line (stewardship.envoys: "sent by the X themselves"): its
+        # COUNCIL's seat rules for it - a people acts through its council (Concordance 3.8), the AI holding the
+        # seat where no player does; a people no longer living holds no seat
+        if relations._peoples(kernel).get(line):
+            council = stats(kernel).setdefault("councils", {})
+            return council.setdefault(line, {"id": f"council:{line}", "name": f"the {line.split(':', 1)[-1]} council",
+                                             "sender": line})
+        return None
     return stewardship.mind(kernel, realm)
 
 
