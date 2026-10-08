@@ -11,7 +11,7 @@
 
 use std::io::Read;
 
-use mycelium::sdk::rule::{sentence, would_judge, Extent, Pred, Step, Symmetry};
+use mycelium::sdk::rule::{sentence, would_judge, Extent, Pred, Region, Step, Symmetry};
 use mycelium::sdk::{Entity, Kernel};
 use serde::Deserialize;
 use serde_json::json;
@@ -27,6 +27,9 @@ enum StepIn {
     Scale((u8, u8)),
     SelectHue(u8),
     Crop(String),
+    /// The region crystal (78.143): select every body, take its interior, and the hue step after fills it.
+    SelectAll(bool),
+    Region(String),
 }
 
 #[derive(Deserialize)]
@@ -109,6 +112,12 @@ fn main() {
             }
             StepIn::SelectHue(h) => steps.push(Step::Select(Pred::Hue(*h))),
             StepIn::Crop(e) => steps.push(Step::Crop(if e == "interior" { Extent::Interior } else { Extent::Body })),
+            StepIn::SelectAll(_) => steps.push(Step::Select(Pred::All)),
+            StepIn::Region(r) => steps.push(Step::Region(match r.as_str() {
+                "halo" => Region::Halo,
+                "extent" => Region::Extent,
+                _ => Region::Interior,
+            })),
         }
     }
     let kernel = Kernel::from_key(ed25519_dalek::SigningKey::from_bytes(&seed));

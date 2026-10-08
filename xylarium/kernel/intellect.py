@@ -49,9 +49,10 @@ DISCOVERABLE = {             # crystal -> the domain whose knowledge reveals it
     C.FLIPH: "information", C.FLIPV: "information", C.TRANSPOSE: "information",
     C.RECOLOR: "biology", C.FLIP_STACK: "energy", C.CYCLE_LAYERS: "energy",
     C.SCALE: "materials", C.CROP: "information",         # the size crystals: making at a scale; attending to one
+    C.FILL: "biology",                                    # the region crystal: an inside told from an outside
     C.HYPER_FLIP: "energy", C.HYPER_CYCLE: "energy",
 }
-RANK_OF = {C.FLIPH: 2, C.FLIPV: 2, C.TRANSPOSE: 2, C.RECOLOR: 2, C.SCALE: 2, C.CROP: 2, C.FLIP_STACK: 3, C.CYCLE_LAYERS: 3,
+RANK_OF = {C.FLIPH: 2, C.FLIPV: 2, C.TRANSPOSE: 2, C.RECOLOR: 2, C.SCALE: 2, C.CROP: 2, C.FILL: 2, C.FLIP_STACK: 3, C.CYCLE_LAYERS: 3,
            C.HYPER_FLIP: 4, C.HYPER_CYCLE: 4}
 VOLUMETRIC_WORLDS = ("GAS_GIANT", "OCEANIC")      # peoples born in volumes think in them first
 ABSTRACT_AFTER = 3           # a composite written this many times is crystallised into one generator
@@ -247,6 +248,10 @@ def decompact(vocab: List[Any], task: Dict[str, Any]) -> Optional[List[Any]]:
             hue = C.read_crop(task["train"])
             if hue is not None:
                 return [(C.CROP, hue)]
+        if C.FILL in vocab:
+            got = C.read_fill(task["train"])
+            if got is not None:
+                return [(C.FILL, got[0], got[1])]
         return None
     frame, cmap = coord
     fw = _chart(vocab).get(frame)

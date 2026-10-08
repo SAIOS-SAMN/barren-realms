@@ -42,6 +42,7 @@ NAMES = {ROT90: "rotate90", ROT180: "rotate180", ROT270: "rotate270", FLIPH: "fl
          HYPER_FLIP: "hyper_flip", HYPER_CYCLE: "hyper_cycle"}
 FRAME_OPS = (ROT90, ROT180, ROT270, FLIPH, FLIPV, TRANSPOSE)
 SCALE, CROP = "scale", "crop"   # the size crystals (mycelium 78.143 Scale and Crop): ("scale", up, down), ("crop", hue)
+FILL = "fill"                   # the region crystal (78.143 Region(Interior) + Hue): ("fill", background, hue)
 STACK_OPS = (FLIP_STACK, CYCLE_LAYERS)
 HYPER_OPS = (HYPER_FLIP, HYPER_CYCLE)
 
@@ -328,6 +329,8 @@ def apply_op(op, g):
         return scaled(g, op[1], op[2])
     if isinstance(op, tuple) and op and op[0] == CROP:
         return cropped(g, op[1])
+    if isinstance(op, tuple) and op and op[0] == FILL:
+        return filled(g, op[1], op[2])
     return apply_frame(frame_of(op), g)
 
 
@@ -383,6 +386,55 @@ def cropped(g: Grid, hue: int) -> Optional[Grid]:
         return None
     ys, xs = [y for y, _ in bs[0]], [x for _, x in bs[0]]
     return tuple(tuple(g[r][min(xs):max(xs) + 1]) for r in range(min(ys), max(ys) + 1))
+
+
+def enclosed(g: Grid, bg: int) -> List[Tuple[int, int]]:
+    """The background cells no edge-path of background joins to the grid's border: the interiors."""
+    h, w = len(g), len(g[0]) if g else 0
+    open_ = set()
+    stack = [(r, c) for r in range(h) for c in (0, w - 1) if g[r][c] == bg] + \
+            [(r, c) for c in range(w) for r in (0, h - 1) if g[r][c] == bg]
+    while stack:
+        y, x = stack.pop()
+        if (y, x) in open_:
+            continue
+        open_.add((y, x))
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and g[ny][nx] == bg and (ny, nx) not in open_:
+                stack.append((ny, nx))
+    return [(r, c) for r in range(h) for c in range(w) if g[r][c] == bg and (r, c) not in open_]
+
+
+def filled(g: Grid, bg: int, hue: int) -> Grid:
+    """Every interior of the background painted one hue."""
+    inside = set(enclosed(g, bg))
+    return tuple(tuple(hue if (r, c) in inside else v for c, v in enumerate(row)) for r, row in enumerate(g))
+
+
+def read_fill(pairs: Iterable[Tuple[Grid, Grid]]) -> Optional[Tuple[int, int]]:
+    """The (background, hue) every pair's output is its input with its interiors filled by - or None. Only cells the
+    fill reaches may change, and every one of them must."""
+    pairs = list(pairs)
+    for bg in range(HUES):
+        hue = None
+        ok = bool(pairs)
+        for i, o in pairs:
+            if len(i) != len(o) or any(len(a) != len(b) for a, b in zip(i, o)):
+                ok = False
+                break
+            inside = enclosed(i, bg)
+            if not inside:
+                ok = False
+                break
+            h0 = o[inside[0][0]][inside[0][1]]
+            if hue not in (None, h0) or h0 == bg or filled(i, bg, h0) != o:
+                ok = False
+                break
+            hue = h0
+        if ok and hue is not None:
+            return bg, hue
+    return None
 
 
 def read_scale(pairs: Iterable[Tuple[Grid, Grid]]) -> Optional[Tuple[int, int]]:

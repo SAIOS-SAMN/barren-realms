@@ -31,6 +31,8 @@ def steps_of(program: List[Any]) -> Optional[List[dict]]:
             steps.append({"scale": [int(op[1]), int(op[2])]})
         elif isinstance(op, tuple) and len(op) == 2 and op[0] == C.CROP:
             steps += [{"select_hue": int(op[1])}, {"crop": "body"}]
+        elif isinstance(op, tuple) and len(op) == 3 and op[0] == C.FILL:
+            steps += [{"select_all": True}, {"region": "interior"}, {"hue": [(int(op[1]), int(op[2]))]}]
         else:
             return None
     return steps

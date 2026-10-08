@@ -36,3 +36,18 @@ class TestSizeCrystals(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFillCrystal(unittest.TestCase):
+    RING = ((0, 0, 0, 0, 0), (0, 3, 3, 3, 0), (0, 3, 0, 3, 0), (0, 3, 3, 3, 0), (0, 0, 0, 0, 0))
+
+    def test_an_interior_is_filled_and_only_it(self):
+        out = C.filled(self.RING, 0, 4)
+        self.assertEqual(C.read_fill([(self.RING, out)]), (0, 4))
+        self.assertIsNone(C.read_fill([(self.RING, C.filled(self.RING, 0, 0))]))   # nothing changed: no fill read
+
+    def test_only_a_people_holding_fill_writes_it_in_the_courts_steps(self):
+        task = {"rank": 2, "train": [(self.RING, C.filled(self.RING, 0, 4))], "test": self.RING}
+        self.assertIsNone(intellect.decompact([C.ROT90], task))
+        prog = intellect.decompact([C.ROT90, C.FILL], task)
+        self.assertEqual(mind.steps_of(prog), [{"select_all": True}, {"region": "interior"}, {"hue": [(0, 4)]}])
