@@ -193,13 +193,21 @@ def petition(kernel: Any, who: str, realm: str) -> None:
     """A people crosses inside a realm another keeps: it asks to go among the stars, and waits on the steward."""
     from xylarium.kernel import history, stewardship
     st = stats(kernel)
-    if who in st["of"]:
-        return
+    if who in st["of"] or _ancient(kernel, who):
+        return                                     # an ancients' house answers to no younger line (the hierarchy)
     st["of"][who] = {"realm": realm, "ruling": "pending", "since": kernel.cycle_count, "ruled": None,
                      "rulings": 0, "mind": mc.new_mind(), "hosts": hosts(kernel, who)}
     history.event(kernel, "PETITION", f"The {who.split(':', 1)[-1]} ask to go among the stars of "
                   f"{stewardship.realm_name(realm)}", actors=[who],
                   cause="they have crossed inside a realm another keeps; its steward will read them")
+
+
+def _ancient(kernel: Any, who: str) -> bool:
+    from xylarium.kernel import board
+    try:
+        return who in board.ancient_peoples(kernel)
+    except Exception:
+        return False
 
 
 def hosts(kernel: Any, who: str) -> List[str]:
@@ -437,6 +445,11 @@ def season(kernel: Any) -> List[str]:
         return []
     logs: List[str] = []
     st = stats(kernel)
+    for who in [w for w in st["of"] if _ancient(kernel, w)]:   # it became an ancient: it answers to no younger line
+        from xylarium.kernel import history
+        st["of"].pop(who)
+        history.event(kernel, "PETITION_WITHDRAWN", f"The {who.split(':', 1)[-1]} answer to no younger line",
+                      actors=[who], cause="they are ancients: the stewards and the lines below them do not rule them")
     for who, rec in sorted(st["of"].items()):
         if not _due(kernel, rec) or _home(kernel, who) is None:
             continue

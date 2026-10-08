@@ -235,8 +235,12 @@ def _forecast(kernel: Any, holder: str, rec: Dict[str, Any], g: Dict[str, float]
                 st["introspective"] = int(st.get("introspective", 0)) + (1 if side else -1)
     m = decide.mind_of_planet(kernel, p0)
     rng = scheduler.rng(kernel, "self", holder, kernel.cycle_count)
-    blur = decide.JUDGEMENT_ERROR * m["noise"]
-    rec["forecast"] = {x: min(1.0, max(0.0, g[x] + (g[x] - prev[x] if prev else 0.0) + rng.gauss(0.0, blur)))
+    # its error scales with the size of what it judges (decide.choose's law): it misjudges how far a thing moves,
+    # never a thing that stands still - a flat gauge is forecast as flat, and skill is earned on what moves
+    moves = {x: (g[x] - prev[x]) if prev else 0.0 for x in GAUGES}
+    scale = max((abs(d) for d in moves.values()), default=0.0)
+    blur = decide.JUDGEMENT_ERROR * m["noise"] * scale
+    rec["forecast"] = {x: min(1.0, max(0.0, g[x] + moves[x] + (rng.gauss(0.0, blur) if blur > 0 else 0.0)))
                        for x in GAUGES}
     rec["last_gauges"] = dict(g)
 

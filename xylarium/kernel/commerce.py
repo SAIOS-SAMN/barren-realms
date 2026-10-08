@@ -68,8 +68,10 @@ def _worth(kernel: Any, w: Any, comm: str) -> Optional[float]:
     if comm == staples.of(kernel, w):
         return relations._output_sol(kernel, [w]) / max(1, biosphere.consumption(w) * _quarter())
     port = getattr(kernel.sectors.get(w.sector_id), "port", None)
-    if port is None:
-        return None
+    if port is None:                                          # no port of its own: what the market pays, on the mean
+        from xylarium.kernel import transit
+        p = transit.price(kernel, comm)
+        return float(p) if p > 0 else None
     from xylarium.kernel.economy import EconomyManager
     sells = EconomyManager.get_unit_prices(port, comm)[1]
     return float(sells) if sells > 0 else None
@@ -134,10 +136,13 @@ def _ship(kernel: Any, buyer: Dict[str, Any], seller: Dict[str, Any], bw: Any, s
         return got
     from xylarium.kernel import fxroutes, news
     from xylarium.kernel.economy import EconomyManager
-    port = getattr(kernel.sectors.get(sw.sector_id), "port", None)     # a world with no port has no price to hear
-    word = news.heard(kernel, bw.sector_id, sw.sector_id, comm) if port is not None else None
-    if word is None:
-        return 0                                              # no word of its price has reached the buyer: not bought
+    port = getattr(kernel.sectors.get(sw.sector_id), "port", None)
+    if port is not None:
+        word = news.heard(kernel, bw.sector_id, sw.sector_id, comm)
+        if word is None:
+            return 0                                          # no word of its price has reached the buyer: not bought
+    else:                                                     # a seller with no port sells at the market's mean
+        word = (transit.price(kernel, comm), 0, 0.0)
     unit, age, sigma = word
     floor = float(EconomyManager.get_unit_prices(port, comm)[0]) if port is not None else 0.0
     if floor > 0 and unit < floor:
