@@ -323,7 +323,9 @@ def _peoples(kernel: Any) -> Dict[str, Dict[str, Any]]:
             rec = out.setdefault(h, {"effort": 0.0, "worlds": [], "lux": 0.0, "aptitude": []})
             from xylarium.kernel import genome
             rec["aptitude"].append(genome.aptitude_factor(p))
-            rec["effort"] += knowledge.effort(kernel, p) * years
+            # its thought: what its free hands think, and what every member thinks as it lives - surplus or none
+            # (knowledge.lived; the same thought technology.season counts: a people at its land's limit still thinks)
+            rec["effort"] += (knowledge.effort(kernel, p) + knowledge.lived(kernel, p)) * years
             rec["worlds"].append(p)
             rec["lux"] = max(rec["lux"], float(p.society.get("lux_access", 0.0) or 0.0))
     return out
