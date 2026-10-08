@@ -248,7 +248,7 @@ def lane(kernel: Any, a: int, b: int) -> Dict[str, Any]:
     if rec is None:
         w = worm(kernel, a, b)
         rec = st["lanes"][key(a, b)] = {"cost_cr": float(w["cost_cr"]) if w else passage_cr(kernel),
-                                        "collected": 0.0, "transits": 0, "year": 0, "last_year": 0}
+                                        "collected": "0", "transits": 0, "year": 0, "last_year": 0}
     return rec
 
 
@@ -259,7 +259,7 @@ def quote(kernel: Any, captain: Any, a: int, b: int) -> Dict[str, Any]:
     if holder is None or _free(kernel, _payer(kernel, captain), holder):
         return {"owner": holder, "toll": 0.0, "floor": 0.0, "ceiling": 0.0, "tithe": 0.0}
     rec = lane(kernel, a, b)
-    floor = max(0.0, rec["cost_cr"] - rec["collected"]) / max(1, rec["last_year"])
+    floor = max(0.0, rec["cost_cr"] - float(book(rec, "collected"))) / max(1, rec["last_year"])
     around = _around(kernel, a, b)
     if around == float("inf"):
         ceiling = fibres.cargo_value(captain) + hop_value(kernel, captain)      # no way round: all it carries
@@ -290,6 +290,15 @@ def on_passage(kernel: Any, captain: Any, a: int, b: int) -> int:
     return amt + tithe
 
 
+def book(d: Dict[str, Any], k: str) -> Fraction:
+    """A toll book's entry, exact (Concordance 9.1a): kept as a Fraction's string."""
+    return Fraction(d.get(k, 0))
+
+
+def _add(d: Dict[str, Any], k: str, v: Any) -> None:
+    d[k] = str(book(d, k) + Fraction(v))
+
+
 def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, tithe: float = 0.0,
            transits: int = 1, paid: Optional[Tuple[int, str]] = None) -> None:
     """A passage paid for (by a ship, a hauler, or a flow of passengers): the lane's traffic counted, the money into
@@ -301,20 +310,20 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
     rec["transits"] += transits
     rec["year"] += transits
     st = stats(kernel)
-    if tithe > 0:
-        st.setdefault("tithes", {})[holder] = st["tithes"].get(holder, 0.0) + tithe
-        st["tithed"] = st.get("tithed", 0.0) + tithe
+    if tithe > 0:                                            # the books exact: the toll's own value, never rounded
+        _add(st.setdefault("tithes", {}), holder, tithe)
+        _add(st, "tithed", tithe)
     if toll > 0:
-        rec["collected"] += toll
-        st["revenue"][holder] = st["revenue"].get(holder, 0.0) + toll
-        st["paid"] += toll
+        _add(rec, "collected", toll)
+        _add(st["revenue"], holder, toll)
+        _add(st, "paid", toll)
     total = int(toll + tithe)
     if total <= 0 and not paid:
         return
     amount, money = paid if paid else (total, _hub())
     if tithe > 0 and amount > 0:                             # the tithe is the progenitors': it goes to the fund
         from xylarium.kernel import endowments, steward_ai   # their realm's stewards keep (endowments.py)
-        part = int(amount * tithe / max(1e-9, toll + tithe))
+        part = int(amount * Fraction(tithe) / (Fraction(toll) + Fraction(tithe)))
         sol = part if money == _hub() else kernel.fx_market.convert(money, _hub(), part)[0]
         endowments.credit(kernel, steward_ai.line_of(kernel, holder) or holder, sol)
         amount -= part
@@ -361,7 +370,7 @@ def charge_cr(kernel: Any, a: int, b: int) -> Tuple[Optional[str], float, float]
     hv = _typical_hop(kernel)
     rec = stats(kernel)["lanes"].get(key(a, b))
     cost_cr = rec["cost_cr"] if rec else (float(w["cost_cr"]) if w else passage_cr(kernel))
-    floor = max(0.0, cost_cr - (rec["collected"] if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
+    floor = max(0.0, cost_cr - (float(book(rec, "collected")) if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
     around = _around(kernel, a, b)
     saving = (float("inf") if around == float("inf") else
               max(0.0, around - fibres.base_lane_cost(kernel, a, b)) * hv)
@@ -484,9 +493,9 @@ def charge_hops(kernel: Any, a: int, b: int) -> float:
 def drain_revenue(kernel: Any, who: str) -> Fraction:
     """What a network collected since last asked, in passages (it pays for more of them)."""
     st = stats(kernel)
-    got = st["revenue"].pop(who, 0.0) if hasattr(kernel, "state") else 0.0
+    got = Fraction(st["revenue"].pop(who, 0)) if hasattr(kernel, "state") else Fraction(0)
     per = passage_cr(kernel)
-    return Fraction(got) / Fraction(per) if got > 0 and per > 0 else Fraction(0)
+    return got / Fraction(per) if got > 0 and per > 0 else Fraction(0)
 
 
 def gate_fee(kernel: Any, captain: Any, gate: Any) -> int:
@@ -888,10 +897,10 @@ def render(kernel: Any) -> str:
         lines.append(f"  {w['kind']} throat {_name(kernel, w['a'])} <-> {_name(kernel, w['b'])}: "
                      + (f"the {w['owner'].split(':', 1)[-1]}'s, {w['handling']}" if w.get("owner") else
                         f"dormant (the {str(w.get('keeper', '?')).split(':', 1)[-1]}'s)"))
-    busiest = sorted(st["lanes"].items(), key=lambda kv: -kv[1]["collected"])[:5]
+    busiest = sorted(st["lanes"].items(), key=lambda kv: -book(kv[1], "collected"))[:5]
     for k, rec in busiest:
-        if rec["collected"] > 0:
-            lines.append(f"  lane {k}: {rec['transits']} passages, {rec['collected']:,.0f} Cr collected")
+        if book(rec, "collected") > 0:
+            lines.append(f"  lane {k}: {rec['transits']} passages, {float(book(rec, 'collected')):,.0f} Cr collected")
     return "\n".join(lines)
 
 
@@ -901,8 +910,8 @@ def summary(kernel: Any) -> Dict[str, Any]:
     for w in st["worms"].values():
         kinds[w["kind"]] = kinds.get(w["kind"], 0) + 1
     kinds["dormant"] = sum(1 for w in st["worms"].values() if w.get("dormant") is not None)
-    return {"paid_cr": round(st["paid"]), "tithed_cr": round(st.get("tithed", 0.0)),
-            "tolled_lanes": sum(1 for r in st["lanes"].values() if r["collected"] > 0),
+    return {"paid_cr": round(book(st, "paid")), "tithed_cr": round(book(st, "tithed")),
+            "tolled_lanes": sum(1 for r in st["lanes"].values() if book(r, "collected") > 0),
             "masters": sorted(st["masters"]), "throats": kinds, "forged": st["forged"],
             "collapsed": st.get("collapsed", 0)}
 
@@ -912,8 +921,8 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="transit",
-    state=lambda: {"lanes": {}, "worms": {}, "masters": {}, "revenue": {}, "handling": {}, "paid": 0.0,
-                   "forged": 0, "tithes": {}, "tithed": 0.0},
+    state=lambda: {"lanes": {}, "worms": {}, "masters": {}, "revenue": {}, "handling": {}, "paid": "0",
+                   "forged": 0, "tithes": {}, "tithed": "0"},
     season=season,
     summary=summary,
 ))

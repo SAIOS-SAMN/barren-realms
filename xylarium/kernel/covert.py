@@ -245,7 +245,7 @@ def smuggle(kernel: Any, buyer: str, seller: str, bw: Any, sw: Any, comm: str, q
                 if transit.blocks(kernel, buyer, a, b) or transit.blocks(kernel, seller, a, b)}
     realm = None
     for who in (buyer, seller):
-        if ascendance.ruling(kernel, who) in ("quarantine", "pending"):
+        if ascendance.ruling(kernel, who) == "quarantine":
             eyes, _, realm = _watch(kernel, who, buyer)
             watchers.update(eyes)
     watchers.discard(None)

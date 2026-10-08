@@ -359,8 +359,8 @@ def basket(kernel: Any, who: str) -> Optional[Dict[str, Any]]:
     food = staples.of(kernel, home)
     eat = Fr(FOOD_PER_THOUSAND) / 1000 * cycles
     from xylarium.kernel import life as _life
-    rel_mass = Fr(biosphere.body_mass(home, kernel)).limit_denominator(10 ** 9)   # its size over a mind's body
-    body_kg_each = Fr(_life.M_MIND_KG).limit_denominator(1) * rel_mass             # its own body, kg
+    rel_mass = Fr(biosphere.body_mass(home, kernel))            # its size over a mind's body (a float's exact value)
+    body_kg_each = Fr(_life.M_MIND_KG) * rel_mass                # its own body, kg
     life = Fr(float(lifespan.expectancy_years(kernel, home)))     # exact: a float is a dyadic fraction
     body_u = Fr(FOOD_PER_THOUSAND) / 1000 * lifespan.BODY_CYCLES * rel_mass / life if life > 0 else Fr(0)
     units[food] = eat + body_u
@@ -369,7 +369,7 @@ def basket(kernel: Any, who: str) -> Optional[Dict[str, Any]]:
     if e:
         watts = KLEIBER_B0 * _life.M_MIND_KG ** 0.75 * biosphere.need_factor(home, kernel)   # need_factor carries
         # its own size^(3/4) and its chemistry's pace
-        eaten_kg = Fr(watts * SECONDS_PER_YEAR / e).limit_denominator(10 ** 6)
+        eaten_kg = Fr(watts * SECONDS_PER_YEAR / e)          # exact: the float's own value, no declared quantum
         body_kg = body_kg_each / life if life > 0 else Fr(0)
         kg[food] = eaten_kg + body_kg
     else:
@@ -389,17 +389,18 @@ def basket(kernel: Any, who: str) -> Optional[Dict[str, Any]]:
     return {"units": units, "kg": kg, "owed": owed, "home": home.id, "reserve_unit": "one person-year at its home"}
 
 
-def basket_value(kernel: Any, b: Dict[str, Any], cur: str) -> Optional[float]:
-    """A basket's worth in a money: each good's units at that money's own ports' price (never through the hub).
-    None where its ports price none of its goods."""
+def basket_value(kernel: Any, b: Dict[str, Any], cur: str) -> Optional[Any]:
+    """A basket's worth in a money, exact: each good's units at that money's own ports' mean price (never through the
+    hub). None where its ports price none of its goods."""
+    from fractions import Fraction as Fr
     from xylarium.kernel.economy import EconomyManager
-    total, priced = 0.0, False
+    total, priced = Fr(0), False
     for good, q in b["units"].items():
         prices = [EconomyManager.get_unit_prices(sec.port, good)[1] for sec in kernel.sectors.values()
                   if sec.port is not None and sec.port.currency == cur and sec.port.sells.get(good)]
         prices = [p for p in prices if p > 0]
         if prices:
-            total += float(q) * sum(prices) / len(prices)
+            total += Fr(q) * Fr(sum(Fr(p) for p in prices), len(prices))
             priced = True
     return total if priced else None
 

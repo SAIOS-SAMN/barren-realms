@@ -25,7 +25,9 @@ The five deed books (deedbooks.py) are read beside them, cited, never gating. Th
 (decide.choose), made only where a mind holds the steward's seat (Concordance 3.8: an envoy, or the progenitor line
 that stewards the people): it reads the books in need order and, in each, weighs holding the people at home (worth
 its entropic side, at the cost of its syntropic side) against letting it go (the reverse) - worth against cost within
-one book, never one book against another. Where no mind holds the seat there is no ruling: the petition waits, unread.
+one book, never one book against another. Where no mind holds the seat there is no ruling: the petition waits, unread
+- and an unread petition (pending) carries no restriction: the people goes free, as on the frontier. Only a seated
+steward's cited ruling holds a people at home.
 A ruling cites the books it rests on, by name and pair, and is a deed on the steward's own books (6.3).
 
 ASCEND: its network grows, it may bond and trade. QUARANTINE: its ships go no further than its own system, its
@@ -280,15 +282,16 @@ def ruling(kernel: Any, who: Optional[str]) -> Optional[str]:
 
 
 def free(kernel: Any, who: Optional[str]) -> bool:
-    """May this people go among the stars: no realm to ask, or ascended."""
-    return ruling(kernel, who) in (None, "ascended")
+    """May this people go among the stars: anything but a seated steward's quarantine - a petition not yet read
+    (pending) carries no restriction, as on the frontier."""
+    return ruling(kernel, who) != "quarantine"
 
 
 def isolated(kernel: Any, a: Optional[str], b: Optional[str]) -> bool:
-    """No open contact between two peoples: either is held at home (quarantined or still pending) - kin excepted."""
+    """No open contact between two peoples: either is held at home by a steward's ruling - kin excepted."""
     if not a or not b or a == b:
         return False
-    return any(ruling(kernel, x) in ("quarantine", "pending") for x in (a, b))
+    return any(ruling(kernel, x) == "quarantine" for x in (a, b))
 
 
 def stopped(kernel: Any, who: Optional[str]) -> List[str]:
@@ -318,7 +321,7 @@ def _interdict(kernel: Any, who: str, rec: Dict[str, Any], logs: Optional[List[s
 
 def confined(kernel: Any, who: Optional[str], a: int, b: int) -> bool:
     """Is a passage from a to b barred to this people's ships: quarantined, and leaving its own system."""
-    if ruling(kernel, who) not in ("quarantine", "pending"):
+    if ruling(kernel, who) != "quarantine":
         return False
     home = _home(kernel, who)
     return home is None or b != home.sector_id

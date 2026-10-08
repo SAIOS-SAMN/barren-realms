@@ -31,7 +31,7 @@ institutions their genesis gives them.
 """
 
 from typing import Any, Dict, List, Optional
-from xylarium.kernel.fx import hub as _hub
+from xylarium.kernel.fx import exact as fx_exact, hub as _hub
 
 DEPOSIT_SHARE = 0.25            # of an issuing state's treasury, put up as its money's side of the exchange pool
 
@@ -404,7 +404,7 @@ def _open_pool(kernel: Any, cur: str) -> bool:
         return False
     ledger.mint("exchange_founding", sol, hub_unit(kernel))   # the house's own unit, issued against the deposit
     fxm = kernel.fx_market
-    fxm.pools[cur] = {"sol": float(sol), "local": float(local)}
+    fxm.pools[cur] = {"sol": fx_exact(sol), "local": fx_exact(local)}
     from xylarium.config import FX_FEE
     fxm.volume_sol.setdefault(cur, 0.0)
     fxm.fees.setdefault(cur, FX_FEE)

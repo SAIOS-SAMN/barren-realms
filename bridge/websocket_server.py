@@ -29,7 +29,7 @@ class WebSocketClient:
         """Encodes and transmits an RFC 6455 unmasked text frame."""
         if self.closed:
             return
-        payload = json.dumps(data).encode("utf-8")
+        payload = json.dumps(data, default=str).encode("utf-8")     # exact values (Fractions) travel as strings
         length = len(payload)
 
         # Header byte 1: FIN=1, Opcode=1 (Text) -> 0x81

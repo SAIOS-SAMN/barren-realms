@@ -14,6 +14,7 @@ reserves and therefore the rate, and swap fees stay in the pool as liquidity.
 
 import math
 from contextlib import contextmanager
+from fractions import Fraction
 from typing import Any, Dict, Optional, Tuple
 
 from xylarium.config import CURRENCIES, FX_POOL_SEED, FX_FEE, PRICE_LEVEL
@@ -36,11 +37,17 @@ def currency_for_security(security: Any) -> str:
     return hub()
 
 
+def exact(v: Any) -> Fraction:
+    """A pool's balance, exact (Concordance 9.1a): a pool's reserves cross every seam (the money supply, the block's
+    state root), so they are Fractions - a float's own binary value where one is handed in, never rounded."""
+    return v if isinstance(v, Fraction) else Fraction(v)
+
+
 class FXMarket:
     def __init__(self) -> None:
         self.hub: Optional[str] = LEGACY_HUB     # the unit every pool pairs with (None until an exchange is founded)
-        self.pools: Dict[str, Dict[str, float]] = {
-            cur: {"sol": float(s), "local": float(l)} for cur, (s, l) in FX_POOL_SEED.items()
+        self.pools: Dict[str, Dict[str, Fraction]] = {
+            cur: {"sol": exact(s), "local": exact(l)} for cur, (s, l) in FX_POOL_SEED.items()
         }
         self.volume_sol: Dict[str, float] = {cur: 0.0 for cur in self.pools}
         self.fees: Dict[str, float] = {cur: FX_FEE for cur in self.pools}   # each exchange prices its own service
@@ -53,8 +60,8 @@ class FXMarket:
             for b in locals_[i + 1:]:
                 self.cross_pools[f"{a}/{b}"] = {
                     "ca": a, "cb": b,
-                    "a": float(CROSS_POOL_SEED_SOL_VALUE * PRICE_LEVEL.get(a, 1.0)),
-                    "b": float(CROSS_POOL_SEED_SOL_VALUE * PRICE_LEVEL.get(b, 1.0)),
+                    "a": exact(CROSS_POOL_SEED_SOL_VALUE) * exact(PRICE_LEVEL.get(a, 1.0)),
+                    "b": exact(CROSS_POOL_SEED_SOL_VALUE) * exact(PRICE_LEVEL.get(b, 1.0)),
                 }
         self.cross_volume: Dict[str, float] = {k: 0.0 for k in self.cross_pools}
 
@@ -64,7 +71,7 @@ class FXMarket:
         if cur == self.hub or cur not in self.pools:
             return 1.0
         p = self.pools[cur]
-        return p["local"] / p["sol"]
+        return float(p["local"] / p["sol"])                 # a quote for the legacy float simulation
 
     def to_sol_value(self, cur: str, amount: float) -> float:
         return amount if cur == self.hub else amount / self.rate(cur)
@@ -92,8 +99,8 @@ class FXMarket:
             self._trace(cur, sol_in)
         p = self.pools[cur]
         k = p["sol"] * p["local"]
-        eff = sol_in * (1 - self.fee(cur))
-        out = int(math.floor(p["local"] - k / (p["sol"] + eff)))
+        eff = sol_in * (1 - exact(self.fee(cur)))
+        out = math.floor(p["local"] - k / (p["sol"] + eff))       # exact constant product, floored once
         p["sol"] += sol_in
         p["local"] -= out
         self.volume_sol[cur] += sol_in
@@ -103,8 +110,8 @@ class FXMarket:
     def swap_to_sol(self, cur: str, local_in: int) -> int:
         p = self.pools[cur]
         k = p["sol"] * p["local"]
-        eff = local_in * (1 - self.fee(cur))
-        out = int(math.floor(p["sol"] - k / (p["local"] + eff)))
+        eff = local_in * (1 - exact(self.fee(cur)))
+        out = math.floor(p["sol"] - k / (p["local"] + eff))       # exact constant product, floored once
         if FX_TRACE is not None:
             self._trace(cur, -out)
         p["local"] += local_in
@@ -119,7 +126,7 @@ class FXMarket:
             return None  # would drain the pool
         k = p["sol"] * p["local"]
         eff = k / (p["local"] - local_out) - p["sol"]
-        return int(math.ceil(eff / (1 - self.fee(cur)))) + 1
+        return math.ceil(eff / (1 - exact(self.fee(cur)))) + 1
 
     # ------------------------------------------------------------------ Galactic ISSE cross pairs
     def _cross(self, from_cur: str, to_cur: str) -> Optional[Tuple[str, str, str]]:
@@ -137,7 +144,7 @@ class FXMarket:
         key, side_in, side_out = route
         p = self.cross_pools[key]
         k = p[side_in] * p[side_out]
-        return int(math.floor(p[side_out] - k / (p[side_in] + amount * (1 - FX_FEE))))
+        return math.floor(p[side_out] - k / (p[side_in] + amount * (1 - exact(FX_FEE))))
 
     def quote_via_sol(self, from_cur: str, to_cur: str, amount: int) -> int:
         """What routing through the two federation exchanges (and SOL) would pay, without trading."""
@@ -370,21 +377,22 @@ class FXMarket:
         return keep
 
     # ------------------------------------------------------------------ persistence
-    def pool_holdings(self) -> Dict[str, int]:
-        out: Dict[str, int] = {self.hub: 0} if self.hub is not None else {}
+    def pool_holdings(self) -> Dict[str, Fraction]:
+        """Every pool's reserves by money, exact - never cut to whole units."""
+        out: Dict[str, Fraction] = {self.hub: Fraction(0)} if self.hub is not None else {}
         for cur, p in self.pools.items():
-            out[self.hub] += int(p["sol"])
-            out[cur] = out.get(cur, 0) + int(p["local"])
+            out[self.hub] += exact(p["sol"])
+            out[cur] = out.get(cur, Fraction(0)) + exact(p["local"])
         for p in getattr(self, "cross_pools", {}).values():
-            out[p["ca"]] = out.get(p["ca"], 0) + int(p["a"])
-            out[p["cb"]] = out.get(p["cb"], 0) + int(p["b"])
+            out[p["ca"]] = out.get(p["ca"], Fraction(0)) + exact(p["a"])
+            out[p["cb"]] = out.get(p["cb"], Fraction(0)) + exact(p["b"])
         return out
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"hub": self.hub, "pools": {c: dict(p) for c, p in self.pools.items()},
+        return {"hub": self.hub, "pools": {c: {k: str(v) for k, v in p.items()} for c, p in self.pools.items()},
                 "volume_sol": dict(self.volume_sol), "fees_collected": dict(self.fees_collected),
                 "fees": dict(self.fees),
-                "cross_pools": {k: dict(p) for k, p in self.cross_pools.items()},
+                "cross_pools": {k: dict(p, a=str(p["a"]), b=str(p["b"])) for k, p in self.cross_pools.items()},
                 "cross_volume": dict(self.cross_volume),
                 "unsettled": {c: int(v) for c, v in (getattr(self, "unsettled", None) or {}).items()}}
 
@@ -395,12 +403,12 @@ class FXMarket:
         if "pools" in data:
             fx.pools = {}                     # exactly the pools saved (a founding universe may have none yet)
         for c, p in data.get("pools", {}).items():
-            fx.pools[c] = {"sol": float(p["sol"]), "local": float(p["local"])}
+            fx.pools[c] = {"sol": exact(p["sol"]), "local": exact(p["local"])}
         fx.volume_sol.update({c: float(v) for c, v in data.get("volume_sol", {}).items()})
         fx.fees_collected.update({c: float(v) for c, v in data.get("fees_collected", {}).items()})
         fx.fees.update({c: float(v) for c, v in data.get("fees", {}).items()})
         if "cross_pools" in data:
-            fx.cross_pools = {k: {"ca": p["ca"], "cb": p["cb"], "a": float(p["a"]), "b": float(p["b"])}
+            fx.cross_pools = {k: {"ca": p["ca"], "cb": p["cb"], "a": exact(p["a"]), "b": exact(p["b"])}
                               for k, p in data["cross_pools"].items()}
         else:
             fx.cross_pools = {}   # a pre-Galactic-ISSE save: no cross pairs appear out of nowhere

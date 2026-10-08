@@ -81,7 +81,7 @@ def _route(kernel: Any, src: int, dst: int, buyer: str, seller: str) -> Optional
     from xylarium.kernel import ascendance, transit
     if src == dst:
         return []
-    if any(ascendance.ruling(kernel, who) in ("quarantine", "pending") for who in (buyer, seller)):
+    if any(ascendance.ruling(kernel, who) == "quarantine" for who in (buyer, seller)):
         return None
     path = kernel.find_path(src, dst) or []
     if len(path) < 2:

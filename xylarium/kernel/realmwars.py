@@ -102,7 +102,7 @@ def weigh(kernel: Any, who: str, other: str, sector: int, fighting: bool = False
     if mine is None or theirs is None or sector not in kernel.sectors:
         return {"war": False, "why": "no capital to fight from"}
     from xylarium.kernel import ascendance
-    if ascendance.ruling(kernel, other) in ("quarantine", "pending"):
+    if ascendance.ruling(kernel, other) == "quarantine":
         return {"war": False, "why": "the steward shields a people it holds at home"}
     fronts = (0 if fighting else 1) + sum(1 for w in stats(kernel)["wars"].values() if w["status"] == "open"
                                           and who in (w.get("taker"), w.get("holder")))
@@ -196,7 +196,7 @@ def _integration(kernel: Any, who: str, other: str, m: Dict[str, float]) -> Tupl
     out_q = relations._output_sol(kernel, by.get(who, []))
     at_stake = [p for p in web - {who} if inside or p in theirs or _abhors(kernel, p)]
     trade_q = out_q * sum(talks.get(p, 0) for p in at_stake) / total
-    tolls_q = sum(r["collected"] for k, r in transit.stats(kernel)["lanes"].items()
+    tolls_q = sum(float(transit.book(r, "collected")) for k, r in transit.stats(kernel)["lanes"].items()
                   if transit.owner(kernel, *map(int, k.split("-"))) == who) / max(1.0, kernel.cycle_count / 25.0) \
         if (inside or at_stake) else 0.0
     return decide.worth(kernel, trade_q + tolls_q, m), inside

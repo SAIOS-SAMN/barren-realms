@@ -22,6 +22,7 @@ STANDOFFS. A hostile border is weighed again each year by the one that arrived: 
 so if the border falls out of repair, and a well-kept one never does.
 """
 
+from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import mindcore as mc
@@ -114,7 +115,8 @@ def _fortify(kernel: Any, realm: str, sid: int, units: float, logs: List[str]) -
     if units < 1:
         return 0.0
     worlds = [w for w in kernel.sectors[sid].planets if w.population > 0]
-    tolls = sum(r["collected"] for k, r in transit.stats(kernel)["lanes"].items() if str(sid) in k.split("-"))
+    tolls = float(sum((transit.book(r, "collected") for k, r in transit.stats(kernel)["lanes"].items()
+                       if str(sid) in k.split("-")), Fraction(0)))
     m = decide.mind_of_planet(kernel, home)
     worth = decide.worth(kernel, relations._output_sol(kernel, worlds) + tolls / max(1.0, kernel.cycle_count / 25.0),
                          m)

@@ -34,9 +34,11 @@ class TestAscendance(unittest.TestCase):
         from xylarium.kernel import realmwars
         ascendance.petition(self.k, self.who, self.realm)
         self.assertEqual(ascendance.ruling(self.k, self.who), "pending")
-        ascendance.rule(self.k, self.who, "quarantine", "test")
         home = spheres._home(self.k, self.who).sector_id
         away = next(s for s in sorted(self.k.sectors) if s != home)
+        self.assertFalse(ascendance.confined(self.k, self.who, home, away))    # unread: no restriction at all
+        self.assertTrue(ascendance.free(self.k, self.who))
+        ascendance.rule(self.k, self.who, "quarantine", "test")
         self.assertTrue(ascendance.confined(self.k, self.who, home, away))
         self.assertFalse(ascendance.confined(self.k, self.who, away, home))     # it may come home
         self.assertFalse(ascendance.free(self.k, self.who))

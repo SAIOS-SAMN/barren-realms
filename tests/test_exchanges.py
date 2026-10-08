@@ -7,6 +7,7 @@ minted: every money is counted, pools included.
 
 import random
 import unittest
+from fractions import Fraction
 from unittest import mock
 
 from xylarium.kernel import decide, exchanges, fx, fxroutes, ledger
@@ -52,7 +53,7 @@ class TestExchanges(unittest.TestCase):
         ex = self._found()
         r0 = exchanges.rate(ex)
         cap = next(c for c in self.k.captains.values())
-        amt = int(ex["local"] * 0.2)
+        amt = int(exchanges.side(ex, "local") / 5)
         fx.credit(cap, self.cur, 0)
         cap.fx_wallet[self.cur] = cap.fx_wallet.get(self.cur, 0)
         self.council.treasury -= amt
@@ -86,7 +87,7 @@ class TestExchanges(unittest.TestCase):
 
     def test_a_gap_is_a_route_worth_flying(self):
         ex = self._found()
-        dump = int(ex["local"])
+        dump = int(exchanges.side(ex, "local"))
         self.council.treasury -= dump
         self.council.treasury += 0
         exchanges.convert_at(self.k, self.sec.id, self.cur, "SOL", dump)     # its money sold hard there
@@ -99,8 +100,8 @@ class TestExchanges(unittest.TestCase):
         t0 = self.council.treasury
         exchanges._dividend(self.k, str(self.sec.id), ex)
         self.assertEqual(self.council.treasury, t0)              # nothing grown: nothing paid
-        ex["local"] *= 1.2
-        ex["sol"] *= 1.2
+        exchanges._put(ex, "local", exchanges.side(ex, "local") * Fraction(6, 5))
+        exchanges._put(ex, "sol", exchanges.side(ex, "sol") * Fraction(6, 5))
         before = _totals(self.k)
         exchanges._dividend(self.k, str(self.sec.id), ex)
         self.assertGreater(self.council.treasury, t0)

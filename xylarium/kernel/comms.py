@@ -318,7 +318,7 @@ def _build_on_lanes(kernel: Any, channel: str, spec: Dict[str, Any], cost: float
                     fund: Dict[str, Any]) -> List[str]:
     from fractions import Fraction
     from xylarium.config import POLICY_RATE_BASE
-    from xylarium.kernel import board, decide, fibres, technology
+    from xylarium.kernel import board, decide, endowments, fibres, technology
     st = stats(kernel)
     logs: List[str] = []
     for line in sorted(board.progenitors(kernel)):
@@ -335,7 +335,7 @@ def _build_on_lanes(kernel: Any, channel: str, spec: Dict[str, Any], cost: float
             lane = f"{channel}:{_lane(a, b)}"
             if lane in st["posts"] or _keeper_of(kernel, a) != line:
                 continue
-            if fund[line]["sol"] < cost:
+            if endowments.sol(fund[line]) < Fraction(cost):
                 break
             value = decide.worth(kernel, float(flow) * _staleness(kernel, a, b), m)
             upkeep = decide.worth(kernel, cost * POLICY_RATE_BASE, m)
@@ -349,7 +349,7 @@ def _build_on_lanes(kernel: Any, channel: str, spec: Dict[str, Any], cost: float
             if sol_port is None:
                 break                                             # no port sells its goods: nothing is built
             paid = int(cost)
-            fund[line]["sol"] -= paid                             # the fund pays the port that sells them (a transfer)
+            endowments.put(fund[line], endowments.sol(fund[line]) - paid)                             # the fund pays the port that sells them (a transfer)
             sol_port.treasury += paid
             for c, n in goods.items():
                 sol_port.stock[c] -= n                            # the goods leave the port's shelves, into the post
@@ -371,10 +371,10 @@ def upkeep(kernel: Any) -> None:
         closed = transit.blocks(kernel, post["keeper"], a, b) or transit.blocks(kernel, post["keeper"], b, a)
         due = int(Fraction(post["upkeep"]))
         f = fund.get(post["keeper"])
-        if closed or f is None or f["sol"] < due:
+        if closed or f is None or endowments.sol(f) < due:
             post["dark"] = True
             continue
-        f["sol"] -= due
+        endowments.put(f, endowments.sol(f) - due)
         ledger.burn("relay_upkeep", due, _hub())
         post["dark"] = False
 
@@ -417,7 +417,7 @@ def _net_has(kernel: Any, line: str, port_sid: int) -> bool:
 def _withholds(kernel: Any, line: str, buyer: str) -> bool:
     """A line keeps its word from a people it sanctions, is at war with, or holds at home."""
     from xylarium.kernel import ascendance, covert
-    if ascendance.ruling(kernel, buyer) in ("quarantine", "pending"):
+    if ascendance.ruling(kernel, buyer) == "quarantine":
         return True
     try:
         if covert.sanctioned(kernel, buyer, line):

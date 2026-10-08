@@ -24,8 +24,9 @@ ASCENSION. When a steward lets a people ascend, its escrow is released at its ho
 """
 
 import math
+from fractions import Fraction
 from typing import Any, Dict, List, Optional
-from xylarium.kernel.fx import hub as _hub
+from xylarium.kernel.fx import exact as fx_exact, hub as _hub
 
 BASKET = ("ORE", "ORGANICS", "EQUIPMENT")        # what a new dock's shelves are stocked with (a waystation's trade)
 
@@ -34,23 +35,32 @@ def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "endowments")
 
 
-def credit(kernel: Any, line: Optional[str], sol: float) -> None:
-    """Money comes to a line's fund (a tithe, already converted to SOL)."""
-    if not line or sol <= 0:
+def sol(rec: Dict[str, Any], key: str = "sol") -> Fraction:
+    """A fund's, escrow's or listing's SOL, exact (Concordance 9.1a: the stewards' money crosses the census)."""
+    return Fraction(rec.get(key, 0))
+
+
+def put(rec: Dict[str, Any], v: Any, key: str = "sol") -> None:
+    rec[key] = str(Fraction(v))
+
+
+def credit(kernel: Any, line: Optional[str], amount: Any) -> None:
+    """Money comes to a line's fund (a tithe, already converted to SOL), exact."""
+    if not line or amount <= 0:
         return
-    f = stats(kernel)["funds"].setdefault(line, {"sol": 0.0, "in": 0.0})
-    f["sol"] += float(sol)
-    f["in"] += float(sol)
+    f = stats(kernel)["funds"].setdefault(line, {"sol": "0", "in": "0"})
+    put(f, sol(f) + Fraction(amount))
+    put(f, sol(f, "in") + Fraction(amount), "in")
 
 
-def holdings(kernel: Any) -> float:
+def holdings(kernel: Any) -> Fraction:
     """The SOL the stewards hold: their funds, what their escrows have not yet spent on goods, and what waits on a
-    listing."""
+    listing - exact."""
     if kernel is None or "endowments" not in getattr(kernel, "state", {}):
-        return 0.0
+        return Fraction(0)
     st = stats(kernel)
-    return (sum(f["sol"] for f in st["funds"].values()) + sum(e["sol"] for e in st["escrows"].values())
-            + sum(r["sol"] for r in st["listing"].values()))
+    return (sum((sol(f) for f in st["funds"].values()), Fraction(0)) + sum((sol(e) for e in st["escrows"].values()), Fraction(0))
+            + sum((sol(r) for r in st["listing"].values()), Fraction(0)))
 
 
 # ---------------------------------------------------------------------- watching the realm grow
@@ -114,21 +124,21 @@ def _buy(kernel: Any, esc: Dict[str, Any]) -> None:
         if port is None or getattr(port, "currency", _hub()) != _hub():
             continue
         for comm in BASKET:
-            share = esc["sol"] / max(1, len(BASKET))
+            share = sol(esc) / max(1, len(BASKET))
             _, sell = EconomyManager.get_unit_prices(port, comm)
             have = int(port.stock.get(comm, 0))
             if not sell or sell <= 0 or have <= 0 or share < sell:
                 continue
-            q = int(min(have, share // sell))
+            q = int(min(have, share // Fraction(sell)))
             if q <= 0:
                 continue
-            pay = int(q * sell)
+            pay = int(q * Fraction(sell))
             port.stock[comm] = have - q
             port.treasury += pay
-            esc["sol"] -= pay
+            put(esc, sol(esc) - pay)
             esc["goods"][comm] = esc["goods"].get(comm, 0) + q
             matter.sink("endowment_escrow", comm, q)
-        if esc["sol"] < 1.0:
+        if sol(esc) < 1:
             break
 
 
@@ -157,7 +167,7 @@ def season(kernel: Any, peoples: Dict[str, List[Any]]) -> List[str]:
     _rekey_minds(kernel, peoples)
     for line, members in sorted(_realm_peoples(kernel, peoples).items()):
         fund = st["funds"].get(line)
-        if not fund or fund["sol"] <= 0:
+        if not fund or sol(fund) <= 0:
             continue
         from xylarium.kernel import fertility
         term_years = spheres.generation(kernel, line) if line != "elders" else fertility.generation_years()
@@ -166,13 +176,13 @@ def season(kernel: Any, peoples: Dict[str, List[Any]]) -> List[str]:
             continue
         # a year's part of the term's share of the realm's growth
         part = min(1.0, _growth(kernel, members) * term_years) / max(1.0, term_years)
-        budget = fund["sol"] * part
+        budget = sol(fund) * Fraction(part)
         if budget < len(arrivals):
             continue
-        fund["sol"] -= budget
+        put(fund, sol(fund) - budget)
         for who in arrivals:
-            esc = st["escrows"].setdefault(who, {"line": line, "sol": 0.0, "goods": {}, "since": kernel.cycle_count})
-            esc["sol"] += budget / len(arrivals)
+            esc = st["escrows"].setdefault(who, {"line": line, "sol": "0", "goods": {}, "since": kernel.cycle_count})
+            put(esc, sol(esc) + budget / len(arrivals))
             _buy(kernel, esc)
     for who in sorted(st["listing"]):
         line = _list(kernel, who)
@@ -200,13 +210,13 @@ def release(kernel: Any, who: str) -> Optional[str]:
     for comm, q in sorted(esc["goods"].items()):
         sec.port.stock[comm] = sec.port.stock.get(comm, 0) + int(q)
         matter.source("endowment_escrow", comm, int(q))
-    st["listing"][who] = {"sol": float(esc["sol"]), "line": esc["line"], "since": kernel.cycle_count}
+    st["listing"][who] = {"sol": str(sol(esc)), "line": esc["line"], "since": kernel.cycle_count}
     st["released"] = st.get("released", 0) + 1
     name = who.split(":", 1)[-1]
     history.event(kernel, "ENDOWED", f"The {name} are endowed on their ascension", actors=[who], planet=home,
                   cause=f"their steward's escrow - {sum(esc['goods'].values())} lots of goods on a dock of their own, "
-                        f"and {esc['sol']:.0f} SOL toward their money's listing",
-                  data={"goods": dict(esc["goods"]), "sol": round(esc["sol"], 2), "line": esc["line"]})
+                        f"and {float(sol(esc)):.0f} SOL toward their money's listing",
+                  data={"goods": dict(esc["goods"]), "sol": str(sol(esc)), "line": esc["line"]})
     return f"[ENDOWMENT] The {name} are endowed on their ascension."
 
 
@@ -230,36 +240,37 @@ def _list(kernel: Any, who: str) -> Optional[str]:
         return None
     sec = kernel.sectors.get(home.sector_id)
     port = sec.port if sec is not None else None
-    if port is None or getattr(port, "currency", None) != cur or port.treasury <= 0 or rec["sol"] < 1.0:
+    if port is None or getattr(port, "currency", None) != cur or port.treasury <= 0 or sol(rec) < 1:
         return None                                       # its money is not yet issued against its goods
     from xylarium.kernel import backing
     fair = backing.fair(kernel, cur)                       # its units per SOL, from the goods behind it
     if not fair or fair <= 0:
         return None
-    sol = min(float(rec["sol"]), port.treasury / fair)     # the escrow's SOL against its money at that rate
-    local = int(sol * fair)
-    if local <= 0 or sol < 1.0:
+    side = min(sol(rec), Fraction(port.treasury) / Fraction(fair))   # the escrow's SOL against its money at that rate
+    local = int(side * Fraction(fair))
+    if local <= 0 or side < 1:
         return None
     port.treasury -= local
-    rec["sol"] -= sol                                      # what the pool did not need stays with the steward
-    fxm.pools[cur] = {"sol": sol, "local": float(local)}
+    put(rec, sol(rec) - side)                              # what the pool did not need stays with the steward
+    fxm.pools[cur] = {"sol": fx_exact(side), "local": fx_exact(local)}
     fxm.volume_sol.setdefault(cur, 0.0)
     fxm.fees.setdefault(cur, FX_FEE)
     fxm.fees_collected.setdefault(cur, 0.0)
-    institutions.stats(kernel)["pools"][cur] = {"sol": int(sol), "local": local, "opened": kernel.cycle_count,
+    institutions.stats(kernel)["pools"][cur] = {"sol": int(side), "local": local, "opened": kernel.cycle_count,
                                                "by": rec["line"]}
-    credit(kernel, rec["line"], rec["sol"])                # the remainder back to the fund
+    credit(kernel, rec["line"], sol(rec))                  # the remainder back to the fund
     st["listing"].pop(who)
     name = who.split(":", 1)[-1]
     history.event(kernel, "LISTED", f"The money of the {name} is listed", actors=[who],
-                  cause=f"their steward set {sol:.0f} SOL beside {local} of their own money on the exchange",
-                  data={"currency": cur, "sol": round(sol, 2), "local": local})
+                  cause=f"their steward set {float(side):.0f} SOL beside {local} of their own money on the exchange",
+                  data={"currency": cur, "sol": str(side), "local": local})
     return f"[ENDOWMENT] The {cur} of the {name} is listed on the realm's exchange."
 
 
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
-    return {"funds_sol": round(sum(f["sol"] for f in st["funds"].values()), 2), "escrows": len(st["escrows"]),
+    return {"funds_sol": round(float(sum((sol(f) for f in st["funds"].values()), Fraction(0))), 2),
+            "escrows": len(st["escrows"]),
             "escrow_goods": sum(sum(e["goods"].values()) for e in st["escrows"].values()),
             "released": st.get("released", 0), "awaiting_listing": len(st["listing"])}
 

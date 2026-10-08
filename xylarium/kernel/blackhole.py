@@ -30,6 +30,7 @@ The galaxy's central black hole therefore takes matter in by two roads:
 The centre's reservoir is a stock the matter ledger tracks through its declarations; the audit counts it.
 """
 
+from fractions import Fraction
 import math
 from typing import Any, Dict, List, Optional
 
@@ -222,9 +223,9 @@ def _engine(core: Dict[str, Any], into: Dict[str, int], deep_myr: float) -> int:
     carry = core.setdefault("carry", {})
     moved = 0
     for el in sorted(core["reservoir"]):
-        due = core["reservoir"][el] * share + float(carry.get(el, 0.0))
+        due = core["reservoir"][el] * Fraction(share) + Fraction(carry.get(el, 0))
         out = min(int(due), core["reservoir"][el])
-        carry[el] = due - out
+        carry[el] = str(due - out)                         # exact: the remainder crosses seasons as a Fraction
         if out <= 0:
             continue
         core["reservoir"][el] -= out
@@ -286,9 +287,9 @@ def _far_engine(kernel: Any, deep_myr: float) -> int:
     moved = 0
     carry = ch.setdefault("carry", {})                       # the share not yet a whole unit: kept, never dropped
     for el in sorted(ch["reservoir"]):
-        due = ch["reservoir"][el] * share + float(carry.get(el, 0.0))
+        due = ch["reservoir"][el] * Fraction(share) + Fraction(carry.get(el, 0))
         out = min(int(due), ch["reservoir"][el])
-        carry[el] = due - out
+        carry[el] = str(due - out)                         # exact: the remainder crosses seasons as a Fraction
         if out <= 0:
             continue
         ch["reservoir"][el] -= out

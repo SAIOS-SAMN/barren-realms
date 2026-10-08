@@ -1230,8 +1230,8 @@ class RunStats:
             "ledger_net": ledger_net(kernel),
             "territory_genesis": territory_genesis(kernel),
             "fx_rates": {cur: round(kernel.fx_market.rate(cur), 4) for cur in kernel.fx_market.pools},
-            "policy": dict(kernel.monetary_policy.factors),
-            "policy_targets": dict(getattr(kernel.monetary_policy, "current", {})),
+            "policy": {c: float(v) for c, v in kernel.monetary_policy.factors.items()},
+            "policy_targets": {c: round(v) for c, v in getattr(kernel.monetary_policy, "current", {}).items()},
             "output_by_currency": {cur: round(kernel.monetary_policy.annual_output(cur))
                                    for cur in kernel.monetary_policy.output_seasons},
             "people_by_currency": dict(sum((Counter({p.currency: p.population}) for p in planets

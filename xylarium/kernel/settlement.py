@@ -69,9 +69,9 @@ class SettlementChain:
             for cur, b in banking.banks.items():
                 accounts[f"bank:{cur}"] = [b.reserves, sorted((k, v["debt"]) for k, v in b.loans.items())]
         for cur, pool in kernel.fx_market.pools.items():
-            accounts[f"pool:{cur}"] = [int(pool["sol"]), int(pool["local"])]
+            accounts[f"pool:{cur}"] = [str(pool["sol"]), str(pool["local"])]       # the exact value, never int(pool)
         for pair, pool in getattr(kernel.fx_market, "cross_pools", {}).items():
-            accounts[f"pool:{pair}"] = [int(pool["a"]), int(pool["b"])]
+            accounts[f"pool:{pair}"] = [str(pool["a"]), str(pool["b"])]
         factions = getattr(kernel, "factions", None)
         if factions is not None:
             for fid, f in factions.factions.items():
@@ -91,7 +91,7 @@ class SettlementChain:
             "prev_hash": prev,
             "receipts_root": _h(self.pending),
             "receipt_count": len(self.pending),
-            "supply": {cur: b["total"] for cur, b in supply.items()},
+            "supply": {cur: str(b["total"]) for cur, b in supply.items()},     # exact, as its string
             "declared": {f"{src}|{cur}": v for (src, cur), v in kernel.ledger.minted.items()},
             "burned": {f"{src}|{cur}": v for (src, cur), v in getattr(kernel.ledger, "burned", {}).items()},
             "state_root": self.state_root(kernel),

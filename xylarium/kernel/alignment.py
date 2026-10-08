@@ -171,7 +171,8 @@ def causes(x: Any) -> Dict[str, Dict[str, float]]:
     """A people's history by cause: lives made and destroyed, and each cause's share of all that was destroyed."""
     cs = _get(x, "causes", None) or {}
     dark = sum(v[1] for v in cs.values()) or 1.0
-    return {k: {"light": round(v[0], 3), "dark": round(v[1], 3), "share_of_dark": round(v[1] / dark, 4)}
+    # unrounded: a cause's made and destroyed are read exactly by the books (no declared quantum)
+    return {k: {"light": v[0], "dark": v[1], "share_of_dark": v[1] / dark}
             for k, v in sorted(cs.items(), key=lambda kv: -kv[1][1])}
 
 

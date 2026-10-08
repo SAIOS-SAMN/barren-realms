@@ -32,6 +32,7 @@ spends buying its own money back in its pool; the loan is repaid when it recover
 """
 
 import math
+from fractions import Fraction
 from typing import Any, Dict, List, Optional
 
 from xylarium.config import COMMODITY_CONFIG, FX_FEE, POLICY_RATE_BASE, RELIEF_LIGHT_THRESHOLD
@@ -311,7 +312,7 @@ def _measure_debasement(kernel: Any) -> None:
                  else alignment.measure(kernel, helped_sol=value, relative_to=held_sol))
         bank = kernel.banking.banks[cur]
         bank.alignment = round(max(-1.0, min(1.0, bank.alignment + shift)), 4)
-        st["debased_sol"][cur] = round(st["debased_sol"].get(cur, 0.0) + (value if excess > 0 else -value), 1)
+        st["debased_sol"][cur] = str(Fraction(st["debased_sol"].get(cur, 0)) + Fraction(value if excess > 0 else -value))
 
 
 # ---------------------------------------------------------------------- help between neighbours

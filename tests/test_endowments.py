@@ -32,7 +32,7 @@ class TestEndowments(unittest.TestCase):
         cap.credits -= 1000
         endowments.credit(self.k, "civ:Line", 1000)
         self.assertEqual(_total_sol(self.k), before)
-        self.assertEqual(endowments.stats(self.k)["funds"]["civ:Line"]["sol"], 1000)
+        self.assertEqual(endowments.sol(endowments.stats(self.k)["funds"]["civ:Line"]), 1000)
 
     def test_an_escrow_buys_goods_at_the_ports_prices_and_no_money_is_made(self):
         port = self._sol_port()
@@ -41,7 +41,7 @@ class TestEndowments(unittest.TestCase):
         before, stock = _total_sol(self.k), {c: port.stock[c] for c in endowments.BASKET}
         endowments._buy(self.k, esc)
         self.assertGreater(sum(esc["goods"].values()), 0)                       # resources, held for the arrival
-        self.assertLess(esc["sol"], 3000.0)
+        self.assertLess(endowments.sol(esc), 3000)
         self.assertAlmostEqual(_total_sol(self.k), before, delta=1)            # SOL moved to the port, not made
         self.assertLess(sum(port.stock[c] for c in endowments.BASKET), sum(stock.values()))
 

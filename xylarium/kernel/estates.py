@@ -18,6 +18,7 @@ holds is what its lines can spend - on its stewards, its operatives, its trade (
 trade).
 """
 
+from fractions import Fraction
 from typing import Any, Dict, Optional
 from xylarium.kernel.fx import hub as _hub
 
@@ -61,8 +62,10 @@ def accrue(kernel: Any, who: str, home: Any, rho: float, years: float) -> int:
     got = _accrue_basket(kernel, who, home, cur, b, rho, years)
     if got is not None:
         return got
-    bid = b["par"] * (1.0 - FX_FEE)
-    want = rho * output_a_year(kernel, home) * years / max(1e-9, bid)     # the take, in units of the commodity
+    bid = Fraction(b["par"]) * (1 - Fraction(str(FX_FEE)))       # exact at the seam: the bid a mint pays on
+    if bid <= 0:
+        return 0
+    want = Fraction(rho * output_a_year(kernel, home) * years) / bid  # the take, in units of the commodity
     comm = b["commodity"]
     have = int(home.element_deposits.get(comm, 0))
     units = int(min(have, want))
@@ -122,18 +125,18 @@ def _accrue_basket(kernel: Any, who: str, home: Any, cur: str, board: Dict[str, 
               if sec.port is not None and sec.port.currency == cur and sec.port.sells.get(good)]
         ps = [p for p in ps if p > 0]
         if ps:
-            prices[good] = sum(ps) / len(ps)
-    worth = {g: float(bk["units"][g]) * p for g, p in prices.items()}
+            prices[good] = Fraction(sum(Fraction(x) for x in ps), len(ps))
+    worth = {g: Fraction(bk["units"][g]) * p for g, p in prices.items()}
     whole = sum(worth.values())
     if whole <= 0:
         return None
-    want = rho * output_a_year(kernel, home) * years           # the take, in its money
+    want = Fraction(rho * output_a_year(kernel, home) * years)  # the take, in its money
     bank = board["bank"]
     pay = 0
     drawn: Dict[str, int] = {}
     for good in sorted(worth):
-        bid = prices[good] * (1.0 - FX_FEE)
-        units = _draw(home, good, int(want * worth[good] / whole / max(1e-9, bid)))
+        bid = prices[good] * (1 - Fraction(str(FX_FEE)))
+        units = _draw(home, good, int(want * worth[good] / whole / bid))
         if units <= 0:
             continue
         bank.warehouse[good] = bank.warehouse.get(good, 0) + units

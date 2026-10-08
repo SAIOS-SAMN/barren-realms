@@ -25,11 +25,14 @@ place's own - it moves with what the place buys and sells.
   DIVIDEND  each year half of what the pools have grown beyond the founder's capital (valued at their own mid) is paid
             to the founder, in its money - an exchange is an investment, like a dock (waystations.py).
 
-Its pools are money, counted in the census (ledger.money_supply: "local_exchanges"); nothing is minted.
+Its pools are money, counted in the census (ledger.money_supply: "local_exchanges"); nothing is minted. They are
+kept exact (Concordance 9.1a): each side a Fraction, stored as its string, the swaps' constant product exact and
+floored once.
 """
 
 from xylarium.kernel.fx import hub as _hub
 import math
+from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -45,14 +48,23 @@ def at(kernel: Any, sector_id: Optional[int]) -> Optional[Dict[str, Any]]:
     return stats(kernel)["of"].get(str(sector_id))
 
 
-def holdings(kernel: Any) -> Dict[str, int]:
-    """Every local exchange's pools, per money (for the census)."""
-    out: Dict[str, int] = {}
+def side(ex: Dict[str, Any], key: str) -> Fraction:
+    """One side of an exchange's pools (or its seed), exact."""
+    return Fraction(ex[key])
+
+
+def _put(ex: Dict[str, Any], key: str, v: Any) -> None:
+    ex[key] = str(Fraction(v))
+
+
+def holdings(kernel: Any) -> Dict[str, Fraction]:
+    """Every local exchange's pools, per money (for the census), exact."""
+    out: Dict[str, Fraction] = {}
     if kernel is None or "exchanges" not in getattr(kernel, "state", {}):
         return out
     for ex in stats(kernel)["of"].values():
-        out[_hub()] = out.get(_hub(), 0) + int(ex["sol"])
-        out[ex["cur"]] = out.get(ex["cur"], 0) + int(ex["local"])
+        out[_hub()] = out.get(_hub(), Fraction(0)) + side(ex, "sol")
+        out[ex["cur"]] = out.get(ex["cur"], Fraction(0)) + side(ex, "local")
     return out
 
 
@@ -71,18 +83,19 @@ def note(kernel: Any, sector_id: Optional[int], sol_value: float) -> None:
 
 def rate(ex: Dict[str, Any]) -> float:
     """An exchange's mid: its money per SOL."""
-    return float(ex["local"]) / max(1e-9, float(ex["sol"]))
+    sol = side(ex, "sol")
+    return float(side(ex, "local") / sol) if sol > 0 else float(side(ex, "local")) / 1e-9
 
 
 def _swap(ex: Dict[str, Any], side_in: str, amount: int, fee: float) -> int:
     """Constant-product swap into one side of an exchange's pools; the fee stays in the pool."""
     side_out = "local" if side_in == "sol" else "sol"
-    k = float(ex["sol"]) * float(ex["local"])
-    eff = amount * (1.0 - fee)
-    out = int(math.floor(float(ex[side_out]) - k / (float(ex[side_in]) + eff)))
-    out = max(0, min(out, int(ex[side_out]) - 1))
-    ex[side_in] = float(ex[side_in]) + amount
-    ex[side_out] = float(ex[side_out]) - out
+    a, b = side(ex, side_in), side(ex, side_out)
+    eff = amount * (1 - Fraction(fee))
+    out = math.floor(b - a * b / (a + eff))                     # exact constant product, floored once
+    out = max(0, min(out, math.floor(b) - 1))
+    _put(ex, side_in, a + amount)
+    _put(ex, side_out, b - out)
     ex["fees_sol"] = float(ex.get("fees_sol", 0.0)) + (amount * fee if side_in == "sol" else amount * fee / rate(ex))
     return out
 
@@ -117,10 +130,10 @@ def ensure_local(kernel: Any, captain: Any, sector_id: Optional[int], cur: str, 
     if short <= 0:
         return True
     fee = _fee(kernel, cur)
-    k = float(ex["sol"]) * float(ex["local"])
-    if short >= float(ex["local"]) * 0.5:
+    sol, loc = side(ex, "sol"), side(ex, "local")
+    if 2 * short >= loc:
         return kernel.fx_market.ensure_local(captain, cur, needed)
-    sol_in = int(math.ceil((k / (float(ex["local"]) - short) - float(ex["sol"])) / (1.0 - fee))) + 1
+    sol_in = math.ceil((sol * loc / (loc - short) - sol) / (1 - Fraction(fee))) + 1
     if captain.credits < sol_in:
         return False
     captain.credits -= sol_in
@@ -180,8 +193,8 @@ def _found(kernel: Any, sec: Any, flow: List[float], logs: List[str], chosen: bo
         council.treasury += fx.convert(_hub(), cur, sol_side)[0] if sol_side > 0 else 0
         return False
     council.treasury -= local_side
-    stats(kernel)["of"][str(sec.id)] = {"cur": cur, "sol": float(sol_side), "local": float(local_side),
-                                        "seed_sol": float(sol_side), "seed_local": float(local_side),
+    stats(kernel)["of"][str(sec.id)] = {"cur": cur, "sol": str(sol_side), "local": str(local_side),
+                                        "seed_sol": str(sol_side), "seed_local": str(local_side),
                                         "founder": council.id, "since": kernel.cycle_count, "fees_sol": 0.0}
     stats(kernel)["founded"] += 1
     history.event(kernel, "EXCHANGE_FOUNDED", f"An exchange opens at {port.name}",
@@ -201,15 +214,15 @@ def _keep(kernel: Any, ex: Dict[str, Any]) -> None:
     fair = backing.fair(kernel, ex["cur"])
     if founder is None or not fair or founder.currency != ex["cur"]:
         return
-    target = fair * float(ex["sol"])
-    held = float(ex["local"])
+    target = fair * float(side(ex, "sol"))
+    held = float(side(ex, "local"))
     if held > target * CLEARING_BAND:                         # its money cheaper there than its goods: take some out
         amt = int((held - target * CLEARING_BAND) * CLEARING_INTERVENTION_RATE)
-        ex["local"] = held - amt
+        _put(ex, "local", side(ex, "local") - amt)
         founder.treasury += amt
     elif held < target / CLEARING_BAND:                       # dearer than its goods: put some in
         amt = min(int((target / CLEARING_BAND - held) * CLEARING_INTERVENTION_RATE), max(0, int(founder.treasury)))
-        ex["local"] = held + amt
+        _put(ex, "local", side(ex, "local") + amt)
         founder.treasury -= amt
 
 
@@ -219,14 +232,14 @@ def _dividend(kernel: Any, sid: str, ex: Dict[str, Any]) -> None:
     if founder is None:
         return
     mid = rate(ex)
-    value = float(ex["local"]) + float(ex["sol"]) * mid
-    seed = float(ex["seed_local"]) + float(ex["seed_sol"]) * mid
+    value = float(side(ex, "local")) + float(side(ex, "sol")) * mid
+    seed = float(side(ex, "seed_local")) + float(side(ex, "seed_sol")) * mid
     if value <= seed:
         return
     share = 0.5 * (value - seed) / value
-    loc, sol = int(float(ex["local"]) * share), int(float(ex["sol"]) * share)
-    ex["local"] = float(ex["local"]) - loc
-    ex["sol"] = float(ex["sol"]) - sol
+    loc, sol = int(float(side(ex, "local")) * share), int(float(side(ex, "sol")) * share)
+    _put(ex, "local", side(ex, "local") - loc)
+    _put(ex, "sol", side(ex, "sol") - sol)
     got = loc + (kernel.fx_market.convert(_hub(), founder.currency, sol)[0] if sol > 0 else 0)
     founder.treasury += got
 

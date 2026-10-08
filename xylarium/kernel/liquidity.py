@@ -131,7 +131,7 @@ def read(kernel: Any) -> None:
         hist.append(fxm.rate(cur))
         del hist[:-8]                                      # two years of quarter-end rates
         depth = st.setdefault("depth_hist", {}).setdefault(cur, [])
-        depth.append(fxm.pools[cur]["sol"])
+        depth.append(float(fxm.pools[cur]["sol"]))
         del depth[:-8]
         if len(hist) >= 3:
             logs = [math.log(b / a) for a, b in zip(hist, hist[1:]) if a > 0 and b > 0]

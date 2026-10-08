@@ -69,6 +69,8 @@ def append(kernel: Any, lane: str, kind: str, payer: str, payee: str, amount: An
 
 def _append(kernel: Any, lane: str, kind: str, payer: str, payee: str, amount: Any, currency: str,
             ref: Optional[str], house: Optional[str]) -> Dict[str, Any]:
+    if isinstance(amount, float):
+        raise TypeError("a hypha row is exact: pass an int or a Fraction, never a float")
     c = _chain(kernel, lane)
     body = {"height": c["height"] + 1, "kind": kind, "payer": payer, "payee": payee, "amount": str(Fraction(amount)),
             "currency": currency, "cycle": int(getattr(kernel, "cycle_count", 0)), "ref": ref, "prev": c["head"]}

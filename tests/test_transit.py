@@ -6,6 +6,7 @@ the energy their networks bank.
 
 import random
 import unittest
+from fractions import Fraction
 from unittest import mock
 
 from xylarium.kernel import fibres, spheres, transit
@@ -44,13 +45,13 @@ class TestTolls(unittest.TestCase):
         with mock.patch.object(transit, "_payer", return_value=holder):
             self.assertEqual(transit.quote(self.k, self.cap, a, b)["toll"], 0.0)
         rec = transit.lane(self.k, a, b)
-        rec["collected"] = rec["cost_cr"]                             # paid off: no floor left
+        rec["collected"] = str(Fraction(rec["cost_cr"]))              # paid off: no floor left
         with mock.patch.object(transit, "_payer", return_value="captain:nobody"), \
                 mock.patch.object(transit, "_around", return_value=fibres.base_lane_cost(self.k, a, b)):
             self.assertEqual(transit.quote(self.k, self.cap, a, b)["toll"], 0.0)
 
     def test_what_a_network_collects_pays_for_its_passages(self):
-        transit.stats(self.k)["revenue"]["civ:Test"] = 3 * transit.passage_cr(self.k)
+        transit.stats(self.k)["revenue"]["civ:Test"] = str(3 * Fraction(transit.passage_cr(self.k)))
         self.assertAlmostEqual(float(transit.drain_revenue(self.k, "civ:Test")), 3.0)
         self.assertEqual(transit.drain_revenue(self.k, "civ:Test"), 0)
 

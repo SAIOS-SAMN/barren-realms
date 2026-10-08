@@ -166,7 +166,7 @@ def gain(kernel: Any, ex: Dict[str, Any], budget_sol: float) -> Tuple[str, float
     cur = ex["cur"]
     r_f, r_l = fx.rate(cur), exchanges.rate(ex)
     fee = exchanges._fee(kernel, cur) + fx.fee(cur)
-    sol, loc = float(ex["sol"]), float(ex["local"])
+    sol, loc = float(exchanges.side(ex, "sol")), float(exchanges.side(ex, "local"))
     k = sol * loc
     if r_l > r_f * (1.0 + fee):                               # cheap here: buy it here, sell it at the federation
         s = min(budget_sol, max(0.0, math.sqrt(k / r_f) - sol))

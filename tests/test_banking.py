@@ -7,6 +7,7 @@ import os
 import random
 import tempfile
 import unittest
+from fractions import Fraction
 
 from xylarium.config import FX_POOL_SEED, PORT_START_TREASURY, PRICE_LEVEL
 from xylarium.kernel.engine import GameKernel
@@ -103,7 +104,7 @@ class TestGalacticIsseAndSettlement(unittest.TestCase):
         self.assertEqual(batch["from_height"], 2)
         self.assertEqual(batch["tip"], chain.blocks[-1]["hash"])
         # Tampering with a sealed block breaks verification
-        chain.blocks[1]["supply"]["SOL"] += 1
+        chain.blocks[1]["supply"]["SOL"] = str(Fraction(chain.blocks[1]["supply"]["SOL"]) + 1)
         self.assertIn("block 1", chain.verify())
 
     def test_banking_and_chain_survive_save_and_load(self):

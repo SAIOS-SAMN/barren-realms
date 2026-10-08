@@ -63,6 +63,25 @@
 
 ---
 
+## ⚖️ Exact at the Seams (prototype note)
+
+This Python kernel is the PROTOTYPE: an example to copy, not the end state. Any value that crosses a SEAM is an exact
+`fractions.Fraction` (or an int, or a Fraction's string): ledgers, the reserve and its basket, the steward books (pairs),
+anything appended to the hypha or sent to a court, anything exchanged with another node. New code is written exact.
+
+The legacy simulation inside these modules still runs on floats - **do not copy the float pattern**: `fx`, `ledger`
+(MonetaryPolicy), `backing` (value_sol, measure, arbitrage), `regimes`, `estates` (output), `transit` (pricing and
+routing), `endowments`, `blackhole` (engines), `market`, `economy`, `liquidity`, `luxury`, `energy`, `worlds`, `cosmos`,
+`creation`, `settling`, `cognition`, `enrichment`, `substances`, `relations`, `annals`, `alignment`, `geometry`,
+`interior`, `phylogeny`, `motive`, `lifespan`, `genome`, `hydromagnetics`, `fertility`, `encircle`, `life`, `society`,
+`waste`, `knowledge`, `memory`, `fibres`, `rent`, `natives`, `noble`, `harvest`, `biosphere`, `decide`.
+
+Where an exact book reads one of these float sources, it carries the float's own binary value (`Fraction(float)`),
+never a declared quantum or a rounding: `rent.of` (restraint), `alignment.causes` (order), `memory.truth` (history),
+`settling` held and reach (expansion), `biosphere.body_mass` / `need_factor` and `lifespan.expectancy_years` (the
+reserve basket), `regimes` debasement and `fx` mid rates (money), `decide` (the steward's judgement). These are legacy
+floats, marked here; their exact replacements are owed.
+
 ## ⚡ Quickstart
 
 ### 1. Launch Interactive Terminal Game

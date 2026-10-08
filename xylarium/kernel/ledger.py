@@ -10,8 +10,10 @@ that the money supply never grows by more than the declared mints.
 """
 
 from collections import Counter
+import math
+from fractions import Fraction
 from typing import Any, Dict, List, Optional, Tuple
-from xylarium.kernel.fx import hub as _hub
+from xylarium.kernel.fx import exact as fx_exact, hub as _hub
 
 
 class MoneyLedger:
@@ -77,16 +79,20 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
       freight/extraction escrow, and ISSE FX pool reserves.
     Transfers between stocks leave these totals unchanged; changes are mints or burns.
     """
-    supply: Dict[str, Dict[str, int]] = {}
-    unheld: List[Tuple[str, int]] = []                       # sums booked to an exchange not yet founded
+    supply: Dict[str, Dict[str, Any]] = {}
+    unheld: List[Tuple[str, Any]] = []                       # sums booked to an exchange not yet founded
 
-    def add(cur: Optional[str], stock: str, amount: float) -> None:
+    def add(cur: Optional[str], stock: str, amount: Any) -> None:
+        # exact at the seam (Concordance 9.1a): every stock is an int or a Fraction - a float is refused, never cut
+        if isinstance(amount, float):
+            raise TypeError(f"money stock '{stock}' in {cur} is a float ({amount!r}): the census takes exact values")
+        amount = Fraction(amount)
         if cur is None:                                   # no exchange yet: nothing can be held in its unit
-            if int(amount):
-                unheld.append((stock, int(amount)))
+            if amount:
+                unheld.append((stock, amount))
             return
         bucket = supply.setdefault(cur, {})
-        bucket[stock] = bucket.get(stock, 0) + int(amount)
+        bucket[stock] = bucket.get(stock, Fraction(0)) + amount
 
     for c in kernel.captains.values():
         add(_hub(), "captains", c.credits)
@@ -149,7 +155,10 @@ def money_supply(kernel: Any) -> Dict[str, Dict[str, int]]:
             for cur, amt in f.vault.items():
                 add(cur, "faction_vaults", amt)
     for cur, bucket in supply.items():
-        bucket["total"] = sum(v for k, v in bucket.items() if k != "total")
+        bucket["total"] = sum((v for k, v in bucket.items() if k != "total"), Fraction(0))
+        for k, v in bucket.items():                       # whole sums read as ints; a fraction stays exact
+            if v.denominator == 1:
+                bucket[k] = int(v)
     if unheld:                                             # money in a unit no exchange has issued: a broken book
         import logging
         logging.getLogger(__name__).warning("money held before any exchange: %s", unheld[:5])
@@ -206,7 +215,7 @@ def endow_exchange_depth(kernel: Any) -> None:
         assigned += sol
         local = int(sol * PRICE_LEVEL.get(cur, 1.0))
         d_local = local - int(pool["local"])
-        pool["sol"], pool["local"] = sol, local
+        pool["sol"], pool["local"] = fx_exact(sol), fx_exact(local)
         if d_local > 0:
             mint("exchange_endowment", d_local, cur)
         elif d_local < 0:
@@ -231,94 +240,105 @@ class MonetaryPolicy:
         (a declared mint). No elasticities, no bounds: the clock sets the pace, output sets the target.
     """
 
+    # Exact (Concordance 9.1a): every book the authority keeps is a Fraction - what it reads in (a float's own binary
+    # value where the simulation hands it one), never rounded - and the fiscal mint is the floor of an exact value.
+    # Its withdraw share is handed to the float simulation as a float (factor).
+    BOOKS = ("targets", "output0", "current", "factors", "output_q", "earnings_q", "gov_q", "services_q",
+             "transfer_q", "last_supply", "output_total", "earnings_total")
+
     def __init__(self) -> None:
-        self.targets: Dict[str, float] = {}      # M0: genesis supply per currency
-        self.output0: Dict[str, float] = {}      # Y0: first full year's output
-        self.current: Dict[str, float] = {}      # this season's M* (reporting)
-        self.factors: Dict[str, float] = {}      # withdraw share: services / government tax
-        self.history: Dict[str, list] = {}
-        self.output_q: Dict[str, float] = {}     # output accumulating this season
-        self.output_seasons: Dict[str, list] = {}  # the last four seasons' output
-        self.earnings_q: Dict[str, float] = {}   # colony earnings minted this season
-        self.gov_q: Dict[str, float] = {}        # of which the governments' share
-        self.transfers: Dict[str, int] = {}      # cumulative fiscal transfers (reporting)
-        self.services_q: Dict[str, float] = {}   # services actually withdrawn this season
-        self.transfer_q: Dict[str, float] = {}   # transfer made at the start of this season
-        self.last_supply: Dict[str, float] = {}  # supply at the last season's close
-        self.output_total: Dict[str, float] = {}     # cumulative real output (reporting)
-        self.earnings_total: Dict[str, float] = {}   # cumulative colony earnings: GDP by the income approach
+        self.targets: Dict[str, Fraction] = {}      # M0: genesis supply per currency
+        self.output0: Dict[str, Fraction] = {}      # Y0: first full year's output
+        self.current: Dict[str, Fraction] = {}      # this season's M* (reporting)
+        self.factors: Dict[str, Fraction] = {}      # withdraw share: services / government tax
+        self.history: Dict[str, list] = {}          # (reporting)
+        self.output_q: Dict[str, Fraction] = {}     # output accumulating this season
+        self.output_seasons: Dict[str, list] = {}   # the last four seasons' output
+        self.earnings_q: Dict[str, Fraction] = {}   # colony earnings minted this season
+        self.gov_q: Dict[str, Fraction] = {}        # of which the governments' share
+        self.transfers: Dict[str, int] = {}         # cumulative fiscal transfers (reporting)
+        self.services_q: Dict[str, Fraction] = {}   # services actually withdrawn this season
+        self.transfer_q: Dict[str, Fraction] = {}   # transfer made at the start of this season
+        self.last_supply: Dict[str, Fraction] = {}  # supply at the last season's close
+        self.output_total: Dict[str, Fraction] = {}     # cumulative real output (reporting)
+        self.earnings_total: Dict[str, Fraction] = {}   # cumulative colony earnings: GDP by the income approach
+
+    @staticmethod
+    def _add(book: Dict[str, Fraction], cur: str, v: Any) -> None:
+        book[cur] = book.get(cur, Fraction(0)) + Fraction(v)
 
     def factor(self, currency: str) -> float:
-        return self.factors.get(currency, 1.0)
+        return float(self.factors.get(currency, 1))
 
     def record_output(self, currency: str, value: float) -> None:
-        self.output_q[currency] = self.output_q.get(currency, 0.0) + value
-        self.output_total[currency] = self.output_total.get(currency, 0.0) + value
+        self._add(self.output_q, currency, value)
+        self._add(self.output_total, currency, value)
 
     def record_earnings(self, currency: str, total: float, government: float) -> None:
-        self.earnings_q[currency] = self.earnings_q.get(currency, 0.0) + total
-        self.earnings_total[currency] = self.earnings_total.get(currency, 0.0) + total
-        self.gov_q[currency] = self.gov_q.get(currency, 0.0) + government
+        self._add(self.earnings_q, currency, total)
+        self._add(self.earnings_total, currency, total)
+        self._add(self.gov_q, currency, government)
 
     def record_income(self, currency: str, amount: float) -> None:
         """Other factor income the worlds earn (export sales, port payroll and purchases): reporting only."""
-        self.earnings_total[currency] = self.earnings_total.get(currency, 0.0) + amount
+        self._add(self.earnings_total, currency, amount)
 
     def record_services(self, currency: str, amount: float) -> None:
-        self.services_q[currency] = self.services_q.get(currency, 0.0) + amount
+        self._add(self.services_q, currency, amount)
 
-    def annual_output(self, currency: str) -> float:
+    def annual_output(self, currency: str) -> Fraction:
         seasons = self.output_seasons.get(currency, [])
-        return sum(seasons) if len(seasons) >= 4 else 0.0
+        return sum(seasons, Fraction(0)) if len(seasons) >= 4 else Fraction(0)
 
-    def target(self, currency: str, supply: float) -> float:
-        m0 = self.targets.get(currency, supply)
+    def target(self, currency: str, supply: Any) -> Fraction:
+        m0 = self.targets.get(currency, Fraction(supply))
         y0, y = self.output0.get(currency), self.annual_output(currency)
         return m0 * y / y0 if (y0 and y) else m0
 
     def update(self, kernel: Any) -> None:
         supply = money_supply(kernel)
         from xylarium.kernel import institutions
+        zero = Fraction(0)
         for cur, bucket in supply.items():
             if not institutions.issued(kernel, cur):
                 continue                                    # no one has founded this money yet
-            m = float(bucket["total"])
+            m = Fraction(bucket["total"])
             if cur not in self.targets:
                 self.targets[cur] = m                       # first reading = genesis supply M0
             # close the season's output books
             seasons = self.output_seasons.setdefault(cur, [])
             if cur in self.output_q or seasons:
-                seasons.append(self.output_q.get(cur, 0.0))
+                seasons.append(self.output_q.get(cur, zero))
                 del seasons[:-4]
             if cur not in self.output0 and len(seasons) >= 4 and self.annual_output(cur) > 0:
                 self.output0[cur] = self.annual_output(cur)  # first full year: V is measured
             target = self.target(cur, m)
-            self.current[cur] = round(target)
-            earned, gov = self.earnings_q.get(cur, 0.0), self.gov_q.get(cur, 0.0)
+            self.current[cur] = target
+            earned, gov = self.earnings_q.get(cur, zero), self.gov_q.get(cur, zero)
             # Everything else that moved this money last season (faction spending, tithes, other declared
             # burns and mints) is measured, not guessed: the season's change minus the colony circuit's own
             last_m = self.last_supply.get(cur)
-            colony_net = earned - self.services_q.get(cur, 0.0) + self.transfer_q.get(cur, 0.0)
-            other = (m - last_m) - colony_net if last_m is not None else 0.0
+            colony_net = earned - self.services_q.get(cur, zero) + self.transfer_q.get(cur, zero)
+            other = (m - last_m) - colony_net if last_m is not None else zero
             self.last_supply[cur] = m
             from xylarium.kernel import regimes
-            self.transfer_q[cur] = 0.0
+            self.transfer_q[cur] = zero
             if not regimes.steers(kernel, cur):
                 # this polity chose not to steer its money: services keep the share they had when it chose
-                frozen = regimes.stats(kernel).get("frozen_factor", {}).get(cur, self.factors.get(cur, 1.0))
+                frozen = Fraction(regimes.stats(kernel).get("frozen_factor", {}).get(cur, self.factors.get(cur, 1)))
                 self.factors[cur] = frozen
-                self.history.setdefault(cur, []).append(round(frozen, 3))
+                self.history.setdefault(cur, []).append(round(float(frozen), 3))
                 self.history[cur] = self.history[cur][-40:]
                 continue
-            gap = (target - m) / 4.0                        # a quarter of the gap per season
+            gap = (target - m) / 4                          # a quarter of the gap per season
             needed = gap - other                            # the colony circuit must also offset the rest
             withdraw = earned - needed                      # what services must burn for that net injection
             if withdraw >= 0:
-                self.factors[cur] = round(withdraw / gov, 4) if gov > 0 else 1.0
+                self.factors[cur] = withdraw / gov if gov > 0 else Fraction(1)
             else:
-                self.factors[cur] = 0.0
-                self._transfer(kernel, cur, int(-withdraw))
-            self.history.setdefault(cur, []).append(round(self.factors[cur], 3))
+                self.factors[cur] = zero
+                self._transfer(kernel, cur, math.floor(-withdraw))   # the floor of an exact value
+            self.history.setdefault(cur, []).append(round(float(self.factors[cur]), 3))
             self.history[cur] = self.history[cur][-40:]
         self.output_q, self.earnings_q, self.gov_q, self.services_q = {}, {}, {}, {}
 
@@ -337,34 +357,22 @@ class MonetaryPolicy:
         if paid:
             mint("fiscal_transfer", paid, cur)
             self.transfers[cur] = self.transfers.get(cur, 0) + paid
-            self.transfer_q[cur] = self.transfer_q.get(cur, 0.0) + paid
+            self._add(self.transfer_q, cur, paid)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {"targets": dict(self.targets), "output0": dict(self.output0), "factors": dict(self.factors),
-                "history": dict(self.history), "output_q": dict(self.output_q),
-                "output_seasons": {k: list(v) for k, v in self.output_seasons.items()},
-                "earnings_q": dict(self.earnings_q), "gov_q": dict(self.gov_q), "transfers": dict(self.transfers),
-                "services_q": dict(self.services_q), "transfer_q": dict(self.transfer_q),
-                "last_supply": dict(self.last_supply),
-                "output_total": dict(self.output_total), "earnings_total": dict(self.earnings_total)}
+        out: Dict[str, Any] = {k: {c: str(v) for c, v in getattr(self, k).items()} for k in self.BOOKS}
+        out.update(history=dict(self.history), transfers=dict(self.transfers),
+                   output_seasons={k: [str(x) for x in v] for k, v in self.output_seasons.items()})
+        return out
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MonetaryPolicy":
         mp = cls()
-        mp.targets = {k: float(v) for k, v in data.get("targets", {}).items()}
-        mp.output0 = {k: float(v) for k, v in data.get("output0", {}).items()}
-        mp.factors = {k: float(v) for k, v in data.get("factors", {}).items()}
+        for k in cls.BOOKS:
+            setattr(mp, k, {c: Fraction(v) for c, v in data.get(k, {}).items()})
         mp.history = {k: list(v) for k, v in data.get("history", {}).items()}
-        mp.output_q = {k: float(v) for k, v in data.get("output_q", {}).items()}
-        mp.output_seasons = {k: [float(x) for x in v] for k, v in data.get("output_seasons", {}).items()}
-        mp.earnings_q = {k: float(v) for k, v in data.get("earnings_q", {}).items()}
-        mp.gov_q = {k: float(v) for k, v in data.get("gov_q", {}).items()}
+        mp.output_seasons = {k: [Fraction(x) for x in v] for k, v in data.get("output_seasons", {}).items()}
         mp.transfers = {k: int(v) for k, v in data.get("transfers", {}).items()}
-        mp.services_q = {k: float(v) for k, v in data.get("services_q", {}).items()}
-        mp.transfer_q = {k: float(v) for k, v in data.get("transfer_q", {}).items()}
-        mp.last_supply = {k: float(v) for k, v in data.get("last_supply", {}).items()}
-        mp.output_total = {k: float(v) for k, v in data.get("output_total", {}).items()}
-        mp.earnings_total = {k: float(v) for k, v in data.get("earnings_total", {}).items()}
         return mp
 
 

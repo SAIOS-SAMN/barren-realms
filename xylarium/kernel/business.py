@@ -66,7 +66,7 @@ def sovereign_book(kernel: Any, people: str) -> Dict[str, Any]:
         for comm, n in demand.wants(w).items():
             wants[comm] = wants.get(comm, 0) + n
     founded = [{"sector": int(sid), "cur": ex["cur"], "rate": round(exchanges.rate(ex), 4),
-                "depth_sol": round(ex["sol"])}
+                "depth_sol": round(exchanges.side(ex, "sol"))}
                for sid, ex in exchanges.stats(kernel)["of"].items() if ex.get("founder") in ids] \
         if "exchanges" in kernel.state else []
     return {"model": commerce.model(kernel, people) if "commerce" in kernel.state else {},

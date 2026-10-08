@@ -143,7 +143,7 @@ class TestFeeds(unittest.TestCase):
         before = {c: b["total"] for c, b in ledger.money_supply(self.k).items()}
         comms.pay_feeds(self.k)
         self.assertEqual({c: b["total"] for c, b in ledger.money_supply(self.k).items()}, before)   # a transfer
-        self.assertGreater(endowments.stats(self.k)["funds"]["civ:Line"]["sol"], 0)
+        self.assertGreater(endowments.sol(endowments.stats(self.k)["funds"]["civ:Line"]), 0)
         comms.deliver(self.k)
         self.assertTrue(any(key.startswith(f"{self.a}|") for key in comms.stats(self.k)["views"][str(self.home.sector_id)]))
 
