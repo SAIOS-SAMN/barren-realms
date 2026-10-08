@@ -927,15 +927,16 @@ class ColonyManager:
             primordial.first(kernel, "first_starport", planet.name)
         primordial.first(kernel, "first_starship", planet.name)
 
-        # Deduct commissioning cost (local money). Part of it becomes the crew's operating float,
-        # cleared into SOL through the ISSE FX desk; the rest is spent building the vessel.
+        # Deduct commissioning cost (local money). Part of it becomes the crew's operating float - its people's own
+        # money, carried in its wallet (never forced through an exchange: a shallow pool would take it all); the rest
+        # is spent building the vessel.
         from xylarium.kernel import fx as fx_mod
         rate = fx_mod.ACTIVE_FX.rate(planet.currency) if (fx_mod.ACTIVE_FX and planet.currency != _hub()) else 1.0
         planet.treasury -= PLANETARY_SPACEFLIGHT_COST
         float_local = min(PLANETARY_SPACEFLIGHT_COST // 2, int(4000 * rate))
         cls._pay_local(planet, kernel, PLANETARY_SPACEFLIGHT_COST - float_local)   # the yard that built the ship
-        crew_float = (fx_mod.ACTIVE_FX.swap_to_sol(planet.currency, float_local)
-                      if (fx_mod.ACTIVE_FX and planet.currency != _hub()) else float_local)
+        local_float = planet.currency != _hub()
+        crew_float = 0 if local_float else float_local
         planet.last_spaceflight_cycle = kernel.cycle_count
 
         civ = getattr(planet, "civilization", None)
@@ -1019,6 +1020,8 @@ class ColonyManager:
             )
         )
 
+        if local_float and float_local > 0:
+            new_cap.fx_wallet[planet.currency] = new_cap.fx_wallet.get(planet.currency, 0) + float_local
         kernel.captains[cap_id] = new_cap
         matter.commission(new_cap)
         if planet.sector_id in kernel.sectors:
