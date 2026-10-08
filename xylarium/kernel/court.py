@@ -109,6 +109,10 @@ def season(kernel: Any) -> List[str]:
             break
         if task is None:
             break                                          # the registry has no work
+        from xylarium.kernel import seats
+        if "seats" in kernel.state and seats.holder(kernel, f"ancients:{house}"):
+            seats.hold_task(kernel, f"ancients:{house}", task)       # its seated mind answers it (seats.call)
+            continue
         got = meet(kernel, house, task)
         if "beyond" in got:
             _deed(kernel, house, "beyond", {"why": got["beyond"]})

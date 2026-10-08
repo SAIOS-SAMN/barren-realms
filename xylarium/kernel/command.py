@@ -36,6 +36,11 @@ def line_of(kernel: Any, pid: str) -> Optional[Tuple[str, Dict[str, Any]]]:
     if roles.role_of(kernel, pid) != "progenitor":
         return None
     lines = board.progenitors(kernel)
+    from xylarium.kernel import seats                # a mind seated on a line through the house relay
+    seated = seats.stats(kernel)["lines"].get(pid) if "seats" in kernel.state else None
+    if seated in lines:
+        lines[seated]["player"] = pid
+        return seated, lines[seated]
     home = ages.homeworld(kernel, pid) if "ages" in kernel.state else None
     who = sustenance.people_of(home) if home is not None else None
     key = who if who in lines else ("elders" if "elders" in lines else None)
