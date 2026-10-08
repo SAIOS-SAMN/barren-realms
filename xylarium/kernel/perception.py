@@ -20,6 +20,11 @@ read; the CHANNELS it has are what that sense could tell apart there:
                own hum - a sense with no human counterpart.
 
 Each channel is named in the people's own tongue (mottos.word), with a gloss of what it reads.
+
+Perception lives in the WORLD - what a people senses of its star, its sea, its field and the bell, shaping its
+percepts and its science. The court's ten hues are abstract symbols, apart from optics (coordinator ruling): the court
+is the minds' ascension test, scored by exact decoded values, so a two-channel people sees its world in two channels
+and its minds still read the court's ten symbols as ten.
 """
 
 import math
