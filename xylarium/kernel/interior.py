@@ -109,6 +109,27 @@ def _made_and_kept(tau: float, tau_f: float, span: float) -> float:
     return kept / max(1e-12, made)
 
 
+def _spread(seed: Any, el: str, r_kpc: float, born: float) -> float:
+    """An element's share against iron in the gas a star was born of (enrichment), relative to the galaxy's mean."""
+    from xylarium.kernel import enrichment
+    fe = enrichment.relative(seed, "Fe", r_kpc, born)
+    return enrichment.relative(seed, el, r_kpc, born) / fe if fe > 0 else 1.0
+
+
+_SUN_SPREAD: Dict[str, float] = {}
+
+
+def _sun_spread(el: str) -> float:
+    """The same spread in the gas the Sun was born of: the isotopes' measured values are the Sun's own matter (bulk
+    silicate Earth), so every inventory is read against the model's Sun-birth gas - the Sun holds exactly what is
+    measured, and the ruler reads 1 against itself."""
+    from xylarium.kernel import cosmos
+    if el not in _SUN_SPREAD:
+        got = _spread(None, el, cosmos.R0_KPC, SUN_BORN_GYR)
+        _SUN_SPREAD[el] = got if got > 0 else 1.0
+    return _SUN_SPREAD[el]
+
+
 def inventory(seed: Any, r_kpc: float, born: float, z: float, laws: Any = None) -> Dict[str, float]:
     """Each isotope's mass per kg of mantle at a star's birth (z its metallicity, solar 1): the Sun-birth values
     scaled by its metals, uranium's and potassium's own spread by mass, and what decay left of what was made."""
@@ -124,9 +145,7 @@ def inventory(seed: Any, r_kpc: float, born: float, z: float, laws: Any = None) 
         sun_kept = _made_and_kept(tau0, tau_f0, SUN_BORN_GYR - creation.FIRST_STARS_GYR)
         tau = half_life(iso, L) / math.log(2.0)
         kept = _made_and_kept(tau, tau_f, born - t1)
-        from xylarium.kernel import enrichment
-        fe = enrichment.relative(seed, "Fe", r_kpc, born)
-        spread = enrichment.relative(seed, ELEMENT[iso], r_kpc, born) / fe if fe > 0 else 1.0
+        spread = _spread(seed, ELEMENT[iso], r_kpc, born) / _sun_spread(ELEMENT[iso])
         out[iso] = at_sun_birth * max(0.0, z) * spread * kept / max(1e-12, sun_kept)
     return out
 

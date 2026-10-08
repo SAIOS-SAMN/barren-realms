@@ -55,9 +55,10 @@ def margin(w: Dict[str, Any]) -> float:
 
 @functools.lru_cache(maxsize=1)
 def _unit() -> Dict[str, Any]:
-    """The unit world (unit mass and radius at a unit star's distance and age) - the rulers' own world."""
+    """The unit world (unit mass and radius at a unit star's distance and age, of the Sun's own metals: z is solar-
+    relative, 1) - the rulers' own world."""
     from xylarium.kernel import cosmos, physics, worlds
-    return worlds.build(None, dict(physics.star_for("G-class")), 1.0, 1.0, 1.0, False, 0.0142, cosmos.R0_KPC, 4.57)
+    return worlds.build(None, dict(physics.star_for("G-class")), 1.0, 1.0, 1.0, False, 1.0, cosmos.R0_KPC, 4.57)
 
 
 def _power(w: Dict[str, Any]) -> float:

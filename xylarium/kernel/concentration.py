@@ -153,13 +153,33 @@ def dispersed(sym: str) -> float:
     return min(1.0, m * S.abundance(sym) / max(1e-300, host))
 
 
+T_SOL0 = 1393.0                 # K: dry peridotite's solidus at the surface (Hirschmann 2000, linear low-pressure term)
+G_SOL = 1.329e-7                # K/Pa: its rise with pressure
+DF_DP = 1.0e-10                 # per Pa: isobaric melt productivity of rising mantle, 10% per GPa (Langmuir et al. 1992)
+F_CAP = 0.3                     # where clinopyroxene is exhausted and the productivity changes (measured)
+
+
+def melting(w: Dict[str, Any]) -> Dict[str, float]:
+    """Decompression melting under a spreading ridge: rising mantle at its potential temperature (the interior's t_int)
+    first crosses the solidus at P0, where the solidus has fallen to its adiabat - and melts from there to the
+    surface at the measured productivity, until clinopyroxene runs out. The column's pooled melt is half its top
+    (a triangular melting regime). No melting where the mantle is no hotter than the surface solidus."""
+    from xylarium.kernel import fundamental, interior
+    L = fundamental.current()
+    t_p = float(w.get("t_int") or 0.0)
+    t_sol0 = T_SOL0 * L.chem
+    g_sol = G_SOL * L.chem / L.pressure
+    g_ad = interior.ALPHA_TH * t_p / (interior.RHO_ROCK * interior.CP_ROCK)   # the adiabat's gradient, derived
+    if t_p <= t_sol0 or g_sol <= g_ad:
+        return {"p0": 0.0, "f_max": 0.0, "f": 0.0}
+    p0 = (t_p - t_sol0) / (g_sol - g_ad)
+    f_max = min(F_CAP, DF_DP * L.pressure * p0)
+    return {"p0": p0, "f_max": f_max, "f": f_max / 2.0}
+
+
 def melt_fraction(w: Dict[str, Any]) -> float:
-    """How much of its mantle a world melts where it melts: its mantle's temperature between rock's solidus and
-    liquidus (worlds.MELT_K, interior.LIQUIDUS_K), never below the share a melt needs to leave its rock."""
-    from xylarium.kernel import interior, worlds
-    t = float(w.get("t_int") or 0.0)
-    f = (t - worlds.MELT_K) / max(1.0, interior.LIQUIDUS_K - worlds.MELT_K)
-    return max(MIN_MELT, min(1.0, f))
+    """How much of its rising mantle a world melts: the pooled melt of its decompression column (melting)."""
+    return melting(w)["f"]
 
 
 def crustal(sym: str, w: Dict[str, Any], ch: Dict[str, float]) -> float:
@@ -174,6 +194,8 @@ def crustal(sym: str, w: Dict[str, Any], ch: Dict[str, float]) -> float:
     if d is None:
         return x
     f = melt_fraction(w)
+    if f < MIN_MELT:
+        return x                                    # too little melt to leave its rock: nothing is carried up
     rise = 1.0 / (d + f * (1.0 - d))
     return min(1.0, x * (1.0 + ch.get("magmatic", 0.0) * (rise - 1.0)))
 
