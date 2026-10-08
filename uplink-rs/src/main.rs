@@ -11,7 +11,7 @@
 
 use std::io::Read;
 
-use mycelium::sdk::rule::{sentence, would_judge, Step, Symmetry};
+use mycelium::sdk::rule::{sentence, would_judge, Extent, Pred, Step, Symmetry};
 use mycelium::sdk::{Entity, Kernel};
 use serde::Deserialize;
 use serde_json::json;
@@ -19,10 +19,14 @@ use serde_json::json;
 type Grid = Vec<Vec<u8>>;
 
 #[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum StepIn {
     Motion(String),
     Hue(Vec<(u8, u8)>),
+    /// The size crystals (78.143): scale by up/down; select the bodies of a hue, then crop to the one selected.
+    Scale((u8, u8)),
+    SelectHue(u8),
+    Crop(String),
 }
 
 #[derive(Deserialize)]
@@ -99,6 +103,12 @@ fn main() {
                 at = next;
             }
             StepIn::Hue(map) => steps.push(Step::Hue(map.clone())),
+            StepIn::Scale((up, down)) => {
+                steps.push(Step::Scale { up: *up, down: *down });
+                at = (at.0 * usize::from(*up) / usize::from((*down).max(1)), at.1 * usize::from(*up) / usize::from((*down).max(1)));
+            }
+            StepIn::SelectHue(h) => steps.push(Step::Select(Pred::Hue(*h))),
+            StepIn::Crop(e) => steps.push(Step::Crop(if e == "interior" { Extent::Interior } else { Extent::Body })),
         }
     }
     let kernel = Kernel::from_key(ed25519_dalek::SigningKey::from_bytes(&seed));
