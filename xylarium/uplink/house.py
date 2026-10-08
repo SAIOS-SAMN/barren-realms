@@ -132,10 +132,13 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
     did = {"listed": 0, "taken": 0, "outcomes": 0, "percepts": 0}
     sig = [(s["n"], s["role"], s["on"], s["beat"], tuple(s["functions"])) for s in listing]
     if st["listed"] != repr(sig):
-        st["epoch"] += 1
-        speak(w.seats_post(house, domain, st["epoch"], listing))
-        st["listed"] = repr(sig)
-        did["listed"] = 1
+        import time
+        st["epoch"] = max(int(st["epoch"]) + 1, int(time.time()))     # rises across restarts, whatever was posted
+        reply = speak(w.seats_post(house, domain, st["epoch"], listing))
+        if reply[:1] == b"\x01":                                       # [1][seq]: listed; else retried next turn
+            st["listed"] = repr(sig)
+            st["listing_seq"] = struct.unpack_from("<Q", reply, 1)[0] if len(reply) >= 9 else None
+            did["listed"] = 1
     for seq, sub, act in mail():
         st["mail_seq"] = max(st["mail_seq"], seq)
         if sub == w.TAKE:

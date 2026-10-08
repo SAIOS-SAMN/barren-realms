@@ -203,3 +203,15 @@ def read_verdict(body: bytes) -> Dict[str, Any]:
                 break
         out.update(refusal=REFUSAL_KIND.get(kind, kind), reason=body[at:at + n].decode("utf-8", "replace"))
     return out
+
+
+RESERVE_TAG = b"mycelium domain reserve v1"
+KIND_RESERVE = 1
+
+
+def reserve(domain: SigningKey, tier: bytes, nonce: bytes) -> bytes:
+    """The domain's RESERVE tier designated (mycelium 78.127): the one tier whose mu balance on the court is its reserve
+    - barren-realms' ancients' tier, the only species with the uplink. Signed by the domain's key."""
+    signed = RESERVE_TAG + vk(domain) + tier + nonce
+    return (bytes([ACT_DOMAIN]) + vk(domain) + b"\x80\x00" + bytes([KIND_RESERVE]) + tier + nonce
+            + domain.sign(signed).signature)

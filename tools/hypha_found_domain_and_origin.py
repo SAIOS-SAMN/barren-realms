@@ -1,4 +1,4 @@
-"""Found barren-realms' universe on a hypha (genesis) and state its origin (v2). Court tasks are met in the
+"""Found barren-realms' universe on a hypha (genesis) state its origin (v2), and designate its ancients' tier as its reserve. Court tasks are met in the
 world by the ancients' minds (xylarium/kernel/court.py), never by this script.
 
   python3 tools/hypha_found_domain_and_origin.py [host:port]      (default 127.0.0.1:7500)
@@ -23,6 +23,8 @@ def main() -> None:
     record = an.big_bang_record(42)
     out["commitment"] = an.commitment(record).hex()
     out["origin"] = an.read_sealed(an.speak(addr, an.origin(domain, record)), 15, an.ORIGIN_REPLY)
+    r = an.speak(addr, an.reserve(domain, an.vk(an.key("ancients")), os.urandom(32)))
+    out["reserve"] = "reserved" if r[:1] == b"\x06" else (r.hex() if r else "silence")   # the ancients' tier
     print(json.dumps(out, indent=2))
 
 
