@@ -413,29 +413,15 @@ class TestFoldedPeoples(unittest.TestCase):
         self.folded = sorted(zones.folded_peoples(self.k))
         self.by = relations._peoples(self.k)
 
-    def test_peoples_no_seat_reaches_are_folded_and_the_engines_laws_do_not_see_them(self):
+    def test_every_woken_people_lives_by_every_law_watched_or_not(self):
+        # coordinator ruling 2026-10-08: no people is frozen until a seat comes near - the engine's laws see every
+        # woken people and its colony is ticked; the annals carry only the deep years its clock runs ahead
         from xylarium.kernel import zones
-        self.assertTrue(self.folded)
-        who = next(w for w in self.folded if w in self.by)
+        self.assertEqual(self.folded, [])
+        who = sorted(self.by)[0]
         world = self.by[who][0]
-        sec = self.k.sectors[world.sector_id]
-        before = list(sec.planets)
-        with zones.hidden(self.k):
-            self.assertNotIn(world, sec.planets)                 # off the map the engine's laws walk
-        self.assertEqual(sec.planets, before)                     # put back as it was, in its place
-        self.assertIs(sec.planets[before.index(world)], world)
-        self.assertEqual(ColonyStub.tick(self.k, world), {})      # its colony is not ticked
-
-    def test_a_seat_coming_near_unfolds_a_people(self):
-        from xylarium.kernel import zones
-        who = next(w for w in self.folded if w in self.by)
-        world = self.by[who][0]
-        self.k.register_player("player_9", "Visitor")
-        roles.seat_captain(self.k, "player_9", "intelligence")
-        roles.place(self.k, "player_9", world.sector_id)
-        self.k.caches.pop("zones", None)                          # the next quarter reads the realm afresh
-        self.assertNotIn(who, zones.folded_peoples(self.k))
         self.assertFalse(zones.is_folded(self.k, world))
+        self.assertNotEqual(ColonyStub.tick(self.k, world), {})   # its colony is ticked
 
 
 class ColonyStub:

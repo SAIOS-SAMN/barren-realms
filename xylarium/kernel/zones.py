@@ -190,26 +190,12 @@ SEES_FOLDED = {"tempo", "clocks", "cosmos", "annals", "blackhole", "exodus", "ge
 
 
 def folded_peoples(kernel: Any) -> FrozenSet[str]:
-    """Peoples held folded this cycle: in a universe begun at its Big Bang, every people whose own history decides its
-    turnings (annals.history_decides: no seat guides it) and none of whose worlds lies where a player's seat - human
-    or AI, of any tier - holds the realm open to the worlds. A folded people lives at the level of history alone:
-    the annals carry its years, its turnings, its falls and its dominion; when a seat comes near it opens, its worlds
-    as its history has made them, and the engine takes up its seasons."""
-    if PEOPLES_OPEN or not hasattr(kernel, "caches"):
-        return frozenset()
-    from xylarium.kernel import cache
-
-    def scan() -> FrozenSet[str]:
-        from xylarium.kernel import annals, cosmos, relations
-        if not cosmos.is_cosmic(kernel):
-            return frozenset()
-        open_ = {sid for sid, lv in _levels(kernel, seated=True).items() if lv >= WORLD}
-        out = set()
-        for who, worlds in relations._peoples(kernel).items():
-            if annals.history_decides(kernel, who) and not any(w.sector_id in open_ for w in worlds):
-                out.add(who)
-        return frozenset(out)
-    return cache.memo(kernel, "zones", "folded_peoples", scan, epoch=_quarter_of(kernel))
+    """Peoples held folded this cycle: none. Every woken people lives by every law, watched or not (coordinator
+    ruling, 2026-10-08: a people frozen until a seat comes near is wrong - civilizations grow by their own needs):
+    the engine runs its seasons for it - it eats, thinks, learns, evolves and trades - and the annals carry only the
+    deep years its own clock runs ahead of the engine's (annals pass 1), by the same laws in closed form (pass 3).
+    The map's hiding (`hidden`) stays for any law that is told to see a fold; there is none to hide."""
+    return frozenset()
 
 
 def folded_worlds(kernel: Any) -> FrozenSet[str]:
