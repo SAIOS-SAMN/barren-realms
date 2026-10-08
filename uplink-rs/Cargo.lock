@@ -294,7 +294,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "mycelium"
 version = "0.1.0"
-source = "git+file:///opt/mycelium-v0.1.0?rev=52c25ae9c51980194136ec14d06b19895c63e954#52c25ae9c51980194136ec14d06b19895c63e954"
+source = "git+file:///opt/mycelium-v0.1.0?rev=9c713fe5ca898b8b4d9666d5884192a3eeace1e6#9c713fe5ca898b8b4d9666d5884192a3eeace1e6"
 dependencies = [
  "blake3",
  "ctrlc",
