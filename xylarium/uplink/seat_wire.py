@@ -108,8 +108,8 @@ def read_args(b: bytes, at: int) -> Tuple[List[Tuple[int, Any]], int]:
 
 
 def q(v: Any) -> bytes:
-    f = Fraction(v)
-    return struct.pack("<qQ", f.numerator, f.denominator)
+    """A fixed Q field: tagged as an argument is (Q where it fits, BigQ otherwise) - never rounded."""
+    return arg(Q_, v)
 
 
 # ---------------------------------------------------------------------- signing
