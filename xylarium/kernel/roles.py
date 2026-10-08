@@ -7,7 +7,7 @@ The tiers, above them all the ancients - the architects' laws, which no seat can
                   that ancient people, carry it through deep time, seed the young worlds after it, write its chronicle.
                   The last word under the laws: it folds space and time to seal what is appealed to it.
   T1 WATCHER      sees across realms (a seat still to be opened).
-  T2 STEWARD      a realm - a quadrant of the 3-sphere (stewardship.py): no people's own, it keeps the balance between
+  T2 STEWARD      a realm - a shell of a sphere of influence (spheres.py; stewardship.py): no people's own, it keeps the balance between
                   the sovereigns of its peoples and adjudicates between them; its rulings bind them.
   T3 SOVEREIGN    one people, or the worlds of one people (the observer is merged here): partisan by its people's own
                   alignment - how it is governed, its defences, its wars, its settlements (Barren Realms Elite).
@@ -30,7 +30,7 @@ ROLES: List[Dict[str, str]] = [
      "blurb": "Start from the Big Bang as one of the first minds near the galactic core. Shape your ancient people, "
               "carry it through what deep time throws at it, seed young worlds, and write its chronicle."},
     {"key": "steward", "name": "Steward (T2)", "tier": "T2",
-     "blurb": "Keep a realm - a quadrant of the universe - for no people of your own: hear the sovereigns' disputes, "
+     "blurb": "Keep a realm - a shell of a sphere of influence (spheres.py) - for no people of your own: hear the sovereigns' disputes, "
               "rule between them, shield the young, and send what you cannot settle up to the progenitors."},
     {"key": "sovereign", "name": "Sovereign (T3)", "tier": "T3",
      "blurb": "Rule a people's worlds, on the brink of interstellar travel, by its own lights. Choose how it is "

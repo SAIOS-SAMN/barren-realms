@@ -629,11 +629,10 @@ def chemistries(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[
     cosmos = _disc()
     bb = big_bang(seed)
     L = laws(seed)
-    by: Dict[str, Dict[str, Any]] = {}
-    for m in world.get("media", []):
-        if m["region"] not in by or m["richness"] * m["energy"] > by[m["region"]]["richness"] * \
-                by[m["region"]]["energy"]:
-            by[m["region"]] = m
+    from xylarium.kernel import worlds as W
+    media = world.get("media", [])
+    by: Dict[str, Dict[str, Any]] = {r: W.best(media, r) for r in {m["region"] for m in media}}   # the medium its
+    # foragers live in (worlds.best), so a lineage and its people share one
     # a lit world's window closes as its star leaves the main sequence: the giant branch's swelling light boils its
     # seas (cosmos.AGEING_SHARE - the same branch the game's stars climb)
     star_end = slot["born"] + lifetime(slot, L) * (1.0 - cosmos.AGEING_SHARE)
@@ -744,8 +743,9 @@ def laws_digest() -> str:
 
 
 def schedule(seed: int) -> Dict[str, Any]:
-    """Every mind the galaxy raises before HORIZON_GYR, on the worlds the cells hold, with its expectation curve.
-    Computed once per universe (and kept on disk under the laws' digest: it is a pure function of the seed)."""
+    """The stage's forecast: every mind the undisturbed galaxy would raise before HORIZON_GYR, on the worlds the cells
+    hold, with its expectation curve. Computed once per stage (kept on disk under the laws' digest: the seed fixes the
+    stage). The play that is lived may differ; what happens is kept in the annals."""
     key = ("schedule", seed)
     if key in _CACHE:
         return _CACHE[key]
@@ -770,25 +770,52 @@ def schedule(seed: int) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------- the galaxy worked out
-def _terms(seed: Any, slot: Dict[str, Any], world: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Each chemistry of a world that could raise a people: its ladder's mean and spread to a mind (impacts lengthen
-    the later steps), the chance it is never sterilised, and when its window closes."""
-    out = []
-    for ch in chemistries(seed, slot, world):
-        if not ch["ladder"]["complete"] or foragers(world, ch["region"], slot) < VIABLE:
+REPLAYS = 64                    # independent replays of each world's own climbs: the forecast of its mind
+
+
+def _replays(seed: Any, i: int, j: int, k: int, w: int, slot: Dict[str, Any], world: Dict[str, Any],
+             npts: int, curve: List[float]) -> None:
+    """A world's forecast of a mind (the undisturbed stage's expectation - not the play, which is lived), from its own
+    physics replayed: each replay climbs every chemistry with a
+    complete ladder as lineage does (its own stream, sterilisation drawn as lineage draws it; no seeding from
+    neighbours), and counts the earliest to finish - if the world can feed a people then (foragers at the wake epoch,
+    as the run's own test). Each counting replay adds 1/REPLAYS to every curve point from its epoch on."""
+    from xylarium.kernel import life
+    from xylarium.kernel import worlds as W
+    t0 = slot["born"] + CRUST_GYR
+    chems = [ch for ch in chemistries(seed, slot, world) if ch["ladder"]["complete"]]
+    if not chems or t0 >= HORIZON_GYR:
+        return
+    fed: Dict[Tuple[float, str], bool] = {}
+    for rep in range(REPLAYS):
+        first: Optional[Tuple[float, str]] = None
+        for ch in chems:
+            region, steps, mu = ch["region"], ch["ladder"]["steps"], ch["mu"]
+            rng = _rng(seed, "expect", i, j, k, w, region, rep)
+            horizon = min(ch["end"], HORIZON_GYR)
+            steril = t0 + rng.random() * (horizon - t0) if rng.random() >= ch["live"] and horizon > t0 \
+                else float("inf")
+            got = life.climb(rng, [x["mean_gyr"] for x in steps], t0, horizon, steril, mu, None)
+            if len(got["times"]) == len(steps):
+                t = got["times"][-1]
+                if first is None or (t, region) < first:
+                    first = (t, region)
+        if first is None:
             continue
-        mu = ch["mu"]
-        means = [x["mean_gyr"] if n == 0 or mu <= 0 else (math.exp(min(50.0, mu * x["mean_gyr"])) - 1.0) / mu
-                 for n, x in enumerate(ch["ladder"]["steps"])]
-        out.append({"region": ch["region"], "means": means, "m1": sum(means), "m2": sum(x * x for x in means),
-                    "live": ch["live"], "end": ch["end"]})
-    return out
+        t, region = first
+        age = max(CRUST_GYR, round((t - slot["born"]) / W.AGE_STEP_GYR) * W.AGE_STEP_GYR)
+        if (age, region) not in fed:
+            fed[(age, region)] = foragers(world_at(seed, slot, world, t), region, slot) >= VIABLE
+        if fed[(age, region)]:
+            for c in range(int(math.ceil(t / CURVE_STEP)), npts):
+                curve[c] += 1.0 / REPLAYS
 
 
 def _cell_life(seed: Any, i: int, j: int, npts: int) -> Dict[str, Any]:
     """One cell's share of the galaxy's minds and expectation - a pure function of the seed and the cell."""
     from xylarium.kernel import life
-    out = {"minds": [], "bins": {}, "worlds": 0, "alive": 0, "stages": [0] * (life.MAX_RUNGS + 1), "rungs": {}}
+    out = {"minds": [], "curve": [0.0] * npts, "worlds": 0, "alive": 0, "stages": [0] * (life.MAX_RUNGS + 1),
+           "rungs": {}}
     for slot in cell(seed, i, j):
         if "worlds" not in slot:
             continue
@@ -810,13 +837,7 @@ def _cell_life(seed: Any, i: int, j: int, npts: int) -> Dict[str, Any]:
                 out["minds"].append({"cell": [i, j], "k": slot["k"], "w": w, "epoch": lin["steps"][-1],
                                      "metab": lin["region"], "mass": round(slot["mass"], 3),
                                      "steps": lin["steps"], "setbacks": lin["setbacks"]})
-            # the expectation: each chemistry's chance of a mind by each epoch (impacts lengthen the later steps)
-            terms = [(round(math.log(x["m1"]) * 50), round(math.log(x["m2"]) * 50), round(x["live"], 3),
-                      npts if x["end"] >= HORIZON_GYR else int(math.ceil(x["end"] / CURVE_STEP)))
-                     for x in _terms(seed, slot, world)]
-            if terms:
-                key = (int(math.ceil(t0 / CURVE_STEP)),) + tuple(terms)
-                out["bins"][key] = out["bins"].get(key, 0) + 1
+            _replays(seed, i, j, slot["k"], w, slot, world, npts, out["curve"])   # its expectation of a mind
     return out
 
 
@@ -825,8 +846,8 @@ def _cells_life(args: Tuple[Any, List[Tuple[int, int]], int]) -> List[Dict[str, 
     return [_cell_life(seed, i, j, npts) for i, j in cs]
 
 
-WORKERS = max(1, min(8, (os.cpu_count() or 1)))   # the machine's cores, for the one-time working out (any count
-                                                  # gives the same galaxy: each cell is its own pure function)
+WORKERS = max(1, min(int(os.environ.get("XYL_WORKERS", "4")), (os.cpu_count() or 1)))   # at most four forked
+# workers for the one-time working out (the machine is shared; any count lays the same stage: each cell is its own)
 
 
 def _compute(seed: Any) -> Dict[str, Any]:
@@ -850,7 +871,6 @@ def _compute(seed: Any) -> Dict[str, Any]:
         per = _cells_life((seed, cs, npts))
     minds: List[Dict[str, Any]] = []
     curve = [0.0] * npts
-    bins: Dict[Tuple[Any, ...], int] = {}
     stages = [0] * (life.MAX_RUNGS + 1)
     rungs: Dict[int, int] = {}
     tally = {"worlds": 0, "alive": 0, "stages": stages, "rungs": rungs}
@@ -862,17 +882,8 @@ def _compute(seed: Any) -> Dict[str, Any]:
             stages[n] += x
         for n, x in c["rungs"].items():
             rungs[n] = rungs.get(n, 0) + x
-        for key, x in c["bins"].items():
-            bins[key] = bins.get(key, 0) + x
-    for key in sorted(bins, key=repr):
-        c0, terms, cnt = key[0], key[1:], bins[key]
-        for c in range(c0, npts):
-            miss = 1.0
-            for lm1, lm2, live, ce in terms:
-                m1, m2 = math.exp(lm1 / 50.0), math.exp(lm2 / 50.0)
-                shape, scale = m1 * m1 / m2, m2 / m1
-                miss *= 1.0 - life.gamma_cdf(shape, (min(c, ce) - c0) * CURVE_STEP / scale) * live
-            curve[c] += cnt * (1.0 - miss)
+        for n, x in enumerate(c["curve"]):
+            curve[n] += x
     minds.sort(key=lambda e: (e["epoch"], e["cell"], e["k"], e["w"]))
     return {"minds": minds, "curve": [round(x, 2) for x in curve], "life": tally}
 

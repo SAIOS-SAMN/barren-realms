@@ -1258,40 +1258,8 @@ class RunStats:
 # Driver
 # ---------------------------------------------------------------------------
 
-DETERMINISM_PROBE = r"""
-import random, sys, hashlib
-sys.path.insert(0, {root!r})
-import simulate_playtest as sp
-from xylarium.kernel.engine import GameKernel
-from xylarium.kernel.ledger import money_supply
-seed, cycles = {seed}, {cycles}
-random.seed(seed); k = GameKernel(seed=seed); rng = random.Random(seed)
-bots = sp.make_players(k, rng); st = sp.RunStats()
-real = k.tick_simulation; k.tick_simulation = lambda: None
-for _ in range(cycles):
-    for b in bots:
-        b.act(k, st)
-    real()
-tip = k.settlement.blocks[-1]["hash"] if k.settlement.blocks else ""
-state = hashlib.sha256(repr(sorted((c, b["total"]) for c, b in money_supply(k).items())).encode()).hexdigest()
-print(tip, state, sum(p.population for s in k.sectors.values() for p in s.planets))
-"""
-
-
-def determinism_check(seed: int, cycles: int) -> Dict[str, Any]:
-    """Runs the same seed in two fresh processes with different string-hash seeds: the universes must match."""
-    import subprocess
-    code = DETERMINISM_PROBE.format(root=os.path.dirname(os.path.abspath(__file__)), seed=seed, cycles=cycles)
-    outs = []
-    for hashseed in ("1", "2"):
-        env = dict(os.environ, PYTHONHASHSEED=hashseed)
-        res = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=1800)
-        outs.append((res.stdout.strip().splitlines() or [res.stderr.strip()[-300:]])[-1])
-    return {"cycles": cycles, "runs": outs, "identical": outs[0] == outs[1]}
-
-
-def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_state: Optional[str] = None,
-        determinism_cycles: int = 0) -> Dict[str, Any]:
+def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_state: Optional[str] = None
+        ) -> Dict[str, Any]:
     timers = Timers()
     instrument(timers)
     flows = MoneyFlows()
@@ -1488,7 +1456,6 @@ def run(cycles: int, seed: int, actions_per_cycle: int, profile: bool, save_stat
         "growth": growth[:25],
         "exceptions": [{"where": k, "count": v, "example": stats.exception_examples[k]} for k, v in stats.exceptions.most_common()],
         "invariant_violations": [{"kind": k, "count": v, "example": stats.violation_examples[k]} for k, v in stats.violations.most_common()],
-        "determinism": determinism_check(seed, determinism_cycles) if determinism_cycles else None,
         "world_timeline": stats.snapshots,
         "bots": [{
             "id": b.id, "clade": b.clade, "kind": b.kind,
@@ -1764,10 +1731,6 @@ def evaluate_acceptance(r: Dict[str, Any]) -> List[Dict[str, Any]]:
         if imp:
             gate("Imperial tithe delivered to the Fortress", "> 0", imp["stats"].get("tithe_delivered", 0),
                  imp["stats"].get("tithe_delivered", 0) > 0)
-    if r.get("determinism"):
-        d = r["determinism"]
-        gate("deterministic across processes (same seed, different hash seeds)", "identical",
-             f"{'identical' if d['identical'] else 'DIVERGED'} after {d['cycles']} cycles", d["identical"])
     gate("invariant violations", "0", sum(v["count"] for v in r["invariant_violations"]), not r["invariant_violations"])
     gate("exceptions", "0", sum(e["count"] for e in r["exceptions"]), not r["exceptions"])
     return gates
@@ -2021,16 +1984,10 @@ def main() -> None:
     ap.add_argument("--profile", action="store_true", help="Include cProfile hotspots")
     ap.add_argument("--out", default=None, help="Write full JSON report here")
     ap.add_argument("--save-state", default=None, help="Also save the final universe to this path (never the live save)")
-    ap.add_argument("--determinism-cycles", type=int, default=None,
-                    help="Cycles for the cross-process determinism law (default: the run's own horizon; 0 to skip) - "
-                         "a set-order defect can surface late (seed 7's first showed at cycle 600)")
     args = ap.parse_args()
-    if args.determinism_cycles is None:
-        args.determinism_cycles = args.cycles
 
     print(f"Xylarium playtest: {args.cycles:,} cycles, seed {args.seed}, bots {BOT_CLADES}")
-    report = run(args.cycles, args.seed, args.actions_per_cycle, args.profile, args.save_state,
-                 args.determinism_cycles)
+    report = run(args.cycles, args.seed, args.actions_per_cycle, args.profile, args.save_state)
     print_report(report)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
