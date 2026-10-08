@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from xylarium.kernel import court, subsystem  # noqa: E402
 from xylarium.kernel.engine import GameKernel  # noqa: E402
 from xylarium.persistence.store import StatePersistence  # noqa: E402
+from xylarium.uplink import house  # noqa: E402
 
 SAVE_EVERY = 2000
 REPORT_EVERY = 500
@@ -81,6 +82,13 @@ def main() -> None:
                                         for h, r in rec.items()}))
         if k.cycle_count % REPORT_EVERY == 0:
             observe(k, obs_path, t0, c0)
+            if court.endpoint():                          # the house relay, once the hypha speaks the seat wire
+                try:
+                    did = house.on_hypha(k, court.endpoint())
+                    if did and any(did.values()):
+                        log("seats: " + json.dumps(did))
+                except OSError as e:
+                    log(f"seats: the hypha did not answer: {e}")
         if k.cycle_count % SAVE_EVERY == 0:
             StatePersistence.save_to_file(k, save)
     StatePersistence.save_to_file(k, save)

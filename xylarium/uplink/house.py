@@ -186,3 +186,16 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
         st["beats"][s["id"]] = kernel.cycle_count
         did["percepts"] += 1
     return did
+
+
+def on_hypha(kernel: Any, addr: str) -> Optional[Dict[str, int]]:
+    """One relay turn against a hypha: posts spoken to it, the house's mail read from it. None where the hypha does
+    not speak the seat wire (silence to the act)."""
+    host, port = addr.rsplit(":", 1)
+    where = (host, int(port))
+    reader = an.key("ancients")
+    probe = an.speak(where, w.read_mail(reader, state(kernel)["mail_seq"], os.urandom(32)), timeout=10)
+    items = w.read_mail_reply(probe) if probe else None
+    if items is None:
+        return None
+    return turn(kernel, lambda act: an.speak(where, act, timeout=10), lambda: items)
