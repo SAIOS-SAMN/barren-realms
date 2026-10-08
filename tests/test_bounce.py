@@ -23,7 +23,7 @@ class TestBounce(unittest.TestCase):
         blackhole.capture(self.k, {"Fe": 1000, "Si": 500}, "the worlds of a dying star", records=["civ:Fallen"])
         st = blackhole.stats(self.k)
         ch = blackhole.child(self.k)
-        self.assertEqual(ch["elements"], {"Fe": 100, "Si": 50})                 # a tenth crosses
+        self.assertEqual(ch["reservoir"], {"Fe": 100, "Si": 50})                # a tenth crosses, into the far core
         self.assertEqual(st["reservoir"], {"Fe": 900, "Si": 450})              # only the rest feeds the jets: once
         self.assertEqual(st.get("inbound", 0), 0)                              # nothing is sent back unless sent
         self.assertIsNotNone(ch["born"])
@@ -37,6 +37,24 @@ class TestBounce(unittest.TestCase):
         self.assertEqual(got, 40)
         self.assertEqual(st["reservoir"].get("Fe"), 40)
         self.assertEqual(st["inbound"], 40)
+
+    def test_the_throat_is_two_faced_and_conserves_what_falls(self):
+        blackhole.capture(self.k, {"Fe": 1000, "Si": 500}, "a dying star's worlds")
+        blackhole.receive(self.k, {"C": 30}, "a paired sphere")
+        self.assertEqual(blackhole.ledger(self.k)["balance"], 0)
+        thr = blackhole.throat(self.k)
+        self.assertEqual((thr["near"], thr["far"]), ("centre", "child"))
+        self.assertEqual(thr["reservoir_far"], 150)
+        self.assertEqual(blackhole.throat(self.k, "parent")["witnessed"], False)   # our Big Bang's far face
+        for _ in range(400):                                   # the far core's engine sends back on its own clock
+            blackhole.quarter(self.k)
+            self.assertEqual(blackhole.ledger(self.k)["balance"], 0)    # matter in exactly one place, every season
+        self.assertGreater(blackhole.child(self.k)["returned"], 0)
+        self.assertLess(blackhole.ledger(self.k)["far"], 150)
+
+    def test_an_older_save_s_crossed_store_becomes_the_far_reservoir(self):
+        blackhole.stats(self.k)["child"] = {"born": 1.0, "elements": {"Fe": 7}, "records": [], "seed": "x"}
+        self.assertEqual(blackhole.child(self.k)["reservoir"], {"Fe": 7})
 
 
 if __name__ == "__main__":

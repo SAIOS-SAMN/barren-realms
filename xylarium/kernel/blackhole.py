@@ -71,8 +71,8 @@ def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
         matter.sink("central_engine", el, q)
         through = int(q * HORIZON_SHARE)
         if through:
-            ch = child(kernel)
-            ch["elements"][el] = ch["elements"].get(el, 0) + through
+            ch = child(kernel)                             # into the far core's engine, across the throat
+            ch["reservoir"][el] = ch["reservoir"].get(el, 0) + through
             crossed += through
         # what crossed is the child's; only what the disc's outflow carried off before the horizon is the jets' to
         # return - counted once
@@ -88,8 +88,9 @@ def capture(kernel: Any, units: Dict[str, int], what: str, made: bool = False,
 
 
 def receive(kernel: Any, units: Dict[str, int], sender: str) -> int:
-    """Matter a paired universe's white hole actually sends: a declared source into the centre's reservoir (the jets
-    return it like any other). Returns the units received."""
+    """Matter a universe beyond our own throats actually sends (a paired universe not yet witnessed as a face of
+    ours): a declared source into the centre's reservoir (the jets return it like any other). What our own far core
+    sends back comes through its engine (_far_engine), already counted. Returns the units received."""
     st = stats(kernel)
     got = 0
     for el, q in sorted(units.items()):
@@ -107,10 +108,90 @@ def receive(kernel: Any, units: Dict[str, int], sender: str) -> int:
 
 
 def child(kernel: Any) -> Dict[str, Any]:
-    """The universe beyond the centre's horizon: begun at its first bounce, holding what crossed - its matter and
-    the records of it, whole (no information is destroyed)."""
+    """The far CORE of the centre's throat: the universe beyond the horizon, founded at the first crossing and kept
+    from then on - its central engine, its reservoir of what crossed, its own clock, and the records of what fell
+    (whole: no information is destroyed). A persisting engine, not a one-time Big Bang."""
     st = stats(kernel)
-    return st.setdefault("child", {"born": None, "elements": {}, "records": [], "seed": None})
+    ch = st.setdefault("child", {"born": None, "reservoir": {}, "records": [], "seed": None})
+    ch.setdefault("reservoir", {})
+    if "elements" in ch:                                     # an older save: its crossed matter was a store
+        for el, q in ch.pop("elements").items():
+            ch["reservoir"][el] = ch["reservoir"].get(el, 0) + int(q)
+    ch.setdefault("reservoir", {})
+    ch.setdefault("returned", 0)
+    ch.setdefault("clock_myr", 0.0)
+    ch.setdefault("lapse", 1.0)                              # its own clock, read as ours until the far face is seen
+    return ch
+
+
+def throat(kernel: Any, which: str = "centre") -> Dict[str, Any]:
+    """A hole's throat: its two faces and their keepers, its mass, and what each face holds. The centre's near face is
+    our galaxy's core; its far face is the core of the universe beyond (child). `parent` is our own Big Bang - the far
+    face of a parent universe's core - its far side unwitnessed. No horizon is a dead end."""
+    st = stats(kernel)
+    thr = st.setdefault("throats", {})
+    if which == "parent":
+        return thr.setdefault("parent", {"near": "our Big Bang", "far": None, "witnessed": False,
+                                         "keepers": {"near": [], "far": []}})
+    ch = child(kernel)
+    rec = thr.setdefault(which, {"near": "centre", "far": "child", "keepers": {"near": [], "far": []}})
+    rec["mass"] = float(st.get("mass", MASS0))
+    rec["reservoir_near"] = sum(int(v) for v in st["reservoir"].values())
+    rec["reservoir_far"] = sum(int(v) for v in ch["reservoir"].values())
+    rec["keepers"]["near"] = _keepers_near(kernel)
+    return rec
+
+
+def _keepers_near(kernel: Any) -> List[str]:
+    """The near face's keepers: the hub's keeper and the living ancients (the ancients are reachable on both faces)."""
+    out: List[str] = []
+    try:
+        from xylarium.kernel import board, transit
+        keeper = transit.stats(kernel).get("hub")
+        if keeper:
+            out.append(keeper)
+        out += [w for w in sorted(board.ancient_peoples(kernel)) if w not in out]
+    except Exception:
+        pass
+    return out
+
+
+def ledger(kernel: Any) -> Dict[str, int]:
+    """The throat's books: everything that fell in or was sent, against where it is now - the near reservoir, the far
+    core's reservoir, or returned by the jets. Conserved: inflow == near + far + returned."""
+    st = stats(kernel)
+    ch = child(kernel)
+    near = sum(int(v) for v in st["reservoir"].values())
+    far = sum(int(v) for v in ch["reservoir"].values())
+    inflow = int(st.get("captured", 0)) + int(st.get("inbound", 0))
+    return {"inflow": inflow, "near": near, "far": far, "returned": int(st.get("returned", 0)),
+            "balance": inflow - near - far - int(st.get("returned", 0))}
+
+
+def _far_engine(kernel: Any, deep_myr: float) -> int:
+    """The far core runs on its own clock: its engine returns its reservoir through the throat by the same e-fold
+    the near jets keep (EPISODE_MYR), read on its clock - into the near face's reservoir (both faces are off the
+    board: a transfer between them, nothing declared)."""
+    st = stats(kernel)
+    ch = child(kernel)
+    if not ch["reservoir"]:
+        return 0
+    dt = deep_myr * float(ch["lapse"])
+    ch["clock_myr"] = float(ch["clock_myr"]) + dt
+    share = 1.0 - math.exp(-dt / EPISODE_MYR)
+    moved = 0
+    carry = ch.setdefault("carry", {})                       # the share not yet a whole unit: kept, never dropped
+    for el in sorted(ch["reservoir"]):
+        due = ch["reservoir"][el] * share + float(carry.get(el, 0.0))
+        out = min(int(due), ch["reservoir"][el])
+        carry[el] = due - out
+        if out <= 0:
+            continue
+        ch["reservoir"][el] -= out
+        st["reservoir"][el] = st["reservoir"].get(el, 0) + out
+        moved += out
+    ch["returned"] = int(ch["returned"]) + moved
+    return moved
 
 
 def _carry(kernel: Any, what: str, records: List[str], crossed: int) -> None:
@@ -121,9 +202,11 @@ def _carry(kernel: Any, what: str, records: List[str], crossed: int) -> None:
     if ch["born"] is None:
         ch["born"] = round(cosmos.deep_gyr(kernel), 6)
         ch["seed"] = f"{cosmos.cosmos_seed(kernel)}:child"
-        history.event(kernel, "CHILD_UNIVERSE", "Beyond the centre's horizon, a universe begins",
+        rec = throat(kernel)
+        rec["keepers"]["far"] = list(rec["keepers"]["near"])     # the ancients hold both faces from its founding
+        history.event(kernel, "CHILD_UNIVERSE", "Beyond the centre's horizon, the far face of its throat is founded",
                       cause=f"{what} crossed the horizon and bounced at the Cartan density: the white hole on the "
-                            f"other side is a new universe's Big Bang",
+                            f"other side is a universe's core - a persisting engine, the throat's far face",
                       data={"seed": ch["seed"], "epoch": ch["born"]})
     ch["records"].append({"what": what, "peoples": list(records), "units": crossed,
                           "epoch": round(cosmos.deep_gyr(kernel), 6)})
@@ -157,6 +240,10 @@ def quarter(kernel: Any) -> List[str]:
                       cause=f"it fed on {st.get('last_meal', 'the dead')}", magnitude=L,
                       data={"luminosity_lsun": L, "fed_units": fed})
         logs.append(f"[COSMOS] The galactic centre flares at {L:.1e} suns, feeding on {st.get('last_meal')}.")
+    # the throat's far face: its core's engine sends back on its own clock; our own Big Bang's face is on record
+    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES as _FQ
+    _far_engine(kernel, _FQ / 100.0 * cosmos.ruler(kernel) / 1.0e6)
+    throat(kernel, "parent")
     # the bounce: jets return the reservoir to the witnessed worlds of the bulge
     worlds = [p for s in kernel.sectors.values() for p in s.planets
               if float(cosmos.stats(kernel)["place"].get(str(s.id), {}).get("r", 99)) < cosmos.R_BULGE_KPC]
