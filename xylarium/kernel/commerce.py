@@ -15,7 +15,7 @@ the goods are a transfer between holders, the money passes through the exchanges
             its own money to do it, and its money weakens; its imports grow dearer until they balance. That is how
             economic models meet: through the exchanges, not by decree.
   ROUTE     the convoy sails the geodesic from the seller's system to the buyer's and pays every lane's keeper its
-            toll and tithe (transit.flow_passage, settled through transit.settle - a receipt on the hypha ledger).
+            toll and tithe (transit.flow_passage, settled through transit.settle - a receipt on the hypha where the keeper is an ancients' house, else on its realm's books).
             A lane that turns the buyer or the seller back (a blockade, an embargo, a steward's quarantine) closes the
             route: the good does not move, unless it is smuggled (covert.py).
   WORTH     what a unit is worth to the buyer: its staple, the output its eaters make while fed (a world's output per

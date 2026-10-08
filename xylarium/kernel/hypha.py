@@ -40,12 +40,40 @@ def _chain(kernel: Any, lane: str) -> Dict[str, Any]:
                                                      "epochs": []})
 
 
+def uplinked(kernel: Any, house: Optional[str]) -> bool:
+    """Is this an ancients' house - the only species with the uplink? The ancient peoples of a universe begun at its
+    Big Bang (board.ancient_peoples) and their progenitor lines; on a settled board, the elders of its prehistory."""
+    if not house:
+        return False
+    from xylarium.kernel import board, constellations
+    if house == constellations.ELDERS:
+        return True
+    try:
+        return house in board.ancient_peoples(kernel) or house in board.progenitors(kernel)
+    except Exception:
+        return False
+
+
+class NotUplinked(PermissionError):
+    """Only an ancients' house appends to the hypha."""
+
+
 def append(kernel: Any, lane: str, kind: str, payer: str, payee: str, amount: Any, currency: str,
-           ref: Optional[str] = None) -> Dict[str, Any]:
-    """A receipt on a lane: chained to the one before it."""
+           ref: Optional[str] = None, house: Optional[str] = None) -> Dict[str, Any]:
+    """A receipt on a lane, chained to the one before it - appended by an ancients' house (`house`), the only
+    species with the uplink; anyone else's book stays in-game (transit.settle routes it). Refused otherwise."""
+    if not uplinked(kernel, house):
+        raise NotUplinked(f"{house!r} holds no uplink: only an ancients' house appends to the hypha")
+    return _append(kernel, lane, kind, payer, payee, amount, currency, ref, house)
+
+
+def _append(kernel: Any, lane: str, kind: str, payer: str, payee: str, amount: Any, currency: str,
+            ref: Optional[str], house: Optional[str]) -> Dict[str, Any]:
     c = _chain(kernel, lane)
     body = {"height": c["height"] + 1, "kind": kind, "payer": payer, "payee": payee, "amount": str(Fraction(amount)),
             "currency": currency, "cycle": int(getattr(kernel, "cycle_count", 0)), "ref": ref, "prev": c["head"]}
+    if house is not None:
+        body["house"] = house                                    # who appended it: an ancients' house
     rec = dict(body, hash=_hash(c["head"], body))
     c["rows"].append(rec)
     c["height"], c["head"] = rec["height"], rec["hash"]
@@ -83,7 +111,7 @@ def fold(kernel: Any, lane: str) -> Optional[Dict[str, Any]]:
     c["epochs"].append({"height": c["height"], "head": head, "rows": len(rows), "cycle": kernel.cycle_count})
     del c["epochs"][:-12]
     c["rows"] = []
-    rec = append(kernel, lane, "fold", "ledger", "ledger", 0, lane, ref=head)
+    rec = _append(kernel, lane, "fold", "ledger", "ledger", 0, lane, head, None)   # the ledger's own act
     c["rows"] = [rec]
     stats(kernel)["folds"] += 1
     return rec

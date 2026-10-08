@@ -171,8 +171,8 @@ class TestHypha(unittest.TestCase):
 
     def test_the_chain_answers_for_itself_and_a_changed_receipt_breaks_it(self):
         from xylarium.kernel import hypha
-        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 120, "SOL", ref="1-3")
-        hypha.append(self.k, "SOL", "pouw", "captain:c", "civ:B", 30, "SOL", ref="1-3")
+        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 120, "SOL", ref="1-3", house="elders")
+        hypha.append(self.k, "SOL", "pouw", "captain:c", "civ:B", 30, "SOL", ref="1-3", house="elders")
         self.assertTrue(hypha.verify(self.k, "SOL"))
         hypha.stats(self.k)["chains"]["SOL"]["rows"][0]["amount"] = "1"
         self.assertFalse(hypha.verify(self.k, "SOL"))
@@ -180,8 +180,8 @@ class TestHypha(unittest.TestCase):
     def test_a_fold_writes_each_identitys_net_and_the_chain_goes_on(self):
         from fractions import Fraction
         from xylarium.kernel import hypha
-        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 120, "SOL")
-        hypha.append(self.k, "SOL", "pouw", "civ:B", "captain:a", 20, "SOL")
+        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 120, "SOL", house="elders")
+        hypha.append(self.k, "SOL", "pouw", "civ:B", "captain:a", 20, "SOL", house="elders")
         head = hypha.stats(self.k)["chains"]["SOL"]["head"]
         rec = hypha.fold(self.k, "SOL")
         c = hypha.stats(self.k)["chains"]["SOL"]
@@ -189,7 +189,7 @@ class TestHypha(unittest.TestCase):
         self.assertEqual(Fraction(c["net"]["civ:B"]), 100)        # closed circulation vanishes in the net
         self.assertEqual(Fraction(c["net"]["captain:a"]), -100)
         self.assertEqual(c["height"], 3)
-        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 5, "SOL")
+        hypha.append(self.k, "SOL", "pouw", "captain:a", "civ:B", 5, "SOL", house="elders")
         self.assertTrue(hypha.verify(self.k, "SOL"))
 
     def test_a_settlement_is_a_proof_of_useful_work_on_the_keepers_reserve(self):
@@ -198,10 +198,27 @@ class TestHypha(unittest.TestCase):
         who = next(iter(spheres.stats(self.k)["nets"]))
         a = spheres.stats(self.k)["nets"][who]["home"]
         b = next(w for w in self.k.sectors[a].warps if w in self.k.sectors)
-        transit.settle(self.k, who, "captain:x", a, b, 50.0, 10.0)
+        with mock.patch.object(hypha, "uplinked", lambda kernel, house: house == who):   # an ancients' house
+            transit.settle(self.k, who, "captain:x", a, b, 50.0, 10.0)
         cur = spheres._home(self.k, who).currency
         rows = hypha.stats(self.k)["chains"][cur]["rows"]
-        self.assertEqual((rows[-1]["kind"], rows[-1]["payee"], rows[-1]["ref"]), ("pouw", who, transit.key(a, b)))
+        self.assertEqual((rows[-1]["kind"], rows[-1]["payee"], rows[-1]["ref"], rows[-1]["house"]),
+                         ("pouw", who, transit.key(a, b), who))
+
+    def test_anyone_elses_toll_stays_in_game_and_only_the_ancients_append(self):
+        from xylarium.kernel import hypha
+        spheres.ensure(self.k)
+        who = next(iter(spheres.stats(self.k)["nets"]))
+        a = spheres.stats(self.k)["nets"][who]["home"]
+        b = next(w for w in self.k.sectors[a].warps if w in self.k.sectors)
+        chains = len(hypha.stats(self.k)["chains"])
+        with mock.patch.object(hypha, "uplinked", lambda kernel, house: False):
+            transit.settle(self.k, who, "captain:x", a, b, 50.0, 0.0)
+            with self.assertRaises(hypha.NotUplinked):
+                hypha.append(self.k, "SOL", "pouw", "captain:x", who, 1, "SOL", house=who)
+        self.assertEqual(len(hypha.stats(self.k)["chains"]), chains)          # nothing reached the hypha
+        books = transit.stats(self.k)["in_game"]
+        self.assertEqual(sum(r["receipts"] for r in books.values()), 1)       # its realm's own books hold it
 
 
 class TestAllTrafficPays(unittest.TestCase):

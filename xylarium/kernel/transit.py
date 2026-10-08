@@ -294,7 +294,8 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
            transits: int = 1, paid: Optional[Tuple[int, str]] = None) -> None:
     """A passage paid for (by a ship, a hauler, or a flow of passengers): the lane's traffic counted, the money into
     its keeper's treasury in the keeper's own money (the reserve its lane is paid in - converted through the
-    exchanges), and the receipt on the hypha ledger: the passage delivered, a proof of useful work."""
+    exchanges), and its receipt: on the hypha (a proof of useful work) where the keeper is an ancients' house - the
+    ancients' throats and their progenitor lines' roads - else on its realm's books in the game."""
     from xylarium.kernel import hypha, spheres
     rec = lane(kernel, a, b)
     rec["transits"] += transits
@@ -318,7 +319,22 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
         endowments.credit(kernel, steward_ai.line_of(kernel, holder) or holder, sol)
         amount -= part
     got, cur = _pay_owner(kernel, holder, amount, money)     # the toll: the payer's own money, exchanged
-    hypha.append(kernel, cur, "pouw", payer, holder, got, cur, ref=key(a, b))
+    if hypha.uplinked(kernel, holder):                       # an ancients' throat or a progenitor line's road: the
+        hypha.append(kernel, cur, "pouw", payer, holder, got, cur, ref=key(a, b), house=holder)   # uplink's receipt
+    else:
+        in_game(kernel, b, payer, holder, got, cur, key(a, b))   # anyone else's toll: its realm's own books
+
+
+def in_game(kernel: Any, sector: int, payer: str, holder: str, amount: Any, cur: str, ref: str) -> None:
+    """A toll paid to a network that holds no uplink (a young people's own passages, a line that is no progenitor's)
+    is booked on the realm's ledger in the game - never on the hypha."""
+    from fractions import Fraction
+    from xylarium.kernel import stewardship
+    realm = stewardship.realm_of(kernel, sector) or "unrealmed"
+    rec = stats(kernel).setdefault("in_game", {}).setdefault(realm, {"receipts": 0, "paid": {}, "last": None})
+    rec["receipts"] += 1
+    rec["paid"][cur] = str(Fraction(rec["paid"].get(cur, "0")) + Fraction(amount))
+    rec["last"] = {"payer": payer, "holder": holder, "ref": ref, "cycle": int(getattr(kernel, "cycle_count", 0))}
 
 
 def reserves(kernel: Any) -> Dict[str, str]:
