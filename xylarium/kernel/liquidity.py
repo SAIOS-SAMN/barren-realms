@@ -137,8 +137,13 @@ def read(kernel: Any) -> None:
             logs = [math.log(b / a) for a, b in zip(hist, hist[1:]) if a > 0 and b > 0]
             mean = sum(logs) / len(logs)
             st["vol"][cur] = round(math.sqrt(sum((x - mean) ** 2 for x in logs) / max(1, len(logs) - 1)), 6)
+        seen = st.setdefault("volume_seen", {})
         if volume_q > 0:
-            price_service(kernel, cur, volume_q)
+            seen[cur] = volume_q
+        if seen.get(cur):
+            # re-priced every quarter on the trade last seen: a fee that choked its trade is felt out again as the
+            # pool's depth changes, rather than frozen where it stood when the trade stopped
+            price_service(kernel, cur, volume_q if volume_q > 0 else seen[cur])
 
 
 def net_yield(kernel: Any, cur: str) -> float:
@@ -179,6 +184,8 @@ def withdraw(kernel: Any, holder: str, cur: str, shares: float, give_sol, give_l
     p = fxm.pools[cur]
     part = shares / st["shares"][cur]
     sol, local = int(p["sol"] * part), int(p["local"] * part)
+    if sol <= 0 or local <= 0:
+        return 0, 0                                       # a withdrawal that would move nothing takes no shares
     p["sol"] -= sol
     p["local"] -= local
     st["shares"][cur] -= shares
