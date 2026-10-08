@@ -8,7 +8,7 @@ Functions and records are typed ids, never names: barren-realms' tables are FUNC
 in-game name (a people, a realm) travels as a Key - the sha256 of the name - which the house maps back.
 
   act body = [0x53][sub-kind u8][fields][sig 64], sig = ed25519 over b"mycelium seat v1" || [sub-kind][fields]
-  (SIGNED_FROM marks where the signed bytes begin; it is checked against mycelium's codec when it lands)
+  call ref = blake3 of the same signed bytes (confirmed by mycelium)
 """
 
 import hashlib
@@ -24,7 +24,7 @@ TAG = b"mycelium seat v1"
 SIGNED_FROM = 1                  # the act tag is not signed; the sub-kind and every field are
 SEATS, TAKE, TAKEN, PERCEPT, CALL, OUTCOME, READ_LISTING, READ_MAIL = range(8)
 Q_, KEY, COUNT, FLAG, MV, BIGQ = range(6)
-ROLE = {"progenitor": 0, "ancients": 0, "steward": 2, "sovereign": 3}   # the ancients' house is the T0 seat
+ROLE = {"progenitor": 0, "ancients": 1, "steward": 2, "sovereign": 3}   # 4..9 the captains' offices
 COUNSEL = 0xFFFF
 
 # barren-realms' functions: typed id -> (name, the argument tags it takes)
@@ -127,8 +127,8 @@ def opened(act: bytes, vk: bytes) -> bool:
 
 
 def call_ref(act: bytes) -> bytes:
-    """A call's reference: blake3 of its signed body."""
-    return blake3.blake3(act[:-64]).digest()
+    """A call's reference: blake3 of exactly the bytes its signature covers (the tag, the sub-kind, the fields)."""
+    return blake3.blake3(TAG + act[SIGNED_FROM:-64]).digest()
 
 
 # ---------------------------------------------------------------------- the house's posts
