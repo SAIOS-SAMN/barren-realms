@@ -99,6 +99,34 @@ def found(kernel: Any, holder: Optional[str], cap: str) -> bool:
     return cap in stats(kernel)["of"].get(holder, {})
 
 
+def unearned(kernel: Any, holder: Optional[str]) -> Dict[str, str]:
+    """What a people holds without understanding it - granted by its history's stage (annals), or dug up and not yet
+    proven (relics) - {capability: how}. Usable; but not extended (nothing that builds on it is found) until earned."""
+    if not holder or kernel is None or "technology" not in getattr(kernel, "state", {}):
+        return {}
+    out = {c: "stage" for c in (stats(kernel).setdefault("unearned", {}).get(holder) or {})}
+    if "relics" in kernel.state:
+        from xylarium.kernel import relics
+        out.update({c: "relic" for c in (relics.stats(kernel).get("unproven", {}).get(holder) or {})})
+    return out
+
+
+def grant(kernel: Any, holder: str, cap: str) -> None:
+    """A capability held by a people's history (its stage), not found by its own understanding: unearned."""
+    held = stats(kernel)["of"].setdefault(holder, {})
+    if cap not in held:
+        held[cap] = kernel.cycle_count
+        stats(kernel).setdefault("unearned", {}).setdefault(holder, {})[cap] = kernel.cycle_count
+
+
+def carry(kernel: Any, src: str, dst: str) -> None:
+    """A people that becomes another carries what it holds - and what of it is unearned - as it holds it."""
+    stats(kernel)["of"].setdefault(dst, {}).update(dict(stats(kernel)["of"].get(src, {})))
+    une = stats(kernel).setdefault("unearned", {})
+    if une.get(src):
+        une.setdefault(dst, {}).update(dict(une[src]))
+
+
 def has(kernel: Any, holder: Optional[str], cap: str) -> bool:
     """Can this people use the capability: found, and not interdicted by a steward (ascendance.stopped)."""
     if not found(kernel, holder, cap):
@@ -230,9 +258,12 @@ def season(kernel: Any) -> List[str]:
         stocks = knowledge.stocks(kernel, who)
         thought = 1.0 - math.exp(-sum(knowledge.effort(kernel, p) + knowledge.lived(kernel, p) for p in worlds) / 1000.0)
         rng = scheduler.rng(kernel, "technology", who, kernel.cycle_count)
+        une = unearned(kernel, who)
         for cap in CAPS:
-            if cap in held or not feasible(kernel, who, cap, home):
+            if cap in held and cap not in une or not feasible(kernel, who, cap, home):
                 continue
+            if any(pre in une for pre in AFTER.get(cap, ())):
+                continue                             # it cannot build on what it does not understand
             chance = laws.mastery(stocks.get(NEEDS[cap], 0.0), KNOWLEDGE_UNIT) * thought
             from xylarium.kernel import mind
             prof = mind.profile(kernel, home)
@@ -245,6 +276,19 @@ def season(kernel: Any) -> List[str]:
                 continue                             # its creed has forbidden it
             if cap == "embodiment":                          # the terrestrial dimensions, learned from nothing
                 chance *= laws.mastery(stocks.get("energy", 0.0), KNOWLEDGE_UNIT)
+            if cap in une:                               # what it holds unearned, its understanding may now build
+                if rng.random() >= chance:
+                    continue
+                st["unearned"].get(who, {}).pop(cap, None)
+                if une[cap] == "relic":
+                    from xylarium.kernel import relics
+                    relics.stats(kernel).get("unproven", {}).get(who, {}).pop(cap, None)
+                st["earned"] = st.get("earned", 0) + 1
+                history.event(kernel, "EARNED", f"The {who.split(':', 1)[-1]} come to understand the {cap} they held",
+                              actors=[who], planet=home, cause=f"what they came to know of {NEEDS[cap]}",
+                              data={"capability": cap, "was": une[cap]})
+                logs.append(f"[TECHNOLOGY] The {who.split(':', 1)[-1]} earn the {cap} they held.")
+                continue
             if rng.random() < chance:
                 held[cap] = kernel.cycle_count
                 st["found"] += 1

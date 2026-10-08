@@ -210,7 +210,7 @@ def _breakaway(kernel: Any, who: str, worlds: List[Any]) -> Optional[str]:
     w.society["way"], w.citadel_level = "state", home.citadel_level
     w.society["arisen"] = dict(home.society.get("arisen") or {})
     new = f"civ:{w.civilization.name}"
-    technology.stats(kernel)["of"][new] = dict(technology.stats(kernel)["of"].get(who, {}))
+    technology.carry(kernel, who, new)
     from xylarium.kernel import annals, intellect, knowledge
     knowledge.stocks(kernel, new).update(dict(knowledge.stocks(kernel, who)))
     intellect.stats(kernel)["vocab"][new] = list(intellect.vocabulary(kernel, who))

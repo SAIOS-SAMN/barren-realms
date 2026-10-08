@@ -263,13 +263,11 @@ def realm_purse(kernel: Any, captain: Any, planet: Any):
 def _inherit(kernel: Any, people: str, ruler: str) -> None:
     """A ruler governs with what its people knows: their knowledge, their capabilities and their mathematics become
     the ruler's (the worlds it now governs are reckoned under its name)."""
-    import copy
     from xylarium.kernel import intellect, knowledge, technology
     mine = knowledge.stocks(kernel, ruler)
     for d, v in knowledge.stocks(kernel, people).items():
         mine[d] = max(float(mine.get(d, 0.0)), float(v))
-    held = technology.stats(kernel)["of"].setdefault(ruler, {})
-    held.update(copy.deepcopy(technology.stats(kernel)["of"].get(people, {})))
+    technology.carry(kernel, people, ruler)
     ist = intellect.stats(kernel)
     if people in ist.get("vocab", {}):
         ist["vocab"][ruler] = list(ist["vocab"][people])

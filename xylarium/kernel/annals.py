@@ -121,7 +121,7 @@ def _grant(kernel: Any, who: str, home: Any, idx: int) -> None:
     held = technology.stats(kernel)["of"].setdefault(who, {})
     for cap, at in CAPS_AT:
         if idx >= at and cap not in held and technology.feasible(kernel, who, cap, home):
-            held[cap] = kernel.cycle_count
+            technology.grant(kernel, who, cap)            # held by its stage, not yet understood: unearned
 
 
 def _apply(kernel: Any, who: str, home: Any, stage: str) -> None:
@@ -427,7 +427,7 @@ def _live_ages(kernel: Any, who: str, worlds: List[Any], logs: List[str]) -> Opt
         hist["since"] = hist["P"]                             # the next wait is counted from here
         fall_rate = hist["rate"] = fall_per_generation(kernel, who, home)
         if kind in ("embodiment", "genetics"):
-            _tech.stats(kernel)["of"].setdefault(who, {})[kind] = kernel.cycle_count
+            _tech.grant(kernel, who, kind)
             speed = _speed(kernel, home)                      # it has hands, or can rewrite itself, now
             continue
         stage = kind
@@ -596,6 +596,16 @@ def _books(kernel: Any, j: Dict[str, Any], logs: List[str]) -> None:
     # what it knows has grown with its ages: its thinkers' effort a year (knowledge.effort, as the engine counts it)
     # over the years carried, shared among what it already studies as it studies it - summed, never compounded, so
     # however its time is cut it learns the same
+    # what its living taught it over the years carried - every member thinks as it lives, surplus or none
+    # (knowledge.lived; coordinator ruling: a people at its land's limit still thinks by living), in the sciences
+    # its life touches (mind.profile's affinity), as the engine's own quarters count it
+    from xylarium.kernel import mind
+    lived_units = knowledge.lived(kernel, home) * gens * gen
+    if lived_units > 0:
+        aff = mind.profile(kernel, home)["affinity"]
+        tot = sum(aff.values()) or 1.0
+        for d in knowledge.DOMAINS:
+            knowledge.learn(kernel, who, d, lived_units * aff[d] / tot, why="lived")
     known = {d: knowledge.stocks(kernel, who).get(d, 0.0) for d in knowledge.DOMAINS}
     if not any(v > 0 for v in known.values()):
         known = {d: 1.0 for d in knowledge.DOMAINS}          # a people that studies nothing yet studies everything alike

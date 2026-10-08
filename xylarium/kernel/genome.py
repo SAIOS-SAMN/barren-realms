@@ -253,9 +253,8 @@ def _inherit_ways(kernel: Any, parent: str, child: str) -> None:
     capabilities, the stages its history passed and its crossing are its parent's on the day it becomes itself."""
     from xylarium.kernel import technology
     if "technology" in kernel.state:
-        held = technology.stats(kernel)["of"].get(parent)
-        if held:
-            technology.stats(kernel)["of"].setdefault(child, {}).update(dict(held))
+        if technology.stats(kernel)["of"].get(parent):
+            technology.carry(kernel, parent, child)
     if "annals" in kernel.state:
         from xylarium.kernel import annals
         rec = annals.stats(kernel)["of"].get(parent)
