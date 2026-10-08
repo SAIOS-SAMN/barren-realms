@@ -30,7 +30,9 @@ class TestFold(unittest.TestCase):
 class TestHub(unittest.TestCase):
     def _contest(self, homes, nets, lines, transfer=()):
         from xylarium.kernel import board, spheres, steward_ai
+        from xylarium.kernel import cosmos                   # a home's place: its 3D distance from the centre
         with mock.patch.object(gateways, "_r", lambda k, sid: homes[sid]), \
+                mock.patch.object(cosmos, "from_centre_kpc", lambda k, sid: homes[sid]), \
                 mock.patch.object(spheres, "_home", lambda k, w: mock.Mock(sector_id=w)), \
                 mock.patch.object(gateways, "travels_as_information", lambda k, w: w in transfer), \
                 mock.patch.object(spheres, "stats", lambda k: {"nets": nets}), \

@@ -48,8 +48,13 @@ def _bh_share(r_kpc: float) -> float:
 
 def black_holes_per_pc3(r_kpc: float) -> float:
     """Stellar black holes per pc^3 at a galactocentric radius."""
+    return _black_holes_at(round(max(0.0, r_kpc), 3))
+
+
+@functools.lru_cache(maxsize=1 << 16)
+def _black_holes_at(r: float) -> float:
+    """A pure law of the radius (to the parsec): computed once per radius."""
     from xylarium.kernel import encounters
-    r = round(max(0.0, r_kpc), 3)
     return sum(n for n, _ in encounters.components(r)) * _bh_share(r)
 
 

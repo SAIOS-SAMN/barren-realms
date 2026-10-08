@@ -78,6 +78,35 @@ class TestRoutesWeighTolls(unittest.TestCase):
         if transit._around(k, a, b) != float("inf"):
             self.assertNotEqual(path, [a, b])                 # it pays to go round
 
+    def test_around_from_cached_costs_matches_the_walk(self):
+        """_around reads each lane's base cost once per version; it gives the walk's own answer, lane excluded."""
+        import heapq
+        random.seed(5)
+        k = GameKernel(seed=42)
+        for _ in range(40):
+            k.tick_simulation()
+
+        def walk(a, b):
+            dist, heap = {a: 0.0}, [(0.0, a)]
+            while heap:
+                d, s = heapq.heappop(heap)
+                if s == b:
+                    return d
+                if d > dist.get(s, float("inf")):
+                    continue
+                for w in k.sectors[s].warps:
+                    if w not in k.sectors or {s, w} == {a, b}:
+                        continue
+                    nd = d + fibres.base_lane_cost(k, s, w)
+                    if nd < dist.get(w, float("inf")):
+                        dist[w] = nd
+                        heapq.heappush(heap, (nd, w))
+            return float("inf")
+        lanes = [(a, w) for a, sec in sorted(k.sectors.items()) for w in sec.warps if w in k.sectors][:25]
+        self.assertTrue(lanes)
+        for a, b in lanes:
+            self.assertEqual(transit._around(k, a, b), walk(a, b))
+
 
 class TestThroats(unittest.TestCase):
     def setUp(self):

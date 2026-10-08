@@ -388,6 +388,14 @@ def ancients(kernel: Any) -> List[Dict[str, Any]]:
     core assembly time of the core's first mind, each born in the core (inside the bulge). Their number is
     the seed's, not chosen. Earliest first: when each wakes (Gyr after the Big Bang), what its life is made of, and
     how far out its home lies (its ring of the galaxy)."""
+    from xylarium.kernel import cache, cosmos
+    if hasattr(kernel, "caches"):                            # the seed's own: computed once per seed
+        return [dict(a, cell=list(a["cell"])) for a in
+                cache.memo(kernel, "roles_ancients", "all", lambda: _ancients(kernel), epoch=cosmos.cosmos_seed(kernel))]
+    return _ancients(kernel)
+
+
+def _ancients(kernel: Any) -> List[Dict[str, Any]]:
     from xylarium.kernel import cosmos
     out = []
     minds = _all_minds(kernel)

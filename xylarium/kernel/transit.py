@@ -223,7 +223,12 @@ def _around(kernel: Any, a: int, b: int) -> float:
     version = (st.get("version", 0), st.get("seasons", 0) // 4, len(kernel.sectors),   # when the map or space changes
                sum(len(sec.warps) for sec in kernel.sectors.values()))
 
+    def costs() -> Dict[int, List[Tuple[int, float]]]:   # every lane's base cost, once per version - not per walk
+        return {s: [(w, fibres.base_lane_cost(kernel, s, w)) for w in sec.warps if w in kernel.sectors]
+                for s, sec in kernel.sectors.items()}
+
     def build() -> float:
+        adj = cache.memo(kernel, "transit_around", "_adj", costs, epoch=version) if hasattr(kernel, "caches") else costs()
         dist = {a: 0.0}
         heap: List[Tuple[float, int]] = [(0.0, a)]
         while heap:
@@ -232,10 +237,10 @@ def _around(kernel: Any, a: int, b: int) -> float:
                 return d
             if d > dist.get(s, float("inf")):
                 continue
-            for w in kernel.sectors[s].warps:
-                if w not in kernel.sectors or {s, w} == {a, b}:
+            for w, c in adj.get(s, ()):
+                if (s == a and w == b) or (s == b and w == a):
                     continue
-                nd = d + fibres.base_lane_cost(kernel, s, w)
+                nd = d + c
                 if nd < dist.get(w, float("inf")):
                     dist[w] = nd
                     heapq.heappush(heap, (nd, w))
