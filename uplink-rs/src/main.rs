@@ -75,7 +75,10 @@ fn main() {
         Ok(r) => r,
         Err(e) => return out(json!({"error": format!("request: {e}")})),
     };
-    let Some(id) = hex(&req.task_id) else { return out(json!({"error": "task_id is not hex"})) };
+    // wire v1.2: a task is named by its 32-byte citation
+    let Some(id) = hex(&req.task_id).and_then(|v| <[u8; 32]>::try_from(v).ok()) else {
+        return out(json!({"error": "task_id is not a 32-byte citation"}));
+    };
     let seed: [u8; 32] = match std::fs::read(&req.key).ok().and_then(|b| b.try_into().ok()) {
         Some(s) => s,
         None => return out(json!({"error": "the voice's key is not a 32-byte seed"})),

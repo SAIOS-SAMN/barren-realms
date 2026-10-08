@@ -5,9 +5,9 @@ edition = "2021"
 description = "barren-realms' own solve client: its minds' steps minted as court rules through mycelium's sdk::rule, judged at home, submitted signed"
 
 [dependencies]
-# Pinned: mycelium at a stated commit (coordinator ruling: vendor at 9c713fe5, 78.143 slice 1), fetched by cargo into its own cache -
+# Pinned: mycelium at a stated commit (coordinator ruling: vendor at 716a81ba, wire v1.2), fetched by cargo into its own cache -
 # nothing is written into the mycelium tree.
-mycelium = { git = "file:///opt/mycelium-v0.1.0", rev = "9c713fe5ca898b8b4d9666d5884192a3eeace1e6" }
+mycelium = { git = "file:///opt/mycelium-v0.1.0", rev = "716a81ba1b3bd56104855cb89de963eca7a9bece" }
 ed25519-dalek = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
