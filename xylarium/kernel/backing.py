@@ -307,6 +307,102 @@ def summary(kernel: Any) -> Dict[str, Any]:
             "gaps": dict(st.get("gaps", {})), "routed_sol": {c: round(v) for c, v in st.get("routed", {}).items()}}
 
 
+
+# ---------------------------------------------------------------------- the reserve basket: survival by mass
+KLEIBER_B0 = 3.4                # W per kg^(3/4): Kleiber (1932), measured across bodies - the metabolic ruler
+SECONDS_PER_YEAR = 3.15576e7
+# what a biosphere fixes, by its food and the solvent its chemistry runs in, and that food's oxidation: carbon fixed
+# in water is carbohydrate, (CH2O)n. Every other (food, solvent) is OWED - never assumed to be Earth's food.
+FIXED = {("ORGANICS", "H2O"): ("C6H12O6", {"O2": 6}, {"CO2": 6, "H2O": 6})}
+
+
+def food_energy_j_per_kg(good: str, solvent: Optional[str] = "H2O") -> Optional[float]:
+    """The energy a kilogram of a food holds, from its bond enthalpies: what a biosphere of that chemistry fixes in its
+    solvent, oxidised (substances' measured formation enthalpies). None where that chemistry is not derived yet."""
+    from xylarium.kernel import substances
+    got = FIXED.get((good, solvent))
+    if got is None:
+        return None
+    sym, reac, prod = got
+    dh = sum(n * substances.formation(x)[0] for x, n in prod.items()) - \
+        (substances.formation(sym)[0] + sum(n * substances.formation(x)[0] for x, n in reac.items()))
+    m = substances.molar_mass(sym)
+    return -dh * 1000.0 / (m / 1000.0) if m and dh < 0 else None      # kJ/mol over kg/mol -> J/kg
+
+
+def basket(kernel: Any, who: str) -> Optional[Dict[str, Any]]:
+    """A people's reserve basket: what one of its people needs to live a year where it lives (its home world - for
+    the ancients, the core), by good. The RESERVE UNIT is one person-year of survival there.
+
+      FOOD       its staple (staples.of), FOOD_PER_THOUSAND a thousand a cycle; kg from its metabolism - Kleiber's
+                 B0 x its OWN body's mass^(3/4) x its chemistry's pace (biosphere.need_factor: life history, gravity,
+                 body temperature) - over the energy density of what its biosphere fixes in its solvent
+      BODY       its bodies' turnover: its own body's mass (life.M_MIND_KG x its size: biosphere.body_mass) over a
+                 life (lifespan), in its staple
+      MEDIUM     the matter its chemistry runs in (uses.MEDIUM_GOOD): OWED (no turnover a head is modelled yet)
+      STRUCTURE  its walls' wear a head (citadel upkeep, in the good they are made of: uses.wears)
+      SHIELDING  against its home's dose (hydromagnetics): OWED (a dwelling's column from the crust's materials)
+
+    Returns {"units": {good: Fraction a capita-year}, "kg": {good: Fraction or None}, "owed": {term: what would give
+    it}, "home": planet id}. kg is the basket's identity; units are how ports price it; owed terms say what is not yet
+    measured. None if the people has no living home."""
+    from fractions import Fraction as Fr
+    from xylarium.config import CITADEL_UPKEEP, FOOD_PER_THOUSAND
+    from xylarium.kernel import biosphere, lifespan, spheres, staples, uses
+    home = spheres._home(kernel, who)
+    if home is None or getattr(home, "population", 0) <= 0:
+        return None
+    cycles = Fr(100)                                         # cycles a year (the clock's own: 100 to the year)
+    units: Dict[str, Fr] = {}
+    kg: Dict[str, Optional[Fr]] = {}
+    owed: Dict[str, str] = {}
+    food = staples.of(kernel, home)
+    eat = Fr(FOOD_PER_THOUSAND) / 1000 * cycles
+    from xylarium.kernel import life as _life
+    rel_mass = Fr(biosphere.body_mass(home, kernel)).limit_denominator(10 ** 9)   # its size over a mind's body
+    body_kg_each = Fr(_life.M_MIND_KG).limit_denominator(1) * rel_mass             # its own body, kg
+    life = Fr(float(lifespan.expectancy_years(kernel, home)))     # exact: a float is a dyadic fraction
+    body_u = Fr(FOOD_PER_THOUSAND) / 1000 * lifespan.BODY_CYCLES * rel_mass / life if life > 0 else Fr(0)
+    units[food] = eat + body_u
+    body = uses.body(kernel, home)
+    e = food_energy_j_per_kg(food, body["solvent"] if body else None)
+    if e:
+        watts = KLEIBER_B0 * _life.M_MIND_KG ** 0.75 * biosphere.need_factor(home, kernel)   # need_factor carries
+        # its own size^(3/4) and its chemistry's pace
+        eaten_kg = Fr(watts * SECONDS_PER_YEAR / e).limit_denominator(10 ** 6)
+        body_kg = body_kg_each / life if life > 0 else Fr(0)
+        kg[food] = eaten_kg + body_kg
+    else:
+        kg[food] = None
+        owed["food_energy_density"] = (f"what a {biosphere.metabolism_of(kernel, home)} biosphere fixes in "
+                                       f"{(body or {}).get('solvent', 'its solvent')}, oxidised")
+    medium = uses.MEDIUM_GOOD.get(body["solvent"]) if body else None
+    if medium:
+        owed["medium"] = f"{medium}: a body's medium turnover a year (households, domes)"
+    wall = uses.wears(kernel, home)
+    up = CITADEL_UPKEEP.get(home.citadel_level, CITADEL_UPKEEP[0])
+    if wall and up.get("ore"):
+        units[wall] = units.get(wall, Fr(0)) + Fr(int(up["ore"])) * cycles / max(1, int(home.population))
+        kg.setdefault(wall, None)
+        owed["structure_kg"] = f"{wall}: a dwelling's mass from the crust's materials"
+    owed["shielding"] = "against its home's dose: a dwelling's shielding column from the crust's materials"
+    return {"units": units, "kg": kg, "owed": owed, "home": home.id, "reserve_unit": "one person-year at its home"}
+
+
+def basket_value(kernel: Any, b: Dict[str, Any], cur: str) -> Optional[float]:
+    """A basket's worth in a money: each good's units at that money's own ports' price (never through the hub).
+    None where its ports price none of its goods."""
+    from xylarium.kernel.economy import EconomyManager
+    total, priced = 0.0, False
+    for good, q in b["units"].items():
+        prices = [EconomyManager.get_unit_prices(sec.port, good)[1] for sec in kernel.sectors.values()
+                  if sec.port is not None and sec.port.currency == cur and sec.port.sells.get(good)]
+        prices = [p for p in prices if p > 0]
+        if prices:
+            total += float(q) * sum(prices) / len(prices)
+            priced = True
+    return total if priced else None
+
 from xylarium.kernel import state  # noqa: E402
 from xylarium.kernel.subsystem import Subsystem, register as register_subsystem  # noqa: E402
 

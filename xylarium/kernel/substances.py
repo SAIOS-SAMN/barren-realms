@@ -109,6 +109,8 @@ COMPOUNDS: Dict[str, Dict[str, Any]] = {
     "CO2": {"f": {"C": 1, "O": 2}, "dH": -393.5, "S": 213.8, "melt": 216.6, "boil": 194.7, "rho": 1.56,
             "origin": "ice", "tc": 72},
     "O2": {"f": {"O": 2}, "dH": 0.0, "S": 205.2, "melt": 54.4, "boil": 90.2, "rho": 1.14, "origin": "biogenic"},
+    "C6H12O6": {"f": {"C": 6, "H": 12, "O": 6}, "dH": -1273.3, "S": 212.1, "melt": 419.0, "boil": 573.0,
+                "rho": 1.54, "origin": "biogenic"},          # glucose: what carbon life fixes (NIST)
     "H2": {"f": {"H": 2}, "dH": 0.0, "S": 130.7, "melt": 14.0, "boil": 20.3, "rho": 0.071, "origin": "ice", "tc": 5},
     "NaCl": {"f": {"Na": 1, "Cl": 1}, "dH": -411.2, "S": 72.1, "melt": 1074.0, "boil": 1738.0, "rho": 2.17,
              "origin": "mineral", "tc": 948},
