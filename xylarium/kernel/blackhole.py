@@ -168,6 +168,110 @@ def ledger(kernel: Any) -> Dict[str, int]:
             "balance": inflow - near - far - int(st.get("returned", 0))}
 
 
+# ---------------------------------------------------------------------- every other hole: the same law, smaller
+def _new_core(t: Optional[float]) -> Dict[str, Any]:
+    return {"born": t, "reservoir": {}, "carry": {}, "clock_myr": 0.0, "lapse": 1.0, "returned": 0}
+
+
+def open_throat(kernel: Any, tid: str, near: Any, mass_suns: float, kind: str,
+                keepers: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Any black hole is a throat: its near face where it sits, a far core (the universe beyond, small for a small
+    hole) persisting on its own clock, keepers on both faces (the ancients reach both), and its own mass. Opened once;
+    a second call returns the record."""
+    from xylarium.kernel import cosmos
+    thr = stats(kernel).setdefault("throats", {})
+    if tid in thr:
+        return thr[tid]
+    k = list(keepers) if keepers is not None else _keepers_near(kernel)
+    t = round(cosmos.deep_gyr(kernel), 6)
+    thr[tid] = {"near": near, "far": f"{tid}:far", "kind": kind, "mass": float(mass_suns), "opened": t,
+                "keepers": {"near": k, "far": list(k)}, "reservoir_near": {}, "core": _new_core(t),
+                "inflow": 0, "returned": 0}
+    return thr[tid]
+
+
+def capture_into(kernel: Any, tid: str, units: Dict[str, int], what: str) -> int:
+    """Matter falls into a throat other than the centre's: a declared sink; a share crosses to its far core (the
+    same horizon law), the rest is its near face's to send back out."""
+    rec = stats(kernel)["throats"][tid]
+    got = 0
+    for el, q in sorted(units.items()):
+        q = int(q)
+        if q <= 0:
+            continue
+        matter.sink("central_engine", el, q)
+        through = int(q * HORIZON_SHARE)
+        core = rec["core"]["reservoir"]
+        if through:
+            core[el] = core.get(el, 0) + through
+        if q - through:
+            rec["reservoir_near"][el] = rec["reservoir_near"].get(el, 0) + (q - through)
+        got += q
+    rec["inflow"] = int(rec["inflow"]) + got
+    return got
+
+
+def _engine(core: Dict[str, Any], into: Dict[str, int], deep_myr: float) -> int:
+    """A far core's engine: its reservoir's e-fold share (EPISODE_MYR, read on its own clock) back through the throat,
+    the fractional remainder carried, never dropped."""
+    if not core["reservoir"]:
+        return 0
+    dt = deep_myr * float(core.get("lapse", 1.0))
+    core["clock_myr"] = float(core.get("clock_myr", 0.0)) + dt
+    share = 1.0 - math.exp(-dt / EPISODE_MYR)
+    carry = core.setdefault("carry", {})
+    moved = 0
+    for el in sorted(core["reservoir"]):
+        due = core["reservoir"][el] * share + float(carry.get(el, 0.0))
+        out = min(int(due), core["reservoir"][el])
+        carry[el] = due - out
+        if out <= 0:
+            continue
+        core["reservoir"][el] -= out
+        into[el] = into.get(el, 0) + out
+        moved += out
+    core["returned"] = int(core.get("returned", 0)) + moved
+    return moved
+
+
+def _small_throats(kernel: Any, deep_myr: float) -> None:
+    """Each season every other throat keeps the centre's law: its far core sends back on its own clock; its near
+    face's reservoir goes out to its own system's worlds by the same e-fold (a declared source)."""
+    from xylarium.kernel import zones
+    share = 1.0 - math.exp(-deep_myr / EPISODE_MYR)
+    for tid in sorted(stats(kernel).get("throats", {})):
+        rec = stats(kernel)["throats"][tid]
+        if tid in ("centre", "parent") or "core" not in rec:
+            continue
+        _engine(rec["core"], rec["reservoir_near"], deep_myr)
+        sec = kernel.sectors.get(rec["near"]) if isinstance(rec["near"], int) else None
+        worlds = [p for p in (sec.planets if sec is not None else [])]
+        if not worlds or not rec["reservoir_near"]:
+            continue
+        for el in sorted(rec["reservoir_near"]):
+            out = int(rec["reservoir_near"][el] * share)
+            if out <= 0:
+                continue
+            rec["reservoir_near"][el] -= out
+            for j, w in enumerate(worlds):
+                part = out // len(worlds) + (1 if j < out % len(worlds) else 0)
+                if part:
+                    zones.touch(kernel, w)
+                    w.element_deposits[el] = w.element_deposits.get(el, 0) + part
+                    matter.source("central_engine", el, part)
+            rec["returned"] = int(rec["returned"]) + out
+
+
+def throat_ledger(kernel: Any, tid: str) -> Dict[str, int]:
+    """A throat's books: inflow == near + far + returned."""
+    rec = stats(kernel)["throats"][tid]
+    near = sum(int(v) for v in rec["reservoir_near"].values())
+    far = sum(int(v) for v in rec["core"]["reservoir"].values())
+    inflow = int(rec["inflow"])
+    return {"inflow": inflow, "near": near, "far": far, "returned": int(rec["returned"]),
+            "balance": inflow - near - far - int(rec["returned"])}
+
+
 def _far_engine(kernel: Any, deep_myr: float) -> int:
     """The far core runs on its own clock: its engine returns its reservoir through the throat by the same e-fold
     the near jets keep (EPISODE_MYR), read on its clock - into the near face's reservoir (both faces are off the
@@ -243,6 +347,7 @@ def quarter(kernel: Any) -> List[str]:
     # the throat's far face: its core's engine sends back on its own clock; our own Big Bang's face is on record
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES as _FQ
     _far_engine(kernel, _FQ / 100.0 * cosmos.ruler(kernel) / 1.0e6)
+    _small_throats(kernel, _FQ / 100.0 * cosmos.ruler(kernel) / 1.0e6)
     throat(kernel, "parent")
     # the bounce: jets return the reservoir to the witnessed worlds of the bulge
     worlds = [p for s in kernel.sectors.values() for p in s.planets

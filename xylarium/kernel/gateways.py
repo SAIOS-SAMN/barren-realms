@@ -300,9 +300,17 @@ def kindling(kernel: Any, logs: list) -> None:
         rec = {"n": n, "by": list(members), "epoch": round(t, 6), "seed": f"{cosmos.cosmos_seed(kernel)}:kindled:{n}",
                "room": room}
         gst["kindled"].append(rec)
+        from xylarium.kernel import blackhole, spheres
+        homes = [spheres._home(kernel, w) for w in members]
+        near = next((h.sector_id for h in homes if h is not None), None)
+        keepers = sorted(set(blackhole._keepers_near(kernel)) | set(members))
+        thr = blackhole.open_throat(kernel, f"kindled:{n}", near, LIGHTEST_HOLE_SUNS, "kindled", keepers)
+        rec["throat"] = f"kindled:{n}"                     # a far face with its own core, two-way: not a one-way room
         for w in members:
             b = settling.stats(kernel)[w]
-            b.setdefault("children", []).append({"n": n, "epoch": t, "room": room / len(members)})
+            b.setdefault("children", []).append({"n": n, "epoch": t, "room": room / len(members),
+                                                 "throat": f"kindled:{n}"})
+        del thr
         names = ", ".join(w.split(":", 1)[-1] for w in members)
         history.event(kernel, "SINGULARITY_KINDLED", f"The {names} kindle a singularity", actors=list(members),
                       cause=f"nowhere left to settle, they pooled "

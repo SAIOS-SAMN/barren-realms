@@ -91,5 +91,27 @@ class TestKindling(unittest.TestCase):
             self.assertTrue(settling.forming(k, b, 3.0))
 
 
+class TestKindledThroat(unittest.TestCase):
+    def test_kindling_opens_a_throat_not_a_one_way_room(self):
+        from xylarium.kernel import blackhole
+        from xylarium.kernel.engine import GameKernel
+        k = GameKernel(seed=7, genesis="cosmic")
+        k.activate()
+        from tests.test_settling import _bubble
+        b = _bubble(k, "civ:A", next(iter(k.sectors)), 1.0)
+        gateways.stats(k)["banks"]["civ:A"] = {"j": gateways.kindle_cost_j() * 2, "t": 0.0}
+        with mock.patch.object(gateways, "coalitions", lambda kernel, t: [("civ:A",)]), \
+                mock.patch.object(gateways, "_full", lambda kernel, w, t: True), \
+                mock.patch.object(gateways, "approves", lambda kernel, m: True), \
+                mock.patch.object(gateways, "coalition_power_w", lambda kernel, m: 0.0), \
+                mock.patch("xylarium.kernel.history.event", lambda *a, **kw: {}):
+            gateways.kindling(k, [])
+        tid = b["children"][0]["throat"]
+        thr = blackhole.stats(k)["throats"][tid]
+        self.assertEqual(thr["kind"], "kindled")
+        self.assertIn("civ:A", thr["keepers"]["near"])
+        self.assertEqual(thr["keepers"]["near"], thr["keepers"]["far"])     # the same keepers on both faces
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -823,6 +823,8 @@ def _death(kernel: Any, sid: int, quiet: bool) -> Optional[str]:
                     matter.source("stellar_ejecta", el, share)          # made in the star, now in the worlds
     sec.star_type = ("White dwarf remnant" if kind == "white_dwarf" else "Supernova remnant" if kind == "supernova"
                      else "Neutron star remnant" if not heavy else "Black hole remnant")
+    if heavy and kind != "supernova":                                   # no horizon is a dead end: its hole is a
+        blackhole.open_throat(kernel, f"star:{sid}", sid, remnant, "stellar")   # throat with a far core of its own
     sec.star = physics.star_for(sec.star_type)
     st = stats(kernel)
     st["deaths"][kind] = st["deaths"].get(kind, 0) + 1
