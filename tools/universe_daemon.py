@@ -37,11 +37,12 @@ def observe(k, path: str, t0: float, c0: int) -> None:
     wall = time.time() - t0
     o = vitals(k, wall, (k.cycle_count - c0) / max(1e-9, wall))
     sums = subsystem.summaries(k)
-    for name in ("transit", "commerce", "court", "spheres", "board", "ladder", "phylogeny", "life", "reserve_banks", "field"):
+    for name in ("transit", "commerce", "court", "spheres", "board", "ladder", "phylogeny", "life", "reserve_banks", "field", "leak"):
         if name in sums:
             o[name] = sums[name]
     from xylarium.kernel import cosmos
     o["deep_gyr"] = cosmos.deep_gyr(k) if cosmos.is_cosmic(k) else None
+    o["clock"] = dict(CLOCK)                              # where the world stands against TUniversal (1.12)
     with open(path, "a") as f:
         f.write(json.dumps(o, default=str) + "\n")
     intel = o.get("intellect") or {}
@@ -52,6 +53,7 @@ def observe(k, path: str, t0: float, c0: int) -> None:
         f"court {json.dumps(o.get('court', {}))}")
 
 
+CLOCK: dict = {"residual": None, "at": None}   # the bound clock's lag: cycles the world stands behind the point
 LATTICE = 10                    # cycles between committed states: a bound universe advances in whole lattice spans
 TUNIVERSAL_ENV = "XYL_TUNIVERSAL"   # "1": the universe's clock is bound to TUniversal (Concordance 1.11)
 
@@ -126,6 +128,9 @@ def main() -> None:
                 log(f"clock: bound to TUniversal: cycle {bound.cycle0} at {an.point_text(p)}")
             # no final point, or caught up to it: time does not advance (the relay and the saves still run)
             advance = p is not None and next_lattice(k.cycle_count) <= bound.cycle(p["h"])
+            if p is not None:                             # the clock's residual (1.12): late, never wrong - the
+                CLOCK["residual"] = bound.cycle(p["h"]) - k.cycle_count   # world is read where it stands
+                CLOCK["at"] = an.point_text(p)
         if not advance:
             time.sleep(0.25)
         else:
@@ -151,6 +156,8 @@ def main() -> None:
                 log(f"seats: relay fault {type(e).__name__}: {e}")
         if now - last["save"] >= SAVE_EVERY_S:
             last["save"] = now
+            if CLOCK["residual"] is not None:
+                log(f"clock: cycle {k.cycle_count}, residual {CLOCK['residual']} cycles behind {CLOCK['at']}")
             StatePersistence.save_to_file(k, save)
     StatePersistence.save_to_file(k, save)
     log(f"saved at cycle {k.cycle_count}; stopped")
