@@ -57,9 +57,8 @@ The ruling supersedes the scalar field: **a pulse is a versor**, not a strength.
 - **The energy unit** is Earth-mass · AU² · (year/2π)⁻². Kepler's 4π² is absorbed in the unit, so an orbit's stiffness
   is M/a³ and everything stays a Fraction.
 - **Floats are quarantined.** None touches an orbit.
-- **Owed:** quantum radiation, the bell's harmonic, luminal and quantum state, as a factor in species and planet
-  evolution, strongest near cores and accretion discs; and how torsion's pitch derives from the Einstein–Cartan
-  bounce.
+- **Settled 2026-10-09:** the versor source (below, *The bells ring*). Quantum radiation is live as each star's
+  measured absorbed flux.
 
 ## The prototype (barren-realms, `xylarium/kernel/field.py`)
 
@@ -71,6 +70,28 @@ The ruling supersedes the scalar field: **a pulse is a versor**, not a strength.
   Handlers are registered by the laws that take them.
 - `value(kernel, place, t)`: the field at a place and time, the sum over every source whose front has arrived of
   its strength over distance, shaped by its pulse's decay. Closed form, with no walk over worlds.
+
+## The bells ring (operator ruling, 2026-10-09; xylarium-kernel FIELD_LAW.md, THE STAR'S BOOKS)
+
+Every hole is a bell: the core, and every throat a dying star leaves or a people kindles (`field.bells`).
+- **Its screw is its own.**
+  - The pitch is the core's wavelength (light's round trip to the rim, 2 R_max = 30 kpc) times (M/M_core)^(1/3).
+  - The period is the pitch at light speed.
+  - Its rotor turns about the hole's spin axis: the disc normal at spin 7/10 for the core. A stellar hole turns about its progenitor's orbit normal, at a spin drawn from the seed (never chosen).
+- **At a receiver d away (`field.received`):**
+  - t = spin x r_g / d;
+  - the translation is pitch x turn / 2 pi along the axis, in AU.
+  - The action is exact: Rodrigues' rational form, held equal to the versor sandwich by the tests.
+- **Energy per ring (`field.energy_at`):** hole light (32 000 x 1/10 x 1/10 suns per sun) x period x a_out^2 / 4 d^2.
+- **Delivery (`field.step`, each season):**
+  - Only the stars the peoples live by are reached.
+  - Rings are counted in closed form (`field.arrivals`), never walked.
+  - Each star holds its worlds as **anchors** that carry their shear.
+  - Each ring's translation **drifts** the star off its galactic orbit, and its later arrivals are timed from where it stands.
+  - Once a ring finds the worlds at their native places and leaves them there, the bell's later rings in that step are the same ring. Their books are counted, not recomputed, which equals the ring-by-ring loop exactly.
+- **Quantum radiation (`field.quantum_flux`):** a star's absorbed energy a year since its first pulse, over the square of its world's orbit.
+
+The inputs are each kernel's own: the core's mass is barren-realms' own hole (4.0e6 suns at the clock's start, grown by what crosses), and its stellar bells are its own throats.
 
 ## Seat readings
 
