@@ -398,7 +398,7 @@ def births(kernel: Any, planet: Any, ceiling: int) -> int:
     never faster than its farms can add food. The fraction of a person is carried (in millionths).
     """
     p = planet.population
-    if p <= 0 or ceiling <= 0:
+    if p <= 0:
         return 0
     prof = _profile(kernel, planet)
     f = float((getattr(planet, "society", None) or {}).get("fertility", 1.0))
@@ -407,7 +407,7 @@ def births(kernel: Any, planet: Any, ceiling: int) -> int:
     speed *= genome.birth_factor(planet)                 # its natural increase is heritable
     r = min(int(prof.get("birth_micro_per_cycle", prof["rate_micro_per_cycle"]) * speed),
             prof.get("food_micro_per_cycle", prof["rate_micro_per_cycle"]))
-    target = max(1, int(ceiling * min(1.0, f)))
+    target = max(0, int(ceiling * min(1.0, f)))         # a world that carries no one: its people dwindles to none
     carry = int(getattr(planet, "growth_carry", None) or 0)
     micro = r * p * (target - p) // max(target, p) + carry    # floor division: exact in millionths
     whole = micro // MICRO if micro >= 0 else -((-micro) // MICRO)

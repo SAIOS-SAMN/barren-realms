@@ -663,7 +663,7 @@ class ColonyManager:
             if pop_growth > 0 and "occupation" in soc:           # the occupied bear children as they comply
                 from xylarium.kernel import occupation
                 pop_growth = int(pop_growth * occupation.births_factor(kernel, planet))
-            planet.population = max(1, planet.population + pop_growth)
+            planet.population = max(0, planet.population + pop_growth)
         else:
             # Famine penalty: population decline and morale crash
             deficit = required_food - staples.eat(kernel, planet, required_food)

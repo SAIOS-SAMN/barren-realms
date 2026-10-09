@@ -74,6 +74,23 @@ class TestBiosphere(unittest.TestCase):
         self.assertTrue(0 <= carry < biosphere.MICRO)
         self.assertGreater(total, 0)
 
+    def test_a_world_that_carries_no_one_sees_its_people_dwindle_to_none(self):
+        w = self.world(habitats=2, owner_id=None)
+        w.population = 40
+        total = sum(biosphere.births(self.kernel, w, 0) for _ in range(20000))
+        self.assertLess(total, 0)                            # no floor holds a people its world cannot carry
+
+    def test_the_last_of_a_people_is_not_held_at_one(self):
+        from xylarium.kernel.colony import ColonyManager
+        w = self.world(habitats=2, owner_id=None)
+        civ = next(p.civilization for s in self.kernel.sectors.values() for p in s.planets if p.civilization)
+        w.civilization, w.population, w.growth_carry = civ, 1, str(-biosphere.MICRO)   # a whole person's loss owed
+        from unittest import mock
+        with mock.patch.object(biosphere, "births", return_value=-1):
+            ColonyManager.tick_colony(w, None, self.kernel)
+        self.assertEqual(w.population, 0)
+        w.civilization = None
+
     def test_every_founding_people_can_feed_itself_on_its_homeworld(self):
         for s in self.kernel.sectors.values():
             for p in s.planets:
