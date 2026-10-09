@@ -64,8 +64,10 @@ def stocks(kernel: Any, holder: Optional[str]) -> Dict[str, float]:
 def experience(kernel: Any, holder: Optional[str], domain: str) -> float:
     """What a people's knowledge is worth in practice: its stock, carried further by its fluid intelligence
     (intellect.py) - a mind that solves harder problems learns more from the same experience."""
-    from xylarium.kernel import intellect
-    return stocks(kernel, holder).get(domain, 0.0) * (1.0 + intellect.fluid(kernel, holder))
+    from xylarium.kernel import consciousness, intellect
+    proven = intellect.fluid(kernel, holder)                 # what it proves by its own work, and what the councils'
+    lifted = consciousness.gain(kernel, holder) if holder else 0.0   # consciousness, carried to it, lifts (3.9)
+    return stocks(kernel, holder).get(domain, 0.0) * (1.0 + 1.0 - (1.0 - proven) * (1.0 - lifted))
 
 
 def mastery(kernel: Any, holder: Optional[str], process: str) -> float:
