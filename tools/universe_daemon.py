@@ -3,7 +3,7 @@ saved to disk, its ancients' houses meeting the court's tasks (court.py) on the 
 
 Listens on no port. Saves every SAVE_EVERY cycles and on SIGTERM/SIGINT, then exits; restarts resume from the save.
 
-  XYL_HYPHA=127.0.0.1:7500 python3 tools/universe_daemon.py [--seed 42] [--save runs/universe_cosmic_42.json]
+  XYL_HYPHA=127.0.0.1:7500 python3 tools/universe_daemon.py [--seed 42] [--save runs/universe_cosmic_42]
 """
 
 import argparse
@@ -52,6 +52,7 @@ def observe(k, path: str, t0: float, c0: int) -> None:
         f"court {json.dumps(o.get('court', {}))}")
 
 
+RECORDS = ".rec.zst"            # the save: the universe's record stream (persistence/records.py), zstd at rest
 LATTICE = 10                    # cycles between committable states: an entry is made at a lattice cycle
 
 
@@ -74,20 +75,23 @@ def main() -> None:
     ap.add_argument("--pace", default="neighbourly")
     ap.add_argument("--save", default=None)
     a = ap.parse_args()
-    save = a.save or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runs",
-                                  f"universe_cosmic_{a.seed}.json")
+    base = a.save or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runs",
+                                  f"universe_cosmic_{a.seed}")
+    base = base[:-len(".json")] if base.endswith(".json") else base[:-len(RECORDS)] if base.endswith(RECORDS) else base
+    save, legacy = base + RECORDS, base + ".json"             # the record set is the save; JSON only an export
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: STOP.update(now=True))
-    k = StatePersistence.load_from_file(save) if os.path.exists(save) else None
+    src = save if os.path.exists(save) else legacy if os.path.exists(legacy) else None
+    k = StatePersistence.load_from_file(src) if src else None
     if k is None:
         log(f"genesis: seed {a.seed}, cosmic:{a.pace}")
         k = GameKernel(seed=a.seed, genesis=f"cosmic:{a.pace}")
     else:
-        log(f"resumed at cycle {k.cycle_count} from {save}")
+        log(f"resumed at cycle {k.cycle_count} from {src}")
     k.activate()
     log(f"hypha: {court.endpoint() or 'none (no court traffic)'}")
     seen = 0
-    obs_path = save.replace(".json", ".obs.jsonl")
+    obs_path, ledger_path = base + ".obs.jsonl", base + ".ledger.jsonl"
     t0, c0 = time.time(), k.cycle_count
     last = {"relay": 0.0, "save": time.time()}
     if court.endpoint():                                  # the last final point, read to cite in entries
@@ -95,8 +99,11 @@ def main() -> None:
         threading.Thread(target=_clock_reader, args=(court.endpoint(),), daemon=True).start()
     commit_due = False
     from concurrent.futures import ProcessPoolExecutor
+    from xylarium.persistence import records as R, smt
     from xylarium.uplink import ledger
-    pool, committing = ProcessPoolExecutor(max_workers=1), None   # the ledger's commitments, off the universe's time
+    pool = ProcessPoolExecutor(max_workers=1)               # the state's tree, kept off the universe's time
+    held: dict = {}                                         # the last committed records, by key: what changed is sent
+    pending: list = []                                      # (u, point, root future), committed in order
     while not STOP["now"]:
         k.tick_simulation()                               # its own clock: it runs at its own pace
         rec = court.stats(k)["of"] if "court" in k.state else {}
@@ -122,19 +129,25 @@ def main() -> None:
             commit_due = True                             # saved and committed at the next lattice cycle
         if commit_due and k.cycle_count % LATTICE == 0:
             commit_due, last["save"] = False, now
-            StatePersistence.save_to_file(k, save)
-            if committing is None or committing.done():   # one commitment at a time, in order
-                if committing is not None and committing.exception() is not None:
-                    log(f"ledger: entry not made: {committing.exception()!r}")
-                elif committing is not None:
-                    e = committing.result()
-                    log(f"ledger: u {e['u']} commits {e['commitment'][:16]} under {e['point'] or 'no final point'}")
-                import shutil
-                from xylarium.uplink import anastome as an
-                snap = save.replace(".json", f".commit.{k.cycle_count}.json")
-                shutil.copyfile(save, snap)
-                committing = pool.submit(ledger.entry, k.cycle_count, snap, save.replace(".json", ".ledger.jsonl"),
-                                         an.LAST_POINT["point"])
+            from xylarium.uplink import anastome as an
+            recs = R.records_of(StatePersistence.snapshot(k))  # the save IS the record set the ledger commits
+            StatePersistence.write_records(recs, save)
+            keyed = {smt._record_key(r): r for r in recs}
+            if not held:
+                fut = pool.submit(smt.worker_build, recs)
+            else:
+                fut = pool.submit(smt.worker_update, [r for key, r in keyed.items() if held.get(key) != r],
+                                  [key for key in held if key not in keyed])
+            held = keyed
+            pending.append((k.cycle_count, an.LAST_POINT["point"], fut))
+        while pending and pending[0][2].done():                # each root, as it lands, becomes an entry - in order
+            u, point, fut = pending.pop(0)
+            if fut.exception() is not None:
+                log(f"ledger: entry not made: {fut.exception()!r}")
+                held, pending = {}, []                         # the tree is rebuilt whole at the next commit
+                break
+            e = ledger.entry(u, fut.result(), ledger_path, point)
+            log(f"ledger: u {e['u']} commits {e['commitment'][:16]} under {e['point'] or 'no final point'}")
     StatePersistence.save_to_file(k, save)
     log(f"saved at cycle {k.cycle_count}; stopped")
 

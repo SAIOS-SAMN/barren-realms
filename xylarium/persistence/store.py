@@ -19,46 +19,13 @@ class StatePersistence:
 
     @staticmethod
     def save_to_file(kernel: GameKernel, filepath: str) -> bool:
-        """Serializes current universe and state to a JSON file."""
+        """Saves the universe: as its record stream (.rec.zst, the truth) or as JSON (an export)."""
         try:
             os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-            data = {
-                "seed": kernel.seed,
-                "cycle_count": kernel.cycle_count,
-                "sectors": {s_id: sec.to_dict() for s_id, sec in kernel.sectors.items()},
-                "captains": {c_id: cap.to_dict() for c_id, cap in kernel.captains.items()},
-                "radio": [m.to_dict() for m in kernel.event_bus.get_recent_radio(50)],
-                "logs": list(kernel.action_logs),
-                "market": kernel.market_manager.to_dict() if hasattr(kernel, "market_manager") else None,
-                "research": kernel.research_manager.to_dict() if hasattr(kernel, "research_manager") else None,
-                "cartography": kernel.cartography_manager.to_dict() if hasattr(kernel, "cartography_manager") else None,
-                "ideology": kernel.ideology_manager.to_dict() if hasattr(kernel, "ideology_manager") else None,
-                "alchemy": kernel.alchemy_manager.to_dict() if hasattr(kernel, "alchemy_manager") else None,
-                "astronomy": kernel.astronomy_manager.to_dict() if hasattr(kernel, "astronomy_manager") else None,
-                "governance": kernel.governance_manager.to_dict() if hasattr(kernel, "governance_manager") else None,
-                "federal": kernel.federal_reserve.to_dict() if hasattr(kernel, "federal_reserve") else None,
-                "fx": kernel.fx_market.to_dict() if hasattr(kernel, "fx_market") else None,
-                "ledger": kernel.ledger.to_dict() if hasattr(kernel, "ledger") else None,
-                "matter": kernel.matter.to_dict() if hasattr(kernel, "matter") else None,
-                "monetary_policy": kernel.monetary_policy.to_dict() if hasattr(kernel, "monetary_policy") else None,
-                "factions": kernel.factions.to_dict() if hasattr(kernel, "factions") else None,
-                "chronicle": kernel.chronicle.to_dict() if hasattr(kernel, "chronicle") else None,
-                "native_stats": dict(getattr(kernel, "native_stats", {})),
-                "state": getattr(kernel, "state", {}),               # every subsystem's record (state.py)
-                "graph_version": getattr(kernel, "graph_version", 0),
-                "lineage": getattr(kernel, "lineage", None),
-                "single_lineage": bool(getattr(kernel, "single_lineage", False)),
-                "npc_lineages": getattr(kernel, "npc_lineages", {}),
-                "banking": kernel.banking.to_dict() if hasattr(kernel, "banking") else None,
-                "settlement": kernel.settlement.to_dict() if hasattr(kernel, "settlement") else None,
-            }
+            data = StatePersistence.snapshot(kernel)
             if filepath.endswith(RECORDS_SUFFIX):           # the record set itself: exact, the save the ledger hashes
-                from compression import zstd
                 from xylarium.persistence import records
-                tmp = filepath + ".tmp"
-                with open(tmp, "wb") as f:
-                    f.write(zstd.compress(records.encode(json.loads(json.dumps(data))), level=3))
-                os.replace(tmp, filepath)                    # whole or not at all: a reader never sees half a save
+                StatePersistence.write_records(records.records_of(data), filepath)
                 return True
             with open(filepath, "w", encoding="utf-8") as f:   # JSON: a human-readable export, never the truth
                 json.dump(data, f, indent=2)
@@ -66,6 +33,50 @@ class StatePersistence:
         except Exception as e:
             print(f"Error saving game state: {e}")
             return False
+
+    @staticmethod
+    def write_records(recs: Any, filepath: str) -> None:
+        """A record stream to disk, zstd at rest, whole or not at all (a reader never sees half a save)."""
+        from compression import zstd
+        tmp = filepath + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(zstd.compress(b"".join(recs), level=3))
+        os.replace(tmp, filepath)
+
+    @staticmethod
+    def snapshot(kernel: GameKernel) -> Dict[str, Any]:
+        """The universe's state as one value: what is stored (derived values are not, Concordance 1.13)."""
+        data = {
+            "seed": kernel.seed,
+            "cycle_count": kernel.cycle_count,
+            "sectors": {s_id: sec.to_dict() for s_id, sec in kernel.sectors.items()},
+            "captains": {c_id: cap.to_dict() for c_id, cap in kernel.captains.items()},
+            "radio": [m.to_dict() for m in kernel.event_bus.get_recent_radio(50)],
+            "logs": list(kernel.action_logs),
+            "market": kernel.market_manager.to_dict() if hasattr(kernel, "market_manager") else None,
+            "research": kernel.research_manager.to_dict() if hasattr(kernel, "research_manager") else None,
+            "cartography": kernel.cartography_manager.to_dict() if hasattr(kernel, "cartography_manager") else None,
+            "ideology": kernel.ideology_manager.to_dict() if hasattr(kernel, "ideology_manager") else None,
+            "alchemy": kernel.alchemy_manager.to_dict() if hasattr(kernel, "alchemy_manager") else None,
+            "astronomy": kernel.astronomy_manager.to_dict() if hasattr(kernel, "astronomy_manager") else None,
+            "governance": kernel.governance_manager.to_dict() if hasattr(kernel, "governance_manager") else None,
+            "federal": kernel.federal_reserve.to_dict() if hasattr(kernel, "federal_reserve") else None,
+            "fx": kernel.fx_market.to_dict() if hasattr(kernel, "fx_market") else None,
+            "ledger": kernel.ledger.to_dict() if hasattr(kernel, "ledger") else None,
+            "matter": kernel.matter.to_dict() if hasattr(kernel, "matter") else None,
+            "monetary_policy": kernel.monetary_policy.to_dict() if hasattr(kernel, "monetary_policy") else None,
+            "factions": kernel.factions.to_dict() if hasattr(kernel, "factions") else None,
+            "chronicle": kernel.chronicle.to_dict() if hasattr(kernel, "chronicle") else None,
+            "native_stats": dict(getattr(kernel, "native_stats", {})),
+            "state": getattr(kernel, "state", {}),               # every subsystem's record (state.py)
+            "graph_version": getattr(kernel, "graph_version", 0),
+            "lineage": getattr(kernel, "lineage", None),
+            "single_lineage": bool(getattr(kernel, "single_lineage", False)),
+            "npc_lineages": getattr(kernel, "npc_lineages", {}),
+            "banking": kernel.banking.to_dict() if hasattr(kernel, "banking") else None,
+            "settlement": kernel.settlement.to_dict() if hasattr(kernel, "settlement") else None,
+        }
+        return data
 
     # Saves made before subsystem state was kept in kernel.state stored each record as a top-level key
     _LEGACY_KEYS = {
