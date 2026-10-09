@@ -141,23 +141,27 @@ def main() -> None:
             applied = inputs.take(k)                          # the inputs this entry commits: their effects are in
             recs = R.records_of(StatePersistence.snapshot(k))  # the state; the save IS the record set it commits
             StatePersistence.write_records(recs, save)
-            keyed = {smt._record_key(r): r for r in R.committed(recs)}   # the commitment covers no cache
+            digests, changed = {}, []                      # the last commit kept as a digest per record only
+            for r in R.committed(recs):
+                key = smt._record_key(r)
+                d = hashlib.blake2b(r, digest_size=16).digest()
+                digests[key] = d
+                if held and held.get(key) != d:
+                    changed.append(r)
             del recs
-            digests = {key: hashlib.blake2b(r, digest_size=16).digest() for key, r in keyed.items()}
-            if not held:
-                fut = pool.submit(smt.worker_build, list(keyed.values()))
-            else:                                          # only what changed is sent; the last commit is kept as
-                fut = pool.submit(smt.worker_update,       # a digest per record, not the records themselves
-                                  [r for key, r in keyed.items() if held.get(key) != digests[key]],
-                                  [key for key in held if key not in keyed])
-            held = digests
-            del keyed
+            if not held:                                   # the tree's first build reads the save from disk
+                fut = pool.submit(smt.worker_build_file, save)
+            else:
+                fut = pool.submit(smt.worker_update, changed, [key for key in held if key not in digests])
+            held, changed = digests, None
             pending.append((k.cycle_count, an.LAST_POINT["point"], fut, applied))
         while pending and pending[0][2].done():                # each root, as it lands, becomes an entry - in order
             u, point, fut, ev = pending.pop(0)
             if fut.exception() is not None:
                 log(f"ledger: entry not made: {fut.exception()!r}")
-                held, pending = {}, []                         # the tree is rebuilt whole at the next commit
+                held, pending = {}, []                         # the tree is rebuilt whole at the next commit, in a
+                pool.shutdown(wait=False, cancel_futures=True)  # fresh process (a broken pool takes no more work)
+                pool = ProcessPoolExecutor(max_workers=1)
                 break
             e = ledger.entry(u, fut.result(), ledger_path, point, ev)
             log(f"ledger: u {e['u']} commits {e['commitment'][:16]}, {e['inputs']} inputs, under "

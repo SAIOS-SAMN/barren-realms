@@ -111,31 +111,36 @@ class Tree:
             self.keys[k], self.leaves[p] = p, _leaf(r)
             touched.append(p)
         if touched:
-            # the branch nodes along the touched paths are stale: recompute those subtrees from the leaves under them
-            ordered = sorted(self.leaves)
-            for p in touched:
-                for d in range(DEPTH):
-                    self.branches.pop((d, p >> (DEPTH - d)), None)
-            self._root = self._recompute(ordered, touched)
+            self._root = self._recompute(sorted(self.leaves), sorted(set(touched)))
         return self.root()
 
     def _recompute(self, ordered: List[int], touched: List[int]) -> bytes:
+        """The root again, re-hashing only the subtrees a touched path falls in: a subtree is stale exactly when a
+        touched path lies in its range of paths (one binary search on the sorted touched paths) - nothing per depth
+        is materialised. Cached branch nodes off the touched paths are reused as they are."""
         import bisect
-        stale = {(d, p >> (DEPTH - d)) for p in touched for d in range(DEPTH)}
+
+        def stale(prefix: int, depth: int) -> bool:
+            lo = prefix << (DEPTH - depth)
+            i = bisect.bisect_left(touched, lo)
+            return i < len(touched) and touched[i] < lo + (1 << (DEPTH - depth))
 
         def sub(lo: int, hi: int, depth: int) -> bytes:
             if lo >= hi:
                 return ZERO
             if hi - lo == 1:
                 return _lone(ordered[lo], self.leaves[ordered[lo]], depth)
-            key = (depth, ordered[lo] >> (DEPTH - depth))
-            if key not in stale and key in self.branches:
+            prefix = ordered[lo] >> (DEPTH - depth)
+            key = (depth, prefix)
+            if key in self.branches and not stale(prefix, depth):
                 return self.branches[key]
-            mid_path = ((ordered[lo] >> (DEPTH - depth)) << (DEPTH - depth)) | (1 << (DEPTH - 1 - depth))
+            mid_path = (prefix << (DEPTH - depth)) | (1 << (DEPTH - 1 - depth))
             mid = bisect.bisect_left(ordered, mid_path, lo, hi)
             h = _node(sub(lo, mid, depth + 1), sub(mid, hi, depth + 1))
             if lo < mid < hi:
                 self.branches[key] = h
+            else:
+                self.branches.pop(key, None)              # no longer a branch: not kept
             return h
         return sub(0, len(ordered), 0)
 
@@ -153,6 +158,18 @@ def worker_build(records: List[bytes]) -> bytes:
     global _TREE
     _TREE = Tree()
     return _TREE.build(records)
+
+
+def worker_build_file(path: str) -> bytes:
+    """Build the tree from a saved record stream on disk (its committed records): no record list crosses between
+    processes - the worker reads the save the daemon just wrote."""
+    from compression import zstd
+    from xylarium.persistence import records
+    with open(path, "rb") as f:
+        stream = zstd.decompress(f.read())
+    recs = records.committed([stream[a:b] for a, b, _ in records.split(stream)])
+    del stream
+    return worker_build(recs)
 
 
 def worker_update(changed: List[bytes], removed: List[bytes]) -> bytes:
