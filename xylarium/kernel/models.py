@@ -374,9 +374,9 @@ class Port:
         )
 
 
-# what a world's society holds that any law recomputes on demand (keyed caches of its physics) - never stored
-# (Concordance 1.13: derived values are decoded from the coordinate, not kept)
-DERIVED_SOCIETY = frozenset({"_media", "_halite", "_freeze", "_rad"})
+# what a world's society holds that is not stored (Concordance 1.13): keyed caches of its physics any law recomputes
+# on demand, and what no law reads again (the survey's reasons each element was withheld)
+DERIVED_SOCIETY = frozenset({"_media", "_halite", "_freeze", "_rad", "withheld"})
 
 
 @dataclass
