@@ -169,43 +169,56 @@ def _skip(b: bytes, at: int) -> int:
     raise ValueError(f"no ARG tag {tag} in a record")
 
 
-def _args(b: bytes, at: int) -> List[Any]:
-    """A record's arguments as Python values (Count -> int, Q/BigQ -> (num, den), Flag -> bool, Bytes -> bytes)."""
+def _args(b: bytes, at: int) -> Tuple[List[Any], int]:
+    """A record's arguments as Python values (Count -> int, Q/BigQ -> (num, den), Flag -> bool, Bytes -> bytes), and
+    where the record ends - one pass."""
+    unpack = struct.unpack_from
     n = b[at]
     at += 1
     out: List[Any] = []
+    append = out.append
     for _ in range(n):
         tag = b[at]
         if tag == COUNT:
-            out.append(struct.unpack_from("<Q", b, at + 1)[0])
+            append(unpack("<Q", b, at + 1)[0])
+            at += 9
         elif tag == Q_:
-            out.append(struct.unpack_from("<qQ", b, at + 1))
-        elif tag == FLAG:
-            out.append(bool(b[at + 1]))
+            append(unpack("<qQ", b, at + 1))
+            at += 17
         elif tag == BYTES:
-            ln = struct.unpack_from("<H", b, at + 1)[0]
-            out.append(b[at + 3:at + 3 + ln])
-        else:
-            ln = struct.unpack_from("<H", b, at + 1)[0]
+            ln = unpack("<H", b, at + 1)[0]
+            append(b[at + 3:at + 3 + ln])
+            at += 3 + ln
+        elif tag == FLAG:
+            append(b[at + 1] == 1)
+            at += 2
+        elif tag == BIGQ:
+            ln = unpack("<H", b, at + 1)[0]
             num = int.from_bytes(b[at + 3:at + 3 + ln], "little", signed=True)
-            ld = struct.unpack_from("<H", b, at + 3 + ln)[0]
-            den = int.from_bytes(b[at + 5 + ln:at + 5 + ln + ld], "little")
-            out.append((num, den))
-        at = _skip(b, at)
-    return out
+            at += 3 + ln
+            ld = unpack("<H", b, at)[0]
+            den = int.from_bytes(b[at + 2:at + 2 + ld], "little")
+            append((num, den))
+            at += 2 + ld
+        else:
+            raise ValueError(f"no ARG tag {tag} in a record")
+    return out, at
 
 
 def decode(stream: bytes) -> Any:
     """The state from its record stream: every entity rebuilt with its children in their own order."""
     parts: Dict[str, Dict[int, List[Any]]] = {}
     kinds: Dict[str, int] = {}
-    for start, end, key in split(stream):
+    at, total = 0, len(stream)
+    while at < total:
+        (kl,) = struct.unpack_from("<H", stream, at)
+        key = stream[at + 2:at + 2 + kl]
+        a, at = _args(stream, at + 2 + kl)
         path = json.loads(key)
         part = 0
         if path and isinstance(path[-1], int) and path[-1] < 0:
             part, path = -path[-1], path[:-1]
         k = _dumps(path)
-        a = _args(stream, start + 2 + len(key))
         kinds[k] = a[0]
         parts.setdefault(k, {})[part] = a[2:]
     built: Dict[str, Any] = {k: ({} if kind == OBJ else []) for k, kind in kinds.items()}
