@@ -126,6 +126,21 @@ def clock(addr: Tuple[str, int]) -> Optional[Tuple[int, ...]]:
     return struct.unpack_from("<7Q", r, 1) if r[:1] == b"\x01" and len(r) >= 57 else None
 
 
+LEDGER_TAG = b"mycelium domain ledger v1"
+LEDGER_SUB = 8
+
+
+def ledger_act(reserve: SigningKey, domain: bytes, u: int, commitment: bytes, point: Optional[Dict[str, Any]],
+               parent: bytes, nonce: bytes) -> bytes:
+    """A universe's upward LEDGER ENTRY on its own axis (proposed with 78.154): ACT_DOMAIN sub-kind 8 -
+    [0x3E][domain 32][0x80 0x00][8][u u64][commitment 32][final point 84][parent 32][nonce 32][sig 64], signed by the
+    domain's reserve over the tag, domain, u, commitment, point, parent and nonce."""
+    pt = put_point(point)
+    signed = LEDGER_TAG + domain + struct.pack("<Q", u) + commitment + pt + parent + nonce
+    return (bytes([ACT_DOMAIN]) + domain + bytes([0x80, 0x00, LEDGER_SUB]) + struct.pack("<Q", u) + commitment + pt
+            + parent + nonce + reserve.sign(signed).signature)
+
+
 def unframe(lane: int, body: bytes) -> Tuple[bytes, Optional[Dict[str, Any]]]:
     """A frame's body and the point it carries, if its lane byte says it carries one (its last 84 bytes)."""
     if lane & POINT_BIT and len(body) >= POINT_LEN:

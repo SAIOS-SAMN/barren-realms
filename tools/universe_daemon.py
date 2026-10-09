@@ -57,28 +57,31 @@ LATTICE = 10                    # cycles between committable states: an entry is
 
 def ledger_entry(k, save: str) -> dict:
     """An upward LEDGER ENTRY for this universe's own axis (operator, coordinator and mycelium, 2026-10-09): the
-    universe runs on its own clock, its cycle u, never bound to TUniversal's height; at a committed moment it records
-    u, a commitment to its whole state (the saved file's digest), the last FINAL point it read, and the parent entry's
-    hash (a chain per axis), signed by the domain's reserve key. Kept here until the hypha's ledger act (the tier
-    fold, 78.119 extended) takes them; the pairs (u, h) are this clock's map onto the mesh."""
+    universe runs on its own clock, its cycle u, never bound to TUniversal's height; at a committed moment it makes
+    the hypha's ledger act (anastome.ledger_act, ACT_DOMAIN sub-kind 8): u, a commitment to its whole state (the
+    saved file's digest), the last FINAL point it read, and its parent entry (a chain per axis), signed by the
+    domain's reserve. Kept here, in order, until the act ships with 78.154; the (u, h) pairs map this clock onto
+    the mesh."""
     import hashlib
     from xylarium.uplink import anastome as an, house
     path = save.replace(".json", ".ledger.jsonl")
-    parent = None
+    parent = bytes(32)
     if os.path.exists(path):
         with open(path) as f:
             lines = f.read().splitlines()
-        parent = json.loads(lines[-1])["hash"] if lines else None
+        if lines:
+            parent = bytes.fromhex(json.loads(lines[-1])["hash"])
     h = hashlib.sha256()
     with open(save, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     p = an.LAST_POINT["point"]
-    body = {"axis": house.genesis(), "domain": an.vk(an.key("domain")).hex(), "u": k.cycle_count,
-            "commitment": h.hexdigest(), "point": an.point_text(p) if p else None, "parent": parent}
-    canon = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
-    body["hash"] = hashlib.sha256(canon).hexdigest()
-    body["sig"] = an.key("ancients").sign(canon).signature.hex()       # the domain reserve's key
+    act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), k.cycle_count, h.digest(), p, parent,
+                        os.urandom(32))
+    body = {"axis": house.genesis(), "u": k.cycle_count, "commitment": h.hexdigest(),
+            "point": an.point_text(p) if p else None, "parent": parent.hex(),
+            "point_wire": an.put_point(p).hex(), "hash": hashlib.sha256(act).hexdigest(), "act": act.hex(),
+            "posted": False}                              # at posting: re-signed, parent = the court's entry hash
     with open(path, "a") as f:
         f.write(json.dumps(body) + "\n")
     return body
