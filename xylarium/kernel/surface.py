@@ -303,10 +303,45 @@ class SurfaceManager:
     """
 
     @staticmethod
+    def seed_of(planet_id: str) -> int:
+        """The seed a world's surface is drawn from: its id - the terrain is never stored, only what was built."""
+        return zlib.crc32(planet_id.encode()) % 1000000
+
+    @staticmethod
+    def compact(grid: Optional[Dict[str, Any]], planet_id: str) -> Optional[Dict[str, Any]]:
+        """What a surface holds beyond what its id draws: each tile built on (district, level), and any terrain
+        that differs from the drawn - the grid itself is derived (Concordance 1.13). The full grid where its
+        shape is not the drawn one."""
+        if not grid:
+            return None
+        drawn = SurfaceGrid(seed=SurfaceManager.seed_of(planet_id)).to_dict()
+        if (grid.get("width"), grid.get("height"), len(grid.get("tiles", []))) != \
+                (drawn["width"], drawn["height"], len(drawn["tiles"])):
+            return {"full": grid}
+        built = {}
+        for i, (t, d) in enumerate(zip(grid["tiles"], drawn["tiles"])):
+            if t != d:
+                built[str(i)] = {k: v for k, v in t.items() if d.get(k) != v}
+        return {"built": built}
+
+    @staticmethod
+    def expand(stored: Optional[Dict[str, Any]], planet_id: str) -> Optional[Dict[str, Any]]:
+        if not stored:
+            return None
+        if "tiles" in stored:                                 # saved before grids were compacted
+            return stored
+        if "full" in stored:
+            return stored["full"]
+        grid = SurfaceGrid(seed=SurfaceManager.seed_of(planet_id)).to_dict()
+        for i, changed in stored.get("built", {}).items():
+            grid["tiles"][int(i)].update(changed)
+        return grid
+
+    @staticmethod
     def ensure_surface_grid(planet: Planet) -> SurfaceGrid:
         """Ensures the planet has an instantiated SurfaceGrid object."""
         if planet.surface_grid is None:
-            grid = SurfaceGrid(seed=zlib.crc32(planet.id.encode()) % 1000000)
+            grid = SurfaceGrid(seed=SurfaceManager.seed_of(planet.id))
             planet.surface_grid = grid.to_dict()
             _GRID_CACHE[planet.id] = (planet.surface_grid, grid)
             return grid

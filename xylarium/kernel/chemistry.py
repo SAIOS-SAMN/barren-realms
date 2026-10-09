@@ -244,7 +244,7 @@ def survey(kernel: Any) -> None:
                 else:
                     p.element_deposits.pop(sym, None)
             p.society["chem_surveyed"] = True
-            p.society["withheld"] = why
+            p.society.pop("withheld", None)                  # why each element is withheld: no law reads it again
             p.society["standing"] = {k: v for k, v in held.items()}      # what its flows hold up (concentration.py)
             st["surveyed"] += 1
 

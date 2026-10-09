@@ -176,7 +176,27 @@ def _attend(kernel: Any) -> List[Dict[str, Any]]:
             reign = max(1.0, fertility.generation_of(kernel, cap)) * 100
             if kernel.cycle_count - rec["since"] >= reign:
                 _succeed(kernel, rec)
+    _forget_the_ended(kernel)
     return [s for s in sovereigns(kernel).values() if not s.get("ended")]
+
+
+def _forget_the_ended(kernel: Any) -> None:
+    """An ended line keeps its name, its place in its house and its crystals (a house's authority reads them), and
+    the annals keep its deeds; its BOOKS - its dealings with the living, and theirs with it - are read by no law
+    once it has ended (every reading skips the ended), so they are not kept: stored state is what can still act."""
+    sv = sovereigns(kernel)
+    gone = {sid for sid, r in sv.items() if r.get("ended") and (r.get("books") or r.get("heard"))}
+    if not gone:
+        return
+    for sid in gone:
+        sv[sid]["books"], sv[sid]["heard"] = {}, {}
+    for r in sv.values():
+        if r.get("ended"):
+            continue
+        for sid in gone & set(r["books"]):
+            del r["books"][sid]
+        for sid in gone & set(r["heard"]):
+            del r["heard"][sid]
 
 
 # ---------------------------------------------------------------------- what a sovereign reads

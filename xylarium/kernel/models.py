@@ -374,6 +374,11 @@ class Port:
         )
 
 
+# what a world's society holds that any law recomputes on demand (keyed caches of its physics) - never stored
+# (Concordance 1.13: derived values are decoded from the coordinate, not kept)
+DERIVED_SOCIETY = frozenset({"_media", "_halite", "_freeze", "_rad"})
+
+
 @dataclass
 class Planet:
     id: str
@@ -455,7 +460,7 @@ class Planet:
             "orbital_period": self.orbital_period,
             "orbital_angle": self.orbital_angle,
             "garrison_troops": self.garrison_troops,
-            "surface_grid": dict(self.surface_grid) if self.surface_grid else None,
+            "surface_grid": _surface().compact(self.surface_grid, self.id),   # only what was built (1.13)
             "planet_type": self.planet_type,
             "currency": self.currency,
             "habitability": self.habitability,
@@ -475,7 +480,7 @@ class Planet:
             "growth_policy": self.growth_policy,
             "last_daughter_quarter": self.last_daughter_quarter,
             "metropole_id": self.metropole_id,
-            "society": _deep_copy(self.society),
+            "society": _deep_copy({k: v for k, v in self.society.items() if k not in DERIVED_SOCIETY}),
             "diaspora_escrow": self.diaspora_escrow,
             "crowded_cycles": self.crowded_cycles,
         }
@@ -513,7 +518,7 @@ class Planet:
             orbital_period=int(data.get("orbital_period", 36)),
             orbital_angle=float(data.get("orbital_angle", 0.0)),
             garrison_troops=int(data.get("garrison_troops", 20)),
-            surface_grid=data.get("surface_grid"),
+            surface_grid=_surface().expand(data.get("surface_grid"), data["id"]),
             planet_type=data.get("planet_type", "TERRESTRIAL"),
             currency=data.get("currency", LEGACY_HUB),   # saved before money was named: the settled board's
             habitability=float(data.get("habitability", 1.0)),
@@ -1375,3 +1380,9 @@ class ActionResult:
         self.turns_spent = turns_spent
         self.data = data if data is not None else {}
         self.logs = logs if logs is not None else []
+
+
+def _surface():
+    from xylarium.kernel.surface import SurfaceManager
+    return SurfaceManager
+
