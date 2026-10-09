@@ -87,3 +87,11 @@ class TestTUniversalPoint(unittest.TestCase):
         self.assertEqual((p["epoch"], p["h"], p["lanes"], p["k"]), (7, 1, (2, 3, 4, 5), 6))
         self.assertEqual(an.point_text(p), gen.hex() + "." + "%08x" % 7 + "/" + ":".join("%016x" % x for x in range(1, 7)))
         self.assertEqual(an.unframe(0, b"\x01reply" + pt), (b"\x01reply" + pt, None))
+
+    def test_every_act_carries_a_point_and_the_zero_point_before_one_is_read(self):
+        from xylarium.uplink import anastome as an
+        self.assertEqual(an.put_point(None), bytes(an.POINT_LEN))
+        gen = bytes(range(32))
+        p = an.read_point(gen + __import__("struct").pack("<IQQQQQQ", 7, 1, 2, 3, 4, 5, 6))
+        self.assertEqual(an.read_point(an.put_point(p)), p)              # round trip, exact
+

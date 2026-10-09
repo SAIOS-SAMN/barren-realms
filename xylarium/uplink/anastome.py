@@ -76,8 +76,9 @@ def speak(addr: Tuple[str, int], body: bytes, timeout: float = 30.0) -> bytes:
     """One act: a frame out, one frame back. Silence (the connection closed unanswered) is returned as b''."""
     if len(body) > BODY_BUDGET:
         raise ValueError(f"act body {len(body)} bytes is over the wire budget")
-    with socket.create_connection(addr, timeout=timeout) as s:
-        s.sendall(bytes([LANE_SPATIAL]) + struct.pack("<I", len(body)) + body)
+    carried = put_point(LAST_POINT["point"])                   # 78.152: every act carries the last final point read
+    with socket.create_connection(addr, timeout=timeout) as s:  # (the zero point before one): pointed, it is answered
+        s.sendall(bytes([LANE_SPATIAL | POINT_BIT]) + struct.pack("<I", len(body) + POINT_LEN) + body + carried)
         head = _read(s, 5)
         if head is None:
             return b""
@@ -102,10 +103,27 @@ def read_point(b: bytes) -> Optional[Dict[str, Any]]:
     return {"genesis": b[:32], "epoch": epoch, "h": h, "lanes": (lane_s, lane_g, lane_t, lane_h), "k": k}
 
 
+def put_point(p: Optional[Dict[str, Any]]) -> bytes:
+    """A point as the wire carries it; None is the zero point ("this speaker reads points")."""
+    if p is None:
+        return bytes(POINT_LEN)
+    return bytes(p["genesis"]) + struct.pack("<IQQQQQQ", p["epoch"], p["h"], *p["lanes"], p["k"])
+
+
 def point_text(p: Dict[str, Any]) -> str:
     """Its text form: <genesis 64 hex>.<epoch 8 hex>/h:S:G:T:H:K, h..K 16 lowercase hex digits each (TPoint::print)."""
     fields = (p["h"],) + tuple(p["lanes"]) + (p["k"],)
     return f"{p['genesis'].hex()}.{p['epoch']:08x}/" + ":".join(f"{x:016x}" for x in fields)
+
+
+ACT_LAWS, MODE_CLOCK = 0x3A, 4
+
+
+def clock(addr: Tuple[str, int]) -> Optional[Tuple[int, ...]]:
+    """The court's own stamp (h, S, G, T, H, K, i), its reply carrying the last final TUniversal point (kept in
+    LAST_POINT): the cheap read a kernel's clock polls. None where the court has made no act."""
+    r = speak(addr, bytes([ACT_LAWS, MODE_CLOCK]), timeout=10)
+    return struct.unpack_from("<7Q", r, 1) if r[:1] == b"\x01" and len(r) >= 57 else None
 
 
 def unframe(lane: int, body: bytes) -> Tuple[bytes, Optional[Dict[str, Any]]]:
