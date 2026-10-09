@@ -108,6 +108,41 @@ class TestRoutesWeighTolls(unittest.TestCase):
             self.assertEqual(transit._around(k, a, b), walk(a, b))
 
 
+class TestDetours(unittest.TestCase):
+    def test_one_search_finds_the_way_round_every_lane_out_of_a_system(self):
+        import heapq
+        import random
+
+        def walk(adj, a, b):
+            dist, heap = {a: 0.0}, [(0.0, a)]
+            while heap:
+                d, s = heapq.heappop(heap)
+                if s == b:
+                    return d
+                if d > dist.get(s, float("inf")):
+                    continue
+                for w, c in adj.get(s, ()):
+                    if {s, w} == {a, b}:
+                        continue
+                    if d + c < dist.get(w, float("inf")):
+                        dist[w] = d + c
+                        heapq.heappush(heap, (d + c, w))
+            return float("inf")
+        random.seed(3)
+        for _ in range(40):
+            n = random.randint(3, 30)
+            adj = {i: [] for i in range(n)}
+            for _ in range(random.randint(n, 3 * n)):
+                x, y = random.sample(range(n), 2)
+                c = random.choice([1.0, 2.0, random.random() * 5])
+                adj[x].append((y, c))
+                adj[y].append((x, c))
+            for a in range(n):
+                got = transit.detours(adj, a)
+                for b, _ in adj[a]:
+                    self.assertEqual(got.get(b, float("inf")), walk(adj, a, b))
+
+
 class TestThroats(unittest.TestCase):
     def setUp(self):
         random.seed(5)

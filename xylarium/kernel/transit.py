@@ -227,27 +227,56 @@ def _around(kernel: Any, a: int, b: int) -> float:
         return {s: [(w, fibres.base_lane_cost(kernel, s, w)) for w in sec.warps if w in kernel.sectors]
                 for s, sec in kernel.sectors.items()}
 
-    def build() -> float:
-        adj = cache.memo(kernel, "transit_around", "_adj", costs, epoch=version) if hasattr(kernel, "caches") else costs()
-        dist = {a: 0.0}
-        heap: List[Tuple[float, int]] = [(0.0, a)]
-        while heap:
-            d, s = heapq.heappop(heap)
-            if s == b:
-                return d
-            if d > dist.get(s, float("inf")):
-                continue
-            for w, c in adj.get(s, ()):
-                if (s == a and w == b) or (s == b and w == a):
-                    continue
-                nd = d + c
-                if nd < dist.get(w, float("inf")):
-                    dist[w] = nd
-                    heapq.heappush(heap, (nd, w))
-        return float("inf")
+    adj = cache.memo(kernel, "transit_around", "_adj", costs, epoch=version) if hasattr(kernel, "caches") else costs()
+    if not any(w == b for w, _ in adj.get(a, ())):            # no lane between them: the cheapest way, plainly
+        if not hasattr(kernel, "caches"):
+            return _cheapest(adj, a, b)
+        return cache.memo(kernel, "transit_around", key(a, b), lambda: _cheapest(adj, a, b), epoch=version)
     if not hasattr(kernel, "caches"):
-        return build()
-    return cache.memo(kernel, "transit_around", key(a, b), build, epoch=version)
+        return detours(adj, a).get(b, float("inf"))
+    got = cache.memo(kernel, "transit_around", ("from", a), lambda: detours(adj, a), epoch=version)
+    return got.get(b, float("inf"))
+
+
+def _cheapest(adj: Dict[int, List[Tuple[int, float]]], a: int, b: int) -> float:
+    dist = {a: 0.0}
+    heap: List[Tuple[float, int]] = [(0.0, a)]
+    while heap:
+        d, s = heapq.heappop(heap)
+        if s == b:
+            return d
+        if d > dist.get(s, float("inf")):
+            continue
+        for w, c in adj.get(s, ()):
+            if d + c < dist.get(w, float("inf")):
+                dist[w] = d + c
+                heapq.heappush(heap, (d + c, w))
+    return float("inf")
+
+
+def detours(adj: Dict[int, List[Tuple[int, float]]], a: int) -> Dict[int, float]:
+    """For every lane out of a, the cheapest way round it - all of them from ONE search: each path is labelled by its
+    first hop out of a, and each system keeps its two best paths with different first hops. The way round lane
+    a-b is the best path to b whose first hop is not b (a path through a again is never the cheapest, so none is
+    walked). Two labels suffice: were a path's label pushed out at some system by two better ones, one of those
+    has a first hop other than b and reaches b cheaper. Ends once every neighbour of a has its answer."""
+    want = {w for w, _ in adj.get(a, ())}
+    out: Dict[int, float] = {}
+    labels: Dict[int, List[int]] = {}                      # system -> first hops settled there (at most two)
+    heap: List[Tuple[float, int, int]] = [(c, w, w) for w, c in adj.get(a, ()) if w != a]
+    heapq.heapify(heap)
+    while heap and len(out) < len(want):
+        d, s, first = heapq.heappop(heap)
+        got = labels.setdefault(s, [])
+        if len(got) >= 2 or first in got:
+            continue
+        got.append(first)
+        if s in want and s not in out and first != s:
+            out[s] = d                                     # the cheapest way to s that does not leave by lane a-s
+        for w, c in adj.get(s, ()):
+            if w != a and len(labels.get(w, ())) < 2:
+                heapq.heappush(heap, (d + c, w, first))
+    return out
 
 
 def lane(kernel: Any, a: int, b: int) -> Dict[str, Any]:
