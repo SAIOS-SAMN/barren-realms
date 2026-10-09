@@ -57,6 +57,11 @@ RECORDS = ".rec.zst"            # the save: the universe's record stream (persis
 LATTICE = 10                    # cycles between committable states: an entry is made at a lattice cycle
 
 
+def an_speak(addr, act):
+    from xylarium.uplink import anastome as an
+    return an.speak(addr, act, timeout=20)
+
+
 def _clock_reader(addr: str, period_s: float = 1.0) -> None:
     """Read the court's clock once a period; each reply carries the final point (anastome.LAST_POINT). The game
     never waits on it: a tick takes the last point heard."""
@@ -128,6 +133,11 @@ def main() -> None:
                 got = ledger.post(ledger_path, (host, int(port)))   # the ledger, upward: what the court has not sealed
                 if got["sealed"] or got.get("refused"):
                     log("ledger: " + json.dumps(got))
+                from xylarium.uplink import atlas                   # its throats on the hypha's map, read again at
+                last_u = ledger.read(ledger.acts(ledger_path)[-1])["u"] if ledger.acts(ledger_path) else 0   # commits
+                m = atlas.map_throats(k, lambda act: an_speak((host, int(port)), act), last_u)
+                if m["mapped"] or m.get("refused"):
+                    log("atlas: " + json.dumps(m))
             except OSError as e:
                 log(f"seats: the hypha did not answer: {e}")
             except Exception as e:                        # a relay fault never stops the universe
