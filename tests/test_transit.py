@@ -154,6 +154,15 @@ class TestThroats(unittest.TestCase):
         self.assertEqual(w["owner"], who)
         self.assertAlmostEqual(net["bank_j"], cost / 2)
         self.assertEqual((line["acts"], line["forged"]), (1, 1))      # a progenitor line's deed: a highway built
+        rec = transit.lane(self.k, anchor, target)
+        rec["cost_cr"], rec["last_year"] = 1000.0, 10                   # its cost unrecovered: 100 a passage
+        holder, due = transit.builders_due(self.k, anchor, target, 150.0)
+        self.assertEqual((holder, due), (who, 100.0))                    # the floor is the builders' own
+        before = self.k.get_planet(spheres._home(self.k, who).id).treasury if spheres._home(self.k, who) else None
+        transit.settle(self.k, who, "captain:x", anchor, target, 150.0, transits=1)
+        self.assertEqual(line["purse"][transit._hub()], 100)             # in the money it was paid in
+        if before is not None:
+            self.assertGreater(spheres._home(self.k, who).treasury, before)      # the rest is the keeper's, exchanged
         transit.settle(self.k, who, "captain:x", anchor, target, 0.0, transits=3)
         self.assertEqual(transit.stats(self.k)["pending_coordinates"][transit.key(anchor, target)], 3)   # owed map points
 

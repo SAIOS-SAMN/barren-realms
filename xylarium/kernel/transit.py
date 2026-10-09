@@ -314,6 +314,7 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
     exchanges), and its receipt: on the hypha (a proof of useful work) where the keeper is an ancients' house - the
     ancients' throats and their progenitor lines' roads - else on its realm's books in the game."""
     from xylarium.kernel import hypha, spheres
+    builders, due = builders_due(kernel, a, b, toll)         # its floor as the toll was charged, before it is booked
     rec = lane(kernel, a, b)
     rec["transits"] += transits
     rec["year"] += transits
@@ -339,6 +340,15 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
         sol = part if money == _hub() else kernel.fx_market.convert(money, _hub(), part)[0]
         endowments.credit(kernel, steward_ai.line_of(kernel, holder) or holder, sol)
         amount -= part
+    if builders and due > 0 and amount > 0:                  # the tube's builders take back what it cost them
+        part = min(amount, int(amount * Fraction(due) / Fraction(toll)))
+        from xylarium.kernel import board
+        line = board.stats(kernel).get("progenitors", {}).get(builders)
+        if line is not None and part > 0:                    # held as the line's own, in the money it was paid in
+            purse = line.setdefault("purse", {})
+            purse[money] = int(purse.get(money, 0)) + part
+            line["tolls_earned"] = int(line.get("tolls_earned", 0)) + part
+            amount -= part
     got, cur = _pay_owner(kernel, holder, amount, money)     # the toll: the payer's own money, exchanged
     if hypha.uplinked(kernel, holder):                       # an ancients' throat or a progenitor line's road: the
         hypha.append(kernel, cur, "pouw", payer, holder, got, cur, ref=key(a, b), house=holder)   # uplink's receipt
@@ -372,6 +382,23 @@ def reserves(kernel: Any) -> Dict[str, str]:
     return out or {_hub(): "elders"}
 
 
+def _floor(kernel: Any, a: int, b: int, w: Optional[Dict[str, Any]], rec: Optional[Dict[str, Any]]) -> float:
+    """A lane's floor: its cost not yet recovered, over the passages it carried last year - its builders' due."""
+    cost_cr = rec["cost_cr"] if rec else (float(w["cost_cr"]) if w else passage_cr(kernel))
+    return max(0.0, cost_cr - (float(book(rec, "collected")) if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
+
+
+def builders_due(kernel: Any, a: int, b: int, toll: float) -> Tuple[Optional[str], float]:
+    """The ROAD TOLL's builders' share (operator, Concordance 5.8): of a toll through a tube a progenitor line forged,
+    the part that recovers its cost (the toll law's own floor) is the line's own; the rest is its keeper's.
+    (builders, share) - no builders where no line forged the lane."""
+    w = worm(kernel, a, b)
+    who = (w or {}).get("builders")
+    if not who or toll <= 0:
+        return None, 0.0
+    return who, min(toll, _floor(kernel, a, b, w, stats(kernel)["lanes"].get(key(a, b))))
+
+
 def charge_cr(kernel: Any, a: int, b: int) -> Tuple[Optional[str], float, float]:
     """What a passer from outside the holder's bonds pays to pass a lane, in SOL: (holder, toll, tithe) - priced for
     a typical passer (the median crew's hop)."""
@@ -382,8 +409,7 @@ def charge_cr(kernel: Any, a: int, b: int) -> Tuple[Optional[str], float, float]
     from xylarium.kernel import fibres
     hv = _typical_hop(kernel)
     rec = stats(kernel)["lanes"].get(key(a, b))
-    cost_cr = rec["cost_cr"] if rec else (float(w["cost_cr"]) if w else passage_cr(kernel))
-    floor = max(0.0, cost_cr - (float(book(rec, "collected")) if rec else 0.0)) / max(1, rec["last_year"] if rec else 1)
+    floor = _floor(kernel, a, b, w, rec)
     around = _around(kernel, a, b)
     saving = (float("inf") if around == float("inf") else
               max(0.0, around - fibres.base_lane_cost(kernel, a, b)) * hv)
@@ -743,6 +769,7 @@ def forge(kernel: Any, who: str, anchor: int, target: int, logs: List[str]) -> O
     net["bank_j"] = float(net["bank_j"]) - cost
     w = open_throat(kernel, anchor, target, who, "forged", cost * credits_per_joule(kernel),
                     f"the {who.split(':', 1)[-1]}'s progenitors punch a stabilised throat to where the traffic is")
+    w["builders"] = who                                      # its builders: their line takes the toll's floor back
     stats(kernel)["forged"] += 1
     from xylarium.kernel import board
     line = board.stats(kernel).get("progenitors", {}).get(who)
