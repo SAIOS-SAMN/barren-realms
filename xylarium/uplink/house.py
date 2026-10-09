@@ -207,4 +207,14 @@ def on_hypha(kernel: Any, addr: str) -> Optional[Dict[str, int]]:
     items = w.read_mail_reply(probe) if probe else None
     if items is None:
         return None
-    return turn(kernel, lambda act: an.speak(where, act, timeout=10), lambda: items)
+    import time
+    t0 = time.monotonic()
+    did = turn(kernel, lambda act: an.speak(where, act, timeout=10), lambda: items)
+    did["held"] = sum(1 for h in seats_held(kernel))
+    did["ms"] = int((time.monotonic() - t0) * 1000)          # the relay's load: one turn's wall time
+    return did
+
+
+def seats_held(kernel: Any) -> List[str]:
+    from xylarium.kernel import seats
+    return sorted(seats.stats(kernel)["held"])

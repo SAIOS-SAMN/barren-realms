@@ -28,8 +28,15 @@ class TestSeats(unittest.TestCase):
     def test_one_mind_per_seat_and_the_built_in_mind_steps_aside(self):
         self.assertIsNone(stewardship.steward_of(self.k, self.realm))
         self.assertTrue(seats.take(self.k, self.seat, VK)["ok"])
-        self.assertEqual(stewardship.steward_of(self.k, self.realm), seats.pid(VK))    # a player's seat now
+        self.assertEqual(stewardship.steward_of(self.k, self.realm), seats.pid(VK, self.seat))    # a player's seat now
         self.assertFalse(seats.take(self.k, self.seat, OTHER)["ok"])
+
+    def test_one_mind_holds_two_realms_and_each_seat_is_its_own_player(self):
+        other = stewardship.realms(self.k)[1]
+        self.assertTrue(seats.take(self.k, self.seat, VK)["ok"])
+        self.assertTrue(seats.take(self.k, f"steward:{other}", VK)["ok"])          # the same key, a second seat
+        self.assertEqual(stewardship.realm_held(self.k, seats.pid(VK, self.seat)), self.realm)
+        self.assertEqual(stewardship.realm_held(self.k, seats.pid(VK, f"steward:{other}")), other)
 
     def test_calls_come_only_from_the_seated_mind_and_within_its_role(self):
         seats.take(self.k, self.seat, VK)

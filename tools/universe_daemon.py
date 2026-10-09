@@ -89,7 +89,7 @@ def main() -> None:
             last["relay"] = now
             try:
                 did = house.on_hypha(k, court.endpoint())
-                if did and any(did.values()):
+                if did and any(v for key, v in did.items() if key not in ("held", "ms")):
                     log("seats: " + json.dumps(did))
             except OSError as e:
                 log(f"seats: the hypha did not answer: {e}")

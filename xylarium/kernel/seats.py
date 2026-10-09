@@ -28,9 +28,10 @@ def stats(kernel: Any) -> Dict[str, Any]:
     return state.of(kernel, "seats")
 
 
-def pid(vk_hex: str) -> str:
-    """The game's name for a mind holding a seat: its key, short."""
-    return f"mind:{vk_hex[:16]}"
+def pid(vk_hex: str, seat_id: str) -> str:
+    """The game's name for a mind in a seat: its key, short, at that seat - one mind may hold many seats, and each is
+    its own player in the game (its realm, its line, its books), all signed by the one key."""
+    return f"mind:{vk_hex[:16]}@{seat_id}"
 
 
 def _q(x: Any) -> str:
@@ -72,7 +73,7 @@ def take(kernel: Any, seat_id: str, vk_hex: str) -> Dict[str, Any]:
     held = stats(kernel)["held"]
     if held.get(seat_id) not in (None, vk_hex):
         return {"ok": False, "why": "the seat is held by another mind"}
-    p = pid(vk_hex)
+    p = pid(vk_hex, seat_id)
     if s["role"] == "steward":
         stewardship.seat_steward(kernel, p, p, s["on"])
     elif s["role"] == "progenitor":
@@ -144,7 +145,7 @@ def call(kernel: Any, seat_id: str, vk_hex: str, function: str, **args: Any) -> 
     elif function == "answer":
         out = _answer(kernel, s, args)
     else:
-        out = command.dispatch(kernel, pid(vk_hex), function, **args)
+        out = command.dispatch(kernel, pid(vk_hex, seat_id), function, **args)
     if s is not None:
         _outcome(kernel, seat_id, function, args, out)
     return out
