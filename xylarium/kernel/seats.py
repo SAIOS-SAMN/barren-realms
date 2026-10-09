@@ -59,13 +59,14 @@ def _seat(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------- TAKE
-def take(kernel: Any, seat_id: str, vk_hex: str) -> Dict[str, Any]:
-    """Bind a mind to a seat - one mind per seat."""
+def take(kernel: Any, seat_id: str, vk_hex: str, lapsed: bool = False) -> Dict[str, Any]:
+    """Bind a mind to a seat - one mind per seat. A seat whose mind has LAPSED (gone silent on it: the relay's
+    measure) is taken from it by another mind that asks."""
     s = _seat(kernel, seat_id)
     if s is None:
         return {"ok": False, "why": f"no seat {seat_id}"}
     held = stats(kernel)["held"]
-    if held.get(seat_id) not in (None, vk_hex):
+    if held.get(seat_id) not in (None, vk_hex) and not lapsed:
         return {"ok": False, "why": "the seat is held by another mind"}
     p = pid(vk_hex, seat_id)
     held[seat_id] = vk_hex

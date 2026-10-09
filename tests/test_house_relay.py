@@ -92,6 +92,26 @@ class TestHouseRelay(unittest.TestCase):
         self._turn()
         self.assertNotIn("progenitor:civ:Elder", seats.stats(self.k)["held"])
 
+    def test_a_seat_whose_mind_falls_silent_lapses_to_another_that_asks(self):
+        n, old = self._seat_n(), "ab" * 32
+        seats.take(self.k, self.seat_id, old)
+        other = SigningKey(bytes(range(1, 33)))
+        vk = other.verify_key.encode()
+
+        def ask():
+            self.inbox = [(len(self.posted) + 1, w.TAKE,
+                           self._act(w.TAKE, self.domain + struct.pack("<I", n) + vk + os.urandom(32), key=other))]
+            self.posted = []
+            self._turn()
+            return next(a for a in self.posted if a[1] == w.TAKEN)[-64 - 3]
+        house.state(self.k)["silent"] = {self.seat_id: house.LAPSE - 1}
+        self.assertEqual(ask(), 0)                                        # still within its patience: refused
+        self.assertEqual(seats.holder(self.k, self.seat_id), old)
+        house.state(self.k)["silent"] = {self.seat_id: house.LAPSE}
+        self.assertEqual(ask(), 1)                                        # silent too long: the asker takes it
+        self.assertEqual(seats.holder(self.k, self.seat_id), vk.hex())
+        self.assertEqual(house.state(self.k)["silent"][self.seat_id], 0)
+
 
 class TestAnswerWithTape(unittest.TestCase):
     def test_bytes_args_round_trip_and_answer_carries_the_tape(self):

@@ -21,6 +21,9 @@ REASON = {"ok": 0, "no such seat": 1, "held by another mind": 2, "not this mind'
 
 
 SEEN_KEEP = 4096                 # mail answered, remembered by digest - far more than a box holds between reads
+LAPSE = 2                        # percepts a seated mind may let pass without a word on its seat before another mind
+#                                  that asks may take it: the mind's own patience (it lets an unanswered call go after
+#                                  two percepts) - a design choice, matched to the client
 
 
 def state(kernel: Any) -> Dict[str, Any]:
@@ -120,6 +123,7 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
             st["listed"] = repr(sig)
             st["listing_seq"] = struct.unpack_from("<Q", reply, 1)[0] if len(reply) >= 9 else None
             did["listed"] = 1
+    silent = st.setdefault("silent", {})                     # percepts each seat's mind has let pass without a word
     seen = st.setdefault("answered", [])                     # the mail it has answered (the act's digest): a box
     for seq, sub, act in mail():                              # that hands back what was read is answered once
         st["mail_seq"] = seq                                  # the last read, never max(old, new): a restarted
@@ -136,7 +140,10 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
                 continue
             s = by_n.get(t["seat"])
             res = {"ok": False, "why": "no such seat"} if s is None else \
-                {"ok": False, "why": "bad signature"} if not t["ok"] else seats.take(kernel, s["id"], t["mind"].hex())
+                {"ok": False, "why": "bad signature"} if not t["ok"] else \
+                seats.take(kernel, s["id"], t["mind"].hex(), lapsed=silent.get(s["id"], 0) >= LAPSE)
+            if res["ok"]:
+                silent[s["id"]] = 0                           # the seat's mind has spoken
             reason = 0 if res["ok"] else REASON.get(res.get("why", ""), REASON["held by another mind"])
             speak(w.taken_post(house, domain, t["seat"], t["mind"], res["ok"], reason))
             did["taken"] += 1
@@ -158,6 +165,8 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
                     res, reason = {"ok": False}, REASON["unknown name"]
                 else:
                     res = seats.call(kernel, s["id"], c["mind"].hex(), fn, **kw)
+                    if seats.holder(kernel, s["id"]) == c["mind"].hex():
+                        silent[s["id"]] = 0
                     reason = 0 if res.get("ok") else (REASON["not this mind's seat"]
                                                      if "not held by this mind" in str(res.get("why")) else
                                                      REASON["refused in the game"])
@@ -183,6 +192,7 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
             st["refusals"] = dict(st.get("refusals") or {}, percept=reply[:2].hex() if reply else "silence")
             continue
         st["beats"][s["id"]] = kernel.cycle_count
+        silent[s["id"]] = silent.get(s["id"], 0) + 1
         did["percepts"] += 1
     return did
 
