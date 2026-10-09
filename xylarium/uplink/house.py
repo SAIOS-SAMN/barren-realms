@@ -180,7 +180,12 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
         p = seats.percept(kernel, s["id"]) or {}
         recs, counsel = percept_records(kernel, p)
         st["seq"] += 1
-        speak(w.percept_post(house, domain, s["n"], bytes.fromhex(mind), kernel.cycle_count, st["seq"], recs, counsel))
+        reply = speak(w.percept_post(house, domain, s["n"], bytes.fromhex(mind), kernel.cycle_count, st["seq"], recs,
+                                     counsel, an.LAST_POINT["point"]))
+        if reply[:1] != b"\x01":                             # refused (or silence): counted, never assumed delivered
+            did["refused"] = did.get("refused", 0) + 1
+            st["refusals"] = dict(st.get("refusals") or {}, percept=reply[:2].hex() if reply else "silence")
+            continue
         st["beats"][s["id"]] = kernel.cycle_count
         did["percepts"] += 1
     return did
@@ -225,8 +230,9 @@ def on_hypha(kernel: Any, addr: str) -> Optional[Dict[str, int]]:
     got = w.read_mail_epoch_reply(probe) if probe else None
     if got is not None:                                       # v1.4: the cursor kept with the relay's epoch
         epoch, _, items = got
-        if epoch != st.get("mail_epoch"):                     # a restarted relay: its box from the start, counted anew
-            st["mail_epoch"], st["mail_seq"] = epoch, 0
+        if epoch != st.get("mail_epoch"):                     # a restarted relay keeps nothing: its box read from the
+            st["mail_epoch"], st["mail_seq"] = epoch, 0       # start, the seats listed again, every percept sent anew
+            st["listed"], st["beats"] = None, {}
     else:                                                     # a relay before v1.4: sub-kind 7, as it was
         probe = an.speak(where, w.read_mail(reader, st["mail_seq"], os.urandom(32)), timeout=10)
         items = w.read_mail_reply(probe) if probe else None

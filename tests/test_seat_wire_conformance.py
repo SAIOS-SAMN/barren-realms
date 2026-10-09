@@ -95,3 +95,14 @@ class TestTUniversalPoint(unittest.TestCase):
         p = an.read_point(gen + __import__("struct").pack("<IQQQQQQ", 7, 1, 2, 3, 4, 5, 6))
         self.assertEqual(an.read_point(an.put_point(p)), p)              # round trip, exact
 
+    def test_a_percept_carries_the_required_point_trailer(self):
+        from xylarium.uplink import anastome as an, seat_wire as w
+        k, d, m = an.key("ancients"), bytes(32), bytes(32)
+        bare = w.percept_post(k, d, 1, m, 5, 1, [], [])
+        self.assertEqual(bare[-65], 0)                                   # no point: [0] before the signature
+        gen = bytes(range(32))
+        p = an.read_point(gen + __import__("struct").pack("<IQQQQQQ", 1, 2, 3, 4, 5, 6, 7))
+        pointed = w.percept_post(k, d, 1, m, 5, 1, [], [], p)
+        self.assertEqual(pointed[-64 - 85], 1)                           # [1] and the 84-byte point
+        self.assertEqual(an.read_point(pointed[-64 - 84:-64]), p)
+

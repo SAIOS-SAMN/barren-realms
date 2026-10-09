@@ -160,13 +160,16 @@ def taken_post(house: SigningKey, domain: bytes, seat: int, mind: bytes, ok: boo
 
 def percept_post(house: SigningKey, domain: bytes, seat: int, mind: bytes, local: Any, seq: int,
                  records: List[Tuple[int, List[Tuple[int, Any]]]],
-                 counsel: List[Tuple[int, List[Tuple[int, Any]], Any, Any]]) -> bytes:
-    """PERCEPT: [domain][seat][mind][local time Q][seq u64][n u16] REC... ; REC = [kind u16][ARGS]; COUNSEL is
-    kind 0xFFFF: [fn u16][ARGS][worth Q][cost Q]."""
+                 counsel: List[Tuple[int, List[Tuple[int, Any]], Any, Any]], point: Any = None) -> bytes:
+    """PERCEPT: [domain][seat][mind][local time Q][seq u64][n u16] REC... [point]; REC = [kind u16][ARGS]; COUNSEL is
+    kind 0xFFFF: [fn u16][ARGS][worth Q][cost Q]. The trailing point (seat v1.3, required): [0] none, or [1] and the
+    last final TUniversal point read (84 bytes). local time is the world's own axis coordinate u (78.156)."""
+    from xylarium.uplink import anastome as an
     recs = [struct.pack("<H", k) + args(a) for k, a in records]
     recs += [struct.pack("<HH", COUNSEL, fn) + args(a) + q(w) + q(c) for fn, a, w, c in counsel]
+    tail = b"\x01" + an.put_point(point) if point is not None else b"\x00"
     return seal(house, PERCEPT, domain + struct.pack("<I", seat) + mind + q(local) + struct.pack("<QH", seq, len(recs))
-                + b"".join(recs))
+                + b"".join(recs) + tail)
 
 
 def outcome_post(house: SigningKey, domain: bytes, seat: int, mind: bytes, ref: bytes, applied: bool, reason: int,
@@ -271,7 +274,15 @@ def read_percept(act: bytes, house_vk: bytes) -> Optional[Dict[str, Any]]:
         else:
             a, at = read_args(act, at)
             records.append((kind, a))
+    point = None
+    if at < len(act) - 64:                                    # the trailing point (seat v1.3): [0] or [1][84]
+        flag, at = act[at], at + 1
+        if flag == 1:
+            from xylarium.uplink import anastome as an
+            point, at = an.read_point(act[at:at + 84]), at + 84
+        elif flag != 0:
+            return None
     if at != len(act) - 64:
         return None
     return {"domain": domain, "seat": seat, "mind": mind, "local": local, "seq": seq, "records": records,
-            "counsel": counsel, "ok": opened(act, house_vk)}
+            "counsel": counsel, "point": point, "ok": opened(act, house_vk)}
