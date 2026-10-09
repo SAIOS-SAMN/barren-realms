@@ -249,8 +249,8 @@ def render(kernel: Any) -> str:
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     out = {k: {"name": v["name"], "acts": v["acts"]} for k, v in st.items() if isinstance(v, dict) and "name" in v}
-    out["progenitors"] = {w: {"name": v["name"], "acts": v["acts"], "ended": v.get("ended")}
-                          for w, v in st.get("progenitors", {}).items()}
+    out["progenitors"] = {w: {"name": v["name"], "acts": v["acts"], "forged": v.get("forged", 0),
+                              "ended": v.get("ended")} for w, v in st.get("progenitors", {}).items()}
     return out
 
 

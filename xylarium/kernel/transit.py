@@ -740,6 +740,11 @@ def forge(kernel: Any, who: str, anchor: int, target: int, logs: List[str]) -> O
     w = open_throat(kernel, anchor, target, who, "forged", cost * credits_per_joule(kernel),
                     f"the {who.split(':', 1)[-1]}'s progenitors punch a stabilised throat to where the traffic is")
     stats(kernel)["forged"] += 1
+    from xylarium.kernel import board
+    line = board.stats(kernel).get("progenitors", {}).get(who)
+    if line is not None:                                   # a progenitor line's deed: it builds the highways
+        line["acts"] = line.get("acts", 0) + 1
+        line["forged"] = line.get("forged", 0) + 1
     logs.append(f"[WORMHOLE] The {who.split(':', 1)[-1]} forge a throat from {kernel.sectors[anchor].name} to "
                 f"{kernel.sectors[target].name}.")
     return w

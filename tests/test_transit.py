@@ -148,9 +148,12 @@ class TestThroats(unittest.TestCase):
         net["bank_j"] = cost / 2
         self.assertIsNone(transit.forge(self.k, who, anchor, target, []))
         net["bank_j"] = cost * 1.5
+        from xylarium.kernel import board
+        line = board.stats(self.k).setdefault("progenitors", {}).setdefault(who, {"name": "L", "acts": 0})
         w = transit.forge(self.k, who, anchor, target, [])
         self.assertEqual(w["owner"], who)
         self.assertAlmostEqual(net["bank_j"], cost / 2)
+        self.assertEqual((line["acts"], line["forged"]), (1, 1))      # a progenitor line's deed: a highway built
 
     def test_a_galaxy_beyond_stays_unwitnessed_until_a_ship_passes(self):
         from xylarium.kernel import cluster
