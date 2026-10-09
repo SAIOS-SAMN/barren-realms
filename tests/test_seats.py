@@ -50,7 +50,8 @@ class TestSeats(unittest.TestCase):
         house = "civ:Elder"
         task = {"id": bytes(range(32)), "train": [([[1]], [[1]])], "test": [[[2]]]}
         deferred = bytes([2]) + bytes(8) + bytes(32) + b"\0\0"            # the hypha's deferral: try again
-        replies = [deferred, bytes([2]) + struct.pack("<4Q", 0, 1, 0, 0)]
+        unread = bytes([3]) + struct.pack("<4Q", 0, 0, 0, 0)               # SOLVE_UNREAD: not judged yet
+        replies = [deferred, unread, bytes([2]) + struct.pack("<4Q", 0, 1, 0, 0)]
         sent = []
         with mock.patch.object(court, "houses", return_value=[house]), \
                 mock.patch.dict(os.environ, {court.ENDPOINT_ENV: "127.0.0.1:1"}), \
@@ -63,8 +64,11 @@ class TestSeats(unittest.TestCase):
             self.assertTrue(got.get("retry"))
             self.assertIsNotNone(seats.task_of(self.k, seat))              # kept before its seat
             with mock.patch.object(an, "read_task", return_value=None):
-                court.hand_tasks(self.k, lambda act: b"")                  # next stroke: filed again
+                court.hand_tasks(self.k, lambda act: b"")                  # next stroke: filed again, unread
+                self.assertIsNotNone(seats.task_of(self.k, seat))
+                court.hand_tasks(self.k, lambda act: b"")                  # and again: judged, a bounty
         self.assertEqual(sent[0], sent[1])                                 # the same answer, re-filed
+        self.assertEqual(sent[1], sent[2])
         self.assertEqual(court.stats(self.k)["of"][house]["closed"], 1)
         self.assertIsNone(seats.task_of(self.k, seat))
 
