@@ -246,6 +246,15 @@ def solve_raw(voice: SigningKey, task_id: bytes, outputs: bytes, rule: bytes) ->
     return body + b"SIGN" + voice.sign(SOLVE_TAG + body).signature
 
 
+RETRY_CODES: frozenset = frozenset()     # verdicts that say "not judged yet" (78.153): re-file, never a refusal -
+#                                         the code is mycelium's to name; a deferral is a retry already
+
+
+def retry(v: Dict[str, Any]) -> bool:
+    """Whether a solve's reply asks for the same answer again next stroke (deferred, or not judged yet)."""
+    return v.get("why") == "deferred" or v.get("code") in RETRY_CODES
+
+
 def read_verdict(body: bytes) -> Dict[str, Any]:
     if not body:
         return {"code": None, "why": "silence"}

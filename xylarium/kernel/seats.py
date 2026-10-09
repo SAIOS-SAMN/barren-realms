@@ -188,6 +188,9 @@ def _answer(kernel: Any, s: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, A
     host, port = addr.rsplit(":", 1)
     body = an.speak((host, int(port)), an.solve_raw(an.key("ancients"), task["id"], args["outputs"], args["tape"]))
     v = an.read_verdict(body)
+    if an.retry(v):                                        # not judged yet: the task stays, the answer is re-filed
+        stats(kernel)["tasks"][s["id"]]["pending"] = {"tape": args["tape"].hex(), "outputs": args["outputs"].hex()}
+        return {"ok": False, "why": "not judged yet - re-filed next stroke", "retry": True}
     v["verdict"] = {2: "bounty", 1: "floor"}.get(v.get("code"), "nothing")
     kind = "closed" if v.get("verdict") in ("bounty", "floor") else "refused"
     court._deed(kernel, s["on"], kind, {"verdict": v.get("verdict"), "why": v.get("why"), "mu": v.get("mu"),

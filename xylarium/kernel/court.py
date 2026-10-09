@@ -61,6 +61,12 @@ def hand_tasks(kernel: Any, speak: Any) -> int:
         if kernel.cycle_count - int(t.get("since", kernel.cycle_count)) > PATIENCE:
             tasks.pop(sid)
             st["let_go"] = st.get("let_go", 0) + 1
+    for sid, t in list(tasks.items()):                        # an answer not judged yet: filed again, as it was
+        if t.get("pending"):
+            s = next((x for x in seats.seats(kernel) if x["id"] == sid), None)
+            if s is not None:
+                seats._answer(kernel, s, {"tape": bytes.fromhex(t["pending"]["tape"]),
+                                          "outputs": bytes.fromhex(t["pending"]["outputs"])})
     handed = 0
     for s in seats.seats(kernel):
         if not s["held_by"] or s["id"] in tasks:
