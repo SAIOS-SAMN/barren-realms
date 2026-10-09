@@ -85,5 +85,5 @@ class TestTUniversalPoint(unittest.TestCase):
         body, p = an.unframe(an.POINT_BIT, b"\x01reply" + pt)
         self.assertEqual(body, b"\x01reply")
         self.assertEqual((p["epoch"], p["h"], p["lanes"], p["k"]), (7, 1, (2, 3, 4, 5), 6))
-        self.assertEqual(an.point_text(p), gen.hex() + "." + "%016x" % 7 + "/" + ":".join("%016x" % x for x in range(1, 7)))
+        self.assertEqual(an.point_text(p), gen.hex() + "." + "%08x" % 7 + "/" + ":".join("%016x" % x for x in range(1, 7)))
         self.assertEqual(an.unframe(0, b"\x01reply" + pt), (b"\x01reply" + pt, None))

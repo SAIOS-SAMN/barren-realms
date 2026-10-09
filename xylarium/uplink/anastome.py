@@ -103,9 +103,9 @@ def read_point(b: bytes) -> Optional[Dict[str, Any]]:
 
 
 def point_text(p: Dict[str, Any]) -> str:
-    """Its text form: <genesis hex>.<epoch hex>/h:S:G:T:H:K, each field 16 lowercase hex digits."""
+    """Its text form: <genesis 64 hex>.<epoch 8 hex>/h:S:G:T:H:K, h..K 16 lowercase hex digits each (TPoint::print)."""
     fields = (p["h"],) + tuple(p["lanes"]) + (p["k"],)
-    return f"{p['genesis'].hex()}.{p['epoch']:016x}/" + ":".join(f"{x:016x}" for x in fields)
+    return f"{p['genesis'].hex()}.{p['epoch']:08x}/" + ":".join(f"{x:016x}" for x in fields)
 
 
 def unframe(lane: int, body: bytes) -> Tuple[bytes, Optional[Dict[str, Any]]]:
