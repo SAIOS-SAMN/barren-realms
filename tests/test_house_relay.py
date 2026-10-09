@@ -85,6 +85,21 @@ class TestAnswerWithTape(unittest.TestCase):
         self.assertEqual(w.FUNCTIONS[1], ("answer", (w.BYTES, w.BYTES)))        # house.rs: [Bytes(tape), Bytes(outputs)]
 
 
+class TestMailOnce(unittest.TestCase):
+    def test_a_take_handed_back_again_is_answered_once(self):
+        k = GameKernel(seed=42)
+        spheres.ensure(k)
+        realm = stewardship.realms(k)[0]
+        mind = SigningKey(bytes(range(32)))
+        n = next(s["n"] for s in house.numbered(k) if s["id"] == f"steward:{realm}")
+        take = w.seal(mind, w.TAKE, an.vk(an.key("domain")) + struct.pack("<I", n) + mind.verify_key.encode()
+                      + os.urandom(32))
+        posted = []
+        for _ in range(3):                                            # a box that ignores the cursor hands it back
+            house.turn(k, lambda act: posted.append(act) or b"\x01", lambda: [(5, w.TAKE, take)])
+        self.assertEqual(sum(1 for a in posted if a[1] == w.TAKEN), 1)
+
+
 class TestRecut(unittest.TestCase):
     def test_a_new_genesis_lists_anew_and_reads_mail_from_the_start(self):
         from unittest import mock

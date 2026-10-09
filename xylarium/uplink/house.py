@@ -20,6 +20,9 @@ REASON = {"ok": 0, "no such seat": 1, "held by another mind": 2, "not this mind'
           "refused in the game": 5, "bad signature": 6, "unknown name": 7}
 
 
+SEEN_KEEP = 4096                 # mail answered, remembered by digest - far more than a box holds between reads
+
+
 def state(kernel: Any) -> Dict[str, Any]:
     from xylarium.kernel import seats
     return seats.stats(kernel).setdefault("wire", {"numbers": {}, "mail_seq": 0, "epoch": 0, "listed": None,
@@ -121,8 +124,14 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
             st["listed"] = repr(sig)
             st["listing_seq"] = struct.unpack_from("<Q", reply, 1)[0] if len(reply) >= 9 else None
             did["listed"] = 1
-    for seq, sub, act in mail():
+    seen = st.setdefault("answered", [])                     # the mail it has answered (the act's digest): a box
+    for seq, sub, act in mail():                              # that hands back what was read is answered once
         st["mail_seq"] = max(st["mail_seq"], seq)
+        digest = hashlib.sha256(act).hexdigest()[:32]
+        if digest in seen:
+            continue
+        seen.append(digest)
+        del seen[:-SEEN_KEEP]
         if sub == w.TAKE:
             t = w.read_take(act)
             if t is None or t["domain"] != domain:
@@ -196,7 +205,7 @@ def recut(kernel: Any) -> bool:
     st, born = state(kernel), genesis()
     if born is None or st.get("genesis") == born:
         return False
-    st.update({"genesis": born, "mail_seq": 0, "listed": None, "beats": {}})
+    st.update({"genesis": born, "mail_seq": 0, "listed": None, "beats": {}, "answered": []})
     seats.stats(kernel)["tasks"].clear()
     return True
 
