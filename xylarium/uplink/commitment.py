@@ -6,8 +6,10 @@ file (Concordance 9.1; the shared form, coordinator 2026-10-09).
            (the JSON array of the keys and indices that reach it). A number is its exact rational (Q, or BigQ where it
            does not fit), read from the save's own text, never through a float; a boolean is a Flag; text is Bytes
            b"s" + utf-8; null is Bytes b"n"; an empty object or list is Bytes b"{}" / b"[]", so the shape is committed.
-  LEAF     blake3 under the domain-separation key: 0x00 || key length (u32 LE) || key || the value in ARG encoding.
-  ROOT     the leaves sorted by key, hashed pairwise (0x01 || left || right); an odd node rises unpaired.
+  LEAF     blake3 under the derive key "mycelium ledger leaf v1": key length (u16 LE) || key || the value in ARG
+           encoding (put_args) - the network-wide form (mycelium 78.154; xylarium has adopted it).
+  ROOT     the leaves sorted by key (duplicate keys refused), hashed pairwise under "mycelium ledger node v1"
+           (left || right); an odd node is carried up unchanged; one record's root is its leaf; no records, 32 zeros.
 
 Two kernels holding the same universe commit the same root however each writes its file.
 """
@@ -19,11 +21,11 @@ from typing import Any, Iterator, List, Tuple
 
 import blake3
 
-CONTEXT = "barren-realms state commitment v1"
+LEAF, NODE = "mycelium ledger leaf v1", "mycelium ledger node v1"
 
 
-def _h(data: bytes) -> bytes:
-    h = blake3.blake3(derive_key_context=CONTEXT)
+def _h(context: str, data: bytes) -> bytes:
+    h = blake3.blake3(derive_key_context=context)
     h.update(data)
     return h.digest()
 
@@ -58,11 +60,18 @@ def records(root: Any) -> Iterator[Tuple[bytes, bytes]]:
 
 def root_of(state: Any) -> bytes:
     """The canonical commitment: the Merkle root over the state's records, sorted by key."""
-    level = [_h(b"\x00" + struct.pack("<I", len(k)) + k + v) for k, v in sorted(records(state))]
+    recs = sorted(records(state))
+    for (a, _), (b, _) in zip(recs, recs[1:]):
+        if a == b:
+            raise ValueError(f"duplicate record key {a[:64]!r}")
+    for k, _ in recs:
+        if len(k) > 0xFFFF:
+            raise ValueError(f"record key longer than u16: {k[:64]!r}")
+    level = [_h(LEAF, struct.pack("<H", len(k)) + k + v) for k, v in recs]
     if not level:
-        return _h(b"\x00")
+        return bytes(32)
     while len(level) > 1:
-        nxt = [_h(b"\x01" + level[i] + level[i + 1]) for i in range(0, len(level) - 1, 2)]
+        nxt = [_h(NODE, level[i] + level[i + 1]) for i in range(0, len(level) - 1, 2)]
         if len(level) % 2:
             nxt.append(level[-1])
         level = nxt

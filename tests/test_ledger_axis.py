@@ -27,6 +27,18 @@ class TestCommitment(unittest.TestCase):
         self.assertNotEqual(commitment.root_of({"q": Fraction(1, 3)}),
                             commitment.root_of({"q": Fraction(1, 3) + Fraction(1, 10 ** 30)}))
 
+    def test_the_network_form_one_record_is_its_leaf_and_none_is_zeros(self):
+        import struct
+        import blake3
+        from xylarium.uplink import seat_wire as w
+        empty = blake3.blake3(struct.pack("<H", 2) + b"[]" + w.args([(w.BYTES, b"{}")]),
+                              derive_key_context="mycelium ledger leaf v1").digest()
+        self.assertEqual(commitment.root_of({}), empty)              # an empty object is one record, its own leaf
+        key = b'["a"]'
+        leaf = blake3.blake3(struct.pack("<H", len(key)) + key + w.args([(w.Q_, Fraction(7))]),
+                             derive_key_context="mycelium ledger leaf v1").digest()
+        self.assertEqual(commitment.root_of({"a": 7}), leaf)
+
 
 class TestLedger(unittest.TestCase):
     def test_entries_chain_and_are_the_hypha_act_signed_by_the_reserve(self):
