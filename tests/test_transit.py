@@ -164,7 +164,7 @@ class TestThroats(unittest.TestCase):
         if before is not None:
             self.assertGreater(spheres._home(self.k, who).treasury, before)      # the rest is the keeper's, exchanged
         transit.settle(self.k, who, "captain:x", anchor, target, 0.0, transits=3)
-        self.assertEqual(transit.stats(self.k)["pending_coordinates"][transit.key(anchor, target)], 3)   # owed map points
+        self.assertEqual(transit.stats(self.k)["pending_coordinates"][transit.key(anchor, target)], 4)   # owed map points: 1 + 3
 
     def test_a_galaxy_beyond_stays_unwitnessed_until_a_ship_passes(self):
         from xylarium.kernel import cluster
