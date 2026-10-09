@@ -151,8 +151,9 @@ def demurrage(kernel: Any, house: str, years: Fraction) -> List[Fraction]:
     at = next((p for s in kernel.sectors.values() for p in s.planets if p.id == b.get("held_at")), None)
     if at is None or years <= 0 or not any(held):
         return held
+    from xylarium.kernel import field as _field
     f = Fraction(rate(kernel, at)["share_yr"]) * years
-    gone = [x * min(Fraction(1), f) for x in held]
+    gone = [_field.grid(x * min(Fraction(1), f)) for x in held]    # on the grid: the books stay bounded
     if not any(gone):
         return held
     b["reserve"] = [str(x - g) for x, g in zip(held, gone)]

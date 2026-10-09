@@ -90,7 +90,7 @@ class TestStarAbsorbs(unittest.TestCase):
         led = field.absorb(self.k, self.sec.id, versor.Mv.scalar(1), F(1000))
         self.assertEqual(F(led["gravity"]), 0)
         share = field.burn_out_share(self.k, self.sec.id)               # its own fusion step's mass defect
-        self.assertEqual(F(led["burned_out"]), F(1000) * share)
+        self.assertEqual(F(led["burned_out"]), field.grid(F(1000) * share))   # on the grid
         self.assertTrue(F(1, 1000) < share < F(1, 100))
 
     def test_quantum_radiation_is_the_absorbed_flux_at_the_world(self):
@@ -173,3 +173,18 @@ class TestBells(unittest.TestCase):
         for book in st["stars"].values():
             self.assertEqual(Fraction(book["in"]),
                              Fraction(book["gravity"]) + Fraction(book["light"]) + Fraction(book["burned_out"]))
+
+    def test_a_star_s_books_stay_on_the_grid_however_many_rings(self):
+        from xylarium.kernel import physics
+        sec = next(s for s in self.k.sectors.values() if len(field.anchors_of(self.k, s.id)) >= 2)
+        core = field.bells(self.k)[0]
+        anchors = field.anchors_of(self.k, sec.id)
+        a_out = max(w["native"][0] for w in anchors)
+        total = Fraction(0)
+        for d in (7.9, 8.0, 8.1, 8.3, 9.7):                            # rings from places that differ
+            a = field.absorb_at(Fraction(physics.star(sec)["mass"]), field.burn_out_share(self.k, sec.id), anchors,
+                                field.received(core, d), field.energy_at(core, d, a_out))
+            self.assertEqual(a["in"], a["gravity"] + a["light"] + a["burned_out"])
+            total += a["in"] + a["gravity"] + a["burned_out"]
+        self.assertEqual((1 << field.GRID) % total.denominator, 0)     # dyadic, never past the grid: bounded books
+

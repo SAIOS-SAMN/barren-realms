@@ -203,7 +203,7 @@ def absorb_at(star_mass: Fraction, burn_share: Fraction, anchors: List[Dict[str,
     all it can of what came in); what it cannot re-lock stays, exact on the grid. The rest it burns: a share burns
     OUT, the rest leaves as LIGHT. In = gravity + light + burned out, exactly."""
     from xylarium.kernel import versor
-    e_in = Fraction(energy)
+    e_in = grid(energy)                                       # the books on the grid: exact, and bounded
     carry = (lambda x: _screw_move(pulse_versor, x)) if isinstance(pulse_versor, dict) else \
         (lambda x: versor.move(pulse_versor, x))
     drift = carry((0, 0, 0))
@@ -216,13 +216,13 @@ def absorb_at(star_mass: Fraction, burn_share: Fraction, anchors: List[Dict[str,
         if a > 0:
             need += w["mass"] * star_mass / (a2 * a) * sum(x * x for x in dx) / 2
         moved.append(dx)
-    gravity = min(e_in, need)
-    held = gravity / need if need > 0 else Fraction(1)
+    gravity = min(e_in, grid(need))                           # the work booked on the grid (floor: what is left of
+    held = Fraction(1) if need <= e_in else (gravity / need if need > 0 else Fraction(1))   # it leaves as light)
     left = 1 - held
     new = [dict(w, at=tuple(w["native"][i] + grid(left * dx[i]) for i in range(3))) for w, dx in zip(anchors, moved)]
     rest = e_in - gravity
-    burned = rest * burn_share
-    light = rest - burned
+    burned = grid(rest * burn_share)
+    light = rest - burned                                     # what is left leaves as light: in = all three, exactly
     assert gravity + light + burned == e_in                   # the field law's conservation, exactly
     return {"in": e_in, "gravity": gravity, "light": light, "burned_out": burned, "anchors": new, "drift": drift}
 
