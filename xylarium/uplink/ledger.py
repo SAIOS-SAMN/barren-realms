@@ -69,6 +69,43 @@ def renumber(ledger: str) -> int:
     return len(out)
 
 
+def _point_of(act: bytes) -> Optional[Dict[str, Any]]:
+    from xylarium.uplink import anastome as an
+    return an.read_point(act[108:192]) if any(act[108:192]) else None
+
+
+def _not_behind(point: Optional[Dict[str, Any]], prev: Optional[bytes]) -> Optional[Dict[str, Any]]:
+    """The point an entry cites never stands below its predecessor's (the court: h only rises): where it would -
+    none read yet since a restart, or an older one - the predecessor's own final point is cited."""
+    before = _point_of(prev) if prev is not None else None
+    if before is not None and (point is None or point["h"] < before["h"]):
+        return before
+    return point
+
+
+def repair(ledger: str, sealed: int) -> int:
+    """Re-make the entries the court has not sealed (index >= sealed) where one cites a point below the one before
+    it: each with its own u, commitment, events and nonce, citing the point _not_behind allows, re-chained, signed
+    again. Returns the entries re-made."""
+    from xylarium.uplink import anastome as an
+    old = acts(ledger)
+    bad = next((i for i in range(max(1, sealed), len(old))
+                if _not_behind(_point_of(old[i]), old[i - 1]) != _point_of(old[i])), None)
+    if bad is None:
+        return 0
+    out = old[:bad]
+    for a in old[bad:]:
+        prev = out[-1] if out else None
+        act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), struct.unpack_from("<Q", a, 36)[0],
+                            a[44:76], a[76:108], _not_behind(_point_of(a), prev),
+                            entry_hash(prev) if prev else bytes(32), a[224:256])
+        out.append(act)
+    with open(ledger + ".tmp", "wb") as f:
+        f.write(b"".join(out))
+    os.replace(ledger + ".tmp", ledger)
+    return len(old) - bad
+
+
 def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
           inputs: Optional[list] = None) -> Dict[str, Any]:
     """One entry: the state's commitment (the SMT root over its records, persistence/smt.py) at its cycle u and the
@@ -80,6 +117,7 @@ def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
     ev = list(inputs or [])
     prior = acts(ledger)
     parent = entry_hash(prior[-1]) if prior else bytes(32)
+    point = _not_behind(point, prior[-1] if prior else None)
     act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), u, root, _inputs.digest(ev), point, parent,
                         os.urandom(32))
     assert len(act) == ACT_LEN
@@ -89,3 +127,39 @@ def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
     with open(ledger, "ab") as f:
         f.write(act)
     return dict(read(act), inputs=len(ev))
+
+
+LEDGER_REFUSAL = {1: "not the reserve", 2: "unknown domain", 3: "parent is not the head", 4: "u not above the head",
+                  5: "point not final", 6: "unsigned", 7: "point below the head's", 8: "applied crossing invalid",
+                  9: "line refused"}
+
+
+def post(ledger: str, addr: Any, limit: int = 8) -> Dict[str, Any]:
+    """Post the entries the court has not sealed yet, in order (up to `limit` a turn): the cursor of how many it
+    sealed is kept beside the ledger (binary, u64 LE). A refusal stops the turn and is named; a deferral or silence
+    is tried again next turn. The court's returned hash must be ours - the chain is one chain."""
+    from xylarium.uplink import anastome as an
+    cur_path = ledger[:-len(".ledger.rec")] + ".ledger.posted"
+    done = struct.unpack("<Q", open(cur_path, "rb").read(8))[0] if os.path.exists(cur_path) else 0
+    repair(ledger, done)                                  # unsealed entries citing a point behind: re-made first
+    todo = acts(ledger)[done:done + limit]
+    out: Dict[str, Any] = {"sealed": 0, "posted_through": done}
+    for a in todo:
+        r = an.speak(addr, a, timeout=20)
+        if r[:1] == b"\x01" and len(r) >= 33:
+            if r[1:33] != entry_hash(a):
+                out["refused"] = "the court sealed another hash"
+                break
+            done += 1
+            out["sealed"] += 1
+            with open(cur_path + ".tmp", "wb") as f:
+                f.write(struct.pack("<Q", done))
+            os.replace(cur_path + ".tmp", cur_path)
+        elif r[:1] == b"\x00" and len(r) == 2:
+            out["refused"] = LEDGER_REFUSAL.get(r[1], f"code {r[1]}")
+            break
+        else:
+            break                                         # deferred or silent: next turn
+    out["posted_through"] = done
+    return out
+

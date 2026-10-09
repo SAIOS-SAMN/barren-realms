@@ -124,6 +124,10 @@ def main() -> None:
                 did = house.on_hypha(k, court.endpoint())
                 if did and any(v for key, v in did.items() if key not in ("held", "ms")):
                     log("seats: " + json.dumps(did))
+                host, port = court.endpoint().rsplit(":", 1)
+                got = ledger.post(ledger_path, (host, int(port)))   # the ledger, upward: what the court has not sealed
+                if got["sealed"] or got.get("refused"):
+                    log("ledger: " + json.dumps(got))
             except OSError as e:
                 log(f"seats: the hypha did not answer: {e}")
             except Exception as e:                        # a relay fault never stops the universe

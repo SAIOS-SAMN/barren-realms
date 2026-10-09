@@ -95,6 +95,32 @@ class TestChainAsTheCourtHashes(unittest.TestCase):
         self.assertEqual(second[192:224], blake3.blake3(signed).digest())
 
 
+class TestPosting(unittest.TestCase):
+    def _pt(self, h):
+        return an.read_point(bytes(range(32)) + struct.pack("<IQQQQQQ", 146, h, 0, 0, 0, 0, 0))
+
+    def test_an_entry_never_cites_a_point_behind_the_one_before(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        led = os.path.join(d, "u.ledger.rec")
+        ledger.entry(0, bytes(32), led, self._pt(50))
+        e = ledger.entry(10, bytes(32), led, None)                            # no point read since a restart
+        self.assertEqual(ledger._point_of(ledger.acts(led)[1])["h"], 50)       # the one before's, final, cited
+
+    def test_posting_keeps_a_cursor_and_stops_on_a_refusal(self):
+        from unittest import mock
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        led = os.path.join(d, "u.ledger.rec")
+        for u in (0, 10, 20):
+            ledger.entry(u, bytes([u]) * 32, led, self._pt(60 + u))
+        acts = ledger.acts(led)
+        replies = [b"\x01" + ledger.entry_hash(acts[0]) + bytes(92), b"\x00\x07"]
+        with mock.patch.object(an, "speak", side_effect=lambda addr, act, timeout=20: replies.pop(0)):
+            got = ledger.post(led, ("x", 1))
+        self.assertEqual((got["sealed"], got["posted_through"], got["refused"]), (1, 1, "point below the head's"))
+
+
 class TestCache(unittest.TestCase):
     def test_a_worlds_body_is_saved_as_cache_and_not_committed(self):
         state = {"sectors": {"1": {"planets": [{"id": "p", "body": {"q": "1/1"}, "population": 5}]}}}
