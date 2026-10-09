@@ -52,6 +52,42 @@ def observe(k, path: str, t0: float, c0: int) -> None:
         f"court {json.dumps(o.get('court', {}))}")
 
 
+LATTICE = 10                    # cycles between committed states: a bound universe advances in whole lattice spans
+TUNIVERSAL_ENV = "XYL_TUNIVERSAL"   # "1": the universe's clock is bound to TUniversal (Concordance 1.11)
+
+
+class Binding:
+    """The universe's clock bound to TUniversal (as xyl-kernel tuniversal.rs): a cycle IS a final point's height,
+    counted from the height it was bound at. A height below it is a court started afresh: bound again where it
+    stands."""
+
+    def __init__(self, h0: int, cycle0: int):
+        self.h0, self.cycle0 = h0, cycle0
+
+    def cycle(self, h: int) -> int:
+        return self.cycle0 + max(0, h - self.h0)
+
+    def holds(self, h: int) -> bool:
+        return h >= self.h0
+
+
+def next_lattice(cycle: int) -> int:
+    return (cycle // LATTICE + 1) * LATTICE
+
+
+def _clock_reader(addr: str, period_s: float = 1.0) -> None:
+    """Read the court's clock once a period; each reply carries the final point (anastome.LAST_POINT). The game
+    never waits on it: a tick takes the last point heard."""
+    from xylarium.uplink import anastome as an
+    host, port = addr.rsplit(":", 1)
+    while not STOP["now"]:
+        try:
+            an.clock((host, int(port)))
+        except Exception:
+            pass
+        time.sleep(period_s)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=42)
@@ -74,15 +110,33 @@ def main() -> None:
     obs_path = save.replace(".json", ".obs.jsonl")
     t0, c0 = time.time(), k.cycle_count
     last = {"relay": 0.0, "save": time.time()}
+    bound = None
+    tuniversal = bool(court.endpoint()) and os.environ.get(TUNIVERSAL_ENV) == "1"
+    if tuniversal:
+        import threading
+        threading.Thread(target=_clock_reader, args=(court.endpoint(),), daemon=True).start()
+        log("clock: bound to TUniversal (the universe advances only as its final point does)")
     while not STOP["now"]:
-        k.tick_simulation()
+        advance = True
+        if tuniversal:
+            from xylarium.uplink import anastome as an
+            p = an.LAST_POINT["point"]
+            if p is not None and (bound is None or not bound.holds(p["h"])):
+                bound = Binding(p["h"], k.cycle_count)
+                log(f"clock: bound to TUniversal: cycle {bound.cycle0} at {an.point_text(p)}")
+            # no final point, or caught up to it: time does not advance (the relay and the saves still run)
+            advance = p is not None and next_lattice(k.cycle_count) <= bound.cycle(p["h"])
+        if not advance:
+            time.sleep(0.25)
+        else:
+            k.tick_simulation()
         rec = court.stats(k)["of"] if "court" in k.state else {}
         met = sum(r["met"] for r in rec.values())
-        if met > seen:
+        if advance and met > seen:
             seen = met
             log("court: " + json.dumps({h: {x: r[x] for x in ("met", "closed", "refused", "beyond", "mu")}
                                         for h, r in rec.items()}))
-        if k.cycle_count % REPORT_EVERY == 0:
+        if advance and k.cycle_count % REPORT_EVERY == 0:
             observe(k, obs_path, t0, c0)
         now = time.time()
         if court.endpoint() and now - last["relay"] >= RELAY_EVERY_S:   # the house relay (seat wire)
