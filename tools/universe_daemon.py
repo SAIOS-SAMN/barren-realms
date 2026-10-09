@@ -9,6 +9,7 @@ Listens on no port. Saves every SAVE_EVERY cycles and on SIGTERM/SIGINT, then ex
 import argparse
 import json
 import os
+import hashlib
 import signal
 import sys
 import time
@@ -137,12 +138,16 @@ def main() -> None:
             recs = R.records_of(StatePersistence.snapshot(k))  # the state; the save IS the record set it commits
             StatePersistence.write_records(recs, save)
             keyed = {smt._record_key(r): r for r in R.committed(recs)}   # the commitment covers no cache
+            del recs
+            digests = {key: hashlib.blake2b(r, digest_size=16).digest() for key, r in keyed.items()}
             if not held:
                 fut = pool.submit(smt.worker_build, list(keyed.values()))
-            else:
-                fut = pool.submit(smt.worker_update, [r for key, r in keyed.items() if held.get(key) != r],
+            else:                                          # only what changed is sent; the last commit is kept as
+                fut = pool.submit(smt.worker_update,       # a digest per record, not the records themselves
+                                  [r for key, r in keyed.items() if held.get(key) != digests[key]],
                                   [key for key in held if key not in keyed])
-            held = keyed
+            held = digests
+            del keyed
             pending.append((k.cycle_count, an.LAST_POINT["point"], fut, applied))
         while pending and pending[0][2].done():                # each root, as it lands, becomes an entry - in order
             u, point, fut, ev = pending.pop(0)
