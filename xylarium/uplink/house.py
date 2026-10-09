@@ -94,6 +94,11 @@ def percept_records(kernel: Any, p: Dict[str, Any]) -> Tuple[list, list]:
             pair = ((p["petitions"].get(c["people"]) or {}).get("books") or {}).get(c.get("lead") or "", {})
             worth, cost = (Fraction(pair["entropic"]), Fraction(pair["syntropic"])) if pair else (0, 0)
             counsel.append((w.FN_ID[c["call"]], [(w.KEY, w.name_key(c["people"]))], worth, cost))
+        elif c.get("call") == "handle":                       # keep the throats as they are handled
+            counsel.append((w.FN_ID["handle"], [(w.COUNT, w.HANDLE.index(c["how"]))], 0, 0))
+        elif c.get("call") == "forge":
+            counsel.append((w.FN_ID["forge"], [(w.COUNT, c["anchor"]), (w.COUNT, c["target"])],
+                            Fraction(c["worth"]), Fraction(c["cost"])))
     return recs, counsel
 
 

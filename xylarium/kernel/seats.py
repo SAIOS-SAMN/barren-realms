@@ -128,7 +128,30 @@ def percept(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
         line = board.progenitors(kernel).get(s["on"]) or {}
         rec["line"] = {"name": line.get("name"), "standing": line.get("standing")}
         rec["realms"] = [r for r in stewardship.realms(kernel) if stewardship.covers(kernel, s["on"], r)]
+        rec["counsel"] += _progenitor_counsel(kernel, s["on"])
     return rec
+
+
+def _progenitor_counsel(kernel: Any, who: str) -> List[Dict[str, Any]]:
+    """What the line's built-in mind would do from this seat: keep its throats as it handles them, and forge where
+    its FLOW lacks most from its nearest mouth (transit._forging's own read) - its worth that flow, its cost the
+    energy the forge spends. Handling and forging are not to be tried blind: a closed handling shuts every throat the
+    line holds, and a forge spends its banked energy."""
+    from xylarium.kernel import mindcore as mc
+    from xylarium.kernel import spheres, transit
+    out: List[Dict[str, Any]] = [{"call": "handle", "how": transit.stats(kernel)["handling"].get(who, "tolled")}]
+    if who not in transit.stats(kernel)["masters"]:
+        return out
+    held = set(spheres.stats(kernel)["nets"].get(who, {}).get("held", []))
+    anchors = sorted(x for x in transit.mouths(kernel) if x in held or x == transit.MOUTH_BASE)
+    if not anchors:
+        return out
+    res = transit.flow(kernel, who, anchors[0])
+    entry = mc.lead(res, ("flow",), deepest=True)
+    if entry is not None:
+        out.append({"call": "forge", "anchor": anchors[0], "target": int(entry[0]), "worth": res[entry],
+                    "cost": Fraction(str(transit.forge_cost_j(kernel, who, anchors[0], int(entry[0]))))})
+    return out
 
 
 # ---------------------------------------------------------------------- CALL and OUTCOME

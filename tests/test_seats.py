@@ -38,6 +38,14 @@ class TestSeats(unittest.TestCase):
         self.assertEqual(stewardship.realm_held(self.k, seats.pid(VK, self.seat)), self.realm)
         self.assertEqual(stewardship.realm_held(self.k, seats.pid(VK, f"steward:{other}")), other)
 
+    def test_a_progenitor_seat_is_counselled_to_keep_its_handling_never_left_to_try_closing_blind(self):
+        from xylarium.kernel import board
+        line = next(iter(board.progenitors(self.k)), None)
+        if line is None:
+            self.skipTest("no progenitor line yet")
+        c = seats.percept(self.k, f"progenitor:{line}")["counsel"]
+        self.assertEqual(c[0], {"call": "handle", "how": "tolled"})
+
     def test_calls_come_only_from_the_seated_mind_and_within_its_role(self):
         seats.take(self.k, self.seat, VK)
         self.assertEqual(seats.call(self.k, self.seat, OTHER, "withdraw")["why"], "the seat is not held by this mind")
