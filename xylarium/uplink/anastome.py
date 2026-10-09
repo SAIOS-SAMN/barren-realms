@@ -82,7 +82,37 @@ def speak(addr: Tuple[str, int], body: bytes, timeout: float = 30.0) -> bytes:
         if head is None:
             return b""
         (n,) = struct.unpack("<I", head[1:5])
-        return _read(s, n) or b""
+        body, point = unframe(head[0], _read(s, n) or b"")
+        if point is not None:
+            LAST_POINT["point"] = point                        # TUniversal: the last quorum-final point heard
+        return body
+
+
+# ---------------------------------------------------------------------- TUniversal (Concordance 1.11; mycelium 78.152)
+POINT_BIT = 0x80                # a frame carrying the hyphae's quorum-final point sets it on its lane byte
+POINT_LEN = 84                  # genesis 32, epoch u32 LE, h, S, G, T, H, K u64 LE
+LAST_POINT: Dict[str, Any] = {"point": None}
+
+
+def read_point(b: bytes) -> Optional[Dict[str, Any]]:
+    """A TUniversal point: its origin (genesis, epoch), its height h, its lanes S, G, T, H and its K."""
+    if len(b) != POINT_LEN:
+        return None
+    epoch, h, lane_s, lane_g, lane_t, lane_h, k = struct.unpack_from("<IQQQQQQ", b, 32)
+    return {"genesis": b[:32], "epoch": epoch, "h": h, "lanes": (lane_s, lane_g, lane_t, lane_h), "k": k}
+
+
+def point_text(p: Dict[str, Any]) -> str:
+    """Its text form: <genesis hex>.<epoch hex>/h:S:G:T:H:K, each field 16 lowercase hex digits."""
+    fields = (p["h"],) + tuple(p["lanes"]) + (p["k"],)
+    return f"{p['genesis'].hex()}.{p['epoch']:016x}/" + ":".join(f"{x:016x}" for x in fields)
+
+
+def unframe(lane: int, body: bytes) -> Tuple[bytes, Optional[Dict[str, Any]]]:
+    """A frame's body and the point it carries, if its lane byte says it carries one (its last 84 bytes)."""
+    if lane & POINT_BIT and len(body) >= POINT_LEN:
+        return body[:-POINT_LEN], read_point(body[-POINT_LEN:])
+    return body, None
 
 
 def _read(s: socket.socket, n: int) -> Optional[bytes]:

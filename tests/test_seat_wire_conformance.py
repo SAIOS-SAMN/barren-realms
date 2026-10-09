@@ -71,3 +71,19 @@ class TestMailFromTheWire(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTUniversalPoint(unittest.TestCase):
+    """A frame carrying the hyphae's quorum-final point (Concordance 1.11, mycelium 78.152) sets 0x80 on its lane
+    byte; its last 84 body bytes are the point; a frame without the bit is read as before."""
+
+    def test_a_point_is_read_off_the_frame_and_the_body_is_what_precedes_it(self):
+        import struct as _s
+        from xylarium.uplink import anastome as an
+        gen = bytes(range(32))
+        pt = gen + _s.pack("<IQQQQQQ", 7, 1, 2, 3, 4, 5, 6)
+        body, p = an.unframe(an.POINT_BIT, b"\x01reply" + pt)
+        self.assertEqual(body, b"\x01reply")
+        self.assertEqual((p["epoch"], p["h"], p["lanes"], p["k"]), (7, 1, (2, 3, 4, 5), 6))
+        self.assertEqual(an.point_text(p), gen.hex() + "." + "%016x" % 7 + "/" + ":".join("%016x" % x for x in range(1, 7)))
+        self.assertEqual(an.unframe(0, b"\x01reply" + pt), (b"\x01reply" + pt, None))
