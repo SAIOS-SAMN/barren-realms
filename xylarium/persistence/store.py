@@ -11,6 +11,9 @@ from xylarium.kernel.phylogeny import PHYLOGENY_MANAGER
 from xylarium.kernel.federal import FederalReserve
 
 
+RECORDS_SUFFIX = ".rec.zst"      # a save as its record stream (persistence/records.py), zstd at rest
+
+
 class StatePersistence:
     """Serializes and deserializes the entire GameKernel to and from JSON."""
 
@@ -49,7 +52,15 @@ class StatePersistence:
                 "banking": kernel.banking.to_dict() if hasattr(kernel, "banking") else None,
                 "settlement": kernel.settlement.to_dict() if hasattr(kernel, "settlement") else None,
             }
-            with open(filepath, "w", encoding="utf-8") as f:
+            if filepath.endswith(RECORDS_SUFFIX):           # the record set itself: exact, the save the ledger hashes
+                from compression import zstd
+                from xylarium.persistence import records
+                tmp = filepath + ".tmp"
+                with open(tmp, "wb") as f:
+                    f.write(zstd.compress(records.encode(json.loads(json.dumps(data))), level=3))
+                os.replace(tmp, filepath)                    # whole or not at all: a reader never sees half a save
+                return True
+            with open(filepath, "w", encoding="utf-8") as f:   # JSON: a human-readable export, never the truth
                 json.dump(data, f, indent=2)
             return True
         except Exception as e:
@@ -109,8 +120,14 @@ class StatePersistence:
         if not os.path.exists(filepath):
             return None
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            if filepath.endswith(RECORDS_SUFFIX):
+                from compression import zstd
+                from xylarium.persistence import records
+                with open(filepath, "rb") as f:
+                    data = records.decode(zstd.decompress(f.read()))
+            else:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
 
             kernel = GameKernel.__new__(GameKernel)
             kernel.seed = data.get("seed", 42)
