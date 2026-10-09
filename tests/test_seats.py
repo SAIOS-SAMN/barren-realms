@@ -2,7 +2,7 @@
 The house relay's game side: a mind takes a seat (one mind per seat) and the built-in mind steps aside; its percept
 carries the built-in mind's counsel; its calls go through the game's own doors, only from the mind that holds the
 seat and only within its role; every call is an outcome on the seat's books; a seated ancients' mind is handed the
-court task and answers it through the house.
+court task; its own answer is filed under the ancients' reserve.
 """
 
 import os
@@ -11,7 +11,9 @@ from unittest import mock
 
 from xylarium.kernel import ascendance, court, seats, spheres, stewardship
 from xylarium.kernel.engine import GameKernel
-from xylarium.uplink import mind
+import struct
+
+from xylarium.uplink import anastome as an
 
 VK, OTHER = "ab" * 32, "cd" * 32
 
@@ -48,28 +50,23 @@ class TestSeats(unittest.TestCase):
         self.assertEqual(p["counsel"][0]["people"], who)
         self.assertIn(p["counsel"][0]["call"], ("ascend", "quarantine"))
 
-    def test_a_seated_ancients_mind_is_handed_the_court_task_and_answers_through_the_house(self):
+    def test_a_seated_minds_answer_is_filed_under_the_ancients_reserve(self):
         house = "civ:Elder"
-        task = {"id": b"\x01\x02", "train": [([[1, 1, 2]], [[1], [1], [2]])], "test": [[[3, 4]]]}
+        task = {"id": bytes(range(32)), "train": [([[1, 1, 2]], [[1], [1], [2]])], "test": [[[3, 4]]]}
         sent = []
         with mock.patch.object(court, "houses", return_value=[house]), \
                 mock.patch.dict(os.environ, {court.ENDPOINT_ENV: "127.0.0.1:1"}), \
-                mock.patch("xylarium.uplink.anastome.speak", return_value=b""), \
-                mock.patch("xylarium.uplink.anastome.read_task", return_value=task), \
-                mock.patch.object(mind, "submit", side_effect=lambda a, key, t, s, o: sent.append((key, s, o))
-                                  or {"verdict": "bounty", "mu": [0, 1, 0, 0]}):
+                mock.patch("xylarium.uplink.anastome.speak", side_effect=lambda a, act, **kw: sent.append(act) or
+                           bytes([2]) + struct.pack("<4Q", 0, 1, 0, 0)):
             seat = f"ancients:{house}"
             self.assertTrue(seats.take(self.k, seat, VK)["ok"])
-            self.k.cycle_count = 0
-            court.season(self.k)
-            self.assertEqual(sent, [])                                  # the built-in mind did not answer
-            self.assertEqual(seats.percept(self.k, seat)["task"]["id"], "0102")
-            got = seats.call(self.k, seat, VK, "answer", steps=[{"motion": "Transpose"}])
+            seats.hold_task(self.k, seat, task)
+            self.assertFalse(seats.call(self.k, seat, VK, "answer")["ok"])     # no tape: the answer does not read
+            got = seats.call(self.k, seat, VK, "answer", tape=b"RULE-TAPE", outputs=b"\x01OUT")
         self.assertTrue(got["ok"])
-        self.assertEqual(os.path.basename(sent[0][0]), "ancients.ed25519")
-        self.assertEqual(sent[0][2], [[[3], [4]]])
+        self.assertEqual(sent[0], an.solve_raw(an.key("ancients"), task["id"], b"\x01OUT", b"RULE-TAPE"))
         self.assertEqual(court.stats(self.k)["of"][house]["closed"], 1)
-
+        self.assertIsNone(seats.task_of(self.k, seat))
 
 if __name__ == "__main__":
     unittest.main()

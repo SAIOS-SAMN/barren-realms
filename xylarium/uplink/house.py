@@ -18,7 +18,6 @@ from xylarium.uplink import seat_wire as w
 
 REASON = {"ok": 0, "no such seat": 1, "held by another mind": 2, "not this mind's seat": 3, "no such function": 4,
           "refused in the game": 5, "bad signature": 6, "unknown name": 7}
-MOTIONS = ("Rotate90", "Rotate180", "Rotate270", "FlipH", "FlipV", "Transpose")
 
 
 def state(kernel: Any) -> Dict[str, Any]:
@@ -69,29 +68,13 @@ def kwargs_of(kernel: Any, fn: str, args: List[Tuple[int, Any]]) -> Optional[Dic
         return {"sector": int(args[0][1]), "units": Fraction(args[1][1])}
     if fn == "answer":
         blobs = [v for t, v in args if t == w.BYTES]
-        if len(blobs) >= 2:                               # the mind's own rule and its outputs
-            return {"tape": bytes(blobs[0]), "outputs": bytes(blobs[1])}
-        steps: List[Dict[str, Any]] = []
-        for t, c in args:
-            if t != w.COUNT:
-                continue
-            c = int(c)
-            if 1 <= c <= 6:
-                steps.append({"motion": MOTIONS[c - 1]})
-            elif c >= 0x100:
-                frm, to = divmod(c - 0x100, 16)
-                if steps and "hue" in steps[-1]:
-                    steps[-1]["hue"].append((frm, to))
-                else:
-                    steps.append({"hue": [(frm, to)]})
-        return {"steps": steps}
+        return {"tape": bytes(blobs[0]), "outputs": bytes(blobs[1])} if len(blobs) >= 2 else {}
     return {}
 
 
 def percept_records(kernel: Any, p: Dict[str, Any]) -> Tuple[list, list]:
     """A seat's percept as typed records and counsel."""
     from xylarium.kernel import ascendance
-    from xylarium.kernel import crystal as C
     recs: list = []
     counsel: list = []
     ruling = {"pending": 0, "ascended": 1, "quarantine": 2}
@@ -102,9 +85,6 @@ def percept_records(kernel: Any, p: Dict[str, Any]) -> Tuple[list, list]:
             if pair:
                 recs.append((2, [(w.KEY, w.name_key(who)), (w.COUNT, i), (w.Q_, Fraction(pair["syntropic"])),
                                  (w.Q_, Fraction(pair["entropic"]))]))
-    if p.get("role") == "ancients":
-        from xylarium.kernel import intellect
-        recs += [(3, [(w.COUNT, op)]) for op in intellect.vocabulary(kernel, p["on"]) if isinstance(op, int)]
     if p.get("task"):
         recs.append((4, [(w.KEY, bytes.fromhex(p["task"]["id"])[:32])]))     # wire v1.2: its 32-byte citation
     for realm in p.get("realms") or []:
@@ -114,15 +94,6 @@ def percept_records(kernel: Any, p: Dict[str, Any]) -> Tuple[list, list]:
             pair = ((p["petitions"].get(c["people"]) or {}).get("books") or {}).get(c.get("lead") or "", {})
             worth, cost = (Fraction(pair["entropic"]), Fraction(pair["syntropic"])) if pair else (0, 0)
             counsel.append((w.FN_ID[c["call"]], [(w.KEY, w.name_key(c["people"]))], worth, cost))
-        elif c.get("call") == "answer":
-            codes = []
-            ops = dict(zip(MOTIONS, C.FRAME_OPS))
-            for st in c["steps"]:
-                if "motion" in st:
-                    codes.append((w.COUNT, ops[st["motion"]]))
-                else:
-                    codes += [(w.COUNT, 0x100 + 16 * a + b) for a, b in st["hue"]]
-            counsel.append((w.FN_ID["answer"], codes, 0, 0))
     return recs, counsel
 
 
@@ -132,6 +103,7 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
     from xylarium.kernel import seats
     house, domain = an.key("ancients"), an.vk(an.key("domain"))
     st = state(kernel)
+    recut(kernel)
     listing = numbered(kernel)
     by_n = {s["n"]: s for s in listing}
     did = {"listed": 0, "taken": 0, "outcomes": 0, "percepts": 0}
@@ -180,6 +152,8 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
             deed = hashlib.sha256(repr((c["ref"], res)).encode()).digest()
             speak(w.outcome_post(house, domain, c["seat"], c["mind"], c["ref"], bool(res.get("ok")), reason, deed))
             did["outcomes"] += 1
+    from xylarium.kernel import court
+    did["tasks"] = court.hand_tasks(kernel, speak)                     # the court's tasks before the seated minds
     for s in listing:
         mind = seats.holder(kernel, s["id"])          # read now: a TAKE this turn binds before its first beat
         if not mind:
@@ -196,12 +170,39 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
     return did
 
 
+GENESIS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "runs",
+                       "hypha_genesis.json")
+
+
+def genesis() -> Optional[str]:
+    """The receipt of the genesis the domain was last founded on (tools/hypha_found_domain_and_origin.py), or None."""
+    import json
+    try:
+        with open(GENESIS) as f:
+            return json.load(f).get("receipt")
+    except (OSError, ValueError):
+        return None
+
+
+def recut(kernel: Any) -> bool:
+    """A new hypha (a recut, read off its genesis): what the old one knew is gone - list anew, read mail from 0,
+    and let go the old court's tasks. True when it was one."""
+    from xylarium.kernel import seats
+    st, born = state(kernel), genesis()
+    if born is None or st.get("genesis") == born:
+        return False
+    st.update({"genesis": born, "mail_seq": 0, "listed": None, "beats": {}})
+    seats.stats(kernel)["tasks"].clear()
+    return True
+
+
 def on_hypha(kernel: Any, addr: str) -> Optional[Dict[str, int]]:
     """One relay turn against a hypha: posts spoken to it, the house's mail read from it. None where the hypha does
     not speak the seat wire (silence to the act)."""
     host, port = addr.rsplit(":", 1)
     where = (host, int(port))
     reader = an.key("ancients")
+    recut(kernel)
     probe = an.speak(where, w.read_mail(reader, state(kernel)["mail_seq"], os.urandom(32)), timeout=10)
     items = w.read_mail_reply(probe) if probe else None
     if items is None:

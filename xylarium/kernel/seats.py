@@ -9,9 +9,9 @@ own beat with the built-in mind's COUNSEL, applies the mind's CALLs through the 
 (command.py), and keeps each OUTCOME as a deed on the seat's books. A taken seat is skipped by the built-in mind, as
 a player's is. The wire (the acts on the hypha) is the seam this module is spoken through; every number here is exact.
 
-  ancients     the house that meets the court (court.py): its percept carries the court task it meets and its own
-               mind's program; a call "answer" submits the mind's steps through the house, signed with the
-               ancients' key
+  ancients     an ancients' house (court.py)
+  every seat   is put a court task when it has none (court.hand_tasks); its mind answers with "answer" - its own
+               rule's tape and its outputs - filed under the ancients' reserve key (puzzle solving is the minds')
   progenitor   a line: send, recall, fold, handle, forge (command.py) - beat: one of its people's generations
   steward      a realm: claim, withdraw, grant, ascend, quarantine, fortify - beat: its steward's term
 """
@@ -20,8 +20,8 @@ from fractions import Fraction
 from typing import Any, Dict, List, Optional
 
 FUNCTIONS = {"ancients": ("answer",),
-             "progenitor": ("send", "recall", "fold", "handle", "forge"),
-             "steward": ("claim", "withdraw", "grant", "ascend", "quarantine", "fortify")}
+             "progenitor": ("answer", "send", "recall", "fold", "handle", "forge"),
+             "steward": ("answer", "claim", "withdraw", "grant", "ascend", "quarantine", "fortify")}
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -89,8 +89,9 @@ def holder(kernel: Any, seat_id: str) -> Optional[str]:
 
 
 def hold_task(kernel: Any, seat_id: str, task: Dict[str, Any]) -> None:
-    """A court task before a seated ancients' mind, kept until it answers (its id as hex, so the record saves)."""
-    stats(kernel)["tasks"][seat_id] = {"id": task["id"].hex(), "train": task["train"], "test": task["test"]}
+    """A court task before a seated mind, kept until it answers or is let go (its id as hex, so the record saves)."""
+    stats(kernel)["tasks"][seat_id] = {"id": task["id"].hex(), "train": task["train"], "test": task["test"],
+                                       "since": kernel.cycle_count}
 
 
 def task_of(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
@@ -101,21 +102,16 @@ def task_of(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
 # ---------------------------------------------------------------------- PERCEPT
 def percept(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
     """What the seat perceives now, exact, with the built-in mind's counsel: what it would do in the seat."""
-    from xylarium.kernel import ascendance, court, intellect
+    from xylarium.kernel import ascendance
     s = _seat(kernel, seat_id)
     if s is None:
         return None
     rec: Dict[str, Any] = {"seat": seat_id, "role": s["role"], "on": s["on"], "cycle": kernel.cycle_count,
                            "functions": s["functions"], "counsel": []}
-    if s["role"] == "ancients":
-        rec["crystals"] = [repr(c) for c in intellect.vocabulary(kernel, s["on"])]
-        task = task_of(kernel, seat_id)
-        if task is not None:
-            rec["task"] = {"id": task["id"].hex(), "train": task["train"], "test": task["test"]}
-            got = court.meet(kernel, s["on"], task)
-            rec["counsel"].append({"call": "answer", "steps": got["steps"]} if "steps" in got
-                                  else {"call": None, "beyond": got["beyond"]})
-    elif s["role"] == "steward":
+    task = task_of(kernel, seat_id)
+    if task is not None:                                   # the court's task before it: the mind's own to solve
+        rec["task"] = {"id": task["id"].hex(), "train": task["train"], "test": task["test"]}
+    if s["role"] == "steward":
         petitions = {w: r for w, r in ascendance.stats(kernel)["of"].items() if r["realm"] == s["on"]} \
             if "ascendance" in kernel.state else {}
         rec["petitions"] = {w: {"ruling": r["ruling"], "books": r.get("books"), "since": r["since"]}
@@ -155,43 +151,25 @@ def call(kernel: Any, seat_id: str, vk_hex: str, function: str, **args: Any) -> 
 
 
 def _answer(kernel: Any, s: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]:
-    """The ancients' house relays its mind's steps to the court, signed with the ancients' key."""
-    import os
+    """File a seated mind's answer to the task before its seat - its own rule's tape and its outputs, as ACT_SOLVE
+    writes them - under the ancients' reserve key: the court pays the reserve."""
     from xylarium.kernel import court
     from xylarium.uplink import anastome as an
-    from xylarium.uplink import mind
     task = task_of(kernel, s["id"])
     addr = court.endpoint()
     if task is None or addr is None:
         return {"ok": False, "why": "no court task before the seat" if task is None else "no hypha named"}
-    if args.get("tape"):                                   # the mind's own rule, minted by its own engine
-        host, port = addr.rsplit(":", 1)
-        body = an.speak((host, int(port)), an.solve_raw(an.key("ancients"), task["id"], args["outputs"], args["tape"]))
-        v = an.read_verdict(body)
-        v["verdict"] = {2: "bounty", 1: "floor"}.get(v.get("code"), "nothing")
-        steps = []
-    else:
-        steps = args.get("steps") or []
-        outputs = [_run_steps(steps, t) for t in task["test"]]
-        v = mind.submit(addr, os.path.join(an.KEYS, "ancients.ed25519"), task, steps, outputs)
+    if not args.get("tape") or not args.get("outputs"):
+        return {"ok": False, "why": "the answer does not read"}
+    host, port = addr.rsplit(":", 1)
+    body = an.speak((host, int(port)), an.solve_raw(an.key("ancients"), task["id"], args["outputs"], args["tape"]))
+    v = an.read_verdict(body)
+    v["verdict"] = {2: "bounty", 1: "floor"}.get(v.get("code"), "nothing")
     kind = "closed" if v.get("verdict") in ("bounty", "floor") else "refused"
     court._deed(kernel, s["on"], kind, {"verdict": v.get("verdict"), "why": v.get("why"), "mu": v.get("mu"),
-                                        "steps": steps, "by": "seated mind"})
+                                        "by": "seated mind"})
     stats(kernel)["tasks"].pop(s["id"], None)
     return {"ok": kind == "closed", "verdict": v.get("verdict"), "mu": v.get("mu"), "why": v.get("why")}
-
-
-def _run_steps(steps: List[Dict[str, Any]], g: List[List[int]]) -> List[List[int]]:
-    from xylarium.kernel import crystal as C
-    names = dict(zip(("Rotate90", "Rotate180", "Rotate270", "FlipH", "FlipV", "Transpose"), C.FRAME_OPS))
-    grid = tuple(tuple(r) for r in g)
-    for st in steps:
-        if "motion" in st:
-            grid = C.run([names[st["motion"]]], grid)
-        else:
-            hm = {int(a): int(b) for a, b in st["hue"]}
-            grid = tuple(tuple(hm.get(c, c) for c in row) for row in grid)
-    return [list(r) for r in grid]
 
 
 def _outcome(kernel: Any, seat_id: str, function: str, args: Dict[str, Any], out: Dict[str, Any]) -> None:

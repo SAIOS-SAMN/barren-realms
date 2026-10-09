@@ -1,17 +1,13 @@
 """
-Xylarium court: the hyphae's registry tasks, met in the world by the ancients' minds (Concordance 3.8, 4, 6.2a).
+Xylarium court: the hyphae's registry tasks, relayed to the seated minds (Concordance 3.8, 4, 6.2a).
 
-Only the ancients are connected to the tubes: a court task reaches an ANCIENTS' HOUSE (board.ancient_peoples), once a
-year of its thinking, as a puzzle met in its world. Its mind answers it the way it climbs its own ladders
-(intellect.py): it reads the coordinate off the train pairs and DECOMPACTS it into a program over the crystals its
-people holds - no search, nothing it has not learned. It fails where its crystals cannot express the coordinate, or
-where the work (every cell through the frame orbit and each op it writes) exceeds the thought it has in the year.
-A program it can write is checked at home on every train pair, translated into the court's steps (each crystal a
-rigid motion of the grid, a recolouring a hue map: uplink.mind.steps_of), minted and judged at home by barren-solve,
-and submitted signed with the ANCIENTS' key - the court pays the ancients, in mu. Every meeting is a deed on the
-house's books: closed (bounty or floor, its mu), refused (the court's reason), or beyond it (by name).
+ALL PUZZLE SOLVING IS THE MYCELIUM-CLIENT MINDS' (operator ruling, 2026-10-09): a kernel grows no crystals to solve
+court tasks. The house pulls a task under the ANCIENTS' reserve key and puts it before a seated mind that has none
+(a PERCEPT, record kind 4 [Key(citation)]); the mind answers with fn 1 [Bytes(its rule's tape), Bytes(the test
+outputs)], and the house files it under the reserve key - the court pays the ancients' reserve, in mu. A task left
+unanswered PATIENCE cycles is let go. Every answer is a deed on the seat's house's books: closed (bounty or floor,
+its mu) or refused (the court's reason). The same shape as xylarium-kernel's house.rs (fn 1 SOLVE).
 
-Younger peoples meet no court task: they climb their own ladders in the world (intellect.forge), judged there.
 The court is reached only where an endpoint is named (XYL_HYPHA, "host:port"); with none, no traffic leaves.
 """
 
@@ -39,46 +35,6 @@ def houses(kernel: Any) -> List[str]:
         return []
 
 
-def _thought(kernel: Any, house: str) -> float:
-    """Operations of thought the house has in a year (intellect's measure)."""
-    from xylarium.kernel import intellect
-    rec = intellect._peoples(kernel).get(house)
-    return rec["effort"] * intellect.OPS_PER_UNIT * 4 if rec else 0.0
-
-
-def _grid(g: List[List[int]]) -> tuple:
-    return tuple(tuple(int(c) for c in row) for row in g)
-
-
-def meet(kernel: Any, house: str, task: Dict[str, Any]) -> Dict[str, Any]:
-    """The house's mind meets a court task: its own program, or why it has none. -> {"program", "steps",
-    "outputs"} or {"beyond": reason}."""
-    from xylarium.kernel import crystal as C
-    from xylarium.kernel import intellect
-    from xylarium.uplink import mind
-    train = [(_grid(a), _grid(b)) for a, b in task["train"]]
-    tests = [_grid(t) for t in task["test"]]
-    if not train or not tests:
-        return {"beyond": "no family to read"}
-    program = intellect.decompact(intellect.vocabulary(kernel, house), {"rank": 2, "train": train, "test": tests[0]})
-    if not program:
-        return {"beyond": "its crystals cannot express the coordinate"}
-    words = intellect.expand(program)
-    cells = sum(len(g) * len(g[0]) for pair in train for g in pair) + sum(len(t) * len(t[0]) for t in tests)
-    work = cells * (len(C.D4) + len(words))
-    if work > _thought(kernel, house):
-        return {"beyond": "the work exceeds its year's thought", "work": work}
-    if any(C.run(words, a) != b for a, b in train):
-        return {"beyond": "its program misreads a train pair"}
-    steps = mind.steps_of(words)
-    if steps is None:
-        return {"beyond": "its program has no form in the court's language"}
-    outs = [C.run(words, t) for t in tests]
-    if any(o is None for o in outs):
-        return {"beyond": "its program makes no grid of a test"}
-    return {"program": words, "steps": steps, "work": work, "outputs": [[list(r) for r in o] for o in outs]}
-
-
 def _deed(kernel: Any, house: str, kind: str, data: Dict[str, Any]) -> None:
     from xylarium.kernel import history
     rec = stats(kernel)["of"].setdefault(house, {"met": 0, "closed": 0, "refused": 0, "beyond": 0,
@@ -91,46 +47,43 @@ def _deed(kernel: Any, house: str, kind: str, data: Dict[str, Any]) -> None:
                   cause=data.get("why") or data.get("verdict") or "", data=data)
 
 
-def season(kernel: Any) -> List[str]:
-    """Once a year of thinking: each ancients' house meets the court task the registry hands it."""
-    from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
-    if (kernel.cycle_count // FISCAL_QUARTER_CYCLES) % 4:
-        return []
-    addr = endpoint()
-    if addr is None:
-        return []
+PATIENCE = 600                  # cycles a task waits before its seat before it is let go (house.rs)
+
+
+def hand_tasks(kernel: Any, speak: Any) -> int:
+    """Put a court task before every seated mind that has none, and let go a task left past its patience. `speak`
+    posts an act to the hypha and returns its reply. Returns how many were handed."""
+    from xylarium.kernel import seats
     from xylarium.uplink import anastome as an
-    from xylarium.uplink import mind
-    host, port = addr.rsplit(":", 1)
-    logs: List[str] = []
-    for house in houses(kernel):
-        try:
-            task = an.read_task(an.speak((host, int(port)), an.task_request(an.key("ancients"))))
-        except Exception as e:                             # the hypha is another node: its fault never stops ours
-            logs.append(f"[COURT] the hypha did not answer: {type(e).__name__}: {e}")
-            break
+    tasks = seats.stats(kernel)["tasks"]
+    st = stats(kernel)
+    for sid, t in list(tasks.items()):
+        if kernel.cycle_count - int(t.get("since", kernel.cycle_count)) > PATIENCE:
+            tasks.pop(sid)
+            st["let_go"] = st.get("let_go", 0) + 1
+    handed = 0
+    for s in seats.seats(kernel):
+        if not s["held_by"] or s["id"] in tasks:
+            continue
+        task = an.read_task(speak(an.task_request(an.key("ancients"))))
         if task is None or not task["train"] or not task["test"]:
-            break                                          # the registry's book is settled: an empty reply is no task
-        from xylarium.kernel import seats
-        if "seats" in kernel.state and seats.holder(kernel, f"ancients:{house}"):
-            seats.hold_task(kernel, f"ancients:{house}", task)       # its seated mind answers it (seats.call)
-            continue
-        got = meet(kernel, house, task)
-        if "beyond" in got:
-            _deed(kernel, house, "beyond", {"why": got["beyond"]})
-            continue
-        v = mind.submit(addr, os.path.join(an.KEYS, "ancients.ed25519"), task, got["steps"], got["outputs"])
-        kind = "closed" if v.get("verdict") in ("bounty", "floor") else "refused"
-        _deed(kernel, house, kind, {"verdict": v.get("verdict"), "why": v.get("why"), "mu": v.get("mu"),
-                                    "steps": got["steps"]})
-        logs.append(f"[COURT] The {house.split(':', 1)[-1]}: {kind} ({v.get('verdict')}).")
-    return logs
+            break                                          # the registry's book is settled: no task is no work
+        seats.hold_task(kernel, s["id"], task)
+        handed += 1
+    st["handed"] = st.get("handed", 0) + handed
+    return handed
+
+
+def season(kernel: Any) -> List[str]:
+    """The court is met by the seated minds, on the house relay's beat (house.turn): the year adds nothing here."""
+    return []
 
 
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)["of"]
     return {"houses": len(st), "closed": sum(r["closed"] for r in st.values()),
-            "beyond": sum(r["beyond"] for r in st.values())}
+            "refused": sum(r["refused"] for r in st.values()), "handed": stats(kernel).get("handed", 0),
+            "let_go": stats(kernel).get("let_go", 0)}
 
 
 from xylarium.kernel import state  # noqa: E402

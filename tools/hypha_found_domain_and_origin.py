@@ -26,6 +26,10 @@ def main() -> None:
     r = an.speak(addr, an.reserve(domain, an.vk(an.key("ancients")), os.urandom(32)))
     out["reserve"] = "reserved" if r[:1] == b"\x06" else (r.hex() if r else "silence")   # the ancients' tier
     print(json.dumps(out, indent=2))
+    from xylarium.uplink import house                     # the relay reads a new genesis as a recut: it lists anew
+    if isinstance(out["genesis"], dict) and out["genesis"].get("receipt"):
+        with open(house.GENESIS, "w") as f:
+            json.dump({"addr": f"{host}:{port}", "receipt": out["genesis"]["receipt"]}, f)
 
 
 if __name__ == "__main__":

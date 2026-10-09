@@ -76,9 +76,28 @@ if __name__ == "__main__":
 
 class TestAnswerWithTape(unittest.TestCase):
     def test_bytes_args_round_trip_and_answer_carries_the_tape(self):
-        a = w.args([(w.BYTES, b"tape-bytes"), (w.BYTES, b"\x01\x01\x00\x01\x00\x07"), (w.COUNT, 6)])
+        a = w.args([(w.BYTES, b"tape-bytes"), (w.BYTES, b"\x01\x01\x00\x01\x00\x07")])
         got, _ = w.read_args(a, 0)
         self.assertEqual(got[0], (w.BYTES, b"tape-bytes"))
         k = GameKernel(seed=42)
         self.assertEqual(house.kwargs_of(k, "answer", got), {"tape": b"tape-bytes", "outputs": b"\x01\x01\x00\x01\x00\x07"})
-        self.assertEqual(house.kwargs_of(k, "answer", [(w.COUNT, 6)]), {"steps": [{"motion": "Transpose"}]})
+        self.assertEqual(house.kwargs_of(k, "answer", [(w.COUNT, 6)]), {})     # fn 1 is the minds' tape, never steps
+        self.assertEqual(w.FUNCTIONS[1], ("answer", (w.BYTES, w.BYTES)))        # house.rs: [Bytes(tape), Bytes(outputs)]
+
+
+class TestRecut(unittest.TestCase):
+    def test_a_new_genesis_lists_anew_and_reads_mail_from_the_start(self):
+        from unittest import mock
+        k = GameKernel(seed=42)
+        spheres.ensure(k)
+        posted = []
+        with mock.patch.object(house, "genesis", return_value="old"):
+            house.turn(k, lambda act: posted.append(act) or b"\x01", lambda: [])
+            house.state(k)["mail_seq"] = 99
+            posted.clear()
+            house.turn(k, lambda act: posted.append(act) or b"\x01", lambda: [])
+        self.assertFalse(any(a[1] == w.SEATS for a in posted))            # the same hypha: listed already
+        with mock.patch.object(house, "genesis", return_value="new"):
+            house.turn(k, lambda act: posted.append(act) or b"\x01", lambda: [])
+        self.assertTrue(any(a[1] == w.SEATS for a in posted))             # a recut: listed anew
+        self.assertEqual(house.state(k)["mail_seq"], 0)
