@@ -55,38 +55,6 @@ def observe(k, path: str, t0: float, c0: int) -> None:
 LATTICE = 10                    # cycles between committable states: an entry is made at a lattice cycle
 
 
-def ledger_entry(k, save: str) -> dict:
-    """An upward LEDGER ENTRY for this universe's own axis (operator, coordinator and mycelium, 2026-10-09): the
-    universe runs on its own clock, its cycle u, never bound to TUniversal's height; at a committed moment it makes
-    the hypha's ledger act (anastome.ledger_act, ACT_DOMAIN sub-kind 8): u, a commitment to its whole state (the
-    saved file's digest), the last FINAL point it read, and its parent entry (a chain per axis), signed by the
-    domain's reserve. Kept here, in order, until the act ships with 78.154; the (u, h) pairs map this clock onto
-    the mesh."""
-    import hashlib
-    from xylarium.uplink import anastome as an, house
-    path = save.replace(".json", ".ledger.jsonl")
-    parent = bytes(32)
-    if os.path.exists(path):
-        with open(path) as f:
-            lines = f.read().splitlines()
-        if lines:
-            parent = bytes.fromhex(json.loads(lines[-1])["hash"])
-    h = hashlib.sha256()
-    with open(save, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    p = an.LAST_POINT["point"]
-    act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), k.cycle_count, h.digest(), p, parent,
-                        os.urandom(32))
-    body = {"axis": house.genesis(), "u": k.cycle_count, "commitment": h.hexdigest(),
-            "point": an.point_text(p) if p else None, "parent": parent.hex(),
-            "point_wire": an.put_point(p).hex(), "hash": hashlib.sha256(act).hexdigest(), "act": act.hex(),
-            "posted": False}                              # at posting: re-signed, parent = the court's entry hash
-    with open(path, "a") as f:
-        f.write(json.dumps(body) + "\n")
-    return body
-
-
 def _clock_reader(addr: str, period_s: float = 1.0) -> None:
     """Read the court's clock once a period; each reply carries the final point (anastome.LAST_POINT). The game
     never waits on it: a tick takes the last point heard."""
@@ -126,6 +94,9 @@ def main() -> None:
         import threading
         threading.Thread(target=_clock_reader, args=(court.endpoint(),), daemon=True).start()
     commit_due = False
+    from concurrent.futures import ProcessPoolExecutor
+    from xylarium.uplink import ledger
+    pool, committing = ProcessPoolExecutor(max_workers=1), None   # the ledger's commitments, off the universe's time
     while not STOP["now"]:
         k.tick_simulation()                               # its own clock: it runs at its own pace
         rec = court.stats(k)["of"] if "court" in k.state else {}
@@ -152,11 +123,18 @@ def main() -> None:
         if commit_due and k.cycle_count % LATTICE == 0:
             commit_due, last["save"] = False, now
             StatePersistence.save_to_file(k, save)
-            try:
-                e = ledger_entry(k, save)
-                log(f"ledger: u {e['u']} commits {e['commitment'][:16]} under {e['point'] or 'no final point yet'}")
-            except Exception as ex:                       # the ledger is a record: its fault never stops the universe
-                log(f"ledger: entry not made: {type(ex).__name__}: {ex}")
+            if committing is None or committing.done():   # one commitment at a time, in order
+                if committing is not None and committing.exception() is not None:
+                    log(f"ledger: entry not made: {committing.exception()!r}")
+                elif committing is not None:
+                    e = committing.result()
+                    log(f"ledger: u {e['u']} commits {e['commitment'][:16]} under {e['point'] or 'no final point'}")
+                import shutil
+                from xylarium.uplink import anastome as an
+                snap = save.replace(".json", f".commit.{k.cycle_count}.json")
+                shutil.copyfile(save, snap)
+                committing = pool.submit(ledger.entry, k.cycle_count, snap, save.replace(".json", ".ledger.jsonl"),
+                                         an.LAST_POINT["point"])
     StatePersistence.save_to_file(k, save)
     log(f"saved at cycle {k.cycle_count}; stopped")
 
