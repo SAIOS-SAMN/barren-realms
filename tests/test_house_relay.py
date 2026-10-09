@@ -100,6 +100,15 @@ class TestMailOnce(unittest.TestCase):
         self.assertEqual(sum(1 for a in posted if a[1] == w.TAKEN), 1)
 
 
+class TestCursor(unittest.TestCase):
+    def test_the_cursor_follows_the_last_read_even_when_a_restarted_hypha_counts_from_one(self):
+        k = GameKernel(seed=42)
+        spheres.ensure(k)
+        house.state(k)["mail_seq"] = 1582                                 # the old hypha's count
+        house.turn(k, lambda act: b"\x01", lambda: [(3, w.CALL, b"\x53\x04x"), (4, w.CALL, b"\x53\x04y")])
+        self.assertEqual(house.state(k)["mail_seq"], 4)                   # its box drains by this cursor
+
+
 class TestRecut(unittest.TestCase):
     def test_a_new_genesis_lists_anew_and_reads_mail_from_the_start(self):
         from unittest import mock

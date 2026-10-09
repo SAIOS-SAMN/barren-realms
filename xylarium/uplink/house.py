@@ -126,7 +126,9 @@ def turn(kernel: Any, speak: Callable[[bytes], bytes], mail: Callable[[], List[T
             did["listed"] = 1
     seen = st.setdefault("answered", [])                     # the mail it has answered (the act's digest): a box
     for seq, sub, act in mail():                              # that hands back what was read is answered once
-        st["mail_seq"] = max(st["mail_seq"], seq)
+        st["mail_seq"] = seq                                  # the last read, never max(old, new): a restarted
+        #                                                       hypha numbers its mail from 1 again, and a cursor
+        #                                                       past its seq is stale (the box is read from 0)
         digest = hashlib.sha256(act).hexdigest()[:32]
         if digest in seen:
             continue
