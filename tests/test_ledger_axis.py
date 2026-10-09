@@ -78,7 +78,21 @@ class TestRenumber(unittest.TestCase):
         self.assertTrue(all(a[35] == 12 for a in acts))
         self.assertEqual([ledger.read(a)["u"] for a in acts], [0, 10, 20])
         self.assertEqual(ledger.read(acts[2])["parent"], ledger.read(acts[1])["hash"])
+        self.assertEqual(ledger.renumber(led), 0)                          # the chain holds: nothing to re-make
         VerifyKey(an.vk(an.key("ancients"))).verify(an.LEDGER_TAG + acts[2][1:33] + acts[2][36:-64], acts[2][-64:])
+
+
+class TestChainAsTheCourtHashes(unittest.TestCase):
+    def test_a_parent_is_blake3_of_the_previous_entrys_signed_bytes(self):
+        import blake3
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        led = os.path.join(d, "u.ledger.rec")
+        ledger.entry(0, bytes(32), led, None)
+        ledger.entry(10, bytes([1]) * 32, led, None)
+        first, second = ledger.acts(led)
+        signed = an.LEDGER_TAG + first[1:33] + first[36:256]               # atlas.rs LedgerEntry::signed_bytes
+        self.assertEqual(second[192:224], blake3.blake3(signed).digest())
 
 
 class TestCache(unittest.TestCase):

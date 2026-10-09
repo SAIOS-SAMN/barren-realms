@@ -62,11 +62,8 @@ def digest(events: List[Dict[str, Any]]) -> bytes:
     if not level:
         return bytes(32)
     while len(level) > 1:
-        nxt = []
-        for i in range(0, len(level) - 1, 2):
-            h = blake3.blake3(derive_key_context=NODE)
-            h.update(level[i] + level[i + 1])
-            nxt.append(h.digest())
+        from xylarium.persistence import smt              # the commitment's node rule (zero over two zeros)
+        nxt = [smt._node(level[i], level[i + 1]) for i in range(0, len(level) - 1, 2)]
         if len(level) % 2:
             nxt.append(level[-1])
         level = nxt

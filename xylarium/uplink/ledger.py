@@ -7,7 +7,6 @@ read, and its parent entry (a chain per axis), signed by the domain's reserve. K
 with 78.154 (then re-signed with parent = the court's returned hash).
 """
 
-import hashlib
 import os
 import struct
 from typing import Any, Dict, List, Optional
@@ -25,22 +24,37 @@ def acts(ledger: str) -> List[bytes]:
     return [b[i:i + ACT_LEN] for i in range(0, len(b) - len(b) % ACT_LEN, ACT_LEN)]
 
 
+def entry_hash(act: bytes) -> bytes:
+    """An entry's hash - what its successor names as parent (mycelium atlas.rs LedgerEntry::hash): blake3 of exactly
+    its signed bytes, the tag, domain, u, commitment, events, point, parent and nonce."""
+    import blake3
+    from xylarium.uplink import anastome as an
+    return blake3.blake3(an.LEDGER_TAG + act[1:33] + act[36:256]).digest()
+
+
 def read(act: bytes) -> Dict[str, Any]:
     """An entry decoded from its act: u, the commitment, the events digest, the point, its parent, its hash."""
     from xylarium.uplink import anastome as an
     p = an.read_point(act[108:192])
     return {"u": struct.unpack_from("<Q", act, 36)[0], "commitment": act[44:76].hex(), "events": act[76:108].hex(),
             "point": an.point_text(p) if p and any(act[108:192]) else None, "parent": act[192:224].hex(),
-            "hash": hashlib.sha256(act).hexdigest()}
+            "hash": entry_hash(act).hex()}
 
 
 def renumber(ledger: str) -> int:
-    """Rebuild a ledger whose acts carry an older sub-kind (78.154 moved LEDGER from 8 to 12): each act re-made in
-    order with its own u, commitment, events, point and nonce, its parent the new hash of the one before, signed
-    again. Returns the acts rebuilt."""
+    """Rebuild a ledger whose acts the court would not chain: an older sub-kind (78.154 moved LEDGER from 8 to 12),
+    or a parent that is not the hash of the act before it (the court's: blake3 of the signed bytes). Each act is
+    re-made in order with its own u, commitment, events, point and nonce, its parent the hash of the one before,
+    signed again. Returns the acts rebuilt (0 where the chain already holds)."""
     from xylarium.uplink import anastome as an
     old = acts(ledger)
-    if not old or all(a[35] == an.LEDGER_SUB for a in old):
+    expect, sound = bytes(32), True
+    for a in old:
+        if a[35] != an.LEDGER_SUB or a[192:224] != expect:
+            sound = False
+            break
+        expect = entry_hash(a)
+    if not old or sound:
         return 0
     out, parent = [], bytes(32)
     for a in old:
@@ -48,7 +62,7 @@ def renumber(ledger: str) -> int:
         act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), struct.unpack_from("<Q", a, 36)[0],
                             a[44:76], a[76:108], p, parent, a[224:256])
         out.append(act)
-        parent = hashlib.sha256(act).digest()
+        parent = entry_hash(act)
     with open(ledger + ".tmp", "wb") as f:
         f.write(b"".join(out))
     os.replace(ledger + ".tmp", ledger)
@@ -65,7 +79,7 @@ def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
     from xylarium.uplink import anastome as an
     ev = list(inputs or [])
     prior = acts(ledger)
-    parent = hashlib.sha256(prior[-1]).digest() if prior else bytes(32)
+    parent = entry_hash(prior[-1]) if prior else bytes(32)
     act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), u, root, _inputs.digest(ev), point, parent,
                         os.urandom(32))
     assert len(act) == ACT_LEN
