@@ -62,6 +62,17 @@ class TestSparseMerkle(unittest.TestCase):
                             smt.root_of(records.records_of({"a": {"x": 2, "y": [1.5, None]}, "b": "t"})))
 
 
+class TestCache(unittest.TestCase):
+    def test_a_worlds_body_is_saved_as_cache_and_not_committed(self):
+        state = {"sectors": {"1": {"planets": [{"id": "p", "body": {"q": "1/1"}, "population": 5}]}}}
+        recs = records.records_of(state)
+        kept = records.committed(recs)
+        self.assertEqual(len(recs) - len(kept), 1)                            # the body: saved, not committed
+        self.assertEqual(records.decode(b"".join(recs)), state)              # the save still holds it
+        moved = {"sectors": {"1": {"planets": [{"id": "p", "body": {"q": "4/1"}, "population": 5}]}}}
+        self.assertEqual(smt.root_of(kept), smt.root_of(records.committed(records.records_of(moved))))
+
+
 class TestLedger(unittest.TestCase):
     def test_entries_chain_and_are_the_hypha_act_signed_by_the_reserve(self):
         d = tempfile.mkdtemp()
@@ -82,6 +93,8 @@ class TestInputs(unittest.TestCase):
         from xylarium.kernel import inputs
         from xylarium.kernel.engine import GameKernel
         k = GameKernel(seed=42)
+        genesis = inputs.take(k)                                             # its own laying-out: the redraws first
+        self.assertTrue(all(e["key"].startswith('["redraw"') for e in genesis))
         inputs.record(k, ["seat", "s1", "take"], ["ab"])
         inputs.record(k, ["order", "p1", "send"], ["realm"])
         ev = inputs.take(k)

@@ -134,9 +134,9 @@ def main() -> None:
             applied = inputs.take(k)                          # the inputs this entry commits: their effects are in
             recs = R.records_of(StatePersistence.snapshot(k))  # the state; the save IS the record set it commits
             StatePersistence.write_records(recs, save)
-            keyed = {smt._record_key(r): r for r in recs}
+            keyed = {smt._record_key(r): r for r in R.committed(recs)}   # the commitment covers no cache
             if not held:
-                fut = pool.submit(smt.worker_build, recs)
+                fut = pool.submit(smt.worker_build, list(keyed.values()))
             else:
                 fut = pool.submit(smt.worker_update, [r for key, r in keyed.items() if held.get(key) != r],
                                   [key for key in held if key not in keyed])

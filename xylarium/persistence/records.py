@@ -18,6 +18,8 @@ Xylarium records: the universe's state as the record set its commitment hashes -
            A record holds at most 255 arguments; an entity with more children continues in PARTS, each its own
            record at its path with a negative last index (-1, -2, ...).
   STREAM   the records in key order, each (key length u16 LE, key, values) - the very bytes a ledger leaf hashes.
+  CACHE    records the save keeps but the commitment does not cover (is_cache): derived values kept so a load need
+           not derive them. The commitment covers only what cannot be derived.
 """
 
 import json
@@ -118,6 +120,25 @@ def entities(root: Any) -> Iterator[Tuple[bytes, bytes]]:
             key = _dumps(path if i == 0 else path + [-i]).encode()
             vals = [_count(OBJ if obj else LIST), _count(len(parts))] + args
             yield key, bytes([len(vals)]) + b"".join(vals)
+
+
+def is_cache(key: bytes) -> bool:
+    """A record the save keeps but the commitment does not: a value any law derives (Concordance 1.13), kept only so
+    a load need not derive it - a world's body, drawn by creation (its redraws are inputs, kernel/inputs.py)."""
+    if b'"planets"' not in key or b'"body"' not in key:
+        return False
+    p = json.loads(key)
+    return len(p) >= 5 and p[0] == "sectors" and p[2] == "planets" and p[4] == "body"
+
+
+def committed(recs: List[bytes]) -> List[bytes]:
+    """The records the commitment covers: all but the cache."""
+    out = []
+    for r in recs:
+        (kl,) = struct.unpack_from("<H", r, 0)
+        if not is_cache(r[2:2 + kl]):
+            out.append(r)
+    return out
 
 
 def records_of(root: Any) -> List[bytes]:

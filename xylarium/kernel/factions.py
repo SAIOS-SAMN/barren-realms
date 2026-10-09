@@ -307,6 +307,8 @@ class FactionManager:
             for i, (p, pop, citadel) in enumerate(world_specs):
                 if p.planet_type not in ("TERRESTRIAL", "OCEANIC"):
                     physics.reseat(kernel.sectors[p.sector_id], p, "TERRESTRIAL")   # a biotic people's world
+                    from xylarium.kernel import inputs                 # a body redrawn: an input, replayable (1.13)
+                    inputs.record(kernel, ["redraw", p.id], ["TERRESTRIAL"])
                 p.habitability = habitability("biotic", p.planet_type)
                 civ = CivilizationIntelligenceEngine.create_civilization(dict(polity))
                 civ.faction_id = key
