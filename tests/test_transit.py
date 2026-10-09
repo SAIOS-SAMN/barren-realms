@@ -154,6 +154,8 @@ class TestThroats(unittest.TestCase):
         self.assertEqual(w["owner"], who)
         self.assertAlmostEqual(net["bank_j"], cost / 2)
         self.assertEqual((line["acts"], line["forged"]), (1, 1))      # a progenitor line's deed: a highway built
+        transit.settle(self.k, who, "captain:x", anchor, target, 0.0, transits=3)
+        self.assertEqual(transit.stats(self.k)["pending_traverse"][transit.key(anchor, target)], 3)   # owed TRAVERSE
 
     def test_a_galaxy_beyond_stays_unwitnessed_until_a_ship_passes(self):
         from xylarium.kernel import cluster

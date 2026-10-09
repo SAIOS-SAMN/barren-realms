@@ -318,6 +318,9 @@ def settle(kernel: Any, holder: str, payer: str, a: int, b: int, toll: float, ti
     rec["transits"] += transits
     rec["year"] += transits
     st = stats(kernel)
+    if key(a, b) in st["worms"]:                             # a crossing through a throat: the hypha's TRAVERSE act
+        pend = st.setdefault("pending_traverse", {})         # (Concordance 5.9, 78.154) is owed it - never a kernel
+        pend[key(a, b)] = pend.get(key(a, b), 0) + transits  # shortcut; kept here until the act exists
     if tithe > 0:                                            # the books exact: the toll's own value, never rounded
         _add(st.setdefault("tithes", {}), holder, tithe)
         _add(st, "tithed", tithe)
@@ -927,7 +930,8 @@ def summary(kernel: Any) -> Dict[str, Any]:
     return {"paid_cr": round(book(st, "paid")), "tithed_cr": round(book(st, "tithed")),
             "tolled_lanes": sum(1 for r in st["lanes"].values() if book(r, "collected") > 0),
             "masters": sorted(st["masters"]), "throats": kinds, "forged": st["forged"],
-            "collapsed": st.get("collapsed", 0)}
+            "collapsed": st.get("collapsed", 0),
+            "pending_traverse": sum((st.get("pending_traverse") or {}).values())}
 
 
 from xylarium.kernel import state  # noqa: E402
