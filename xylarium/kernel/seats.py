@@ -82,6 +82,8 @@ def take(kernel: Any, seat_id: str, vk_hex: str) -> Dict[str, Any]:
         roles.stats(kernel)["of"][p] = "progenitor"
         stats(kernel)["lines"][p] = s["on"]
     held[seat_id] = vk_hex
+    from xylarium.kernel import inputs
+    inputs.record(kernel, ["seat", seat_id, "take"], [vk_hex])          # an input: a mind takes its seat
     return {"ok": True, "seat": seat_id, "as": p}
 
 
@@ -171,6 +173,9 @@ def call(kernel: Any, seat_id: str, vk_hex: str, function: str, **args: Any) -> 
         out = command.dispatch(kernel, pid(vk_hex, seat_id), function, **args)
     if s is not None:
         _outcome(kernel, seat_id, function, args, out)
+        from xylarium.kernel import inputs
+        inputs.record(kernel, ["seat", seat_id, "call", function],      # an input: a seated mind's call
+                      [vk_hex] + [args[k].hex() if isinstance(args[k], bytes) else str(args[k]) for k in sorted(args)])
     return out
 
 

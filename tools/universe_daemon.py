@@ -129,8 +129,10 @@ def main() -> None:
             commit_due = True                             # saved and committed at the next lattice cycle
         if commit_due and k.cycle_count % LATTICE == 0:
             commit_due, last["save"] = False, now
+            from xylarium.kernel import inputs
             from xylarium.uplink import anastome as an
-            recs = R.records_of(StatePersistence.snapshot(k))  # the save IS the record set the ledger commits
+            applied = inputs.take(k)                          # the inputs this entry commits: their effects are in
+            recs = R.records_of(StatePersistence.snapshot(k))  # the state; the save IS the record set it commits
             StatePersistence.write_records(recs, save)
             keyed = {smt._record_key(r): r for r in recs}
             if not held:
@@ -139,15 +141,16 @@ def main() -> None:
                 fut = pool.submit(smt.worker_update, [r for key, r in keyed.items() if held.get(key) != r],
                                   [key for key in held if key not in keyed])
             held = keyed
-            pending.append((k.cycle_count, an.LAST_POINT["point"], fut))
+            pending.append((k.cycle_count, an.LAST_POINT["point"], fut, applied))
         while pending and pending[0][2].done():                # each root, as it lands, becomes an entry - in order
-            u, point, fut = pending.pop(0)
+            u, point, fut, ev = pending.pop(0)
             if fut.exception() is not None:
                 log(f"ledger: entry not made: {fut.exception()!r}")
                 held, pending = {}, []                         # the tree is rebuilt whole at the next commit
                 break
-            e = ledger.entry(u, fut.result(), ledger_path, point)
-            log(f"ledger: u {e['u']} commits {e['commitment'][:16]} under {e['point'] or 'no final point'}")
+            e = ledger.entry(u, fut.result(), ledger_path, point, ev)
+            log(f"ledger: u {e['u']} commits {e['commitment'][:16]}, {e['inputs']} inputs, under "
+                f"{e['point'] or 'no final point'}")
     StatePersistence.save_to_file(k, save)
     log(f"saved at cycle {k.cycle_count}; stopped")
 

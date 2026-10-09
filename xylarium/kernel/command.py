@@ -367,7 +367,11 @@ def dispatch(kernel: Any, pid: str, name: str, **kw: Any) -> Dict[str, Any]:
           "swear": lambda: swear(kernel, pid, str(kw.get("house", ""))),
           "forswear": lambda: forswear(kernel, pid),
           "way": lambda: way(kernel, pid, str(kw.get("way", "solo")))}.get(name)
-    return fn() if fn is not None else _no(f"no order '{name}'")
+    if fn is None:
+        return _no(f"no order '{name}'")
+    from xylarium.kernel import inputs
+    inputs.record(kernel, ["order", pid, name], [str(kw[k]) for k in sorted(kw)])   # an input: a player's order
+    return fn()
 
 
 def standing(kernel: Any, pid: str) -> Dict[str, Any]:

@@ -13,9 +13,14 @@ import os
 from typing import Any, Dict, Optional
 
 
-def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """One entry: the state's commitment (the SMT root over its records, persistence/smt.py) at its cycle u, under
-    the last final point read, chained to the entry before it, signed by the domain's reserve."""
+def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
+          inputs: Optional[list] = None) -> Dict[str, Any]:
+    """One entry: the state's commitment (the SMT root over its records, persistence/smt.py) at its cycle u and the
+    digest of the inputs applied since the entry before (kernel/inputs.py), under the last final point read, chained
+    to that entry, signed by the domain's reserve. The inputs themselves are written beside the ledger, for replay."""
+    from xylarium.kernel import inputs as _inputs
+    ev = list(inputs or [])
+    events = _inputs.digest(ev)
     from xylarium.uplink import anastome as an, house
     parent = bytes(32)
     if os.path.exists(ledger):
@@ -23,10 +28,14 @@ def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]]) -> 
             lines = f.read().splitlines()
         if lines:
             parent = bytes.fromhex(json.loads(lines[-1])["hash"])
-    act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), u, root, point, parent, os.urandom(32))
-    body = {"axis": house.genesis(), "u": u, "commitment": root.hex(), "point": an.point_text(point) if point else None,
+    act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), u, root, events, point, parent, os.urandom(32))
+    body = {"axis": house.genesis(), "u": u, "commitment": root.hex(), "events": events.hex(), "inputs": len(ev),
+            "point": an.point_text(point) if point else None,
             "parent": parent.hex(), "point_wire": an.put_point(point).hex(), "hash": hashlib.sha256(act).hexdigest(),
             "act": act.hex(), "posted": False}
+    if ev:
+        with open(ledger.replace(".ledger.jsonl", ".inputs.jsonl"), "a") as f:
+            f.write(json.dumps({"entry": body["hash"], "u": u, "inputs": ev}) + "\n")
     with open(ledger, "a") as f:
         f.write(json.dumps(body) + "\n")
     return body

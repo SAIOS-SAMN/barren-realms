@@ -72,7 +72,25 @@ class TestLedger(unittest.TestCase):
         self.assertEqual((e1["parent"], e2["parent"], e2["commitment"]), ("00" * 32, e1["hash"], r2.hex()))
         act = bytes.fromhex(e2["act"])
         self.assertEqual((act[0], act[33:36]), (0x3E, bytes([0x80, 0, 8])))
+        self.assertEqual(act[76:108], bytes(32))                         # no inputs since: the events digest is zero
         VerifyKey(an.vk(an.key("ancients"))).verify(an.LEDGER_TAG + act[1:33] + act[36:-64], act[-64:])
+
+
+class TestInputs(unittest.TestCase):
+    def test_inputs_are_recorded_at_their_coordinate_and_digested_in_applied_order(self):
+        from xylarium.kernel import inputs
+        from xylarium.kernel.engine import GameKernel
+        k = GameKernel(seed=42)
+        inputs.record(k, ["seat", "s1", "take"], ["ab"])
+        inputs.record(k, ["order", "p1", "send"], ["realm"])
+        ev = inputs.take(k)
+        self.assertEqual(([e["key"] for e in ev], inputs.take(k)), (['["seat","s1","take"]', '["order","p1","send"]'], []))
+        self.assertNotEqual(inputs.digest(ev), inputs.digest(list(reversed(ev))))   # order is part of what happened
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        e = ledger.entry(5, bytes(32), os.path.join(d, "u.ledger.jsonl"), None, ev)
+        self.assertEqual((e["events"], e["inputs"]), (inputs.digest(ev).hex(), 2))
+        self.assertTrue(os.path.exists(os.path.join(d, "u.inputs.jsonl")))
 
 
 if __name__ == "__main__":
