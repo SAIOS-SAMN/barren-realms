@@ -2,26 +2,22 @@
 Xylarium seats: the house relay's game side - the seats a mind outside the game may take, what each perceives, the
 calls it may make, and what came of them (Concordance 3.8; the seat surface the universes share).
 
-Mycelium-client minds hold the ANCIENTS', PROGENITORS' and STEWARDS' seats (peoples grow by their own minds,
-intellect.py; captains are for players who want the personal touch). Barren-realms' ancients' house posts its
-seats, binds a mind to one (TAKE: one mind per seat, by its verifying key), posts each seat's PERCEPT on the seat's
-own beat with the built-in mind's COUNSEL, applies the mind's CALLs through the same doors a player's orders use
-(command.py), and keeps each OUTCOME as a deed on the seat's books. A taken seat is skipped by the built-in mind, as
-a player's is. The wire (the acts on the hypha) is the seam this module is spoken through; every number here is exact.
+Mycelium-client minds seat at the COUNCIL OF THE ANCIENTS only (Concordance 3.9): each ancients' house seats its
+council, which earns mu by court work. The progenitors' parliaments and the stewards' realms play in game - no
+network mind sits there. The house posts its seats, binds a mind to one (TAKE: one mind per seat, by its verifying
+key), posts each seat's PERCEPT on the seat's own beat, applies the mind's CALLs, and keeps each OUTCOME as a deed
+on the seat's books. The wire (the acts on the hypha) is the seam this module is spoken through; every number
+here is exact.
 
-  ancients     an ancients' house (court.py)
-  every seat   is put a court task when it has none (court.hand_tasks); its mind answers with "answer" - its own
-               rule's tape and its outputs - filed under the ancients' reserve key (puzzle solving is the minds')
-  progenitor   a line: send, recall, fold, handle, forge (command.py) - beat: one of its people's generations
-  steward      a realm: claim, withdraw, grant, ascend, quarantine, fortify - beat: its steward's term
+  ancients     an ancients' house (court.py): its council's seat is put a court task when it has none
+               (court.hand_tasks); its mind answers with "answer" - its own rule's tape and its outputs - filed under
+               the ancients' reserve key (puzzle solving is the minds')
 """
 
 from fractions import Fraction
 from typing import Any, Dict, List, Optional
 
-FUNCTIONS = {"ancients": ("answer",),
-             "progenitor": ("answer", "send", "recall", "fold", "handle", "forge"),
-             "steward": ("answer", "claim", "withdraw", "grant", "ascend", "quarantine", "fortify")}
+FUNCTIONS = {"ancients": ("answer",)}
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -41,18 +37,13 @@ def _q(x: Any) -> str:
 # ---------------------------------------------------------------------- SEATS
 def seats(kernel: Any) -> List[Dict[str, Any]]:
     """Every seat a mind may take: id, role, what it stands on, its functions, its beat (cycles), who holds it."""
-    from xylarium.kernel import board, clocks, court, spheres, stewardship
+    from xylarium.kernel import court
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
     held = stats(kernel)["held"]
     out: List[Dict[str, Any]] = []
-    for house in court.houses(kernel):
-        out.append({"id": f"ancients:{house}", "role": "ancients", "on": house, "beat": _q(4 * FISCAL_QUARTER_CYCLES)})
-    for line in sorted(board.progenitors(kernel)):
-        beat = clocks.lived_span(kernel, spheres.generation(kernel, line)) if line.startswith("civ:") else 0
-        out.append({"id": f"progenitor:{line}", "role": "progenitor", "on": line, "beat": _q(beat)})
-    for realm in stewardship.realms(kernel):
-        out.append({"id": f"steward:{realm}", "role": "steward", "on": realm,
-                    "beat": _q(stewardship.span_cycles(kernel, realm))})
+    for house in court.houses(kernel):                    # the council of the ancients: the only seats network minds
+        out.append({"id": f"ancients:{house}", "role": "ancients", "on": house,   # take (Concordance 3.9) - the
+                    "beat": _q(4 * FISCAL_QUARTER_CYCLES)})   # progenitors' parliaments and the stewards' realms play in game
     for s in out:
         s["functions"] = list(FUNCTIONS[s["role"]])
         s["held_by"] = held.get(s["id"])
@@ -65,8 +56,7 @@ def _seat(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
 
 # ---------------------------------------------------------------------- TAKE
 def take(kernel: Any, seat_id: str, vk_hex: str) -> Dict[str, Any]:
-    """Bind a mind to a seat - one mind per seat; the built-in mind steps aside as it does for a player."""
-    from xylarium.kernel import board, roles, stewardship
+    """Bind a mind to a seat - one mind per seat."""
     s = _seat(kernel, seat_id)
     if s is None:
         return {"ok": False, "why": f"no seat {seat_id}"}
@@ -74,17 +64,39 @@ def take(kernel: Any, seat_id: str, vk_hex: str) -> Dict[str, Any]:
     if held.get(seat_id) not in (None, vk_hex):
         return {"ok": False, "why": "the seat is held by another mind"}
     p = pid(vk_hex, seat_id)
-    if s["role"] == "steward":
-        stewardship.seat_steward(kernel, p, p, s["on"])
-    elif s["role"] == "progenitor":
-        line = board.progenitors(kernel)[s["on"]]
-        line["player"] = p
-        roles.stats(kernel)["of"][p] = "progenitor"
-        stats(kernel)["lines"][p] = s["on"]
     held[seat_id] = vk_hex
     from xylarium.kernel import inputs
     inputs.record(kernel, ["seat", seat_id, "take"], [vk_hex])          # an input: a mind takes its seat
     return {"ok": True, "seat": seat_id, "as": p}
+
+
+def release_unseatable(kernel: Any) -> List[str]:
+    """Seats a network mind may no longer hold (Concordance 3.9: minds seat at the ancients' councils only) are
+    released, and the game's own play takes them back: a progenitor line's player, a realm's steward, their roles
+    and bindings - each release an input. Returns the seats released."""
+    from xylarium.kernel import board, inputs, roles, stewardship
+    st = stats(kernel)
+    out = []
+    for seat_id, vk_hex in list(st["held"].items()):
+        if seat_id.startswith("ancients:"):
+            continue
+        p = pid(vk_hex, seat_id)
+        role, _, on = seat_id.partition(":")
+        if role == "progenitor":
+            line = (board.stats(kernel).get("progenitors") or {}).get(on)
+            if line is not None and line.get("player") == p:
+                line.pop("player", None)
+            st["lines"].pop(p, None)
+        elif role == "steward":
+            stw = stewardship.stats(kernel)["stewards"]
+            if stw.get(on) == p:
+                stw.pop(on, None)
+        roles.stats(kernel)["of"].pop(p, None)
+        st["held"].pop(seat_id, None)
+        st["tasks"].pop(seat_id, None)
+        inputs.record(kernel, ["seat", seat_id, "release"], [vk_hex])
+        out.append(seat_id)
+    return out
 
 
 def holder(kernel: Any, seat_id: str) -> Optional[str]:
@@ -104,8 +116,7 @@ def task_of(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
 
 # ---------------------------------------------------------------------- PERCEPT
 def percept(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
-    """What the seat perceives now, exact, with the built-in mind's counsel: what it would do in the seat."""
-    from xylarium.kernel import ascendance
+    """What the seat perceives now, exact: the court's task before it, if any."""
     s = _seat(kernel, seat_id)
     if s is None:
         return None
@@ -114,46 +125,7 @@ def percept(kernel: Any, seat_id: str) -> Optional[Dict[str, Any]]:
     task = task_of(kernel, seat_id)
     if task is not None:                                   # the court's task before it: the mind's own to solve
         rec["task"] = {"id": task["id"].hex(), "train": task["train"], "test": task["test"]}
-    if s["role"] == "steward":
-        petitions = {w: r for w, r in ascendance.stats(kernel)["of"].items() if r["realm"] == s["on"]} \
-            if "ascendance" in kernel.state else {}
-        rec["petitions"] = {w: {"ruling": r["ruling"], "books": r.get("books"), "since": r["since"]}
-                            for w, r in sorted(petitions.items())}
-        sat = ascendance.seat(kernel, s["on"])
-        for w, r in sorted(petitions.items()):
-            if r.get("books") and sat is not None:
-                verdict, lead = ascendance.judge(kernel, w, r, sat)
-                rec["counsel"].append({"call": "ascend" if verdict == "ascended" else "quarantine", "people": w,
-                                       "lead": lead})
-    elif s["role"] == "progenitor":
-        from xylarium.kernel import board, stewardship
-        line = board.progenitors(kernel).get(s["on"]) or {}
-        rec["line"] = {"name": line.get("name"), "standing": line.get("standing")}
-        rec["realms"] = [r for r in stewardship.realms(kernel) if stewardship.covers(kernel, s["on"], r)]
-        rec["counsel"] += _progenitor_counsel(kernel, s["on"])
     return rec
-
-
-def _progenitor_counsel(kernel: Any, who: str) -> List[Dict[str, Any]]:
-    """What the line's built-in mind would do from this seat: keep its throats as it handles them, and forge where
-    its FLOW lacks most from its nearest mouth (transit._forging's own read) - its worth that flow, its cost the
-    energy the forge spends. Handling and forging are not to be tried blind: a closed handling shuts every throat the
-    line holds, and a forge spends its banked energy."""
-    from xylarium.kernel import mindcore as mc
-    from xylarium.kernel import spheres, transit
-    out: List[Dict[str, Any]] = [{"call": "handle", "how": transit.stats(kernel)["handling"].get(who, "tolled")}]
-    if who not in transit.stats(kernel)["masters"]:
-        return out
-    held = set(spheres.stats(kernel)["nets"].get(who, {}).get("held", []))
-    anchors = sorted(x for x in transit.mouths(kernel) if x in held or x == transit.MOUTH_BASE)
-    if not anchors:
-        return out
-    res = transit.flow(kernel, who, anchors[0])
-    entry = mc.lead(res, ("flow",), deepest=True)
-    if entry is not None:
-        out.append({"call": "forge", "anchor": anchors[0], "target": int(entry[0]), "worth": res[entry],
-                    "cost": Fraction(str(transit.forge_cost_j(kernel, who, anchors[0], int(entry[0]))))})
-    return out
 
 
 # ---------------------------------------------------------------------- CALL and OUTCOME

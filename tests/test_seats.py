@@ -1,53 +1,60 @@
 """
-The house relay's game side: a mind takes a seat (one mind per seat) and the built-in mind steps aside; its percept
-carries the built-in mind's counsel; its calls go through the game's own doors, only from the mind that holds the
-seat and only within its role; every call is an outcome on the seat's books; a seated ancients' mind is handed the
-court task; its own answer is filed under the ancients' reserve.
+The house relay's game side (Concordance 3.9): network minds seat at the COUNCIL OF THE ANCIENTS only - one mind
+per seat, each seat its own player; calls come only from the mind that holds the seat and only within its role;
+every call is an outcome on the seat's books; a seated mind is handed the court task, and its own answer is filed
+under the ancients' reserve. The progenitors' and stewards' seats are not offered, and any held is released.
 """
 
 import os
+import struct
 import unittest
 from unittest import mock
 
-from xylarium.kernel import ascendance, court, seats, spheres, stewardship
+from xylarium.kernel import board, court, seats, spheres, stewardship
 from xylarium.kernel.engine import GameKernel
-import struct
-
 from xylarium.uplink import anastome as an
 
 VK, OTHER = "ab" * 32, "cd" * 32
+HOUSE, OTHER_HOUSE = "civ:Elder", "civ:Younger"
 
 
 class TestSeats(unittest.TestCase):
     def setUp(self):
+        p = mock.patch.object(court, "houses", return_value=[HOUSE, OTHER_HOUSE])
+        p.start()
+        self.addCleanup(p.stop)
         self.k = GameKernel(seed=42)
         spheres.ensure(self.k)
-        self.realm = stewardship.realms(self.k)[0]
-        self.seat = f"steward:{self.realm}"
+        self.seat = f"ancients:{HOUSE}"
 
-    def test_one_mind_per_seat_and_the_built_in_mind_steps_aside(self):
-        self.assertIsNone(stewardship.steward_of(self.k, self.realm))
+    def test_only_the_ancients_council_is_offered(self):
+        self.assertEqual({s["id"] for s in seats.seats(self.k)}, {f"ancients:{HOUSE}", f"ancients:{OTHER_HOUSE}"})
+        realm = stewardship.realms(self.k)[0]
+        self.assertFalse(seats.take(self.k, f"steward:{realm}", VK)["ok"])          # no network mind in a realm
+
+    def test_one_mind_per_seat_and_one_mind_may_hold_two_councils_each_its_own_player(self):
         self.assertTrue(seats.take(self.k, self.seat, VK)["ok"])
-        self.assertEqual(stewardship.steward_of(self.k, self.realm), seats.pid(VK, self.seat))    # a player's seat now
         self.assertFalse(seats.take(self.k, self.seat, OTHER)["ok"])
+        self.assertTrue(seats.take(self.k, f"ancients:{OTHER_HOUSE}", VK)["ok"])
+        self.assertNotEqual(seats.pid(VK, self.seat), seats.pid(VK, f"ancients:{OTHER_HOUSE}"))
 
-    def test_one_mind_holds_two_realms_and_each_seat_is_its_own_player(self):
-        other = stewardship.realms(self.k)[1]
-        self.assertTrue(seats.take(self.k, self.seat, VK)["ok"])
-        self.assertTrue(seats.take(self.k, f"steward:{other}", VK)["ok"])          # the same key, a second seat
-        self.assertEqual(stewardship.realm_held(self.k, seats.pid(VK, self.seat)), self.realm)
-        self.assertEqual(stewardship.realm_held(self.k, seats.pid(VK, f"steward:{other}")), other)
+    def test_calls_come_only_from_the_seated_mind_and_within_its_role(self):
+        seats.take(self.k, self.seat, VK)
+        self.assertEqual(seats.call(self.k, self.seat, OTHER, "answer")["why"], "the seat is not held by this mind")
+        self.assertIn("no function", seats.call(self.k, self.seat, VK, "forge")["why"])
+        self.assertEqual(seats.stats(self.k)["books"][self.seat]["calls"], 2)
 
-    def test_a_progenitor_seat_is_counselled_to_keep_its_handling_never_left_to_try_closing_blind(self):
-        from xylarium.kernel import board
-        line = next(iter(board.progenitors(self.k)), None)
-        if line is None:
-            self.skipTest("no progenitor line yet")
-        c = seats.percept(self.k, f"progenitor:{line}")["counsel"]
-        self.assertEqual(c[0], {"call": "handle", "how": "tolled"})
+    def test_a_progenitor_or_steward_seat_held_before_the_ruling_is_released_to_the_game(self):
+        realm = stewardship.realms(self.k)[0]
+        p = seats.pid(VK, f"steward:{realm}")
+        stewardship.stats(self.k)["stewards"][realm] = p
+        seats.stats(self.k)["held"][f"steward:{realm}"] = VK
+        self.assertEqual(seats.release_unseatable(self.k), [f"steward:{realm}"])
+        self.assertIsNone(stewardship.steward_of(self.k, realm))                  # the realm's own steward again
+        self.assertEqual(set(seats.stats(self.k)["held"]), set())
 
     def test_an_answer_not_judged_yet_keeps_its_task_and_is_filed_again(self):
-        house = "civ:Elder"
+        house = HOUSE
         task = {"id": bytes(range(32)), "train": [([[1]], [[1]])], "test": [[[2]]]}
         deferred = bytes([2]) + bytes(8) + bytes(32) + b"\0\0"            # the hypha's deferral: try again
         unread = bytes([3]) + struct.pack("<4Q", 0, 0, 0, 0)               # SOLVE_UNREAD: not judged yet
@@ -72,27 +79,8 @@ class TestSeats(unittest.TestCase):
         self.assertEqual(court.stats(self.k)["of"][house]["closed"], 1)
         self.assertIsNone(seats.task_of(self.k, seat))
 
-    def test_calls_come_only_from_the_seated_mind_and_within_its_role(self):
-        seats.take(self.k, self.seat, VK)
-        self.assertEqual(seats.call(self.k, self.seat, OTHER, "withdraw")["why"], "the seat is not held by this mind")
-        self.assertIn("no function", seats.call(self.k, self.seat, VK, "forge")["why"])
-        who = next(w for w in spheres.stats(self.k)["nets"] if spheres.presence(self.k, self.realm) != w)
-        ascendance.petition(self.k, who, self.realm)
-        self.assertTrue(seats.call(self.k, self.seat, VK, "quarantine", people=who)["ok"])
-        self.assertEqual(ascendance.ruling(self.k, who), "quarantine")
-        self.assertEqual(seats.stats(self.k)["books"][self.seat]["calls"], 3)
-
-    def test_a_stewards_percept_carries_the_built_in_minds_counsel(self):
-        who = next(w for w in spheres.stats(self.k)["nets"] if spheres.presence(self.k, self.realm) != w)
-        ascendance.petition(self.k, who, self.realm)
-        ascendance.stats(self.k)["of"][who]["books"] = ascendance.books(self.k, who, self.realm)
-        p = seats.percept(self.k, self.seat)
-        self.assertIn(who, p["petitions"])
-        self.assertEqual(p["counsel"][0]["people"], who)
-        self.assertIn(p["counsel"][0]["call"], ("ascend", "quarantine"))
-
     def test_a_seated_minds_answer_is_filed_under_the_ancients_reserve(self):
-        house = "civ:Elder"
+        house = HOUSE
         task = {"id": bytes(range(32)), "train": [([[1, 1, 2]], [[1], [1], [2]])], "test": [[[3, 4]]]}
         sent = []
         with mock.patch.object(court, "houses", return_value=[house]), \
@@ -108,6 +96,8 @@ class TestSeats(unittest.TestCase):
         self.assertEqual(sent[0], an.solve_raw(an.key("ancients"), task["id"], b"\x01OUT", b"RULE-TAPE"))
         self.assertEqual(court.stats(self.k)["of"][house]["closed"], 1)
         self.assertIsNone(seats.task_of(self.k, seat))
+
+
 
 if __name__ == "__main__":
     unittest.main()

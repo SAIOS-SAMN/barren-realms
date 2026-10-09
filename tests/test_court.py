@@ -19,7 +19,10 @@ class TestCourt(unittest.TestCase):
     def setUp(self):
         self.k = GameKernel(seed=42)
         spheres.ensure(self.k)
-        self.seat = f"steward:{stewardship.realms(self.k)[0]}"
+        p = mock.patch.object(court, "houses", return_value=["civ:Elder"])
+        p.start()
+        self.addCleanup(p.stop)
+        self.seat = "ancients:civ:Elder"
 
     def test_a_task_goes_only_before_a_seated_mind_and_is_pulled_under_the_reserve_key(self):
         asked = []

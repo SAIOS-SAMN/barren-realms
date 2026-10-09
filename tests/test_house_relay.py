@@ -1,25 +1,36 @@
 """
-The house relay on the seat wire: a mind's signed TAKE is answered TAKEN and binds the seat; its signed CALL goes
-through the game's doors and is answered OUTCOME with the call's ref; a held seat's PERCEPT is posted on its beat;
-a CALL signed by another key is refused and changes nothing.
+The house relay on the seat wire: a mind's signed TAKE of an ancients' council seat is answered TAKEN and binds the
+seat; its signed CALL is answered OUTCOME with the call's ref; a held seat's PERCEPT is posted on its beat; a CALL
+signed by another key is refused and changes nothing; seats a network mind may no longer hold are released (3.9).
 """
 
 import os
 import struct
 import unittest
+from unittest import mock
 
 from nacl.signing import SigningKey
 
-from xylarium.kernel import ascendance, seats, spheres, stewardship
+from xylarium.kernel import court, seats, spheres
 from xylarium.kernel.engine import GameKernel
 from xylarium.uplink import anastome as an, house, seat_wire as w
+
+HOUSE = "civ:Elder"
+TASK = {"id": bytes(range(32)), "train": [([[1]], [[1]])], "test": [[[2]]]}
+
+
+def _council(test):
+    for p in (mock.patch.object(court, "houses", return_value=[HOUSE]),
+              mock.patch.object(house, "genesis", return_value=None)):     # no recut: the live genesis is not ours
+        p.start()
+        test.addCleanup(p.stop)
 
 
 class TestHouseRelay(unittest.TestCase):
     def setUp(self):
+        _council(self)
         self.k = GameKernel(seed=42)
         spheres.ensure(self.k)
-        self.realm = stewardship.realms(self.k)[0]
         self.mind = SigningKey(bytes(range(32)))
         self.domain = an.vk(an.key("domain"))
         self.posted, self.inbox = [], []
@@ -29,10 +40,15 @@ class TestHouseRelay(unittest.TestCase):
         return house.turn(self.k, lambda act: self.posted.append(act) or b"\x01", lambda: mail)
 
     def _seat_n(self):
-        return next(s["n"] for s in house.numbered(self.k) if s["id"] == f"steward:{self.realm}")
+        return next(s["n"] for s in house.numbered(self.k) if s["id"] == f"ancients:{HOUSE}")
 
     def _act(self, sub, fields, key=None):
         return w.seal(key or self.mind, sub, fields)
+
+    def _answer(self, n, vk, key=None):
+        return self._act(w.CALL, self.domain + struct.pack("<I", n) + vk + os.urandom(32)
+                         + struct.pack("<H", w.FN_ID["answer"]) + w.args([(w.BYTES, b"tape"), (w.BYTES, b"\x01out")]),
+                         key=key)
 
     def test_take_call_outcome_and_percept(self):
         self._turn()
@@ -44,34 +60,33 @@ class TestHouseRelay(unittest.TestCase):
         taken = next(a for a in self.posted if a[1] == w.TAKEN)
         self.assertEqual(taken[-64 - 3], 1)                               # ok
         self.assertTrue(any(a[1] == w.PERCEPT for a in self.posted))      # the held seat perceives on its beat
-        who = next(x for x in spheres.stats(self.k)["nets"] if spheres.presence(self.k, self.realm) != x)
-        ascendance.petition(self.k, who, self.realm)
-        call = self._act(w.CALL, self.domain + struct.pack("<I", n) + vk + os.urandom(32)
-                         + struct.pack("<H", w.FN_ID["quarantine"]) + w.args([(w.KEY, w.name_key(who))]))
+        seats.hold_task(self.k, f"ancients:{HOUSE}", TASK)
+        call = self._answer(n, vk)
         self.inbox, self.posted = [(2, w.CALL, call)], []
-        self._turn()
+        bounty = bytes([2]) + struct.pack("<4Q", 0, 3, 0, 0)
+        with mock.patch.dict(os.environ, {court.ENDPOINT_ENV: "127.0.0.1:1"}), \
+                mock.patch.object(an, "speak", return_value=bounty):
+            self._turn()
         out = next(a for a in self.posted if a[1] == w.OUTCOME)
         self.assertEqual(out[2 + 32 + 4 + 32:2 + 32 + 4 + 32 + 32], w.call_ref(call))
-        self.assertEqual(out[2 + 32 + 4 + 32 + 32], 1)                   # applied
-        self.assertEqual(ascendance.ruling(self.k, who), "quarantine")
+        self.assertEqual(out[2 + 32 + 4 + 32 + 32], 1)                   # applied: the court closed it
+        self.assertEqual(court.stats(self.k)["of"][HOUSE]["closed"], 1)
 
     def test_a_call_signed_by_another_key_is_refused(self):
         n, vk = self._seat_n(), self.mind.verify_key.encode()
-        seats.take(self.k, f"steward:{self.realm}", vk.hex())
-        who = next(x for x in spheres.stats(self.k)["nets"] if spheres.presence(self.k, self.realm) != x)
-        ascendance.petition(self.k, who, self.realm)
-        forged = self._act(w.CALL, self.domain + struct.pack("<I", n) + vk + os.urandom(32)
-                           + struct.pack("<H", w.FN_ID["quarantine"]) + w.args([(w.KEY, w.name_key(who))]),
-                           key=SigningKey(bytes(32)))
-        self.inbox = [(1, w.CALL, forged)]
+        seats.take(self.k, f"ancients:{HOUSE}", vk.hex())
+        seats.hold_task(self.k, f"ancients:{HOUSE}", TASK)
+        self.inbox = [(1, w.CALL, self._answer(n, vk, key=SigningKey(bytes(32))))]
         self._turn()
         out = next(a for a in self.posted if a[1] == w.OUTCOME)
         self.assertEqual(out[2 + 32 + 4 + 32 + 32], 0)
-        self.assertEqual(ascendance.ruling(self.k, who), "pending")
+        self.assertIsNotNone(seats.task_of(self.k, f"ancients:{HOUSE}"))   # nothing changed
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_only_the_ancients_council_seats_are_listed_and_others_are_released(self):
+        self.assertEqual({s["role"] for s in house.numbered(self.k)}, {"ancients"})
+        seats.stats(self.k)["held"]["progenitor:civ:Elder"] = "ab" * 32      # held before the ruling
+        self._turn()
+        self.assertNotIn("progenitor:civ:Elder", seats.stats(self.k)["held"])
 
 
 class TestAnswerWithTape(unittest.TestCase):
@@ -87,11 +102,11 @@ class TestAnswerWithTape(unittest.TestCase):
 
 class TestMailOnce(unittest.TestCase):
     def test_a_take_handed_back_again_is_answered_once(self):
+        _council(self)
         k = GameKernel(seed=42)
         spheres.ensure(k)
-        realm = stewardship.realms(k)[0]
         mind = SigningKey(bytes(range(32)))
-        n = next(s["n"] for s in house.numbered(k) if s["id"] == f"steward:{realm}")
+        n = next(s["n"] for s in house.numbered(k) if s["id"] == f"ancients:{HOUSE}")
         take = w.seal(mind, w.TAKE, an.vk(an.key("domain")) + struct.pack("<I", n) + mind.verify_key.encode()
                       + os.urandom(32))
         posted = []
