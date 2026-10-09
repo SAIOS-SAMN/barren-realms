@@ -56,8 +56,11 @@ def _quarter() -> int:
 
 
 def _goods(kernel: Any, w: Any) -> List[str]:
-    from xylarium.kernel import staples
+    from xylarium.kernel import leak, staples, uses
     out = [staples.of(kernel, w), "ORE"]
+    medium = uses.medium(kernel, w) if (getattr(w, "society", None) or {}).get("air_hold") else None
+    if medium and medium not in out and leak.keep_units(kernel, w, medium) > 0:
+        out.append(medium)                                    # an ancients' world wants its leaking air back
     return out + sorted(k for k in (w.element_reserves or {}) if k not in out)
 
 

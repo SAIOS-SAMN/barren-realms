@@ -9,7 +9,9 @@ dissipates as that world loses its matter (operator rulings, 2026-10-09).
                own). A world gaining air leaks nothing.
   THE BASKET   the ancients hold the air their lineage rose in. Each season an ancients' world takes, from its own
                stores of its medium's good (uses.medium: water for a water people, cryogenite - ammonia - for an
-               ammonia people), the mass its air lost since, a hold slot's mass a unit (cargo.unit_kg). What its
+               ammonia people), the mass its air lost since, a hold slot's mass a unit (cargo.unit_kg); and it keeps
+               a season's loss in store (keep_units: staples.reserve), the want the trade its line's stewards broker
+               fills from the rim - the progenitors' convoys, earning their roads' tolls. What its
                stores cannot cover is air it no longer holds: the share of its native air it stands in falls (the
                world's atmosphere, which bounds what its land can feed). It never falls below what its world would
                hold untended - the model's own air at its age, over the air it held when first read: untended is the
@@ -97,6 +99,7 @@ def hold(kernel: Any, planet: Any) -> Dict[str, Any]:
         _years(kernel, planet, rec)
         return rec
     years = _years(kernel, planet, rec)
+    rec["years_last"] = str(years)                             # a season's span, for what it keeps against the next
     native, held = Fraction(rec["native_kg"]), Fraction(rec["held_kg"])
     lost = Fraction(r["kg_yr"]) * years
     want = min(lost, native - held + lost)                    # replace what it lost, up to its native air
@@ -120,6 +123,22 @@ def hold(kernel: Any, planet: Any) -> Dict[str, Any]:
     if share != was:                                           # the air it stands in moved: the world's atmosphere
         imprint.record(kernel, planet, "air_leak", None, air_add=float(share - was))
     return rec
+
+
+def keep_units(kernel: Any, planet: Any, comm: str) -> int:
+    """What an ancients' world keeps of its medium's good against its leak: a season's loss at its rate now, in
+    units - its want, which the trade its line's stewards broker brings in from the rim (commerce: the progenitors'
+    convoys, paying their roads' tolls). Nothing for any other world or good."""
+    from xylarium.kernel import cargo, uses
+    rec = (getattr(planet, "society", None) or {}).get("air_hold")
+    if not rec or "years_last" not in rec or comm != uses.medium(kernel, planet):
+        return 0
+    each = cargo.unit_kg(comm)
+    r = (planet.society.get("_leak") or {})
+    need = Fraction(r.get("kg_yr", "0")) * Fraction(rec["years_last"])
+    if not each or need <= 0:
+        return 0
+    return int(need // each) + (1 if need % each else 0)
 
 
 def demurrage(kernel: Any, house: str, years: Fraction) -> List[Fraction]:

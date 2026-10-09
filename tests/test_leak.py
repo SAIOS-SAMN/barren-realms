@@ -77,6 +77,17 @@ class TestLeak(unittest.TestCase):
             self.assertEqual(leak.demurrage(self.k, "civ:House", F(1000))[0], left[0])
 
 
+    def test_an_ancients_world_keeps_a_season_of_its_leak_and_commerce_wants_it(self):
+        from xylarium.kernel import commerce, staples
+        self.w.society["air_hold"] = {"years_last": "1000"}
+        self.w.society["_leak"] = {"kg_yr": str(F(cargo.unit_kg("H2O")) * 3 / 1000)}   # three slots a thousand years
+        with mock.patch.object(uses, "medium", return_value="H2O"):
+            self.assertEqual(leak.keep_units(self.k, self.w, "H2O"), 3)
+            self.assertEqual(leak.keep_units(self.k, self.w, "ORE"), 0)
+            self.assertGreaterEqual(staples.reserve(self.k, self.w, "H2O"), 3)
+            self.assertIn("H2O", commerce._goods(self.k, self.w))
+
+
 class TestCargo(unittest.TestCase):
     def test_a_unit_is_a_hold_slot_of_the_good_at_its_measured_density(self):
         self.assertEqual(cargo.unit_kg("H2O"), F("33.2") * 1000)        # water at 1 g/cc

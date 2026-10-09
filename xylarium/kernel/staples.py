@@ -125,6 +125,8 @@ def reserve(kernel: Any, planet: Any, comm: str) -> int:
     keep = 0
     if comm == of(kernel, planet):
         keep = 2 * _quarter_len() * biosphere.consumption(planet)
+    from xylarium.kernel import leak
+    keep = max(keep, leak.keep_units(kernel, planet, comm))      # an ancients' world: its air's leak in store
     if comm == "ORE":
         return max(keep, 600)
     if comm == "ORGANICS":
