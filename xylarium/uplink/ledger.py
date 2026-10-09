@@ -106,6 +106,23 @@ def repair(ledger: str, sealed: int) -> int:
     return len(old) - bad
 
 
+def rebase(ledger: str, point: Optional[Dict[str, Any]]) -> Optional[str]:
+    """A recut: the court's final points stand on a new origin (genesis, epoch), and its chains start empty. The
+    old chain - its acts, its posted cursor, its inputs - is set aside under the origin it stood on, and the next
+    entry starts a new chain from a zero parent. Returns the old origin's tag where it was set aside."""
+    old = acts(ledger)
+    last = next((p for p in map(_point_of, reversed(old)) if p is not None), None)
+    if point is None or last is None or (bytes(last["genesis"]), last["epoch"]) == \
+            (bytes(point["genesis"]), point["epoch"]):
+        return None
+    tag = f"{bytes(last['genesis'])[:4].hex()}.{last['epoch']:08x}"
+    base = ledger[:-len(".ledger.rec")]
+    for suffix in (".ledger.rec", ".ledger.posted", ".inputs.rec"):
+        if os.path.exists(base + suffix):
+            os.replace(base + suffix, f"{base}.{tag}{suffix}")
+    return tag
+
+
 def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
           inputs: Optional[list] = None) -> Dict[str, Any]:
     """One entry: the state's commitment (the SMT root over its records, persistence/smt.py) at its cycle u and the
@@ -115,6 +132,7 @@ def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
     from xylarium.kernel import inputs as _inputs
     from xylarium.uplink import anastome as an
     ev = list(inputs or [])
+    rebase(ledger, point)                                 # a recut since the last entry: this one starts the chain
     prior = acts(ledger)
     parent = entry_hash(prior[-1]) if prior else bytes(32)
     point = _not_behind(point, prior[-1] if prior else None)
@@ -139,11 +157,14 @@ def post(ledger: str, addr: Any, limit: int = 8) -> Dict[str, Any]:
     sealed is kept beside the ledger (binary, u64 LE). A refusal stops the turn and is named; a deferral or silence
     is tried again next turn. The court's returned hash must be ours - the chain is one chain."""
     from xylarium.uplink import anastome as an
+    rebased = rebase(ledger, an.LAST_POINT["point"])     # a recut: the old chain set aside, a new one begins
     cur_path = ledger[:-len(".ledger.rec")] + ".ledger.posted"
     done = struct.unpack("<Q", open(cur_path, "rb").read(8))[0] if os.path.exists(cur_path) else 0
     repair(ledger, done)                                  # unsealed entries citing a point behind: re-made first
     todo = acts(ledger)[done:done + limit]
     out: Dict[str, Any] = {"sealed": 0, "posted_through": done}
+    if rebased:
+        out["rebased"] = rebased
     for a in todo:
         r = an.speak(addr, a, timeout=20)
         if r[:1] == b"\x01" and len(r) >= 33:
