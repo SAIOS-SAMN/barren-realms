@@ -109,6 +109,17 @@ class TestCursor(unittest.TestCase):
         self.assertEqual(house.state(k)["mail_seq"], 4)                   # its box drains by this cursor
 
 
+class TestMailEpoch(unittest.TestCase):
+    def test_v14_read_mail_is_signed_and_its_reply_carries_the_relays_epoch(self):
+        reader = an.key("ancients")
+        act = w.read_mail_epoch(reader, 7, 99, bytes(32))
+        self.assertEqual((act[1], struct.unpack_from("<QQ", act, 34)), (w.READ_MAIL_EPOCH, (7, 99)))
+        self.assertTrue(w.opened(act, reader.verify_key.encode()))
+        reply = bytes([1]) + struct.pack("<QQ", 5, 12) + struct.pack("<H", 0)
+        self.assertEqual(w.read_mail_epoch_reply(reply), (5, 12, []))
+        self.assertIsNone(w.read_mail_epoch_reply(bytes([0, 3])))          # a refusal is no mail
+
+
 class TestRecut(unittest.TestCase):
     def test_a_new_genesis_lists_anew_and_reads_mail_from_the_start(self):
         from unittest import mock

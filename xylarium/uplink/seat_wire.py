@@ -203,6 +203,25 @@ def read_call(act: bytes) -> Optional[Dict[str, Any]]:
             "ref": call_ref(act)}
 
 
+READ_MAIL_EPOCH = 8              # seat wire v1.4 (lexicon 5): READ-MAIL under the relay's restart epoch
+
+
+def read_mail_epoch(reader: SigningKey, after: int, epoch: int, nonce: bytes) -> bytes:
+    """READ-MAIL v1.4: [reader][after u64][epoch u64][nonce] - `after` is honoured only under the relay's current
+    epoch (a random nonzero u64 drawn at each hypha start; 0: none held yet) and at or below its seq."""
+    return seal(reader, READ_MAIL_EPOCH, reader.verify_key.encode() + struct.pack("<QQ", after, epoch) + nonce)
+
+
+def read_mail_epoch_reply(body: bytes) -> Optional[Tuple[int, int, List[Tuple[int, int, bytes]]]]:
+    """Its reply: [1][relay epoch u64][relay seq u64] then the pieces as sub-kind 7 frames them -> (epoch, seq,
+    items); a refusal ([0][reason]) or anything that does not frame whole is None."""
+    if len(body) < 17 or body[0] != 1:
+        return None
+    epoch, seq = struct.unpack_from("<QQ", body, 1)
+    items = read_mail_reply(body[17:])
+    return None if items is None else (epoch, seq, items)
+
+
 def read_mail_reply(body: bytes) -> Optional[List[Tuple[int, int, bytes]]]:
     """READ-MAIL's reply, as the relay frames it on the wire (aefc6a39): [count u16] then per item [seq u64][sub u8]
     [len u32][fields || sig], in seq order - [0][0] an empty box; anything that does not frame whole (a refusal, a

@@ -91,7 +91,7 @@ def main() -> None:
     k.activate()
     log(f"hypha: {court.endpoint() or 'none (no court traffic)'}")
     seen = 0
-    obs_path, ledger_path = base + ".obs.jsonl", base + ".ledger.jsonl"
+    obs_path, ledger_path = base + ".obs.jsonl", base + ".ledger.rec"
     t0, c0 = time.time(), k.cycle_count
     last = {"relay": 0.0, "save": time.time()}
     if court.endpoint():                                  # the last final point, read to cite in entries

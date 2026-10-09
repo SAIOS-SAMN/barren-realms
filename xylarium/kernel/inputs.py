@@ -12,7 +12,8 @@ compute.
            Each ledger entry carries it after the state's commitment (mycelium 78.154).
 
 The events since the last entry are kept in the state (state "inputs"), so a save holds them; the entry that
-commits them clears them, and they are written beside the ledger (runs/<universe>.events.jsonl) for replay.
+commits them clears them, and they are appended beside the ledger as binary records (runs/<universe>.inputs.rec,
+event_bytes in applied order; each entry says how many are its own) for replay.
 """
 
 import json
@@ -39,13 +40,19 @@ def record(kernel: Any, path: List[Any], values: List[Any]) -> None:
                                    "values": values})
 
 
-def _leaf(e: Dict[str, Any]) -> bytes:
+def event_bytes(e: Dict[str, Any]) -> bytes:
+    """An event as it is hashed and as it is stored: point (84) || u (u64 LE) || key length (u16 LE) || key ||
+    put_args(values) - the replay reads the very bytes the digest committed."""
     from xylarium.persistence import records
     key = e["key"].encode()
     vals = [x for v in e["values"] for x in records._scalar(v)]
+    return (bytes.fromhex(e["point"]) + struct.pack("<Q", e["u"]) + struct.pack("<H", len(key)) + key
+            + bytes([len(vals)]) + b"".join(vals))
+
+
+def _leaf(e: Dict[str, Any]) -> bytes:
     h = blake3.blake3(derive_key_context=EVENT)
-    h.update(bytes.fromhex(e["point"]) + struct.pack("<Q", e["u"]) + struct.pack("<H", len(key)) + key
-             + bytes([len(vals)]) + b"".join(vals))
+    h.update(event_bytes(e))
     return h.digest()
 
 

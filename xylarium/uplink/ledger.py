@@ -8,34 +8,49 @@ with 78.154 (then re-signed with parent = the court's returned hash).
 """
 
 import hashlib
-import json
 import os
-from typing import Any, Dict, Optional
+import struct
+from typing import Any, Dict, List, Optional
+
+
+ACT_LEN = 320                   # [0x3E][domain 32][0x80 0 8][u 8][commitment 32][events 32][point 84][parent 32][nonce 32][sig 64]
+
+
+def acts(ledger: str) -> List[bytes]:
+    """The ledger as it lies: its acts, in order (each its fixed 320 bytes)."""
+    if not os.path.exists(ledger):
+        return []
+    with open(ledger, "rb") as f:
+        b = f.read()
+    return [b[i:i + ACT_LEN] for i in range(0, len(b) - len(b) % ACT_LEN, ACT_LEN)]
+
+
+def read(act: bytes) -> Dict[str, Any]:
+    """An entry decoded from its act: u, the commitment, the events digest, the point, its parent, its hash."""
+    from xylarium.uplink import anastome as an
+    p = an.read_point(act[108:192])
+    return {"u": struct.unpack_from("<Q", act, 36)[0], "commitment": act[44:76].hex(), "events": act[76:108].hex(),
+            "point": an.point_text(p) if p and any(act[108:192]) else None, "parent": act[192:224].hex(),
+            "hash": hashlib.sha256(act).hexdigest()}
 
 
 def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
           inputs: Optional[list] = None) -> Dict[str, Any]:
     """One entry: the state's commitment (the SMT root over its records, persistence/smt.py) at its cycle u and the
     digest of the inputs applied since the entry before (kernel/inputs.py), under the last final point read, chained
-    to that entry, signed by the domain's reserve. The inputs themselves are written beside the ledger, for replay."""
+    to that entry, signed by the domain's reserve - appended to the ledger as the hypha's act, binary; the inputs
+    beside it as the bytes their digest hashed."""
     from xylarium.kernel import inputs as _inputs
+    from xylarium.uplink import anastome as an
     ev = list(inputs or [])
-    events = _inputs.digest(ev)
-    from xylarium.uplink import anastome as an, house
-    parent = bytes(32)
-    if os.path.exists(ledger):
-        with open(ledger) as f:
-            lines = f.read().splitlines()
-        if lines:
-            parent = bytes.fromhex(json.loads(lines[-1])["hash"])
-    act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), u, root, events, point, parent, os.urandom(32))
-    body = {"axis": house.genesis(), "u": u, "commitment": root.hex(), "events": events.hex(), "inputs": len(ev),
-            "point": an.point_text(point) if point else None,
-            "parent": parent.hex(), "point_wire": an.put_point(point).hex(), "hash": hashlib.sha256(act).hexdigest(),
-            "act": act.hex(), "posted": False}
+    prior = acts(ledger)
+    parent = hashlib.sha256(prior[-1]).digest() if prior else bytes(32)
+    act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), u, root, _inputs.digest(ev), point, parent,
+                        os.urandom(32))
+    assert len(act) == ACT_LEN
     if ev:
-        with open(ledger.replace(".ledger.jsonl", ".inputs.jsonl"), "a") as f:
-            f.write(json.dumps({"entry": body["hash"], "u": u, "inputs": ev}) + "\n")
-    with open(ledger, "a") as f:
-        f.write(json.dumps(body) + "\n")
-    return body
+        with open(ledger[:-len(".ledger.rec")] + ".inputs.rec", "ab") as f:
+            f.write(b"".join(_inputs.event_bytes(e) for e in ev))
+    with open(ledger, "ab") as f:
+        f.write(act)
+    return dict(read(act), inputs=len(ev))

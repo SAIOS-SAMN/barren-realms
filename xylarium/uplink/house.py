@@ -219,8 +219,17 @@ def on_hypha(kernel: Any, addr: str) -> Optional[Dict[str, int]]:
     where = (host, int(port))
     reader = an.key("ancients")
     recut(kernel)
-    probe = an.speak(where, w.read_mail(reader, state(kernel)["mail_seq"], os.urandom(32)), timeout=10)
-    items = w.read_mail_reply(probe) if probe else None
+    st = state(kernel)
+    probe = an.speak(where, w.read_mail_epoch(reader, st["mail_seq"], int(st.get("mail_epoch") or 0),
+                                               os.urandom(32)), timeout=10)
+    got = w.read_mail_epoch_reply(probe) if probe else None
+    if got is not None:                                       # v1.4: the cursor kept with the relay's epoch
+        epoch, _, items = got
+        if epoch != st.get("mail_epoch"):                     # a restarted relay: its box from the start, counted anew
+            st["mail_epoch"], st["mail_seq"] = epoch, 0
+    else:                                                     # a relay before v1.4: sub-kind 7, as it was
+        probe = an.speak(where, w.read_mail(reader, st["mail_seq"], os.urandom(32)), timeout=10)
+        items = w.read_mail_reply(probe) if probe else None
     if items is None:
         return None
     import time

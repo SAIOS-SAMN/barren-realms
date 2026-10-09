@@ -66,11 +66,12 @@ class TestLedger(unittest.TestCase):
     def test_entries_chain_and_are_the_hypha_act_signed_by_the_reserve(self):
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d)
-        led = os.path.join(d, "u.ledger.jsonl")
+        led = os.path.join(d, "u.ledger.rec")
         r1, r2 = smt.root_of([rec(b'["a"]', 1)]), smt.root_of([rec(b'["a"]', 2)])
         e1, e2 = ledger.entry(0, r1, led, None), ledger.entry(10, r2, led, None)
         self.assertEqual((e1["parent"], e2["parent"], e2["commitment"]), ("00" * 32, e1["hash"], r2.hex()))
-        act = bytes.fromhex(e2["act"])
+        act = ledger.acts(led)[1]
+        self.assertEqual(ledger.read(act)["u"], 10)                       # the ledger is its acts, binary
         self.assertEqual((act[0], act[33:36]), (0x3E, bytes([0x80, 0, 8])))
         self.assertEqual(act[76:108], bytes(32))                         # no inputs since: the events digest is zero
         VerifyKey(an.vk(an.key("ancients"))).verify(an.LEDGER_TAG + act[1:33] + act[36:-64], act[-64:])
@@ -88,9 +89,10 @@ class TestInputs(unittest.TestCase):
         self.assertNotEqual(inputs.digest(ev), inputs.digest(list(reversed(ev))))   # order is part of what happened
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d)
-        e = ledger.entry(5, bytes(32), os.path.join(d, "u.ledger.jsonl"), None, ev)
+        e = ledger.entry(5, bytes(32), os.path.join(d, "u.ledger.rec"), None, ev)
         self.assertEqual((e["events"], e["inputs"]), (inputs.digest(ev).hex(), 2))
-        self.assertTrue(os.path.exists(os.path.join(d, "u.inputs.jsonl")))
+        with open(os.path.join(d, "u.inputs.rec"), "rb") as f:
+            self.assertEqual(f.read(), b"".join(inputs.event_bytes(x) for x in ev))   # the bytes the digest hashed
 
 
 if __name__ == "__main__":
