@@ -42,7 +42,6 @@ def observe(k, path: str, t0: float, c0: int) -> None:
             o[name] = sums[name]
     from xylarium.kernel import cosmos
     o["deep_gyr"] = cosmos.deep_gyr(k) if cosmos.is_cosmic(k) else None
-    o["clock"] = dict(CLOCK)                              # where the world stands against TUniversal (1.12)
     with open(path, "a") as f:
         f.write(json.dumps(o, default=str) + "\n")
     intel = o.get("intellect") or {}
@@ -53,28 +52,36 @@ def observe(k, path: str, t0: float, c0: int) -> None:
         f"court {json.dumps(o.get('court', {}))}")
 
 
-CLOCK: dict = {"residual": None, "at": None}   # the bound clock's lag: cycles the world stands behind the point
-LATTICE = 10                    # cycles between committed states: a bound universe advances in whole lattice spans
-TUNIVERSAL_ENV = "XYL_TUNIVERSAL"   # "1": the universe's clock is bound to TUniversal (Concordance 1.11)
+LATTICE = 10                    # cycles between committable states: an entry is made at a lattice cycle
 
 
-class Binding:
-    """The universe's clock bound to TUniversal (as xyl-kernel tuniversal.rs): a cycle IS a final point's height,
-    counted from the height it was bound at. A height below it is a court started afresh: bound again where it
-    stands."""
-
-    def __init__(self, h0: int, cycle0: int):
-        self.h0, self.cycle0 = h0, cycle0
-
-    def cycle(self, h: int) -> int:
-        return self.cycle0 + max(0, h - self.h0)
-
-    def holds(self, h: int) -> bool:
-        return h >= self.h0
-
-
-def next_lattice(cycle: int) -> int:
-    return (cycle // LATTICE + 1) * LATTICE
+def ledger_entry(k, save: str) -> dict:
+    """An upward LEDGER ENTRY for this universe's own axis (operator, coordinator and mycelium, 2026-10-09): the
+    universe runs on its own clock, its cycle u, never bound to TUniversal's height; at a committed moment it records
+    u, a commitment to its whole state (the saved file's digest), the last FINAL point it read, and the parent entry's
+    hash (a chain per axis), signed by the domain's reserve key. Kept here until the hypha's ledger act (the tier
+    fold, 78.119 extended) takes them; the pairs (u, h) are this clock's map onto the mesh."""
+    import hashlib
+    from xylarium.uplink import anastome as an, house
+    path = save.replace(".json", ".ledger.jsonl")
+    parent = None
+    if os.path.exists(path):
+        with open(path) as f:
+            lines = f.read().splitlines()
+        parent = json.loads(lines[-1])["hash"] if lines else None
+    h = hashlib.sha256()
+    with open(save, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    p = an.LAST_POINT["point"]
+    body = {"axis": house.genesis(), "domain": an.vk(an.key("domain")).hex(), "u": k.cycle_count,
+            "commitment": h.hexdigest(), "point": an.point_text(p) if p else None, "parent": parent}
+    canon = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    body["hash"] = hashlib.sha256(canon).hexdigest()
+    body["sig"] = an.key("ancients").sign(canon).signature.hex()       # the domain reserve's key
+    with open(path, "a") as f:
+        f.write(json.dumps(body) + "\n")
+    return body
 
 
 def _clock_reader(addr: str, period_s: float = 1.0) -> None:
@@ -112,36 +119,19 @@ def main() -> None:
     obs_path = save.replace(".json", ".obs.jsonl")
     t0, c0 = time.time(), k.cycle_count
     last = {"relay": 0.0, "save": time.time()}
-    bound = None
-    tuniversal = bool(court.endpoint()) and os.environ.get(TUNIVERSAL_ENV) == "1"
-    if tuniversal:
+    if court.endpoint():                                  # the last final point, read to cite in entries
         import threading
         threading.Thread(target=_clock_reader, args=(court.endpoint(),), daemon=True).start()
-        log("clock: bound to TUniversal (the universe advances only as its final point does)")
+    commit_due = False
     while not STOP["now"]:
-        advance = True
-        if tuniversal:
-            from xylarium.uplink import anastome as an
-            p = an.LAST_POINT["point"]
-            if p is not None and (bound is None or not bound.holds(p["h"])):
-                bound = Binding(p["h"], k.cycle_count)
-                log(f"clock: bound to TUniversal: cycle {bound.cycle0} at {an.point_text(p)}")
-            # no final point, or caught up to it: time does not advance (the relay and the saves still run)
-            advance = p is not None and next_lattice(k.cycle_count) <= bound.cycle(p["h"])
-            if p is not None:                             # the clock's residual (1.12): late, never wrong - the
-                CLOCK["residual"] = bound.cycle(p["h"]) - k.cycle_count   # world is read where it stands
-                CLOCK["at"] = an.point_text(p)
-        if not advance:
-            time.sleep(0.25)
-        else:
-            k.tick_simulation()
+        k.tick_simulation()                               # its own clock: it runs at its own pace
         rec = court.stats(k)["of"] if "court" in k.state else {}
         met = sum(r["met"] for r in rec.values())
-        if advance and met > seen:
+        if met > seen:
             seen = met
             log("court: " + json.dumps({h: {x: r[x] for x in ("met", "closed", "refused", "beyond", "mu")}
                                         for h, r in rec.items()}))
-        if advance and k.cycle_count % REPORT_EVERY == 0:
+        if k.cycle_count % REPORT_EVERY == 0:
             observe(k, obs_path, t0, c0)
         now = time.time()
         if court.endpoint() and now - last["relay"] >= RELAY_EVERY_S:   # the house relay (seat wire)
@@ -155,10 +145,15 @@ def main() -> None:
             except Exception as e:                        # a relay fault never stops the universe
                 log(f"seats: relay fault {type(e).__name__}: {e}")
         if now - last["save"] >= SAVE_EVERY_S:
-            last["save"] = now
-            if CLOCK["residual"] is not None:
-                log(f"clock: cycle {k.cycle_count}, residual {CLOCK['residual']} cycles behind {CLOCK['at']}")
+            commit_due = True                             # saved and committed at the next lattice cycle
+        if commit_due and k.cycle_count % LATTICE == 0:
+            commit_due, last["save"] = False, now
             StatePersistence.save_to_file(k, save)
+            try:
+                e = ledger_entry(k, save)
+                log(f"ledger: u {e['u']} commits {e['commitment'][:16]} under {e['point'] or 'no final point yet'}")
+            except Exception as ex:                       # the ledger is a record: its fault never stops the universe
+                log(f"ledger: entry not made: {type(ex).__name__}: {ex}")
     StatePersistence.save_to_file(k, save)
     log(f"saved at cycle {k.cycle_count}; stopped")
 
