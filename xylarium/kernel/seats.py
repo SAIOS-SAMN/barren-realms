@@ -9,7 +9,8 @@ key), posts each seat's PERCEPT on the seat's own beat, applies the mind's CALLs
 on the seat's books. The wire (the acts on the hypha) is the seam this module is spoken through; every number
 here is exact.
 
-  ancients     an ancients' house (court.py): its council's seat is put a court task when it has none
+  ancients     an ancients' house (court.py): its council has ONE SEAT PER WORLD the house holds (operator,
+               3.9) - it grows as the ancients expand; each seat is put a court task when it has none
                (court.hand_tasks); its mind answers with "answer" - its own rule's tape and its outputs - filed under
                the ancients' reserve key (puzzle solving is the minds')
 """
@@ -41,9 +42,12 @@ def seats(kernel: Any) -> List[Dict[str, Any]]:
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES
     held = stats(kernel)["held"]
     out: List[Dict[str, Any]] = []
+    from xylarium.kernel import relations
+    worlds = relations._peoples(kernel)
     for house in court.houses(kernel):                    # the council of the ancients: the only seats network minds
-        out.append({"id": f"ancients:{house}", "role": "ancients", "on": house,   # take (Concordance 3.9) - the
-                    "beat": _q(4 * FISCAL_QUARTER_CYCLES)})   # progenitors' parliaments and the stewards' realms play in game
+        for w in sorted(worlds.get(house) or [], key=lambda p: p.id):   # take (3.9) - one seat for every world the
+            out.append({"id": f"ancients:{house}@{w.id}", "role": "ancients", "on": house, "world": w.id,   # house
+                        "beat": _q(4 * FISCAL_QUARTER_CYCLES)})   # holds: the council grows as the ancients do
     for s in out:
         s["functions"] = list(FUNCTIONS[s["role"]])
         s["held_by"] = held.get(s["id"])
@@ -77,8 +81,22 @@ def release_unseatable(kernel: Any) -> List[str]:
     from xylarium.kernel import board, inputs, roles, stewardship
     st = stats(kernel)
     out = []
+    offered = {x["id"] for x in seats(kernel)}
     for seat_id, vk_hex in list(st["held"].items()):
-        if seat_id.startswith("ancients:"):
+        if seat_id in offered:
+            continue
+        house = seat_id[len("ancients:"):].split("@")[0] if seat_id.startswith("ancients:") else None
+        if house is not None:                             # a council seat before seats were per world: the house's
+            home = next((x["id"] for x in seats(kernel) if x["on"] == house and x["id"] not in st["held"]), None)
+            if home is not None and "@" not in seat_id:   # first free world's seat keeps its mind
+                st["held"][home] = vk_hex
+                if seat_id in st["tasks"]:
+                    st["tasks"][home] = st["tasks"].pop(seat_id)
+            st["held"].pop(seat_id, None)
+            st["tasks"].pop(seat_id, None)
+            if home is None or "@" in seat_id:            # a world the house no longer holds: its seat is gone
+                inputs.record(kernel, ["seat", seat_id, "release"], [vk_hex])
+                out.append(seat_id)
             continue
         p = pid(vk_hex, seat_id)
         role, _, on = seat_id.partition(":")

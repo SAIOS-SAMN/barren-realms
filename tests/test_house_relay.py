@@ -19,18 +19,22 @@ HOUSE = "civ:Elder"
 TASK = {"id": bytes(range(32)), "train": [([[1]], [[1]])], "test": [[[2]]]}
 
 
-def _council(test):
+def _council(test, k):
+    from xylarium.kernel import relations
+    world = next(p for s in k.sectors.values() for p in s.planets)
     for p in (mock.patch.object(court, "houses", return_value=[HOUSE]),
+              mock.patch.object(relations, "_peoples", return_value={HOUSE: [world]}),
               mock.patch.object(house, "genesis", return_value=None)):     # no recut: the live genesis is not ours
         p.start()
         test.addCleanup(p.stop)
+    return f"ancients:{HOUSE}@{world.id}"
 
 
 class TestHouseRelay(unittest.TestCase):
     def setUp(self):
-        _council(self)
         self.k = GameKernel(seed=42)
         spheres.ensure(self.k)
+        self.seat_id = _council(self, self.k)
         self.mind = SigningKey(bytes(range(32)))
         self.domain = an.vk(an.key("domain"))
         self.posted, self.inbox = [], []
@@ -40,7 +44,7 @@ class TestHouseRelay(unittest.TestCase):
         return house.turn(self.k, lambda act: self.posted.append(act) or b"\x01", lambda: mail)
 
     def _seat_n(self):
-        return next(s["n"] for s in house.numbered(self.k) if s["id"] == f"ancients:{HOUSE}")
+        return next(s["n"] for s in house.numbered(self.k) if s["id"] == self.seat_id)
 
     def _act(self, sub, fields, key=None):
         return w.seal(key or self.mind, sub, fields)
@@ -60,7 +64,7 @@ class TestHouseRelay(unittest.TestCase):
         taken = next(a for a in self.posted if a[1] == w.TAKEN)
         self.assertEqual(taken[-64 - 3], 1)                               # ok
         self.assertTrue(any(a[1] == w.PERCEPT for a in self.posted))      # the held seat perceives on its beat
-        seats.hold_task(self.k, f"ancients:{HOUSE}", TASK)
+        seats.hold_task(self.k, self.seat_id, TASK)
         call = self._answer(n, vk)
         self.inbox, self.posted = [(2, w.CALL, call)], []
         bounty = bytes([2]) + struct.pack("<4Q", 0, 3, 0, 0)
@@ -74,13 +78,13 @@ class TestHouseRelay(unittest.TestCase):
 
     def test_a_call_signed_by_another_key_is_refused(self):
         n, vk = self._seat_n(), self.mind.verify_key.encode()
-        seats.take(self.k, f"ancients:{HOUSE}", vk.hex())
-        seats.hold_task(self.k, f"ancients:{HOUSE}", TASK)
+        seats.take(self.k, self.seat_id, vk.hex())
+        seats.hold_task(self.k, self.seat_id, TASK)
         self.inbox = [(1, w.CALL, self._answer(n, vk, key=SigningKey(bytes(32))))]
         self._turn()
         out = next(a for a in self.posted if a[1] == w.OUTCOME)
         self.assertEqual(out[2 + 32 + 4 + 32 + 32], 0)
-        self.assertIsNotNone(seats.task_of(self.k, f"ancients:{HOUSE}"))   # nothing changed
+        self.assertIsNotNone(seats.task_of(self.k, self.seat_id))   # nothing changed
 
     def test_only_the_ancients_council_seats_are_listed_and_others_are_released(self):
         self.assertEqual({s["role"] for s in house.numbered(self.k)}, {"ancients"})
@@ -102,11 +106,11 @@ class TestAnswerWithTape(unittest.TestCase):
 
 class TestMailOnce(unittest.TestCase):
     def test_a_take_handed_back_again_is_answered_once(self):
-        _council(self)
         k = GameKernel(seed=42)
         spheres.ensure(k)
+        seat_id = _council(self, k)
         mind = SigningKey(bytes(range(32)))
-        n = next(s["n"] for s in house.numbered(k) if s["id"] == f"ancients:{HOUSE}")
+        n = next(s["n"] for s in house.numbered(k) if s["id"] == seat_id)
         take = w.seal(mind, w.TAKE, an.vk(an.key("domain")) + struct.pack("<I", n) + mind.verify_key.encode()
                       + os.urandom(32))
         posted = []

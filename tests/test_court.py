@@ -19,10 +19,13 @@ class TestCourt(unittest.TestCase):
     def setUp(self):
         self.k = GameKernel(seed=42)
         spheres.ensure(self.k)
-        p = mock.patch.object(court, "houses", return_value=["civ:Elder"])
-        p.start()
-        self.addCleanup(p.stop)
-        self.seat = "ancients:civ:Elder"
+        from xylarium.kernel import relations
+        world = next(p for s in self.k.sectors.values() for p in s.planets)
+        for p in (mock.patch.object(court, "houses", return_value=["civ:Elder"]),
+                  mock.patch.object(relations, "_peoples", return_value={"civ:Elder": [world]})):
+            p.start()
+            self.addCleanup(p.stop)
+        self.seat = f"ancients:civ:Elder@{world.id}"
 
     def test_a_task_goes_only_before_a_seated_mind_and_is_pulled_under_the_reserve_key(self):
         asked = []

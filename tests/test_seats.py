@@ -20,23 +20,36 @@ HOUSE, OTHER_HOUSE = "civ:Elder", "civ:Younger"
 
 class TestSeats(unittest.TestCase):
     def setUp(self):
-        p = mock.patch.object(court, "houses", return_value=[HOUSE, OTHER_HOUSE])
-        p.start()
-        self.addCleanup(p.stop)
+        from xylarium.kernel import relations
         self.k = GameKernel(seed=42)
         spheres.ensure(self.k)
-        self.seat = f"ancients:{HOUSE}"
+        w = [p for s in self.k.sectors.values() for p in s.planets][:3]
+        self.worlds = {HOUSE: w[:2], OTHER_HOUSE: w[2:3]}                   # the Elder hold two worlds, the Younger one
+        for p in (mock.patch.object(court, "houses", return_value=[HOUSE, OTHER_HOUSE]),
+                  mock.patch.object(relations, "_peoples", return_value=self.worlds)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.seat = f"ancients:{HOUSE}@{w[0].id}"
+        self.other = f"ancients:{OTHER_HOUSE}@{w[2].id}"
 
-    def test_only_the_ancients_council_is_offered(self):
-        self.assertEqual({s["id"] for s in seats.seats(self.k)}, {f"ancients:{HOUSE}", f"ancients:{OTHER_HOUSE}"})
+    def test_a_council_has_one_seat_per_world_its_house_holds(self):
+        self.assertEqual({s["id"] for s in seats.seats(self.k)},
+                         {f"ancients:{HOUSE}@{p.id}" for p in self.worlds[HOUSE]} | {self.other})
         realm = stewardship.realms(self.k)[0]
         self.assertFalse(seats.take(self.k, f"steward:{realm}", VK)["ok"])          # no network mind in a realm
 
     def test_one_mind_per_seat_and_one_mind_may_hold_two_councils_each_its_own_player(self):
         self.assertTrue(seats.take(self.k, self.seat, VK)["ok"])
         self.assertFalse(seats.take(self.k, self.seat, OTHER)["ok"])
-        self.assertTrue(seats.take(self.k, f"ancients:{OTHER_HOUSE}", VK)["ok"])
-        self.assertNotEqual(seats.pid(VK, self.seat), seats.pid(VK, f"ancients:{OTHER_HOUSE}"))
+        self.assertTrue(seats.take(self.k, self.other, VK)["ok"])
+        self.assertNotEqual(seats.pid(VK, self.seat), seats.pid(VK, self.other))
+
+    def test_a_council_seat_from_before_worlds_moves_to_a_world_of_its_house(self):
+        seats.stats(self.k)["held"][f"ancients:{HOUSE}"] = VK               # one seat per house, as it was
+        seats.release_unseatable(self.k)
+        held = seats.stats(self.k)["held"]
+        self.assertEqual(list(held.values()), [VK])
+        self.assertTrue(next(iter(held)).startswith(f"ancients:{HOUSE}@"))
 
     def test_calls_come_only_from_the_seated_mind_and_within_its_role(self):
         seats.take(self.k, self.seat, VK)
@@ -64,7 +77,7 @@ class TestSeats(unittest.TestCase):
                 mock.patch.dict(os.environ, {court.ENDPOINT_ENV: "127.0.0.1:1"}), \
                 mock.patch("xylarium.uplink.anastome.speak", side_effect=lambda a, act, **kw: sent.append(act)
                            or replies.pop(0)):
-            seat = f"ancients:{house}"
+            seat = self.seat
             seats.take(self.k, seat, VK)
             seats.hold_task(self.k, seat, task)
             got = seats.call(self.k, seat, VK, "answer", tape=b"T", outputs=b"\x01O")
@@ -87,7 +100,7 @@ class TestSeats(unittest.TestCase):
                 mock.patch.dict(os.environ, {court.ENDPOINT_ENV: "127.0.0.1:1"}), \
                 mock.patch("xylarium.uplink.anastome.speak", side_effect=lambda a, act, **kw: sent.append(act) or
                            bytes([2]) + struct.pack("<4Q", 0, 1, 0, 0)):
-            seat = f"ancients:{house}"
+            seat = self.seat
             self.assertTrue(seats.take(self.k, seat, VK)["ok"])
             seats.hold_task(self.k, seat, task)
             self.assertFalse(seats.call(self.k, seat, VK, "answer")["ok"])     # no tape: the answer does not read
