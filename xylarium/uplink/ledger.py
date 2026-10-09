@@ -34,6 +34,27 @@ def read(act: bytes) -> Dict[str, Any]:
             "hash": hashlib.sha256(act).hexdigest()}
 
 
+def renumber(ledger: str) -> int:
+    """Rebuild a ledger whose acts carry an older sub-kind (78.154 moved LEDGER from 8 to 12): each act re-made in
+    order with its own u, commitment, events, point and nonce, its parent the new hash of the one before, signed
+    again. Returns the acts rebuilt."""
+    from xylarium.uplink import anastome as an
+    old = acts(ledger)
+    if not old or all(a[35] == an.LEDGER_SUB for a in old):
+        return 0
+    out, parent = [], bytes(32)
+    for a in old:
+        p = an.read_point(a[108:192]) if any(a[108:192]) else None
+        act = an.ledger_act(an.key("ancients"), an.vk(an.key("domain")), struct.unpack_from("<Q", a, 36)[0],
+                            a[44:76], a[76:108], p, parent, a[224:256])
+        out.append(act)
+        parent = hashlib.sha256(act).digest()
+    with open(ledger + ".tmp", "wb") as f:
+        f.write(b"".join(out))
+    os.replace(ledger + ".tmp", ledger)
+    return len(out)
+
+
 def entry(u: int, root: bytes, ledger: str, point: Optional[Dict[str, Any]],
           inputs: Optional[list] = None) -> Dict[str, Any]:
     """One entry: the state's commitment (the SMT root over its records, persistence/smt.py) at its cycle u and the

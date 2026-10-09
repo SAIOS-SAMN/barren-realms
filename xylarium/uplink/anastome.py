@@ -127,13 +127,13 @@ def clock(addr: Tuple[str, int]) -> Optional[Tuple[int, ...]]:
 
 
 LEDGER_TAG = b"mycelium domain ledger v1"
-LEDGER_SUB = 8
+LEDGER_SUB = 12                 # ACT_DOMAIN sub-kind 12 (78.154: 8-11 were already live)
 
 
 def ledger_act(reserve: SigningKey, domain: bytes, u: int, commitment: bytes, events: bytes,
                point: Optional[Dict[str, Any]], parent: bytes, nonce: bytes) -> bytes:
-    """A universe's upward LEDGER ENTRY on its own axis (78.154): ACT_DOMAIN sub-kind 8 -
-    [0x3E][domain 32][0x80 0x00][8][u u64][commitment 32][events 32][final point 84][parent 32][nonce 32][sig 64],
+    """A universe's upward LEDGER ENTRY on its own axis (78.154): ACT_DOMAIN sub-kind 12 -
+    [0x3E][domain 32][0x80 0x00][12][u u64][commitment 32][events 32][final point 84][parent 32][nonce 32][sig 64],
     signed by the domain's reserve over the tag, domain, u, commitment, events, point, parent and nonce."""
     pt = put_point(point)
     signed = LEDGER_TAG + domain + struct.pack("<Q", u) + commitment + events + pt + parent + nonce

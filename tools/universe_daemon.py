@@ -104,6 +104,8 @@ def main() -> None:
     pool = ProcessPoolExecutor(max_workers=1)               # the state's tree, kept off the universe's time
     held: dict = {}                                         # the last committed records, by key: what changed is sent
     pending: list = []                                      # (u, point, root future), committed in order
+    if ledger.renumber(ledger_path):
+        log("ledger: acts re-made under the hypha's LEDGER sub-kind (78.154)")
     while not STOP["now"]:
         k.tick_simulation()                               # its own clock: it runs at its own pace
         rec = court.stats(k)["of"] if "court" in k.state else {}

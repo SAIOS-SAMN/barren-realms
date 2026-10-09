@@ -62,6 +62,25 @@ class TestSparseMerkle(unittest.TestCase):
                             smt.root_of(records.records_of({"a": {"x": 2, "y": [1.5, None]}, "b": "t"})))
 
 
+class TestRenumber(unittest.TestCase):
+    def test_older_acts_are_re_made_in_order_and_re_chained(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d)
+        led = os.path.join(d, "u.ledger.rec")
+        for u in (0, 10, 20):
+            ledger.entry(u, bytes([u]) * 32, led, None)
+        raw = bytearray(open(led, "rb").read())
+        for i in range(0, len(raw), ledger.ACT_LEN):
+            raw[i + 35] = 8                                                # as they were written under sub-kind 8
+        open(led, "wb").write(bytes(raw))
+        self.assertEqual(ledger.renumber(led), 3)
+        acts = ledger.acts(led)
+        self.assertTrue(all(a[35] == 12 for a in acts))
+        self.assertEqual([ledger.read(a)["u"] for a in acts], [0, 10, 20])
+        self.assertEqual(ledger.read(acts[2])["parent"], ledger.read(acts[1])["hash"])
+        VerifyKey(an.vk(an.key("ancients"))).verify(an.LEDGER_TAG + acts[2][1:33] + acts[2][36:-64], acts[2][-64:])
+
+
 class TestCache(unittest.TestCase):
     def test_a_worlds_body_is_saved_as_cache_and_not_committed(self):
         state = {"sectors": {"1": {"planets": [{"id": "p", "body": {"q": "1/1"}, "population": 5}]}}}
@@ -83,7 +102,7 @@ class TestLedger(unittest.TestCase):
         self.assertEqual((e1["parent"], e2["parent"], e2["commitment"]), ("00" * 32, e1["hash"], r2.hex()))
         act = ledger.acts(led)[1]
         self.assertEqual(ledger.read(act)["u"], 10)                       # the ledger is its acts, binary
-        self.assertEqual((act[0], act[33:36]), (0x3E, bytes([0x80, 0, 8])))
+        self.assertEqual((act[0], act[33:36]), (0x3E, bytes([0x80, 0, 12])))
         self.assertEqual(act[76:108], bytes(32))                         # no inputs since: the events digest is zero
         VerifyKey(an.vk(an.key("ancients"))).verify(an.LEDGER_TAG + act[1:33] + act[36:-64], act[-64:])
 
