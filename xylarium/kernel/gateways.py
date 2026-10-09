@@ -27,7 +27,7 @@ bears the wave; others pass as the keeper's handling allows (transit.py).
 
 import functools
 import math
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 NEAREST = 0.554                 # the mean nearest-neighbour distance among random points, in units of n^-1/3
 
@@ -185,11 +185,38 @@ def folds_to(kernel: Any, held: Any, target: int, where: Optional[dict] = None) 
     t = pos(target)
     if t is None:
         return False
-    for h in held:
-        p = pos(h)
-        if p is None:
-            continue
-        if math.dist(p[:3], t[:3]) * 1000.0 <= fold_reach_pc(p[3]):
+    grid = where.get(("_grid", id(held)))
+    if grid is None or grid[0] != len(held):              # the held systems bucketed by place, once per reading
+        cells: Dict[Tuple[int, int, int], List[tuple]] = {}
+        reach = 0.0
+        for h in held:
+            p = pos(h)
+            if p is None:
+                continue
+            r = fold_reach_pc(p[3])
+            if r == math.inf:
+                reach = math.inf
+                break
+            reach = max(reach, r / 1000.0)
+            cells.setdefault((0, 0, 0), []).append((p, r))
+        if reach != math.inf and reach > 0:               # cells as wide as the farthest reach: only neighbours can fold
+            cells = {}
+            for h in held:
+                p = pos(h)
+                if p is not None:
+                    c = tuple(int(math.floor(x / reach)) for x in p[:3])
+                    cells.setdefault(c, []).append((p, fold_reach_pc(p[3])))
+        grid = (len(held), reach, cells)
+        where[("_grid", id(held))] = grid
+    _, reach, cells = grid
+    if reach == math.inf or reach <= 0:
+        near = [x for v in cells.values() for x in v]
+    else:
+        c = tuple(int(math.floor(x / reach)) for x in t[:3])
+        near = [x for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
+                for x in cells.get((c[0] + dx, c[1] + dy, c[2] + dz), ())]
+    for p, r in near:
+        if math.dist(p[:3], t[:3]) * 1000.0 <= r:            # the same test as ever, on the neighbours only
             return True
     return False
 

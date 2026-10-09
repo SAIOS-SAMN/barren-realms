@@ -149,7 +149,10 @@ def _money(kernel: Any, cur: str) -> Tuple[Fraction, Fraction]:
     if "regimes" not in kernel.state:
         return Fraction(0), Fraction(0)
     debased = max(Fraction(0), Fraction(regimes.stats(kernel).get("debased_sol", {}).get(cur, 0)))
-    total = float((ledger.money_supply(kernel).get(cur) or {}).get("total", 0.0))
+    from xylarium.kernel import cache                     # the money in existence, read once a cycle: the books
+    supply = cache.memo(kernel, "ascendance_supply", "all", lambda: ledger.money_supply(kernel),   # of every pair
+                        epoch=kernel.cycle_count) if hasattr(kernel, "caches") else ledger.money_supply(kernel)
+    total = float((supply.get(cur) or {}).get("total", 0.0))
     held = mc.q(kernel.fx_market.to_sol_value(cur, total) if cur != _hub() and total else total)
     return max(Fraction(0), held - debased), debased
 
