@@ -402,6 +402,48 @@ def _hears(kernel: Any, rec: Dict[str, Any], other: Dict[str, Any]) -> str:
     return "unheard"
 
 
+def treaty_holonomy_su2(kernel: Any, sovereign_a_id: str, sovereign_b_id: str) -> Dict[str, Any]:
+    """Non-abelian SU(2) Wilson loop holonomy across the gravitational cone connecting realm seats.
+    
+    Treaties between sovereign seats are evaluated as non-abelian parallel transport:
+        Omega_AB = exp(1/2 * s_AB * n . sigma) in SU(2)
+    Measures Lie algebra curvature ||xi|| = arccos(Tr(Omega)/2). If ||xi|| > pi/2,
+    diplomatic metric stress precipitates a Realm War fracture.
+    """
+    import math
+    from xylarium.kernel import physics
+    sovs = sovereigns(kernel)
+    a = sovs.get(sovereign_a_id)
+    b = sovs.get(sovereign_b_id)
+    if not a or not b:
+        return {"holonomy": "identity", "curvature_rad": 0.0, "war_risk": False}
+
+    # Mutual conduct records (Compassion, Resonance, Integrity, Morality)
+    conduct_a = (a.get("books") or {}).get("conduct", {}).get(b["id"], {})
+    conduct_b = (b.get("books") or {}).get("conduct", {}).get(a["id"], {})
+    
+    syntropic = float(conduct_a.get("syntropic", 1.0)) + float(conduct_b.get("syntropic", 1.0))
+    entropic = float(conduct_a.get("entropic", 0.0)) + float(conduct_b.get("entropic", 0.0))
+    ratio = syntropic / max(0.1, syntropic + entropic)
+    
+    # SU(2) Wilson line rotation angle theta in [0, pi]
+    theta = (1.0 - ratio) * math.pi
+    q_holonomy = physics.Quaternion.from_axis_angle((0.0, 0.0, 1.0), theta)
+    curvature_rad = theta
+    war_risk = curvature_rad > (math.pi / 2.0)
+    
+    return {
+        "sovereign_a": sovereign_a_id,
+        "sovereign_b": sovereign_b_id,
+        "holonomy": str(q_holonomy),
+        "holonomy_trace_half": round(q_holonomy.w, 4),
+        "curvature_rad": round(curvature_rad, 4),
+        "curvature_deg": round(math.degrees(curvature_rad), 2),
+        "fidelity_ratio": round(ratio, 4),
+        "diplomatic_rupture_risk": war_risk,
+    }
+
+
 # ---------------------------------------------------------------------- the deed
 VOCABULARY = {"food": ("trade", "war"), "room": ("peace", "war"), "security": ("defense", "peace"),
               "wealth": ("trade", "war"), "standing": ("peace",)}

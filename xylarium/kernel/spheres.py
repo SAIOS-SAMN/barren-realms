@@ -175,6 +175,78 @@ def is_within_potential_basin(kernel: Any, sector_id: int, presence: str) -> boo
     return True
 
 
+def waveguide_conduit(kernel: Any, from_sector_id: int, to_sector_id: int) -> Dict[str, Any]:
+    """Continuous gravitational cone waveguide between two star systems."""
+    import math
+    from xylarium.kernel import physics
+    dist = distance(kernel, from_sector_id, to_sector_id)
+    if dist >= float("inf"):
+        return {"waveguide_active": False, "reason": "unreachable"}
+
+    sec_from = getattr(kernel, "sectors", {}).get(from_sector_id)
+    sec_to = getattr(kernel, "sectors", {}).get(to_sector_id)
+    p_from = sec_from.planets[0] if sec_from and sec_from.planets else None
+    p_to = sec_to.planets[0] if sec_to and sec_to.planets else None
+
+    # Default proxy if planets not populated
+    class _ProxyPlanet:
+        population = 500
+    p1 = p_from or _ProxyPlanet()
+    p2 = p_to or _ProxyPlanet()
+
+    cone = physics.GravitationalConeManifold(p1, p2, distance_au=max(0.5, dist))
+    sigma = cone.collimation_half_width()
+    gain = 1.0 / (math.sqrt(2.0 * math.pi) * sigma)
+    beta = cone.conical_deficit_beta()
+    flux = cone.gravitational_flux(math.pi / 4.0)
+
+    return {
+        "from_sector": from_sector_id,
+        "to_sector": to_sector_id,
+        "distance": dist,
+        "collimation_half_width_deg": round(math.degrees(sigma), 2),
+        "deficit_beta": round(beta, 4),
+        "directed_flux": round(flux, 3),
+        "collimation_gain": round(gain, 2),
+        "waveguide_active": True,
+    }
+
+
+def caustic_nav_envelope(kernel: Any, sector_id: int) -> Dict[str, Any]:
+    """Caustic horizon intersection envelope across overlapping gravitational realm cones."""
+    import math
+    st = stats(kernel)
+    pots = []
+    for presence_id in st.get("nets", {}):
+        phi = potential_field(kernel, sector_id, presence_id)
+        if phi > 0.01:
+            pots.append((presence_id, phi))
+    pots.sort(key=lambda x: x[1], reverse=True)
+
+    if len(pots) < 2:
+        return {
+            "sector_id": sector_id,
+            "is_caustic": False,
+            "caustic_curvature": 0.0,
+            "stealth_factor": 0.0,
+            "customs_evasion_pct": 0.0,
+        }
+
+    # Caustic intersection of top two competing potential fields
+    phi1, phi2 = pots[0][1], pots[1][1]
+    caustic_curv = math.sqrt(phi1 * phi2) * 0.1
+    stealth = min(0.85, caustic_curv * 0.5)
+
+    return {
+        "sector_id": sector_id,
+        "is_caustic": True,
+        "contenders": [p[0] for p in pots[:2]],
+        "caustic_curvature": round(caustic_curv, 4),
+        "stealth_factor": round(stealth, 4),
+        "customs_evasion_pct": round(stealth * 100.0, 1),
+    }
+
+
 # ---------------------------------------------------------------------- holding
 def owner(kernel: Any, sector_id: int) -> Optional[str]:
     """The realm that holds a system (the first network to reach it), if any."""

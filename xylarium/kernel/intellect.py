@@ -597,6 +597,82 @@ def verify_harmonic_convergence(
     return None
 
 
+def mine_mayer_vietoris_theorems(
+    kernel: Any,
+    holder: str,
+    from_sector_id: int,
+    to_sector_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Solve and mint higher-dimensional harmonic forms in Mayer-Vietoris cohomology across S^360.
+    
+    When a civilization proves volumetric or 4th-axis rungs, it computes closed differential
+    forms on the overlapping cone manifold C_A intersect C_B, resolving non-trivial Betti numbers:
+        b_k in {1, 59, 60, 120, 121, 360}
+    Minted directly into st["proof_roots"] and logged to the Hypha INTELLECT lane.
+    """
+    from fractions import Fraction
+    from xylarium.kernel import physics, hypha, board, constellations
+
+    st = stats(kernel)
+    gauge_vec = st["gauge"].get(holder, {})
+    rank_achieved = max([int(r) for r in gauge_vec.keys()] or [2])
+    if rank_achieved < 3:
+        return None
+
+    # Construct cone manifold
+    sec_a = kernel.sectors.get(from_sector_id)
+    sec_b = kernel.sectors.get(to_sector_id)
+    p_a = sec_a.planets[0] if sec_a and sec_a.planets else None
+    p_b = sec_b.planets[0] if sec_b and sec_b.planets else None
+
+    class _ProxyWorld:
+        population = 500
+    cone = physics.GravitationalConeManifold(p_a or _ProxyWorld(), p_b or _ProxyWorld(), distance_au=1.5)
+    u360 = physics.Universe360(cosmic_radius=1.0)
+    cohom = u360.compute_mayer_vietoris_cohomology([cone])
+
+    # Target intermediate degree based on rank achieved
+    target_deg = 120 if rank_achieved >= 4 else 60
+    betti_val = cohom["betti_numbers"].get(target_deg, 1)
+
+    proof_id = f"mv_proof:{holder}:{from_sector_id}:{to_sector_id}:{target_deg}:{kernel.cycle_count}"
+    cert = {
+        "id": proof_id,
+        "holder": holder,
+        "harmonic_degree": target_deg,
+        "betti_value": betti_val,
+        "total_capacity": cohom["total_harmonic_capacity"],
+        "cycle": kernel.cycle_count,
+        "hash": zlib.crc32(f"{proof_id}:{betti_val}:{cohom['euler_characteristic']}".encode()),
+        "lane": "INTELLECT",
+    }
+
+    # Fold into Merkle root chain
+    proof_archive = st.setdefault("proof_roots", {})
+    prev_root = str(proof_archive.get(holder, "genesis"))
+    new_root = hashlib.sha256(f"{prev_root}:{cert['id']}:{cert['hash']}".encode()).hexdigest()
+    proof_archive[holder] = new_root
+    st["proofs"].setdefault(holder, []).append(cert)
+    st["proofs"][holder] = st["proofs"][holder][-2:]
+    st["stats"]["solved"] = st["stats"].get("solved", 0) + 1
+
+    ancients = board.ancient_peoples(kernel)
+    house = ancients[0] if ancients else constellations.ELDERS
+    if house and hypha.uplinked(kernel, house):
+        hypha.append(
+            kernel,
+            lane="INTELLECT",
+            kind="pouw",
+            payer=holder,
+            payee="hypha",
+            amount=Fraction(target_deg, 10),
+            currency="SOL",
+            ref=proof_id,
+            house=house,
+        )
+    return cert
+
+
 def summary(kernel: Any) -> Dict[str, Any]:
     st = stats(kernel)
     g = st["gauge"]

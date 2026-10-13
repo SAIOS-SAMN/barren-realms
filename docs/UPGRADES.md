@@ -334,3 +334,43 @@ Planetary bodies and interstellar gravitational connections have been elevated f
     $$\dots \to H^k(\mathcal{C}_A \cup \mathcal{C}_B) \to H^k(\mathcal{C}_A) \oplus H^k(\mathcal{C}_B) \to H^k(\mathcal{C}_A \cap \mathcal{C}_B) \xrightarrow{\delta^*} H^{k+1}(\mathcal{C}_A \cup \mathcal{C}_B) \to \dots$$
     Generating non-vanishing harmonic subspaces in degrees $\{0, 1, 59, 60, 120, 121, 360\}$, providing continuous, uncollapsed volumetric capacity for all physical, cognitive, and economic tensors.
 
+---
+
+## 7. Active Civilization Bridges: The 5 High-Dimensional Expansions
+
+To prevent high-dimensional physics from operating as an isolated abstraction, five active bridges were integrated directly into the core civilization systems of Xylarium:
+
+### 7.1 Cosmological Ascendance & $S^{360}$ Horizon Gating
+* **Files:** [`xylarium/kernel/ascendance.py`](file:///opt/barren-realms/xylarium/kernel/ascendance.py) (`_horizon`, `s360_horizon_coherence`, `BOOKS`)
+* **Mechanics:**
+  - Expanded the 8 traditional steward books with a 9th paired book: `HORIZON`.
+  - **Syntropic Side:** Proved higher-rank harmonic capacity on $S^{360}$ and Landauer information depth.
+  - **Entropic Side:** Metric dispersion of populations attempting to cross sectors without sufficient proved mathematical capacity, quantified by the Lévy variance scale $\sigma_\theta = 1/\sqrt{59}$.
+  - Quarantined civilizations remain held within their native 60D equatorial subspace ($\mathbb{V}_k^{60}$). Only civilizations achieving $S^{360}$ horizon coherence gain permission to traverse the global 360-sphere.
+
+### 7.2 Interstellar Waveguide Transit & Smuggler Caustics
+* **Files:** [`xylarium/kernel/spheres.py`](file:///opt/barren-realms/xylarium/kernel/spheres.py) (`waveguide_conduit`, `caustic_nav_envelope`)
+* **Mechanics:**
+  - `waveguide_conduit()` computes gravitational cone joins between star systems, yielding an angular collimation corridor of $\sigma_\psi \approx 3.70^\circ$ and a $6.18\times$ collimation flux gain. Fleets aligned with the waveguide axis traverse interstellar space with reduced metric wear.
+  - `caustic_nav_envelope()` identifies topological caustic singularities where competing realm cones intersect ($\mathcal{C}_{AB} \cap \mathcal{C}_{BC}$). Smuggler guilds and ghost fleets utilize the metric curvature $\mathcal{K}_{\text{caustic}}$ as a sensor horizon blind spot to bypass customs tariffs.
+
+### 7.3 Cross-Sector Morphospace Shear & Epigenetic Adaptation
+* **Files:** [`xylarium/kernel/genome.py`](file:///opt/barren-realms/xylarium/kernel/genome.py) (`evaluate_dimensional_shear`), [`xylarium/kernel/civilization.py`](file:///opt/barren-realms/xylarium/kernel/civilization.py) (`Civilization.dimensional_shear`)
+* **Mechanics:**
+  - When a civilization colonizes an orthogonal sector across $S^{360}$, it encounters dimensional shear:
+    $$\Delta G_{\text{shear}} = \Delta G_0 + \kappa \cdot \sin^2(\Delta \psi_{360})$$
+  - Species must navigate Langevin-Waddington drift to overcome the thermodynamic shear barrier ($0.45\text{ eV}$), preventing cellular lysis and enabling organic adaptation across non-Euclidean sector boundaries.
+
+### 7.4 Non-Abelian Diplomatic Holonomies
+* **Files:** [`xylarium/kernel/polity.py`](file:///opt/barren-realms/xylarium/kernel/polity.py) (`treaty_holonomy_su2`)
+* **Mechanics:**
+  - Treaties between sovereign seats are evaluated as non-abelian parallel transport around the connecting gravitational cone waveguide:
+    $$\Omega_{AB} = \exp\left(\frac{1}{2} s_{AB} \vec{n} \cdot \vec{\sigma}\right) \in SU(2)$$
+  - Evaluates Lie algebra curvature $\|\vec{\xi}\| = \arccos(\frac{1}{2}\text{Tr}(\Omega_{AB}))$. If diplomatic infractions push $\|\vec{\xi}\| > \pi/2$, metric stress fractures the diplomatic link, precipitating a synchronized Realm War.
+
+### 7.5 Mayer-Vietoris Theorem Mining & Hypha `INTELLECT` Lane Coupling
+* **Files:** [`xylarium/kernel/intellect.py`](file:///opt/barren-realms/xylarium/kernel/intellect.py) (`mine_mayer_vietoris_theorems`), [`xylarium/kernel/hypha.py`](file:///opt/barren-realms/xylarium/kernel/hypha.py)
+* **Mechanics:**
+  - Civilizations achieving volumetric or hyper-crystal capability (ranks 3 and 4) prove closed differential forms on overlapping cone manifolds, resolving intermediate Betti numbers in degrees $\{60, 120\}$.
+  - Validated proofs are folded into the SHA-256 Merkle root `proof_roots[holder]` and stamped directly into the universal Hypha ledger's `INTELLECT` lane.
+

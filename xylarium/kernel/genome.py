@@ -188,6 +188,50 @@ def evaluate_waddington_drift(
     )
 
 
+def evaluate_dimensional_shear(
+    kernel: Any,
+    source_planet: Any,
+    target_planet: Any,
+    coord: Optional[MorphospaceCoordinate] = None,
+) -> Dict[str, Any]:
+    """Evaluate thermodynamic Waddington shear barrier across S^360 orthogonal sectors.
+    
+    When colonizing across the 6 orthogonal 60D hyper-sectors (R^360 = (+) V_k^60),
+    species encounter high-dimensional metric divergence:
+        Delta G_shear = Delta G_0 + kappa * sin^2(Delta psi_360)
+    Requiring Langevin-Waddington epigenetic drift to prevent cellular lysis.
+    """
+    from xylarium.kernel import physics
+    u360 = physics.Universe360(cosmic_radius=1.0)
+    sec_src = int(getattr(source_planet, "sector_id", 0))
+    sec_tgt = int(getattr(target_planet, "sector_id", 0))
+    
+    emb_src = u360.embed_body(source_planet, sec_src)
+    emb_tgt = u360.embed_body(target_planet, sec_tgt)
+    
+    psi_360 = u360.global_geodesic(emb_src, emb_tgt)
+    sector_offset = abs((sec_src % 6) - (sec_tgt % 6))
+    
+    # Thermodynamic shear barrier: kappa = 0.45 eV
+    shear_barrier_ev = 0.45 * (math.sin(psi_360) ** 2)
+    cross_sector = sector_offset > 0
+    
+    # Effective activation barrier
+    base_ea = coord.activation_energy_ev if coord else 0.85
+    effective_ea = base_ea + shear_barrier_ev
+    
+    return {
+        "source_sector": sec_src,
+        "target_sector": sec_tgt,
+        "cross_sector": cross_sector,
+        "geodesic_psi_rad": round(psi_360, 4),
+        "geodesic_psi_deg": round(math.degrees(psi_360), 2),
+        "shear_barrier_ev": round(shear_barrier_ev, 4),
+        "effective_activation_ev": round(effective_ea, 4),
+        "cellular_stability": round(max(0.05, 1.0 - shear_barrier_ev / 1.5), 4),
+    }
+
+
 
 def _quarter() -> int:
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES

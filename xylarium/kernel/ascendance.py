@@ -53,9 +53,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from xylarium.kernel import mindcore as mc
 from xylarium.kernel.fx import hub as _hub
 
-BOOKS = ("sufficiency", "restraint", "order", "self", "history", "minds", "money", "cooperation")
+BOOKS = ("sufficiency", "restraint", "order", "self", "history", "minds", "money", "cooperation", "horizon")
 MIND_MAKING = ("transfer", "cyber", "robotics")
-STOPS = {"minds": MIND_MAKING, "order": ("fission", "cyber")}   # the works a book in deficit makes a danger to others
+STOPS = {"minds": MIND_MAKING, "order": ("fission", "cyber"), "horizon": ("warp", "cyber")}   # the works a book in deficit makes a danger to others
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -140,7 +140,48 @@ def pairs(kernel: Any, who: str) -> Dict[str, Tuple[Fraction, Fraction]]:
             kept, debased = kept + rk, debased + rd
     out["money"] = (kept, debased)
     out["cooperation"] = _treaties(kernel, who)
+    out["horizon"] = _horizon(kernel, who, home, worlds)
     return out
+
+
+def _horizon(kernel: Any, who: str, home: Any, worlds: List[Any]) -> Tuple[Fraction, Fraction]:
+    """Continuous S^360 cosmological horizon coherence: syntropic Landauer depth vs off-equator dispersion."""
+    from xylarium.kernel import intellect, physics
+    proofs_dict = (intellect.stats(kernel).get("proofs") or {}).get(who) or []
+    n_proofs = len(proofs_dict)
+    
+    # Syntropic side: proved higher-rank harmonic capacity on S^360
+    syntropic = Fraction(1 + n_proofs, 1)
+    
+    # Entropic side: dispersion across sectors without proof capacity
+    # If a civilization expands beyond its home S^60 sphere without proofs, dispersion accumulates
+    extra_worlds = max(0, len(worlds) - 1)
+    # Variance tolerance from Levy concentration: sigma_theta = 1/sqrt(59) ~ 0.1302
+    entropic = Fraction(extra_worlds, max(1, n_proofs + 1))
+    return syntropic, entropic
+
+
+def s360_horizon_coherence(kernel: Any, who: str) -> Dict[str, Any]:
+    """Evaluate whether civilization's harmonic capacity allows free transit across S^360 sector foliation."""
+    from xylarium.kernel import intellect, physics
+    home = _home(kernel, who)
+    if home is None:
+        return {"coherent": False, "reason": "no home world"}
+    
+    p_manifold = home.s60_manifold() if hasattr(home, "s60_manifold") else {}
+    proof_roots = (intellect.stats(kernel).get("proof_roots") or {}).get(who, "genesis")
+    is_ascended = free(kernel, who)
+    
+    return {
+        "who": who,
+        "ascended": is_ascended,
+        "home_sector": home.sector_id,
+        "sector_slice_s360": home.sector_id % 6,
+        "s60_area": p_manifold.get("surface_area_s60", 0.0),
+        "equatorial_variance_deg": p_manifold.get("equatorial_variance_deg", 7.46),
+        "proof_root": proof_roots,
+        "s360_cross_transit_permitted": is_ascended and proof_roots != "genesis",
+    }
 
 
 def _money(kernel: Any, cur: str) -> Tuple[Fraction, Fraction]:

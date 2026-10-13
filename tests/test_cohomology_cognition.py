@@ -377,6 +377,68 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertGreater(p_manifold["surface_area_s60"], 0.0)
         self.assertTrue(p_manifold["uncollapsed"])
 
+    def test_civilization_high_dimensional_bridges(self):
+        from xylarium.kernel import ascendance, spheres, genome, polity, intellect, civilization
+        
+        # 1. Ascendance S^360 Horizon Coherence & Horizon Book
+        peoples = list(ascendance.stats(self.kernel).get("of", {}).keys())
+        who = peoples[0] if peoples else "civ:imperium"
+        home = ascendance._home(self.kernel, who)
+        if home:
+            pairs = ascendance.pairs(self.kernel, who)
+            self.assertIn("horizon", pairs)
+            syn, ent = pairs["horizon"]
+            self.assertGreater(syn, 0)
+            
+            coh = ascendance.s360_horizon_coherence(self.kernel, who)
+            self.assertEqual(coh["who"], who)
+            self.assertIn("s60_area", coh)
+
+        # 2. Interstellar Waveguide Conduit & Caustic Navigation Envelope
+        sec1, sec2 = 1, 2
+        conduit = spheres.waveguide_conduit(self.kernel, sec1, sec2)
+        self.assertTrue(conduit["waveguide_active"])
+        self.assertAlmostEqual(conduit["collimation_half_width_deg"], 3.70, places=1)
+        self.assertGreater(conduit["collimation_gain"], 5.0)
+        
+        caustic_env = spheres.caustic_nav_envelope(self.kernel, sec1)
+        self.assertIn("is_caustic", caustic_env)
+        self.assertIn("stealth_factor", caustic_env)
+
+        # 3. Cross-Sector Dimensional Shear & Epigenetic Adaptation
+        sec_a = self.kernel.sectors[1]
+        sec_b = self.kernel.sectors[5] if 5 in self.kernel.sectors else self.kernel.sectors[2]
+        p_src = sec_a.planets[0] if sec_a.planets else None
+        p_tgt = sec_b.planets[0] if sec_b.planets else None
+        if p_src and p_tgt:
+            shear = genome.evaluate_dimensional_shear(self.kernel, p_src, p_tgt)
+            self.assertIn("shear_barrier_ev", shear)
+            self.assertIn("cellular_stability", shear)
+            self.assertGreater(shear["cellular_stability"], 0.0)
+            
+            civ = civilization.Civilization(
+                name="Aethelgard", species_name="Aethel", class_code=1,
+                sigil="⬡", clade="biotic", metabolism="biotic", disposition="empiricist", motto="Veritas"
+            )
+            civ_shear = civ.dimensional_shear(p_src, p_tgt, kernel=self.kernel)
+            self.assertEqual(civ_shear["source_sector"], p_src.sector_id)
+
+        # 4. Non-Abelian Diplomatic Holonomies in Polity
+        sovs = list(polity.sovereigns(self.kernel).keys())
+        if len(sovs) >= 2:
+            hol = polity.treaty_holonomy_su2(self.kernel, sovs[0], sovs[1])
+            self.assertIn("holonomy", hol)
+            self.assertIn("curvature_rad", hol)
+            self.assertIn("diplomatic_rupture_risk", hol)
+
+        # 5. Mayer-Vietoris Theorem Mining in Intellect
+        intellect.stats(self.kernel)["gauge"][who] = {"2": 8, "3": 4, "4": 2}
+        cert = intellect.mine_mayer_vietoris_theorems(self.kernel, who, 1, 2)
+        self.assertIsNotNone(cert)
+        self.assertIn("harmonic_degree", cert)
+        self.assertIn(cert["harmonic_degree"], (60, 120))
+        self.assertIn(who, intellect.stats(self.kernel)["proof_roots"])
+
 
 if __name__ == "__main__":
     unittest.main()

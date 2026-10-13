@@ -191,6 +191,11 @@ class Civilization:
             "traits": dict(self.traits) if self.traits else None,
         }
 
+    def dimensional_shear(self, source_world: Any, target_world: Any, kernel: Any = None) -> Dict[str, Any]:
+        """Evaluate thermodynamic Waddington shear when this civilization colonizes an orthogonal S^360 sector."""
+        from xylarium.kernel import genome
+        return genome.evaluate_dimensional_shear(kernel, source_world, target_world)
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Civilization":
         return cls(
