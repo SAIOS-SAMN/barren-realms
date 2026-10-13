@@ -48,30 +48,29 @@ This specification designs the mathematical foundation and integration architect
 
 ---
 
-## 3. Mathematical Architecture: Non-Collapsing Cohomology
+## 3. Mathematical Architecture: Non-Euclidean Manifolds & Non-Abelian Cohomology
 
-### 3.1 Presheaf of Ideation over the Orbital Nerve Complex
-Let $\mathcal{K}$ be the simplicial nerve complex of a star system:
-* $0$-simplices $\sigma_0 \in \mathcal{K}_0$: Orbital bodies (planets, moons, starports).
-* $1$-simplices $\sigma_1 \in \mathcal{K}_1$: Warp lanes, transit tubes, and line-of-sight communication paths.
-* $2$-simplices $\sigma_2 \in \mathcal{K}_2$: Orbital resonance triads (e.g. 4:2:1 Laplace resonance chains).
+### 3.1 Non-Euclidean Riemannian Geometry over Orbital Complexes
+The star system is modeled not as a flat spreadsheet graph, but as a continuous curved Riemannian manifold $(\mathcal{M}, g)$ equipped with an $SU(2) \cong \text{Spin}(3)$ non-abelian gauge bundle:
+* **Metric Tensor & Geodesic Arcs:** In curved Schwarzschild/Kerr spacetime around stellar mass $m$:
+  $$ds^2 = \frac{dr^2}{1 - 2m/r} + r^2 d\phi^2, \quad R^\rho_{\ \sigma\mu\nu} \neq 0$$
+  Geodesic distance $s_{ij} = \int_{p_i}^{p_j} ds$ accounts for non-Euclidean metric dilation rather than flat planar subtraction.
+* **Non-Abelian 1-Cochains (Wilson Lines):** Parallel transport along directed edge $e_{ij}$ is a unit quaternion group element $U_{ij} \in SU(2)$.
+  $$U_{ij} = \exp\left(\frac{1}{2} s_{ij} (1 + \text{Ind}_{ij}) \vec{n}_{ij}\right)$$
+  Strictly non-commutative: $U_{ij} U_{jk} \neq U_{jk} U_{ij}$.
 
-A cognitive state is a section of a sheaf $\mathcal{F}$ over $\mathcal{K}$, where the stalk at each simplex is a finite-dimensional module $V = \mathbb{R}^d$ representing the multi-axis semantic space of the people (vitality, memory, exploration, dialectic, craft).
+### 3.2 Non-Abelian Curvature 2-Forms on Plaquettes (2-Simplices)
+For every orbital triad $(p_i, p_j, p_k) \in \mathcal{K}_2$, the non-abelian field strength curvature 2-form is the Wilson loop:
+$$\Omega_{ijk} = U_{ij} \cdot U_{jk} \cdot U_{ki} \in SU(2)$$
+* If spacetime is flat and uncoupled: $\Omega_{ijk} = \mathbf{1}$.
+* With non-Euclidean Riemann curvature and stellar electrodynamic induction: $\Omega_{ijk} \neq \mathbf{1}$. The non-trivial holonomy angle measures the intrinsic geometric curvature $F = dA + A \wedge A$.
 
-### 3.2 The Coboundary Operator & The Posed Theorem
-The cochain spaces are $C^k(\mathcal{K}; \mathcal{F})$. The coboundary operator $\delta: C^k \to C^{k+1}$ maps local observations to edge discrepancies:
-$$(\delta c)(e_{ij}) = \rho_{j \leftarrow ij}(c(v_j)) - \rho_{i \leftarrow ij}(c(v_i))$$
-
-* **A Theorem is an Unclosed 1-Cochain:**
-  $$\tau \in C^1(\mathcal{K}; \mathcal{F}), \quad \delta \tau \neq 0$$
-  It represents a question, an unresolved scientific anomaly, or an unfulfilled societal aspiration.
-
-### 3.3 Convergence Without Dimensionality Collapse (Hodge Decomposition)
-When multiple wave packets converge, classical algorithms discard dimensions by taking a scalar dot product or $\arg\max$. 
-
-**Our Non-Collapsing Rule:**
-Instead of scalar projection, the system applies a **Hodge-de Rham Decomposition**:
-$$C^k(\mathcal{K}; \mathcal{F}) = \text{im}(\delta) \oplus \text{im}(\delta^*) \oplus \mathcal{H}^k$$
+### 3.3 Convergence Without Dimensionality Collapse (Covariant Hodge Decomposition)
+Instead of scalar projection, the system applies covariant Hodge decomposition to the $\mathfrak{su}(2)$ Lie algebra 1-forms $\vec{\xi}_{ij} = \log(U_{ij})$:
+$$C^1(\mathcal{K}; \mathfrak{su}(2)) = \text{im}(D_A) \oplus \text{im}(D_A^*) \oplus \mathcal{H}^1$$
+Where:
+* $D_A = d + [A, \cdot]$: Covariant exterior derivative.
+* $\mathcal{H}^1 = \ker(\Delta_A)$: Conserved harmonic 3-manifold forms. Dimension $3 \times \beta_1$ is strictly preserved.
 
 Where:
 * $\delta^*$: The adjoint combinatorial boundary operator.

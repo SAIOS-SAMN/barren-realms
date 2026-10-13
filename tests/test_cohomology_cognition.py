@@ -60,11 +60,46 @@ class TestCohomologyCognition(unittest.TestCase):
         
         # Verify harmonic convergence
         cert = intellect.verify_harmonic_convergence(self.kernel, "civ:Elder", 1)
-        # Even if resonance phase has slight offset, function executes cleanly
         if cert:
             self.assertEqual(cert["lane"], "INTELLECT")
             self.assertIn("proof:civ:Elder:1:", cert["id"])
 
+    def test_non_abelian_quaternion_algebra(self):
+        # Verify strict non-commutativity in SU(2)
+        q1 = physics.Quaternion.from_axis_angle((1.0, 0.0, 0.0), 1.2)
+        q2 = physics.Quaternion.from_axis_angle((0.0, 1.0, 0.0), 0.8)
+        
+        prod1 = q1 * q2
+        prod2 = q2 * q1
+        # In non-abelian space: q1 * q2 != q2 * q1
+        self.assertNotEqual((prod1.w, prod1.x, prod1.y, prod1.z), (prod2.w, prod2.x, prod2.y, prod2.z))
+        
+        # Lie bracket commutator is non-zero
+        comm = q1.commutator(q2)
+        self.assertGreater(comm.norm(), 1e-4)
+
+    def test_non_euclidean_manifold_and_curvature_2(self):
+        # 1. Non-Euclidean curved geodesic vs flat Euclidean subtraction
+        body1 = {"q": Fraction(1, 2), "orbital_angle": 0.0}
+        body2 = {"q": Fraction(2), "orbital_angle": 1.5}
+        geodesic_len, axis = physics.non_euclidean_geodesic(Fraction(1), body1, body2)
+        flat_dist = abs(float(body1["q"])**2 - float(body2["q"])**2)
+        
+        self.assertGreater(geodesic_len, 0.0)
+        self.assertNotEqual(geodesic_len, flat_dist)
+        
+        # 2. Non-abelian 2-simplex curvature Wilson loops
+        sec = next(s for s in self.kernel.sectors.values() if len(s.planets) >= 3)
+        cochain = cognition.MaterialCochain()
+        diffs = cognition.coboundary_1(self.kernel, sec, cochain)
+        plaquettes = cognition.curvature_2(self.kernel, sec, diffs)
+        
+        self.assertIsInstance(plaquettes, dict)
+        if len(plaquettes) > 0:
+            w_loop = next(iter(plaquettes.values()))
+            self.assertIsInstance(w_loop, physics.Quaternion)
+
 
 if __name__ == "__main__":
     unittest.main()
+

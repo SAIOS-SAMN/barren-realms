@@ -82,7 +82,13 @@ def breadth(kernel: Any, planet: Any, holder: str) -> List[Dict[str, Any]]:
     ]
 
     # Non-collapsing harmonic modes added to superposition directly from electrodynamic induction
-    harmonic_shift = float(induction)
+    # Non-abelian SU(2) parallel transport rotation combining torsion pulse and mantle induction
+    q_torsion = physics.Quaternion.from_axis_angle((0.0, 0.0, 1.0), float(phase))
+    q_induction = physics.Quaternion.from_axis_angle((1.0, 0.0, 0.0), float(induction))
+    q_holonomy = q_torsion * q_induction  # non-abelian product
+    axis, net_rot_angle = q_holonomy.to_axis_angle()
+    harmonic_shift = net_rot_angle
+
     if harmonic_shift != 0.0 or amp > 0.001:
         plans.append(("harmonic_resonance", f"align social works to {phase:.2f} rad toroidal pulse",
                       out_value * 0.5 + harmonic_shift * 1000.0))
@@ -94,7 +100,8 @@ def breadth(kernel: Any, planet: Any, holder: str) -> List[Dict[str, Any]]:
     weights = [math.exp((v - held[0][2]) / spread) for _, _, v in held]
     total = sum(weights)
     out = [{"plan": k, "what": t, "net": round(v, 1), "chance": round(w / total, 3),
-            "holonomy_phase": f"{phase + harmonic_shift:.3f}"}
+            "holonomy_phase": f"{net_rot_angle:.3f}",
+            "non_abelian_holonomy": repr(q_holonomy)}
            for (k, t, v), w in zip(held, weights)]
 
     # and where to turn its inquiry: the goals it holds, by how far each falls short of what it wants (introspect)

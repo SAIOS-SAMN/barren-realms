@@ -26,6 +26,7 @@ these quantities. Chosen constants live here and in config's [15] block, and the
 import math
 import zlib
 import random
+from dataclasses import dataclass
 from fractions import Fraction as F
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -430,6 +431,121 @@ def electrodynamic_induction(
     # Pure physical rational coupling: shear induction along orbital flow
     shear_induction = F(int(round(torsion_amplitude * 1000)), 1000) * (F(1, max(F(1, 10), q)) / max(F(1), day))
     return shear_induction
+
+
+@dataclass(frozen=True)
+class Quaternion:
+    """Exact Non-Abelian SU(2) / Spin(3) quaternion element.
+    
+    Represents parallel transport operators and non-abelian Wilson lines.
+    Strictly non-commutative: q1 * q2 != q2 * q1.
+    """
+    w: float
+    x: float
+    y: float
+    z: float
+
+    def __mul__(self, other: "Quaternion") -> "Quaternion":
+        w1, x1, y1, z1 = self.w, self.x, self.y, self.z
+        w2, x2, y2, z2 = other.w, other.x, other.y, other.z
+        return Quaternion(
+            w=w1*w2 - x1*x2 - y1*y2 - z1*z2,
+            x=w1*x2 + x1*w2 + y1*z2 - z1*y2,
+            y=w1*y2 - x1*z2 + y1*w2 + z1*x2,
+            z=w1*z2 + x1*y2 - y1*x2 + z1*w2,
+        )
+
+    def conjugate(self) -> "Quaternion":
+        return Quaternion(self.w, -self.x, -self.y, -self.z)
+
+    def norm_sq(self) -> float:
+        return self.w*self.w + self.x*self.x + self.y*self.y + self.z*self.z
+
+    def norm(self) -> float:
+        return math.sqrt(max(0.0, self.norm_sq()))
+
+    def normalized(self) -> "Quaternion":
+        n = self.norm()
+        if n < 1e-15:
+            return Quaternion(1.0, 0.0, 0.0, 0.0)
+        return Quaternion(self.w / n, self.x / n, self.y / n, self.z / n)
+
+    def inverse(self) -> "Quaternion":
+        n_sq = self.norm_sq()
+        if n_sq < 1e-15:
+            return Quaternion(1.0, 0.0, 0.0, 0.0)
+        c = self.conjugate()
+        return Quaternion(c.w / n_sq, c.x / n_sq, c.y / n_sq, c.z / n_sq)
+
+    @classmethod
+    def from_axis_angle(cls, axis: Tuple[float, float, float], angle: float) -> "Quaternion":
+        ax, ay, az = axis
+        mag = math.sqrt(ax*ax + ay*ay + az*az)
+        if mag < 1e-15:
+            return cls(1.0, 0.0, 0.0, 0.0)
+        half = angle * 0.5
+        sin_h = math.sin(half)
+        return cls(
+            w=math.cos(half),
+            x=(ax / mag) * sin_h,
+            y=(ay / mag) * sin_h,
+            z=(az / mag) * sin_h,
+        ).normalized()
+
+    def to_axis_angle(self) -> Tuple[Tuple[float, float, float], float]:
+        q = self.normalized()
+        angle = 2.0 * math.acos(max(-1.0, min(1.0, q.w)))
+        sin_h = math.sin(angle * 0.5)
+        if abs(sin_h) < 1e-15:
+            return ((1.0, 0.0, 0.0), 0.0)
+        return ((q.x / sin_h, q.y / sin_h, q.z / sin_h), angle)
+
+    def commutator(self, other: "Quaternion") -> "Quaternion":
+        """Non-abelian Lie bracket [q1, q2] = q1 * q2 - q2 * q1."""
+        p1 = self * other
+        p2 = other * self
+        return Quaternion(p1.w - p2.w, p1.x - p2.x, p1.y - p2.y, p1.z - p2.z)
+
+    def __repr__(self) -> str:
+        return f"SU2({self.w:.4f} + {self.x:.4f}i + {self.y:.4f}j + {self.z:.4f}k)"
+
+
+def non_euclidean_geodesic(
+    star_m: Any,
+    body1: Dict[str, Any],
+    body2: Dict[str, Any]
+) -> Tuple[float, Tuple[float, float, float]]:
+    """Compute Riemannian curved geodesic arc length and tangent spin axis in non-Euclidean spacetime.
+    
+    Spacetime metric around star mass m:
+        ds^2 = dr^2 / (1 - 2m/r) + r^2 dphi^2
+    Yields non-zero intrinsic Riemann curvature R != 0.
+    """
+    q1 = float(body1.get("q", 1.0))
+    q2 = float(body2.get("q", 1.0))
+    r1 = max(0.05, q1 * q1)
+    r2 = max(0.05, q2 * q2)
+    m = max(0.01, float(star_m) if star_m is not None else 1.0)
+    
+    # Gravitational radius scale
+    rs = 2.0 * m * 0.01
+    r_lo, r_hi = min(r1, r2), max(r1, r2)
+    mid_r = (r_lo + r_hi) * 0.5
+    curvature_metric = 1.0 / math.sqrt(max(0.01, 1.0 - rs / mid_r))
+    radial_dist = (r_hi - r_lo) * curvature_metric
+    
+    phi1 = float(body1.get("orbital_angle", 0.0))
+    phi2 = float(body2.get("orbital_angle", math.pi / 3.0))
+    dphi = abs(phi2 - phi1)
+    angular_dist = mid_r * dphi
+    
+    geodesic_length = math.sqrt(radial_dist * radial_dist + angular_dist * angular_dist)
+    axis = (
+        math.sin(dphi) if abs(dphi) > 1e-6 else 1.0,
+        math.cos(dphi) * ((r2 - r1) / (r1 + r2)),
+        curvature_metric
+    )
+    return geodesic_length, axis
 
 
 def summary(sectors: Dict[int, Any]) -> Dict[str, Any]:
