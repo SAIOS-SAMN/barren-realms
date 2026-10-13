@@ -32,6 +32,7 @@ The centre's reservoir is a stock the matter ledger tracks through its declarati
 
 from fractions import Fraction
 import math
+import zlib
 from typing import Any, Dict, List, Optional
 
 EFFICIENCY = 0.1                # radiative efficiency of accretion onto a black hole
@@ -187,13 +188,15 @@ def open_throat(kernel: Any, tid: str, near: Any, mass_suns: float, kind: str,
     t = round(cosmos.deep_gyr(kernel), 6)
     thr[tid] = {"near": near, "far": f"{tid}:far", "kind": kind, "mass": float(mass_suns), "opened": t,
                 "keepers": {"near": k, "far": list(k)}, "reservoir_near": {}, "core": _new_core(t),
-                "inflow": 0, "returned": 0}
+                "inflow": 0, "returned": 0,
+                "vacuum": {"intake_energy": 0.0, "scale_factor": 1.0, "expansion_rate": 0.0, "last_pulse_cycle": 0}}
     return thr[tid]
 
 
 def capture_into(kernel: Any, tid: str, units: Dict[str, int], what: str) -> int:
     """Matter falls into a throat other than the centre's: a declared sink; a share crosses to its far core (the
-    same horizon law), the rest is its near face's to send back out."""
+    same horizon law), the rest is its near face's to send back out.
+    Accretion crossing the throat horizon triggers an Einstein-Cartan metric bounce."""
     rec = stats(kernel)["throats"][tid]
     got = 0
     for el, q in sorted(units.items()):
@@ -209,6 +212,23 @@ def capture_into(kernel: Any, tid: str, units: Dict[str, int], what: str) -> int
             rec["reservoir_near"][el] = rec["reservoir_near"].get(el, 0) + (q - through)
         got += q
     rec["inflow"] = int(rec["inflow"]) + got
+
+    if got:
+        try:
+            from xylarium.kernel import torsion
+            sec_id = rec.get("near", 1) if isinstance(rec.get("near"), int) else 1
+            bounce_energy = min(100.0, max(1.0, float(got) * 1.5))
+            chir = 1 if (zlib.crc32(tid.encode()) % 2 == 0) else -1
+            torsion.emit_bounce(
+                kernel,
+                origin_sector=sec_id,
+                energy_scale=bounce_energy,
+                chirality=chir,
+                source=f"throat:{tid}",
+            )
+        except Exception:
+            pass
+
     return got
 
 
@@ -237,7 +257,8 @@ def _engine(core: Dict[str, Any], into: Dict[str, int], deep_myr: float) -> int:
 
 def _small_throats(kernel: Any, deep_myr: float) -> None:
     """Each season every other throat keeps the centre's law: its far core sends back on its own clock; its near
-    face's reservoir goes out to its own system's worlds by the same e-fold (a declared source)."""
+    face's reservoir goes out to its own system's worlds by the same e-fold (a declared source).
+    Vacuum-controlled physics at distributed singularities drives conformal expansion and continuous bounce pulses."""
     from xylarium.kernel import zones
     share = 1.0 - math.exp(-deep_myr / EPISODE_MYR)
     for tid in sorted(stats(kernel).get("throats", {})):
@@ -247,20 +268,103 @@ def _small_throats(kernel: Any, deep_myr: float) -> None:
         _engine(rec["core"], rec["reservoir_near"], deep_myr)
         sec = kernel.sectors.get(rec["near"]) if isinstance(rec["near"], int) else None
         worlds = [p for p in (sec.planets if sec is not None else [])]
-        if not worlds or not rec["reservoir_near"]:
-            continue
-        for el in sorted(rec["reservoir_near"]):
-            out = int(rec["reservoir_near"][el] * share)
-            if out <= 0:
-                continue
-            rec["reservoir_near"][el] -= out
-            for j, w in enumerate(worlds):
-                part = out // len(worlds) + (1 if j < out % len(worlds) else 0)
-                if part:
-                    zones.touch(kernel, w)
-                    w.element_deposits[el] = w.element_deposits.get(el, 0) + part
-                    matter.source("central_engine", el, part)
-            rec["returned"] = int(rec["returned"]) + out
+        if worlds and rec["reservoir_near"]:
+            for el in sorted(rec["reservoir_near"]):
+                out = int(rec["reservoir_near"][el] * share)
+                if out <= 0:
+                    continue
+                rec["reservoir_near"][el] -= out
+                for j, w in enumerate(worlds):
+                    part = out // len(worlds) + (1 if j < out % len(worlds) else 0)
+                    if part:
+                        zones.touch(kernel, w)
+                        w.element_deposits[el] = w.element_deposits.get(el, 0) + part
+                        matter.source("central_engine", el, part)
+                rec["returned"] = int(rec["returned"]) + out
+
+        # Vacuum reductionist physics and continuous bounce pulses at distributed singularities
+        vac = rec.setdefault("vacuum", {
+            "intake_energy": 0.0,
+            "scale_factor": 1.0,
+            "expansion_rate": 0.0,
+            "last_pulse_cycle": 0,
+        })
+        m_throat = float(rec.get("mass", 10.0))
+        # Reductionist in-take of vacuum-controlled physics:
+        # Horizon volume proportional to Schwarzschild radius cubed
+        r_schwarzschild = 2.0 * m_throat * 1.0e-5
+        v_horizon = max(0.01, (4.0 / 3.0) * math.pi * (r_schwarzschild ** 3))
+        rho_vac = 0.70  # Cosmological vacuum energy density
+        delta_e_vac = rho_vac * v_horizon * max(0.1, deep_myr)
+        vac["intake_energy"] = round(float(vac.get("intake_energy", 0.0)) + delta_e_vac, 6)
+
+        # Friedmann-Cartan cosmic expansion acceleration:
+        # a_ddot / a = (8pi G / 3) * rho_vac - (4pi G / 3) * (rho_m + 3p/c^2) + kappa_torsion * <sigma^2>
+        rho_m = m_throat / max(0.01, v_horizon)
+        cartan_repulsion = min(5.0, (rho_m * 1.0e-4) ** 2)
+        expansion_accel = (8.0 * math.pi / 3.0) * rho_vac - (4.0 * math.pi / 3.0) * (rho_m * 0.01) + cartan_repulsion
+        vac["expansion_rate"] = round(max(0.01, expansion_accel), 6)
+        vac["scale_factor"] = round(float(vac.get("scale_factor", 1.0)) * (1.0 + vac["expansion_rate"] * 0.01 * min(1.0, deep_myr)), 6)
+
+        # Continuous bounce pulse emitted into the expanding universe
+        try:
+            from xylarium.kernel import torsion
+            sec_id = rec.get("near", 1) if isinstance(rec.get("near"), int) else 1
+            pulse_energy = max(0.5, min(50.0, m_throat * 0.1 * (1.0 + vac["intake_energy"] * 0.01)))
+            chir = 1 if (zlib.crc32(tid.encode()) % 2 == 0) else -1
+            torsion.emit_bounce(
+                kernel,
+                origin_sector=sec_id,
+                energy_scale=pulse_energy,
+                chirality=chir,
+                source=f"throat:{tid}",
+            )
+        except Exception:
+            pass
+
+
+def throat_vacuum_physics(kernel: Any, tid: str) -> Dict[str, Any]:
+    """Evaluates the reductionist vacuum in-take and Friedmann-Cartan bounce physics for a distributed throat."""
+    thr = stats(kernel).get("throats", {})
+    rec = thr.get(tid)
+    if not rec:
+        return {}
+    vac = rec.get("vacuum", {})
+    m_throat = float(rec.get("mass", 10.0))
+    rho_vac = 0.70
+    rho_m = m_throat * 0.1
+    cartan_repulsion = min(5.0, (rho_m * 1.0e-4) ** 2)
+    accel = (8.0 * math.pi / 3.0) * rho_vac - (4.0 * math.pi / 3.0) * (rho_m * 0.01) + cartan_repulsion
+    return {
+        "throat_id": tid,
+        "mass_suns": m_throat,
+        "vacuum_energy_intake": vac.get("intake_energy", 0.0),
+        "scale_factor": vac.get("scale_factor", 1.0),
+        "expansion_acceleration": round(accel, 6),
+        "cartan_spin_repulsion": round(cartan_repulsion, 6),
+        "negative_pressure_p_vac": round(-rho_vac, 4),
+        "conformal_expansion_active": accel > 0.0,
+    }
+
+
+def cosmic_bounce_continuum(kernel: Any) -> Dict[str, Any]:
+    """Aggregate state of the cosmic bounce continuum across all distributed singularities."""
+    thr = stats(kernel).get("throats", {})
+    total_vac = 0.0
+    mean_scale = 1.0
+    active_throats = 0
+    for tid, rec in thr.items():
+        if "vacuum" in rec:
+            total_vac += float(rec["vacuum"].get("intake_energy", 0.0))
+            mean_scale = max(mean_scale, float(rec["vacuum"].get("scale_factor", 1.0)))
+            active_throats += 1
+    return {
+        "distributed_singularities": len(thr),
+        "active_throats": active_throats,
+        "total_vacuum_intake": round(total_vac, 6),
+        "universal_scale_factor": round(mean_scale, 6),
+        "reductionist_intake_law": "Einstein-Cartan-Sciama-Kibble",
+    }
 
 
 def throat_ledger(kernel: Any, tid: str) -> Dict[str, int]:

@@ -62,7 +62,10 @@ def coupling_constant(kernel: Any) -> Fraction:
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
-    return state.of(kernel, "torsion")
+    st = state.of(kernel, "torsion")
+    st.setdefault("universal_scale_factor", 1.0)
+    st.setdefault("vacuum_intake_total", 0.0)
+    return st
 
 
 def emit_bounce(
@@ -255,6 +258,44 @@ def compute_quasinormal_ringdown(
 
 
 
+def cosmic_expansion_dynamics(kernel: Any) -> Dict[str, Any]:
+    """Evaluate Friedmann-Cartan universal expansion driven by vacuum negative pressure and distributed bounces.
+    
+    In the presence of distributed singularity fermion spin repulsion, collapse halts at the Cartan
+    density, and continuous bounce pulses drive outward conformal cosmological expansion:
+        a_ddot / a = (8pi G / 3) * rho_vac - (4pi G / 3) * (rho_m + 3p/c^2) + kappa_torsion * <sigma^2>
+    """
+    st = stats(kernel)
+    bounces = st.get("bounces", [])
+    total_energy = sum(float(b.get("energy", 0.0)) for b in bounces)
+
+    # Vacuum parameters
+    rho_vac = 0.70
+    p_vac = -rho_vac  # Negative vacuum pressure
+
+    # Cumulative spin density from active wavefronts
+    spin_density = total_energy * 0.001
+    cartan_repulsion = min(10.0, spin_density * 1.5)
+
+    # Universal expansion acceleration
+    expansion_accel = (8.0 * math.pi / 3.0) * rho_vac + cartan_repulsion
+    current_scale = float(st.get("universal_scale_factor", 1.0))
+    new_scale = current_scale * (1.0 + expansion_accel * 0.001)
+    st["universal_scale_factor"] = round(new_scale, 6)
+
+    return {
+        "bounces_count": len(bounces),
+        "total_bounce_energy": round(total_energy, 4),
+        "rho_vacuum": rho_vac,
+        "p_vacuum": p_vac,
+        "cartan_spin_density": round(spin_density, 6),
+        "cartan_repulsion": round(cartan_repulsion, 6),
+        "expansion_acceleration": round(expansion_accel, 6),
+        "universal_scale_factor": round(new_scale, 6),
+        "continuum_pulsing": len(bounces) > 0,
+    }
+
+
 def season(kernel: Any) -> List[str]:
     """Seasonal check: prune ancient attenuated bounces into the stochastic cosmological background strain."""
     st = stats(kernel)
@@ -275,6 +316,7 @@ def summary(kernel: Any) -> Dict[str, Any]:
     return {
         "bounces_recorded": len(st["bounces"]),
         "latest": st["bounces"][-1] if st["bounces"] else None,
+        "universal_scale_factor": round(float(st.get("universal_scale_factor", 1.0)), 6),
     }
 
 

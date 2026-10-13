@@ -439,6 +439,150 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertIn(cert["harmonic_degree"], (60, 120))
         self.assertIn(who, intellect.stats(self.kernel)["proof_roots"])
 
+    def test_combat_holonomies_and_micro_torsion_recoil(self):
+        from xylarium.kernel import combat, physics, torsion
+        from xylarium.kernel.models import Captain, Ship, CargoHold, AIPersonality, SecurityLevel
+
+        sec = self.kernel.sectors[2]
+        sec.security = SecurityLevel.ANARCHY
+
+        c1 = Captain(
+            id="cap:att", name="Attacker", is_ai=False, personality=None,
+            ship=Ship(ship_type="Cruiser", shields=150, max_shields=200, fighters=40, cargo=CargoHold()),
+            credits=5000, sector_id=2, turns_left=20
+        )
+        c2 = Captain(
+            id="cap:def", name="Defender", is_ai=True, personality=None,
+            ship=Ship(ship_type="Frigate", shields=100, max_shields=150, fighters=25, cargo=CargoHold()),
+            credits=2000, sector_id=2, turns_left=20
+        )
+        self.kernel.captains[c1.id] = c1
+        self.kernel.captains[c2.id] = c2
+        if c1.id not in sec.captains:
+            sec.captains.append(c1.id)
+        if c2.id not in sec.captains:
+            sec.captains.append(c2.id)
+
+        # 1. Direct tactical holonomy evaluation
+        hol = combat.combat_holonomy_su2(c1, c2, sec, self.kernel)
+        self.assertIsInstance(hol["quaternion"], physics.Quaternion)
+        self.assertGreaterEqual(hol["trace_half"], -1.0)
+        self.assertLessEqual(hol["trace_half"], 1.0)
+        self.assertIn(hol["resonance_mode"], ("CONSTRUCTIVE", "DESTRUCTIVE_SHEAR", "HARMONIC"))
+        self.assertGreater(hol["shield_absorption_eff"], 0.0)
+
+        # 2. Combat resolution and micro-torsion recoil
+        bounces_before = len(torsion.stats(self.kernel)["bounces"])
+        res = combat.CombatManager.resolve_ship_battle(
+            c1, c2, sec, tactic="volley", kernel=self.kernel
+        )
+        self.assertTrue(res.success)
+        self.assertIn("holonomy", res.data)
+        self.assertTrue(any("[HOLONOMY]" in l for l in res.logs))
+        bounces_after = len(torsion.stats(self.kernel)["bounces"])
+        self.assertGreater(bounces_after, bounces_before)
+
+        # 3. Orbital bombardment holonomy
+        if sec.planets:
+            planet = sec.planets[0]
+            orb_hol = combat.orbital_bombardment_holonomy_su2(c1, planet, sec, self.kernel)
+            self.assertIsInstance(orb_hol["quaternion"], physics.Quaternion)
+            self.assertIn(orb_hol["resonance_mode"], ("CONSTRUCTIVE", "DESTRUCTIVE_SHEAR", "HARMONIC"))
+            self.assertGreater(orb_hol["shield_absorption_eff"], 0.0)
+
+    def test_distributed_singularities_vacuum_intake_and_bounce_continuum(self):
+        from xylarium.kernel import blackhole, torsion
+
+        # 1. Open a distributed throat
+        thr = blackhole.open_throat(self.kernel, "throat:sig_test", near=2, mass_suns=18.5, kind="intermediate")
+        self.assertEqual(thr["mass"], 18.5)
+        self.assertIn("vacuum", thr)
+
+        # 2. Accretion capture generates an Einstein-Cartan metric bounce
+        bounces_init = len(torsion.stats(self.kernel)["bounces"])
+        got = blackhole.capture_into(self.kernel, "throat:sig_test", {"Fe": 8, "U": 4}, "stellar_remnant")
+        self.assertEqual(got, 12)
+        bounces_post = len(torsion.stats(self.kernel)["bounces"])
+        self.assertGreater(bounces_post, bounces_init)
+
+        # 3. Seasonal evolution with vacuum-controlled intake
+        blackhole._small_throats(self.kernel, deep_myr=2.5)
+        vac_phys = blackhole.throat_vacuum_physics(self.kernel, "throat:sig_test")
+        self.assertEqual(vac_phys["throat_id"], "throat:sig_test")
+        self.assertGreater(vac_phys["vacuum_energy_intake"], 0.0)
+        self.assertGreater(vac_phys["expansion_acceleration"], 0.0)
+        self.assertLess(vac_phys["negative_pressure_p_vac"], 0.0)
+        self.assertTrue(vac_phys["conformal_expansion_active"])
+
+        # 4. Universal bounce continuum & scale factor dynamics
+        cont = blackhole.cosmic_bounce_continuum(self.kernel)
+        self.assertGreater(cont["distributed_singularities"], 0)
+        self.assertGreater(cont["universal_scale_factor"], 0.99)
+
+        exp_dyn = torsion.cosmic_expansion_dynamics(self.kernel)
+        self.assertTrue(exp_dyn["continuum_pulsing"])
+        self.assertGreater(exp_dyn["cartan_spin_density"], 0.0)
+        self.assertGreaterEqual(exp_dyn["universal_scale_factor"], 1.0)
+
+    def test_alchemical_induction_118_continuum_and_new_element_discovery(self):
+        from xylarium.kernel import elements_continuum, elements, alchemy
+        from xylarium.kernel.models import Captain, Ship, CargoHold
+
+        # 1. Systematic IUPAC naming for Z >= 119
+        sym_119, name_119 = elements_continuum.systematic_iupac(119)
+        self.assertEqual(sym_119, "Uue")
+        self.assertEqual(name_119, "Ununennium")
+
+        sym_120, name_120 = elements_continuum.systematic_iupac(120)
+        self.assertEqual(sym_120, "Ubn")
+        self.assertEqual(name_120, "Unbinilium")
+
+        sym_126, name_126 = elements_continuum.systematic_iupac(126)
+        self.assertEqual(sym_126, "Ubh")
+        self.assertEqual(name_126, "Unbihexium")
+
+        # 2. Parse element Z and PeriodicTable resolution
+        self.assertEqual(elements_continuum.parse_element_z("Uue"), 119)
+        self.assertEqual(elements_continuum.parse_element_z("Ubn"), 120)
+        self.assertEqual(elements_continuum.parse_element_z("Ubh"), 126)
+
+        elem_uue = elements.PeriodicTable.get_element("Uue")
+        self.assertIsNotNone(elem_uue)
+        self.assertEqual(elem_uue.symbol, "Uue")
+        self.assertEqual(elem_uue.family, "Superheavy")
+
+        # 3. Alchemical induction: synthesis and new element discovery
+        cap = Captain(
+            id="cap:alchemist", name="Alchemist", is_ai=False, personality=None,
+            ship=Ship(
+                ship_type="Scout Ship", shields=100, max_shields=100, fighters=10,
+                cargo=CargoHold(capacity=100, elements={"U": 2, "Fe": 2, "Pt": 5})
+            ),
+            credits=50000, sector_id=1, turns_left=20
+        )
+        self.kernel.captains[cap.id] = cap
+
+        # Induce Z = 92 (U) + 26 (Fe) = 118 (Oganesson "Og")
+        res_og = alchemy.alchemical_induction(
+            self.kernel, cap, input_elements={"U": 1, "Fe": 1}, catalyst="Pt", sector_id=1
+        )
+        self.assertTrue(res_og.success)
+        self.assertEqual(res_og.data["target_element"], "Og")
+        self.assertEqual(res_og.data["atomic_number"], 118)
+        self.assertIn("Og", cap.ship.cargo.elements)
+
+        # Induce Z = 92 (U) + 29 (Cu) -> 121 (Unbiunium "Ubu") discovery!
+        cap.ship.cargo.elements["Cu"] = 2
+        res_ubu = alchemy.alchemical_induction(
+            self.kernel, cap, input_elements={"U": 1, "Cu": 1}, catalyst="Pt", sector_id=1
+        )
+        self.assertTrue(res_ubu.success)
+        self.assertEqual(res_ubu.data["target_element"], "Ubu")
+        self.assertEqual(res_ubu.data["atomic_number"], 121)
+        self.assertTrue(res_ubu.data["is_new_discovery"])
+        self.assertIn("Ubu", cap.discovered_elements)
+        self.assertIn("Ubu", cap.ship.cargo.elements)
+
 
 if __name__ == "__main__":
     unittest.main()

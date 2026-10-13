@@ -82,12 +82,83 @@ def shell_correction_mev(z: int, a: float) -> float:
     return bonus
 
 
+IUPAC_DIGITS = {
+    0: ("nil", "n"),
+    1: ("un", "u"),
+    2: ("bi", "b"),
+    3: ("tri", "t"),
+    4: ("quad", "q"),
+    5: ("pent", "p"),
+    6: ("hex", "h"),
+    7: ("sept", "s"),
+    8: ("oct", "o"),
+    9: ("enn", "e"),
+}
+IUPAC_CHAR_TO_DIGIT = {v[1]: k for k, v in IUPAC_DIGITS.items()}
+
+
+def systematic_iupac(z: int) -> Tuple[str, str]:
+    """Derive systematic IUPAC 3-letter symbol and Latinate element name for any Z >= 119."""
+    digits = [int(d) for d in str(z)]
+    sym = "".join(IUPAC_DIGITS[d][1] for d in digits).capitalize()
+    roots = [IUPAC_DIGITS[d][0] for d in digits]
+    name_root = "".join(roots)
+    if name_root.endswith("i"):
+        name = (name_root + "um").capitalize()
+    else:
+        name = (name_root + "ium").capitalize()
+    return sym, name
+
+
+def parse_element_z(element_id: str) -> Optional[int]:
+    """Parse atomic number Z from element symbol, IUPAC name, or number."""
+    if not element_id or not isinstance(element_id, str):
+        return None
+    raw = element_id.strip()
+    if raw.isdigit():
+        return int(raw)
+
+    # Check canonical periodic symbols
+    for z, s in enumerate(PERIODIC_SYMBOLS):
+        if s and s.lower() == raw.lower():
+            return z
+
+    # Check substances.py experimental data
+    if raw in S.ELEMENTS:
+        return S.ELEMENTS[raw][0]
+    for sym, spec in S.ELEMENTS.items():
+        if sym.lower() == raw.lower():
+            return spec[0]
+
+    # Check precursor superheavies
+    if raw in S.SUPERHEAVY:
+        return S.SUPERHEAVY[raw][0]
+    for sym, spec in S.SUPERHEAVY.items():
+        if sym.lower() == raw.lower():
+            return spec[0]
+
+    # Check IUPAC systematic symbol (e.g. Uue -> 119, Ubn -> 120, Ubh -> 126)
+    low = raw.lower()
+    if len(low) == 3 and all(c in IUPAC_CHAR_TO_DIGIT for c in low):
+        val = 0
+        for c in low:
+            val = val * 10 + IUPAC_CHAR_TO_DIGIT[c]
+        if val >= 100:
+            return val
+
+    return None
+
+
 def get_element(z: int) -> ContinuumElement:
     """Analytic evaluation of any element Z in 1..118+ on demand."""
     if z < 1:
         z = 1
-    sym = PERIODIC_SYMBOLS[z] if z < len(PERIODIC_SYMBOLS) else f"Uue-{z}"
-    
+    if 1 <= z < len(PERIODIC_SYMBOLS) and PERIODIC_SYMBOLS[z]:
+        sym = PERIODIC_SYMBOLS[z]
+        name = sym
+    else:
+        sym, name = systematic_iupac(z)
+
     # Check if substances.py already has measured experimental data
     measured = S.ELEMENTS.get(sym)
     if measured:
@@ -96,32 +167,49 @@ def get_element(z: int) -> ContinuumElement:
         lane = S.group(z)
         bind = S.binding(ma, z) / max(1.0, ma)
         return ContinuumElement(
-            z=z, symbol=sym, name=sym, a=ma, line=line, lane=lane,
+            z=z, symbol=sym, name=name, a=ma, line=line, lane=lane,
             binding_per_nucleon=bind, condensation_k=float(mtc),
             density_g_cm3=float(mrho), stability_factor=1.0
         )
-        
+
+    # Check if precursor superheavy (e.g. AdL, SpR, pyrosite)
+    for sh_sym, sh_spec in S.SUPERHEAVY.items():
+        if sh_spec[0] == z:
+            sh_data = S.get(sh_sym)
+            if sh_data:
+                a_sh = float(sh_spec[1])
+                line = S.period(z)
+                lane = S.group(z)
+                bind = S.binding(a_sh, z) / max(1.0, a_sh)
+                return ContinuumElement(
+                    z=z, symbol=sym, name=name, a=a_sh, line=line, lane=lane,
+                    binding_per_nucleon=bind,
+                    condensation_k=float(sh_data.get("tc", 1000.0)),
+                    density_g_cm3=float(sh_data.get("rho", 15.0)),
+                    stability_factor=2.5,
+                )
+
     # Analytic derivation for all other unmeasured/heavy elements
     a = stable_isotope_a(z)
     line = S.period(z)
     lane = S.group(z)
-    
+
     # Weizsaecker binding energy + shell bonus
     b_total = S.binding(a, z) + shell_correction_mev(z, a)
     b_per_a = b_total / max(1.0, a)
-    
+
     # Estimated condensation temperature from group homologue
     homologue_z = z - 32 if z > 86 else (z - 18 if z > 36 else z - 8)
     homologue_sym = PERIODIC_SYMBOLS[homologue_z] if 1 <= homologue_z < len(PERIODIC_SYMBOLS) else "Pb"
     homologue = S.ELEMENTS.get(homologue_sym)
     tc = float(homologue[6]) if homologue else 1000.0
     rho = float(homologue[4]) * (a / max(1.0, float(homologue[1]))) if homologue else 10.0
-    
+
     # Island of stability factor around superheavies
     stability = 1.0 if z <= 82 else (math.exp(-(z - 82) * 0.1) + (1.5 if z in (114, 120, 126) else 0.0))
-    
+
     return ContinuumElement(
-        z=z, symbol=sym, name=sym, a=a, line=line, lane=lane,
+        z=z, symbol=sym, name=name, a=a, line=line, lane=lane,
         binding_per_nucleon=b_per_a, condensation_k=tc,
         density_g_cm3=min(30.0, rho), stability_factor=stability
     )

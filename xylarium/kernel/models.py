@@ -857,6 +857,7 @@ class Captain:
     persona_memory: Dict[str, Any] = field(default_factory=dict)  # remembered payoff per plan kind
     wages_due: int = 0                    # crew pay accrued at sea, settled at the next port
     escort: Optional[Dict[str, Any]] = None   # a world's fighters sailing with it (fxroutes.py)
+    discovered_elements: List[str] = field(default_factory=list)  # Elements discovered via alchemical induction
 
     def __post_init__(self):
         if not self.phylogeny_node_id:
@@ -1173,6 +1174,7 @@ class Captain:
             "persona_memory": dict(self.persona_memory),
             "wages_due": self.wages_due,
             "escort": dict(self.escort) if self.escort else None,
+            "discovered_elements": list(getattr(self, "discovered_elements", [])),
         }
 
     @classmethod
@@ -1263,6 +1265,7 @@ class Captain:
             persona_memory=dict(data.get("persona_memory", {})),
             wages_due=int(data.get("wages_due", 0)),
             escort=dict(data["escort"]) if data.get("escort") else None,
+            discovered_elements=list(data.get("discovered_elements", [])),
         )
 
 

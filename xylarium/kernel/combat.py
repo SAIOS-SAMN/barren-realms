@@ -3,10 +3,14 @@ Tactical combat engine for Xylarium.
 Handles ship-to-ship tactical engagements and planetary orbital sieges (BRE/SRE style).
 """
 
+import math
 import random
 from typing import Dict, Any, List, Optional
 from xylarium.kernel import hulls
 from xylarium.kernel import matter
+from xylarium.kernel import physics
+from xylarium.kernel import torsion
+from xylarium.kernel import cosmos
 from xylarium.kernel.models import (
     Captain,
     Sector,
@@ -110,6 +114,119 @@ def _award_victory(victor: Captain, victor_power: float, loser_power: float, los
     """Combat Xi scales with the opponent's strength; farming much weaker targets earns ~nothing."""
     ratio = max(0.0, min(2.0, loser_power / max(1.0, victor_power)))
     ExperienceManager.award(victor, "combat", XP_COMBAT_BASE * ratio, kernel, key=f"kill:{loser_id}")
+
+
+def combat_holonomy_su2(
+    attacker: Captain,
+    defender: Captain,
+    sector: Sector,
+    kernel: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Computes the non-abelian SU(2) tactical Wilson line parallel transport operator
+    for tactical ship-to-ship engagements.
+
+    Integrates sector metric curvature, ship kinematic maneuver states, and local
+    torsion wavefront phase/chirality:
+      - Unit quaternion Q in SU(2) tracks the tactical parallel transport.
+      - Normalized trace Tr(Q)/2 = cos(theta/2) governs shield harmonic resonance:
+        * Constructive phase (Tr ~ 1.0) reinforces shield absorption efficiency (up to 1.2x).
+        * Destructive phase shear (|Tr| < 0.28) induces phase collapse, allowing a portion
+          of salvo energy to penetrate shields directly into fighters.
+    """
+    st = physics.star(sector)
+    m_star = float(st.get("m", 1.0))
+    r_gal = float(cosmos.from_centre_kpc(kernel, sector.id) or 8.0) if kernel is not None else 8.0
+    metric_curvature = (2.0 * m_star * m_star) / max(0.1, (1.0 + r_gal) ** 2)
+
+    att_drive_val = 1.2 if getattr(attacker.ship, "drive", "H") in ("He-3", "fusion") else 1.0
+    def_drive_val = 1.2 if getattr(defender.ship, "drive", "H") in ("He-3", "fusion") else 1.0
+
+    v_att = (
+        (1.0 + attacker.ship.fighters * 0.02) * att_drive_val,
+        attacker.ship.shields * 0.005,
+        1.0,
+    )
+    v_def = (
+        (1.0 + defender.ship.fighters * 0.02) * def_drive_val,
+        defender.ship.shields * 0.005,
+        -1.0,
+    )
+
+    ux = v_att[1] * v_def[2] - v_att[2] * v_def[1]
+    uy = v_att[2] * v_def[0] - v_att[0] * v_def[2]
+    uz = v_att[0] * v_def[1] - v_att[1] * v_def[0]
+    u_mag = math.sqrt(ux * ux + uy * uy + uz * uz)
+    axis = (0.0, 0.0, 1.0) if u_mag < 1e-12 else (ux / u_mag, uy / u_mag, uz / u_mag)
+
+    amp, phase, chirality = torsion.eval_wavefront(kernel, sector.id) if kernel is not None else (0.0, 0.0, 1)
+    theta = float(phase + metric_curvature * 10.0 * (1.0 + amp) + 0.35 * chirality)
+    Q = physics.Quaternion.from_axis_angle(axis, theta)
+
+    trace_half = float(Q.w)  # In SU(2), Tr(Q)/2 = w = cos(theta/2)
+    res_val = abs(trace_half)
+
+    shield_eff = 0.85 + 0.35 * res_val  # 0.85x to 1.20x absorption efficiency
+    phase_shear_breach = res_val < 0.28
+    breach_ratio = max(0.0, min(0.35, 0.35 * (1.0 - res_val / 0.28))) if phase_shear_breach else 0.0
+
+    mode = "CONSTRUCTIVE" if res_val >= 0.70 else ("DESTRUCTIVE_SHEAR" if phase_shear_breach else "HARMONIC")
+
+    return {
+        "quaternion": Q,
+        "axis": axis,
+        "theta": theta,
+        "trace_half": round(trace_half, 4),
+        "resonance_mode": mode,
+        "shield_absorption_eff": round(shield_eff, 4),
+        "phase_shear_breach": phase_shear_breach,
+        "breach_ratio": round(breach_ratio, 4),
+        "metric_curvature": round(metric_curvature, 6),
+        "torsion_amp": round(amp, 6),
+        "torsion_chirality": chirality,
+    }
+
+
+def orbital_bombardment_holonomy_su2(
+    attacker: Captain,
+    planet: Planet,
+    sector: Sector,
+    kernel: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Computes non-abelian SU(2) orbital geometry holonomy for planetary orbital sieges.
+    Integrates planetary orbital parameters (q, day, mass) with the sector metric.
+    """
+    st = physics.star(sector)
+    m_star = float(st.get("m", 1.0))
+    b = planet.body or {}
+    q_val = float(b.get("q", 1.0)) if "q" in b else float(planet.orbital_radius)
+    planet_r = float(b.get("r", 1.0)) if "r" in b else 1.0
+
+    phi_grav = (m_star / max(0.1, q_val * q_val)) + (planet_r / 2.0)
+    amp, phase, chirality = torsion.eval_wavefront(kernel, sector.id) if kernel is not None else (0.0, 0.0, 1)
+
+    theta_orb = float(phase + (phi_grav * 0.15) * (1.0 + amp) + 0.2 * chirality)
+    axis_orb = (0.0, 1.0, 0.0) if planet.citadel_level % 2 == 0 else (1.0, 0.0, 0.0)
+    Q = physics.Quaternion.from_axis_angle(axis_orb, theta_orb)
+    trace_half = float(Q.w)
+    res_val = abs(trace_half)
+
+    shield_eff = 0.85 + 0.35 * res_val
+    shear_breach = res_val < 0.25
+    breach_ratio = max(0.0, min(0.30, 0.30 * (1.0 - res_val / 0.25))) if shear_breach else 0.0
+
+    mode = "CONSTRUCTIVE" if res_val >= 0.70 else ("DESTRUCTIVE_SHEAR" if shear_breach else "HARMONIC")
+
+    return {
+        "quaternion": Q,
+        "trace_half": round(trace_half, 4),
+        "shield_absorption_eff": round(shield_eff, 4),
+        "phase_shear_breach": shear_breach,
+        "breach_ratio": round(breach_ratio, 4),
+        "resonance_mode": mode,
+        "phi_grav": round(phi_grav, 4),
+    }
 
 
 class CombatManager:
@@ -347,13 +464,31 @@ class CombatManager:
         att_power = int(att_power * hulls.spec(attacker.ship).get("broadside", 1.0))
         def_power = int(def_power * hulls.spec(defender.ship).get("broadside", 1.0))
 
+        # Non-abelian SU(2) tactical holonomy & metric curvature
+        holonomy = combat_holonomy_su2(attacker, defender, sector, kernel)
+        logs.append(
+            f">> [HOLONOMY] SU(2) Tactical Wilson Line: Tr(Q)/2 = {holonomy['trace_half']:.4f} "
+            f"({holonomy['resonance_mode']}) | Harmonic Absorption: {holonomy['shield_absorption_eff']:.2f}x"
+        )
+
         # 1. Attacker damages Defender
+        eff_def_shields = int(defender.ship.shields * holonomy["shield_absorption_eff"])
         if defender.ship.shields > 0:
-            if att_power <= defender.ship.shields:
-                defender.ship.shields -= att_power
-                logs.append(f">> {defender.name}'s shields absorb {att_power} MW of blaster fire (Remaining: {defender.ship.shields}).")
+            if holonomy["phase_shear_breach"]:
+                breach_dmg = int(att_power * holonomy["breach_ratio"])
+                att_power_eff = max(0, att_power - breach_dmg)
+                breach_lost = min(defender.ship.fighters, max(1, breach_dmg // 20))
+                defender.ship.fighters -= breach_lost
+                logs.append(f">> [SHEAR BREACH] SU(2) destructive phase collapsed shields! {breach_dmg} MW direct penetration (-{breach_lost} fighters).")
             else:
-                overflow = att_power - defender.ship.shields
+                att_power_eff = att_power
+
+            if att_power_eff <= eff_def_shields:
+                shield_drain = max(1, int(att_power_eff / max(0.1, holonomy["shield_absorption_eff"])))
+                defender.ship.shields = max(0, defender.ship.shields - shield_drain)
+                logs.append(f">> {defender.name}'s shields absorb {att_power_eff} MW of blaster fire (Remaining: {defender.ship.shields}).")
+            else:
+                overflow = att_power_eff - eff_def_shields
                 logs.append(f">> {defender.name}'s SHIELDS COLLAPSED! {overflow} overflow damage breaches the hull!")
                 defender.ship.shields = 0
                 fighters_lost = min(defender.ship.fighters, max(1, overflow // 20))
@@ -365,12 +500,23 @@ class CombatManager:
             logs.append(f">> Direct hit on {defender.name}! Lost {fighters_lost} fighters.")
 
         # 2. Defender counter-attacks Attacker
+        eff_att_shields = int(attacker.ship.shields * holonomy["shield_absorption_eff"])
         if attacker.ship.shields > 0:
-            if def_power <= attacker.ship.shields:
-                attacker.ship.shields -= def_power
-                logs.append(f"<< Return fire hits {attacker.name}'s shields for {def_power} MW (Remaining: {attacker.ship.shields}).")
+            if holonomy["phase_shear_breach"]:
+                breach_dmg = int(def_power * holonomy["breach_ratio"])
+                def_power_eff = max(0, def_power - breach_dmg)
+                breach_lost = min(attacker.ship.fighters, max(1, breach_dmg // 20))
+                attacker.ship.fighters -= breach_lost
+                logs.append(f"<< [SHEAR BREACH] SU(2) return fire breached ship shields! {breach_dmg} MW penetration (-{breach_lost} fighters).")
             else:
-                overflow = def_power - attacker.ship.shields
+                def_power_eff = def_power
+
+            if def_power_eff <= eff_att_shields:
+                shield_drain = max(1, int(def_power_eff / max(0.1, holonomy["shield_absorption_eff"])))
+                attacker.ship.shields = max(0, attacker.ship.shields - shield_drain)
+                logs.append(f"<< Return fire hits {attacker.name}'s shields for {def_power_eff} MW (Remaining: {attacker.ship.shields}).")
+            else:
+                overflow = def_power_eff - eff_att_shields
                 logs.append(f"<< Return fire CRIPPLED {attacker.name}'s shields! {overflow} damage penetrated!")
                 attacker.ship.shields = 0
                 att_lost = min(attacker.ship.fighters, max(1, overflow // 20))
@@ -380,6 +526,23 @@ class CombatManager:
             att_lost = min(attacker.ship.fighters, max(1, def_power // 20))
             attacker.ship.fighters -= att_lost
             logs.append(f"<< Return fire incinerated {att_lost} of {attacker.name}'s fighters.")
+
+        # Micro-torsion recoil pulse emitted into the sector metric
+        total_salvo = att_power + def_power
+        if total_salvo >= 60 and kernel is not None:
+            recoil_energy = min(50.0, float(total_salvo) * 0.05)
+            chir = 1 if holonomy["trace_half"] >= 0 else -1
+            try:
+                b_rec = torsion.emit_bounce(
+                    kernel,
+                    origin_sector=sector.id,
+                    energy_scale=recoil_energy,
+                    chirality=chir,
+                    source=f"tactical_combat:{attacker.id}_vs_{defender.id}",
+                )
+                logs.append(f">> [TORSION] High-energy salvo ({total_salvo} MW) emitted micro-torsion recoil bounce (id={b_rec['id']})!")
+            except Exception:
+                pass
 
         if escorted:                                           # the escort takes the line's losses first
             lost = def_line - defender.ship.fighters
@@ -401,6 +564,7 @@ class CombatManager:
             "def_fighters": defender.ship.fighters,
             "defender_destroyed": defender_destroyed,
             "attacker_destroyed": attacker_destroyed,
+            "holonomy": holonomy,
         }
 
         if defender_destroyed:
@@ -535,13 +699,31 @@ class CombatManager:
             def_power = int(def_power * (0.5 + 0.5 * r))
             logs.append(f">> {planet.name} broadcasts a DEGRADED beacon: its batteries fire at reduced power.")
 
+        # Non-abelian SU(2) orbital bombardment holonomy
+        orb_hol = orbital_bombardment_holonomy_su2(attacker, planet, sector, kernel)
+        logs.append(
+            f">> [HOLONOMY] SU(2) Orbital Geometry Holonomy: Tr(Q)/2 = {orb_hol['trace_half']:.4f} "
+            f"({orb_hol['resonance_mode']}) | Planetary Shield Resonance: {orb_hol['shield_absorption_eff']:.2f}x"
+        )
+
         # 1. Attacker strikes planetary defense grid
+        eff_plan_shields = int(planet.shields * orb_hol["shield_absorption_eff"])
         if planet.shields > 0:
-            if att_power <= planet.shields:
-                planet.shields -= att_power
-                logs.append(f">> Planetary shields absorbed {att_power} MW of orbital bombardment (Remaining: {planet.shields}).")
+            if orb_hol["phase_shear_breach"]:
+                breach_dmg = int(att_power * orb_hol["breach_ratio"])
+                att_power_eff = max(0, att_power - breach_dmg)
+                fighters_breached = min(planet.fighters, max(1, breach_dmg // 25))
+                planet.fighters -= fighters_breached
+                logs.append(f">> [SHEAR BREACH] SU(2) phase shear bypassed orbital shields! {breach_dmg} MW struck hangars (-{fighters_breached} fighters).")
             else:
-                overflow = att_power - planet.shields
+                att_power_eff = att_power
+
+            if att_power_eff <= eff_plan_shields:
+                drain = max(1, int(att_power_eff / max(0.1, orb_hol["shield_absorption_eff"])))
+                planet.shields = max(0, planet.shields - drain)
+                logs.append(f">> Planetary shields absorbed {att_power_eff} MW of orbital bombardment (Remaining: {planet.shields}).")
+            else:
+                overflow = att_power_eff - eff_plan_shields
                 planet.shields = 0
                 logs.append(f">> PLANETARY SHIELDS OVERLOADED AND COLLAPSED!")
                 fighters_lost = min(planet.fighters, max(1, overflow // 25))
@@ -558,12 +740,14 @@ class CombatManager:
             logs.append(f">> Direct bombardment destroyed {fighters_lost} fighters and caused {pop_loss} civilian casualties.")
 
         # 2. Planetary ground guns fire back at attacker
+        eff_ship_shields = int(attacker.ship.shields * orb_hol["shield_absorption_eff"])
         if attacker.ship.shields > 0:
-            if def_power <= attacker.ship.shields:
-                attacker.ship.shields -= def_power
+            if def_power <= eff_ship_shields:
+                drain = max(1, int(def_power / max(0.1, orb_hol["shield_absorption_eff"])))
+                attacker.ship.shields = max(0, attacker.ship.shields - drain)
                 logs.append(f"<< Planetary anti-orbital batteries struck ship shields for {def_power} MW (Remaining: {attacker.ship.shields}).")
             else:
-                overflow = def_power - attacker.ship.shields
+                overflow = def_power - eff_ship_shields
                 attacker.ship.shields = 0
                 att_lost = min(attacker.ship.fighters, max(1, overflow // 20))
                 attacker.ship.fighters -= att_lost
@@ -572,6 +756,22 @@ class CombatManager:
             att_lost = min(attacker.ship.fighters, max(1, def_power // 20))
             attacker.ship.fighters -= att_lost
             logs.append(f"<< Surface missiles tore through your hull! Lost {att_lost} fighters.")
+
+        # Micro-torsion recoil pulse from massive orbital barrage
+        total_barrage = att_power + def_power
+        if total_barrage >= 60 and kernel is not None:
+            chir = 1 if orb_hol["trace_half"] >= 0 else -1
+            try:
+                b_rec = torsion.emit_bounce(
+                    kernel,
+                    origin_sector=sector.id,
+                    energy_scale=min(60.0, float(total_barrage) * 0.05),
+                    chirality=chir,
+                    source=f"orbital_siege:{planet.id}",
+                )
+                logs.append(f">> [TORSION] Orbital kinetic barrage ({total_barrage} MW) emitted micro-torsion recoil bounce (id={b_rec['id']})!")
+            except Exception:
+                pass
 
         # 3. Check for Planet Conquest
         if planet.shields <= 0 and planet.fighters <= 0:

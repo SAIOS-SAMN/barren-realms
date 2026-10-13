@@ -6,6 +6,7 @@ Transmutes base volatiles and structural metals into high-tier exotics and manuf
 balancing reaction thermal entropy against cryogenic cooling infrastructure.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from xylarium.config import (
@@ -15,6 +16,8 @@ from xylarium.config import (
 )
 from xylarium.kernel.models import ActionResult, ActionType, Captain, Ship, CargoHold
 from xylarium.kernel.elements import PeriodicTable
+from xylarium.kernel import elements_continuum, substances, torsion
+from xylarium.kernel.experience import ExperienceManager
 
 
 @dataclass
@@ -141,6 +144,188 @@ ALCHEMY_RECIPES: Dict[str, TransmutationRecipe] = {
         description="Flash-freezes volatile hydro-compounds in a xenon gas bath into zero-Kelvin Cryogenite.",
     ),
 }
+
+
+def alchemical_induction(
+    kernel: Optional[Any],
+    captain: Captain,
+    input_elements: Dict[str, int],
+    catalyst: str,
+    sector_id: Optional[int] = None,
+) -> ActionResult:
+    """
+    Sub-atomic nucleosynthesis and alchemical induction across the 118+ periodic continuum.
+
+    Couples input element nuclear mass/charge conservation with local torsion wavefront resonance:
+      - Z_net = sum(Q_i * Z_i), A_net = sum(Q_i * A_i)
+      - Nuclear binding energy B(A, Z) derived via Weizsaecker SEMF and magic shell corrections.
+      - Torsion wavefront phase resonance (Psi, phase, chirality) from sector torsion flux modulates
+        activation entropy and stabilizes synthetic superheavy nuclides.
+      - When magic proton shell closures (Z in 114, 120, 126) or Island of Stability conditions are met,
+        induces synthesis and discovery of new superheavy elements (e.g. Z=119 Uue, Z=120 Ubn, Z=126 Ubh).
+      - Records newly discovered elements in captain.discovered_elements and civilization archives.
+    """
+    if not input_elements:
+        return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE, "No input elements specified for induction.")
+
+    cargo = captain.ship.cargo
+
+    # 1. Validate catalyst
+    if catalyst == "organics":
+        if cargo.organics < 1:
+            return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE, "Missing required catalyst: 1 crate of Organics.")
+    else:
+        cat_units = cargo.unbonded(catalyst)
+        if cat_units < 1:
+            return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE, f"Missing required catalyst: 1 unit of [{catalyst}].")
+
+    # 2. Validate input materials
+    for sym, qty in input_elements.items():
+        if qty <= 0:
+            continue
+        avail = cargo.unbonded(sym)
+        if avail < qty:
+            return ActionResult(
+                False,
+                ActionType.ALCHEMY_TRANSMUTE,
+                f"Insufficient raw element [{sym}]: {qty} required, {avail} present in cargo.",
+            )
+
+    # 3. Credit fee for high-energy reactor ignition
+    if captain.credits < ALCHEMY_BASE_CREDIT_COST:
+        return ActionResult(
+            False,
+            ActionType.ALCHEMY_TRANSMUTE,
+            f"Insufficient funds: Alchemical induction requires {ALCHEMY_BASE_CREDIT_COST:,} Credits for ignition.",
+        )
+
+    # 4. Resolve net atomic number and nucleon mass
+    z_net = 0
+    a_net = 0.0
+    for sym, qty in input_elements.items():
+        if qty <= 0:
+            continue
+        z_i = elements_continuum.parse_element_z(sym)
+        if z_i is not None:
+            ce_i = elements_continuum.get_element(z_i)
+            z_net += int(qty * z_i)
+            a_net += float(qty * ce_i.a)
+        else:
+            consts = substances.constituents(sym)
+            if consts:
+                for c_sym, c_q in consts.items():
+                    cz = elements_continuum.parse_element_z(c_sym) or 1
+                    ce = elements_continuum.get_element(cz)
+                    z_net += int(qty * c_q * cz)
+                    a_net += float(qty * c_q * ce.a)
+            else:
+                return ActionResult(False, ActionType.ALCHEMY_TRANSMUTE, f"Unrecognized element or compound [{sym}].")
+
+    if z_net < 1:
+        z_net = 1
+
+    # 5. Target continuum element evaluation
+    target_ce = elements_continuum.get_element(z_net)
+    target_sym = target_ce.symbol
+    target_name = target_ce.name
+
+    # Check cargo hold capacity
+    total_in = sum(v for v in input_elements.values() if v > 0)
+    net_space_delta = 1 - total_in
+    if net_space_delta > 0 and cargo.available_space < net_space_delta:
+        return ActionResult(
+            False,
+            ActionType.ALCHEMY_TRANSMUTE,
+            f"Cargo hold full! Insufficient capacity for synthesized [{target_sym}].",
+        )
+
+    # 6. Torsion wavefront resonance coupling
+    sec_id = sector_id if sector_id is not None else getattr(captain, "sector_id", 1)
+    amp, phase, chirality = torsion.eval_wavefront(kernel, sec_id) if kernel is not None else (0.0, 0.0, 1)
+
+    cos_phase = math.cos(phase)
+    phase_alignment = (1.0 + cos_phase * chirality) * 0.5  # 0.0 to 1.0
+
+    # Shell closure proximity
+    dist_magic = min(abs(z_net - m) for m in elements_continuum.MAGIC_Z)
+    shell_resonance = max(0.0, 1.0 - (dist_magic * 0.15))
+
+    stability = target_ce.stability_factor * (0.8 + 0.4 * phase_alignment) * (1.0 + shell_resonance * 0.5 * (1.0 + amp))
+
+    # Thermal entropy calculation
+    base_entropy = max(8.0, abs(z_net - 26) * 0.5) / max(0.3, stability)
+
+    # Cryogenic cooling check
+    coolant_used = False
+    if base_entropy > ALCHEMY_CRYO_COOLING_CAPACITY:
+        if cargo.unbonded("cryogenite") >= 1:
+            cargo.elements["cryogenite"] -= 1
+            if cargo.elements["cryogenite"] <= 0:
+                del cargo.elements["cryogenite"]
+            base_entropy = max(0.0, base_entropy - 25.0)
+            coolant_used = True
+        elif cargo.unbonded("H2O") >= 2:
+            cargo.elements["H2O"] -= 2
+            if cargo.elements["H2O"] <= 0:
+                del cargo.elements["H2O"]
+            base_entropy = max(0.0, base_entropy - 15.0)
+            coolant_used = True
+
+    # 7. Deduct costs and input elements
+    captain.credits -= ALCHEMY_BASE_CREDIT_COST
+    for sym, qty in input_elements.items():
+        if qty <= 0:
+            continue
+        cargo.elements[sym] -= qty
+        if cargo.elements[sym] <= 0:
+            del cargo.elements[sym]
+
+    # 8. Deposit synthesized output element
+    cargo.elements[target_sym] = cargo.elements.get(target_sym, 0) + 1
+
+    # 9. Discovery record
+    discovered = getattr(captain, "discovered_elements", [])
+    is_new = (z_net >= 114 or target_sym in ("SpR", "pyrosite", "umbrite", "aetherium", "AdL", "mirror_glass") or z_net >= 119) and (target_sym not in discovered)
+
+    disc_msg = ""
+    if is_new:
+        discovered.append(target_sym)
+        captain.score += 500
+        if kernel is not None:
+            ExperienceManager.award(captain, "intellect", 250, kernel, key=f"discovery:{target_sym}")
+            sec = kernel.sectors.get(sec_id) if hasattr(kernel, "sectors") else None
+            if sec and sec.planets:
+                for p in sec.planets:
+                    if p.civilization and hasattr(p.civilization, "discovered_elements"):
+                        if target_sym not in p.civilization.discovered_elements:
+                            p.civilization.discovered_elements.append(target_sym)
+        disc_msg = f" *** BREAKTHROUGH: Discovered New Element [{target_sym}] ({target_name}, Z={z_net})! ***"
+
+    cool_str = " (Cryo-Coolant consumed to stabilize core)" if coolant_used else ""
+    msg = (
+        f"ALCHEMICAL INDUCTION SUCCESS: Synthesized [{target_sym}] (Z={z_net}, A={target_ce.a:.1f})! "
+        f"Phase Alignment: {phase_alignment:.2f} | Stability: {stability:.2f} | Thermal Entropy: {base_entropy:.1f} MW.{cool_str}{disc_msg}"
+    )
+
+    if kernel and hasattr(kernel, "action_logs"):
+        kernel.action_logs.append(f"[INDUCTION] {captain.name} induced {target_sym} (Z={z_net}).")
+
+    return ActionResult(
+        True,
+        ActionType.ALCHEMY_TRANSMUTE,
+        msg,
+        data={
+            "target_element": target_sym,
+            "target_name": target_name,
+            "atomic_number": z_net,
+            "mass_number": round(target_ce.a, 3),
+            "is_new_discovery": is_new,
+            "phase_alignment": round(phase_alignment, 4),
+            "stability_factor": round(stability, 4),
+            "binding_per_nucleon": round(target_ce.binding_per_nucleon, 4),
+            "heat": round(base_entropy, 2),
+        },
+    )
 
 
 class AlchemyManager:
@@ -335,6 +520,21 @@ class AlchemyManager:
                 "heat": new_heat,
             },
         )
+
+    def induce_transmutation(
+        self,
+        captain: Captain,
+        input_elements: Dict[str, int],
+        catalyst: str,
+        kernel: Any = None,
+        sector_id: Optional[int] = None,
+    ) -> ActionResult:
+        """Executes sub-atomic nucleosynthesis and discovery across the 118+ table."""
+        res = alchemical_induction(kernel, captain, input_elements, catalyst, sector_id=sector_id)
+        if res.success and "heat" in (res.data or {}):
+            h = float(res.data["heat"])
+            self.heat_accumulated[captain.id] = self.get_heat(captain.id) + h
+        return res
 
     def tick_alchemy(self, kernel: Any) -> None:
         """Passive reactor cooling each cycle."""

@@ -25,6 +25,11 @@ from xylarium.kernel import (
     spheres,
     polity,
     intellect,
+    combat,
+    blackhole,
+    alchemy,
+    elements_continuum,
+    elements,
 )
 
 def main():
@@ -166,8 +171,51 @@ def main():
     cert = intellect.mine_mayer_vietoris_theorems(kernel, who, 1, 2)
     print(f"  [Intellect] Mayer-Vietoris Theorem Mined: Deg {cert['harmonic_degree']} (Betti={cert['betti_value']}) -> Stamped into Hypha INTELLECT Lane")
 
+    # --------------------------------------------------------------------------
+    # 8. Combat Holonomies, Distributed Singularities & Alchemical Induction
+    # --------------------------------------------------------------------------
+    print("\n[8] COMBAT HOLONOMIES, DISTRIBUTED SINGULARITIES & ALCHEMICAL INDUCTION:")
+    from xylarium.kernel.models import Captain, Ship, CargoHold
+    c_att = Captain(
+        id="cap:live_att", name="Vanguard", is_ai=False, personality=None,
+        ship=Ship(ship_type="Cruiser", shields=150, max_shields=200, fighters=45, cargo=CargoHold()),
+        credits=10000, sector_id=1, turns_left=20
+    )
+    c_def = Captain(
+        id="cap:live_def", name="Corsair", is_ai=True, personality=None,
+        ship=Ship(ship_type="Frigate", shields=120, max_shields=150, fighters=30, cargo=CargoHold()),
+        credits=5000, sector_id=1, turns_left=20
+    )
+    c_hol = combat.combat_holonomy_su2(c_att, c_def, kernel.sectors[1], kernel)
+    print(f"  [Combat Holonomy] SU(2) Tactical Wilson Line: Tr(Q)/2 = {c_hol['trace_half']:.4f} ({c_hol['resonance_mode']})")
+    print(f"  [Combat Holonomy] Harmonic Shield Efficiency = {c_hol['shield_absorption_eff']:.2f}x | Phase Shear Breach = {c_hol['phase_shear_breach']}")
+
+    # Distributed Singularity Vacuum Intake & Expansion
+    thr_live = blackhole.open_throat(kernel, "throat:deep_bulge", near=1, mass_suns=40.0, kind="supermassive")
+    blackhole.capture_into(kernel, "throat:deep_bulge", {"U": 10, "Pt": 5}, "collapsed_core")
+    blackhole._small_throats(kernel, deep_myr=3.0)
+    vac_st = blackhole.throat_vacuum_physics(kernel, "throat:deep_bulge")
+    cont_st = blackhole.cosmic_bounce_continuum(kernel)
+    exp_st = torsion.cosmic_expansion_dynamics(kernel)
+    print(f"  [Singularities] Throat: {vac_st['throat_id']} (Mass={vac_st['mass_suns']} suns)")
+    print(f"  [Singularities] Vacuum Intake Energy = {vac_st['vacuum_energy_intake']:.4f} | Cartan Spin Repulsion = {vac_st['cartan_spin_repulsion']:.6f}")
+    print(f"  [Cosmic Bounce] Universal Expansion Accel ddot(a)/a = {exp_st['expansion_acceleration']:.4f} | Scale Factor a(t) = {exp_st['universal_scale_factor']:.6f}")
+
+    # Alchemical Induction & 118+ Element Discovery
+    cap_alch = Captain(
+        id="cap:alch_live", name="Paracelsus", is_ai=False, personality=None,
+        ship=Ship(ship_type="Scout Ship", shields=100, max_shields=100, fighters=10,
+                  cargo=CargoHold(capacity=100, elements={"U": 2, "Fe": 2, "Cu": 2, "Pt": 5})),
+        credits=25000, sector_id=1, turns_left=20
+    )
+    res_ind = alchemy.alchemical_induction(kernel, cap_alch, input_elements={"U": 1, "Cu": 1}, catalyst="Pt", sector_id=1)
+    disc_elem = elements.PeriodicTable.get_element(res_ind.data["target_element"])
+    print(f"  [Alchemical Induction] Fused {res_ind.data['target_element']} (Z={res_ind.data['atomic_number']}, A={res_ind.data['mass_number']})")
+    print(f"  [Alchemical Induction] Periodic Table Almanac: Name={disc_elem.name}, Family={disc_elem.family_name}, Phase={disc_elem.phase_name}")
+    print(f"  [Alchemical Induction] New Element Discovered: {res_ind.data['is_new_discovery']} (Discovered Roster: {cap_alch.discovered_elements})")
+
     print("\n" + "=" * 80)
-    print("ALL MANIFOLD EXPANSIONS & CIVILIZATION BRIDGES VERIFIED FUNCTIONAL IN LIVE RUNTIME!")
+    print("ALL MANIFOLD EXPANSIONS, BRIDGES & ADVANCED FRONTIERS VERIFIED FUNCTIONAL IN LIVE RUNTIME!")
     print("=" * 80)
 
 if __name__ == "__main__":
