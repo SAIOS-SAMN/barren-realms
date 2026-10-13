@@ -13,9 +13,11 @@
 
 ## 📚 Documentation
 
+* **[docs/UPGRADES.md](docs/UPGRADES.md)** - master documentation of physical manifold upgrades: Einstein-Cartan singularity bounces, non-Euclidean Riemannian metrics, non-abelian $SU(2)$ gauge cohomology, Pareto decision manifolds, and sovereign agency.
+* **[docs/MANIFOLD_REMEDIATION.md](docs/MANIFOLD_REMEDIATION.md)** - remediation of dimensional collapse across decisions, spherical planetary surfaces, ideology tensors, and potential fields.
+* **[docs/NEXT_CYCLE_SCOPE.md](docs/NEXT_CYCLE_SCOPE.md)** - engineering scope specification for the 5 fundamental manifold expansions.
 * **[docs/GAME.md](docs/GAME.md)** - the game as it is today: careers, the universe, peoples, money, polity, ships,
-  the AI, the laws of the universe and the commands. (The sections below describe the original prototype and are
-  kept for history.)
+  the AI, the laws of the universe and the commands.
 * **[docs/STANDARDS.md](docs/STANDARDS.md)** - engineering standards: the principles every change models, the
   architecture rules (subsystems, state, topology, caching, immutable config, action registry) and the definition
   of done.
