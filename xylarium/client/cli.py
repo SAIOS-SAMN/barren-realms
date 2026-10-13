@@ -893,12 +893,46 @@ class TerminalClient:
                     )
                     self._print_result(res)
 
+            elif action == "N":
+                # Contract Naval Patrol Security Escort
+                try:
+                    hid = input("Trade Hauler ID to secure (e.g. HAUL-101): ").strip().upper()
+                    print(c_cyan("Security Levels: [1] Patrol Sloop │ [2] Corvette │ [3] Frigate │ [4] Destroyer │ [5] Defense Cruiser"))
+                    lvl = int(input("Security Level [1-5]: ").strip() or "1")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.FLEET_CONTRACT_SECURITY,
+                        hauler_id=hid,
+                        security_level=lvl,
+                    )
+                    self._print_result(res)
+                except ValueError:
+                    print(c_red("Invalid input for security level."))
+
+            elif action == "D":
+                # Derivative Market Hedging for Long-Haul Depreciation
+                try:
+                    ticker = input("Stock Ticker to hedge against asset depreciation (e.g. SOL-ORE): ").strip().upper()
+                    op = input("[S]hort Sell hedge or [C]over Short position? ").strip().upper()
+                    hedge_mode = "COVER" if op.startswith("C") else "SHORT"
+                    qty = int(input("Number of shares to hedge: ").strip() or "100")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.HEDGE_DERIVATIVE,
+                        company_ticker=ticker,
+                        shares=qty,
+                        hedge_type=hedge_mode,
+                    )
+                    self._print_result(res)
+                except ValueError:
+                    print(c_red("Invalid share quantity."))
+
             elif action == "V":
                 # Venture Capital Desk
                 self._prompt_vc_desk(fresh_view)
 
             else:
-                print(c_gold("Valid commands: [C]ommission, [R]eassign, [E]scort, [H]alt, [S]crap, [V]enture Capital, [X] Exit"))
+                print(c_gold("Valid commands: [C]ommission, [R]eassign, [E]scort Wings, [N]aval Security, [D]erivative Hedge, [H]alt, [S]crap, [V]C Desk, [X] Exit"))
 
     def _prompt_vc_desk(self, view: Dict[str, Any]) -> None:
         """Interactive Venture Capital and Debt Syndicate Console."""

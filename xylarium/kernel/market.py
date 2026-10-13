@@ -2540,7 +2540,7 @@ class MarketManager:
 
                 # 4. Heavy Structural Metal Tensile Requirements
                 tensile_req = hull_cfg.get("min_tensile_gpa", 50.0)
-                if z in [22, 26, 28, 29] and tensile_req < 200.0 and hull_class in ["STANDARD", "BIOSPHERE_VESSEL"]:
+                if z in [22, 26, 28, 29] and tensile_req < 200.0:
                     return False, f"High-density structural metal {commodity} (Z={z}) requires heavy reinforced freight bracing (HEAVY_METALLIC)."
 
                 return True, "Compatible"
@@ -2955,8 +2955,16 @@ class MarketManager:
             sec_b = kernel.sectors.get(dest)
             if not sec_a or not sec_a.port:
                 return False, f"Origin Sector {origin:03d} does not have a commercial spaceport.", {}
-            if not sec_b or not sec_b.port:
+            is_harvester = hull_info.get("is_harvester", False)
+            if not sec_b:
+                return False, f"Destination Sector {dest:03d} does not exist.", {}
+            if not is_harvester and not sec_b.port:
                 return False, f"Destination Sector {dest:03d} does not have a commercial spaceport.", {}
+            if is_harvester and not sec_b.port:
+                # Harvester target validation: must have asteroid belts or be deep space
+                has_belts = bool(sec_b.belts)
+                if hull_info.get("harvest_target") == "ASTEROID_BELT" and not has_belts:
+                    return False, f"Extraction Sector {dest:03d} has no asteroid belts to harvest.", {}
             if origin == dest:
                 return False, "Origin and Destination sectors must be different.", {}
 
@@ -3122,7 +3130,7 @@ class MarketManager:
             return 0.0
         cost = buy_p * units
         owner_liquid = getattr(owner, "credits", getattr(owner, "treasury", 0))
-        if market and src.currency != _hub():
+        if market and src.currency != _hub() and hasattr(owner, "fx_wallet"):
             if not market.ensure_local(owner, src.currency, cost):
                 return 0.0
         elif owner_liquid < cost:
@@ -3261,6 +3269,27 @@ class MarketManager:
                                         f"PIRATE RAID ALERT: Unescorted {hauler.name} sustained hull damage in Sector {next_sec:03d} (+5 Wear)."
                                     )
 
+            # Automated Harvesting for Asteroid Harvesters & Deep Space Miners
+            hull_cfg = SPECIALIZED_HULLS.get(hauler.hull_class, {})
+            if hull_cfg.get("is_harvester"):
+                curr_sec_obj = kernel.sectors.get(hauler.sector_id)
+                harvest_kind = hull_cfg.get("harvest_target", "ASTEROID_BELT")
+                if hauler.sector_id == hauler.dest_sector and curr_sec_obj:
+                    # In extraction destination: harvest resources
+                    if harvest_kind == "ASTEROID_BELT" and curr_sec_obj.belts:
+                        # Extract from asteroid belt
+                        belt = max(curr_sec_obj.belts, key=lambda b: b.get("reserve", 0))
+                        if belt.get("reserve", 0) > 0:
+                            haul_q = min(hauler.capacity, int(belt["reserve"]))
+                            belt["reserve"] -= haul_q
+                            hauler.cargo[hauler.commodity_outbound] = hauler.cargo.get(hauler.commodity_outbound, 0) + haul_q
+                            logs.append(f"HARVESTER EXTRACTION: {hauler.name} scooped +{haul_q} {hauler.commodity_outbound} from Asteroid Belt {belt['id']} in Sector {hauler.sector_id:03d}!")
+                    elif harvest_kind == "DEEP_SPACE":
+                        # Scoop deep space / throat accretion debris
+                        scoop_q = min(hauler.capacity, 25)
+                        hauler.cargo[hauler.commodity_outbound] = hauler.cargo.get(hauler.commodity_outbound, 0) + scoop_q
+                        logs.append(f"DEEP SPACE MINER: {hauler.name} ramscooped +{scoop_q} units of {hauler.commodity_outbound} in Sector {hauler.sector_id:03d}!")
+
             # Arrived at destination/origin or path finished
             if not hauler.current_path:
                 if hauler.status == "RETREAT":
@@ -3270,8 +3299,19 @@ class MarketManager:
 
                 sec_a = kernel.sectors.get(hauler.origin_sector)
                 sec_b = kernel.sectors.get(hauler.dest_sector)
-                if not sec_a or not sec_b or not sec_a.port or not sec_b.port:
+                if not sec_a or not sec_b:
                     continue
+
+                hull_cfg = SPECIALIZED_HULLS.get(hauler.hull_class, {})
+                is_harvester = bool(hull_cfg.get("is_harvester"))
+
+                # Standard haulers require spaceports at both ends; harvesters require a spaceport at origin
+                if is_harvester:
+                    if not sec_a.port:
+                        continue
+                else:
+                    if not sec_a.port or not sec_b.port:
+                        continue
 
                 port_a = sec_a.port
                 port_b = sec_b.port
@@ -3292,34 +3332,62 @@ class MarketManager:
                 if owner is None and civ_owner is None:
                     continue
 
-                # Both legs settle through the ports' treasuries in their own currencies
                 trade_actor = owner if owner is not None else civ_owner
-                profit_ab = self._hauler_leg(trade_actor, port_a, port_b, hauler.commodity_outbound, hauler.capacity)
-                profit_ba = self._hauler_leg(trade_actor, port_b, port_a, hauler.commodity_return, hauler.capacity)
+                total_profit = 0
 
-                total_profit = profit_ab + profit_ba
+                if is_harvester:
+                    if hauler.sector_id == hauler.origin_sector and hauler.cargo:
+                        # Harvester returned to home spaceport with raw mined extract
+                        from xylarium.kernel import fx
+                        market = fx.ACTIVE_FX
+                        to_sol = (lambda cur, amt: market.to_sol_value(cur, amt)) if market else (lambda cur, amt: amt)
+                        for comm, qty in list(hauler.cargo.items()):
+                            if qty <= 0:
+                                continue
+                            sell_p, _ = EconomyManager.get_unit_prices(port_a, comm)
+                            if sell_p <= 0:
+                                sell_p = 35
+                            max_buyable = port_a.treasury // sell_p if sell_p > 0 else qty
+                            units = min(qty, max(1, max_buyable))
+                            revenue = sell_p * units
+                            if port_a.treasury >= revenue:
+                                port_a.treasury -= revenue
+                            if hasattr(trade_actor, "credits"):
+                                fx.credit(trade_actor, port_a.currency, revenue)
+                            else:
+                                trade_actor.treasury += revenue
+                            port_a.stock[comm] = port_a.stock.get(comm, 0) + units
+                            hauler.cargo[comm] -= units
+                            if hauler.cargo[comm] <= 0:
+                                del hauler.cargo[comm]
+                            total_profit += to_sol(port_a.currency, revenue)
+                else:
+                    # Both legs settle through the ports' treasuries in their own currencies
+                    profit_ab = self._hauler_leg(trade_actor, port_a, port_b, hauler.commodity_outbound, hauler.capacity)
+                    profit_ba = self._hauler_leg(trade_actor, port_b, port_a, hauler.commodity_return, hauler.capacity)
+                    total_profit = profit_ab + profit_ba
 
-                # Relativistic Viscous Fluid Market Tensor yield modulation via Stress-Energy projection
-                try:
-                    tensor_out = relativistic_trade_tensor(kernel, hauler.origin_sector, hauler.dest_sector, hauler.commodity_outbound)
-                    lapse = tensor_out.get("gravitational_lapse", 1.0)
-                    T_mat = tensor_out.get("stress_energy_tensor", [[1.0, 0.0], [0.0, 1.0]])
-                    # 4-velocity energy projection: u = (gamma, gamma * beta) with beta = 0.5, gamma = 1.1547
-                    gamma = 1.1547
-                    beta = 0.5
-                    u0, u1 = gamma, gamma * beta
-                    # Projected energy-momentum flux density: E = u_mu T^{mu nu} u_nu
-                    t00 = T_mat[0][0]
-                    t01 = T_mat[0][1]
-                    t11 = T_mat[1][1]
-                    projected_flux_density = (u0 * u0 * t00) + (2.0 * u0 * u1 * t01) + (u1 * u1 * t11)
-                    # Normalize against rest energy density T^{00}
-                    norm_flux = projected_flux_density / max(1.0, t00 * gamma * gamma)
-                    # Relativistic yield combines proper-time dilation lapse with energetic flux transport
-                    effective_yield_mult = float(lapse * norm_flux)
-                    total_profit = int(total_profit * max(0.20, effective_yield_mult))
-                except Exception:
-                    pass
+                    # Relativistic Viscous Fluid Market Tensor yield modulation via Stress-Energy projection
+                    try:
+                        tensor_out = relativistic_trade_tensor(kernel, hauler.origin_sector, hauler.dest_sector, hauler.commodity_outbound)
+                        lapse = tensor_out.get("gravitational_lapse", 1.0)
+                        T_mat = tensor_out.get("stress_energy_tensor", [[1.0, 0.0], [0.0, 1.0]])
+                        # 4-velocity energy projection: u = (gamma, gamma * beta) with beta = 0.5, gamma = 1.1547
+                        gamma = 1.1547
+                        beta = 0.5
+                        u0, u1 = gamma, gamma * beta
+                        # Projected energy-momentum flux density: E = u_mu T^{mu nu} u_nu
+                        t00 = T_mat[0][0]
+                        t01 = T_mat[0][1]
+                        t11 = T_mat[1][1]
+                        projected_flux_density = (u0 * u0 * t00) + (2.0 * u0 * u1 * t01) + (u1 * u1 * t11)
+                        # Normalize against rest energy density T^{00}
+                        norm_flux = projected_flux_density / max(1.0, t00 * gamma * gamma)
+                        # Relativistic yield combines proper-time dilation lapse with energetic flux transport
+                        effective_yield_mult = float(lapse * norm_flux)
+                        total_profit = int(total_profit * max(0.20, effective_yield_mult))
+                    except Exception:
+                        pass
 
                 if total_profit > 0:
                     hauler.lifetime_profit += total_profit
@@ -3353,14 +3421,20 @@ class MarketManager:
 
                         royalty_str = f" [VC Royalty Skim: -{royalty_cut:,} Cr]" if royalty_cut > 0 else ""
                         worm_str = " (Wormhole Traversed)" if hauler.wormhole_enabled else ""
-                        log_text = f"AUTOMATED FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{net_profit:,} Cr!{royalty_str}"
+                        if is_harvester:
+                            log_text = f"HARVESTER OFFLOAD: {hauler.name}{worm_str} offloaded cargo at {port_a.name}, generating +{net_profit:,} Cr!{royalty_str}"
+                        else:
+                            log_text = f"AUTOMATED FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{net_profit:,} Cr!{royalty_str}"
                         logs.append(log_text)
                         if hasattr(kernel, "action_logs"):
                             kernel.action_logs.append(log_text)
                     elif civ_owner:
                         civ_owner.treasury += total_profit
                         worm_str = " (Wormhole Traversed)" if hauler.wormhole_enabled else ""
-                        log_text = f"CIVILIZATION FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{total_profit:,} Cr for {civ_owner.name}!"
+                        if is_harvester:
+                            log_text = f"CIVILIZATION HARVESTER OFFLOAD: {hauler.name}{worm_str} offloaded cargo at {port_a.name}, generating +{total_profit:,} Cr for {civ_owner.name}!"
+                        else:
+                            log_text = f"CIVILIZATION FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{total_profit:,} Cr for {civ_owner.name}!"
                         logs.append(log_text)
                         if hasattr(kernel, "action_logs"):
                             kernel.action_logs.append(log_text)

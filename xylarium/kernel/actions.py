@@ -346,6 +346,18 @@ def _fleet_assign_escort(k: Any, captain: Any, current_sector: Any, kwargs: Dict
     return result
 
 
+@action(ActionType.FLEET_CONTRACT_SECURITY, turns=0)
+def _fleet_contract_security(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_fleet_contract_security(captain, kwargs)
+    return result
+
+
+@action(ActionType.HEDGE_DERIVATIVE, turns=0)
+def _hedge_derivative(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_hedge_derivative(captain, kwargs)
+    return result
+
+
 @action(ActionType.FLEET_RECALL, turns=0)
 def _fleet_recall(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     result = k._handle_fleet_recall(captain, kwargs)

@@ -292,6 +292,164 @@ class TestFleetAndVCEconomy(unittest.TestCase):
         fleet_rendered = TerminalRenderer.render_fleet_control_console(view)
         self.assertIn("MULTI-HAULER FLEET CONTROL CONSOLE", fleet_rendered)
         self.assertIn("COMMISSION SPECIALIZED HULL CLASSES", fleet_rendered)
+        self.assertIn("[N]aval Security", fleet_rendered)
+        self.assertIn("[D]erivative Hedge", fleet_rendered)
+
+    def test_asteroid_harvester_lifecycle_and_offload(self):
+        """Test commissioning Asteroid Harvester, resource extraction from belts, return transit, and port offload."""
+        belt_sec = next((s for s in self.kernel.sectors.values() if s.belts and s.id != 1), None)
+        if belt_sec is None:
+            belt_sec = self.kernel.sectors[2]
+            belt_sec.belts = [{"id": "BELT-002-1", "reserve": 500, "composition": {"ORE": 1.0}}]
+
+        self.player.credits = 100000
+        res = self.kernel.dispatch(
+            self.player_id,
+            ActionType.HAULER_COMMISSION,
+            hull_class="ASTEROID_HARVESTER",
+            origin_sector=1,
+            dest_sector=belt_sec.id,
+            commodity_outbound="ORE",
+            commodity_return="ORE",
+            name="RockCrusher-1",
+        )
+        self.assertTrue(res.success, res.message)
+        hid = res.data["hauler"]["id"]
+        hauler = self.kernel.market_manager.trade_haulers[hid]
+        self.assertEqual(hauler.hull_class, "ASTEROID_HARVESTER")
+        self.assertEqual(hauler.capacity, 120)
+
+        # 1. Simulate arrival at the asteroid belt extraction sector
+        hauler.sector_id = belt_sec.id
+        hauler.current_path = []
+        logs = self.kernel.market_manager.tick_trade_haulers(self.kernel)
+        self.assertIn("ORE", hauler.cargo)
+        self.assertGreater(hauler.cargo["ORE"], 0)
+        self.assertTrue(any("HARVESTER EXTRACTION" in l for l in logs))
+
+        # 2. Simulate return to home spaceport at Sector 1
+        initial_cr = self.player.credits
+        hauler.sector_id = 1
+        hauler.current_path = []
+        logs_return = self.kernel.market_manager.tick_trade_haulers(self.kernel)
+        self.assertEqual(hauler.cargo.get("ORE", 0), 0)  # Cargo offloaded
+        self.assertGreater(hauler.lifetime_profit, 0)
+        self.assertGreater(self.player.credits, initial_cr)
+        self.assertTrue(any("HARVESTER OFFLOAD" in l for l in logs_return))
+        # Turnaround path set back towards extraction destination
+        self.assertEqual(hauler.status, "IN_TRANSIT")
+
+    def test_deep_space_miner_lifecycle_and_offload(self):
+        """Test Deep Space Miner ramscooping in unported deep space sectors, return transit, and port offload."""
+        deep_sec = next((s for s in self.kernel.sectors.values() if s.id > 1 and not s.port and not s.belts), None)
+        if deep_sec is None:
+            deep_sec = self.kernel.sectors[max(self.kernel.sectors.keys())]
+            deep_sec.port = None
+
+        self.player.credits = 100000
+        res = self.kernel.dispatch(
+            self.player_id,
+            ActionType.HAULER_COMMISSION,
+            hull_class="DEEP_SPACE_MINER",
+            origin_sector=1,
+            dest_sector=deep_sec.id,
+            commodity_outbound="He-3",
+            commodity_return="He-3",
+            name="VoidScoop-1",
+        )
+        self.assertTrue(res.success, res.message)
+        hid = res.data["hauler"]["id"]
+        hauler = self.kernel.market_manager.trade_haulers[hid]
+        self.assertTrue(hauler.wormhole_enabled)
+
+        # 1. Simulate arrival in deep space sector
+        hauler.sector_id = deep_sec.id
+        hauler.current_path = []
+        logs = self.kernel.market_manager.tick_trade_haulers(self.kernel)
+        self.assertIn("He-3", hauler.cargo)
+        self.assertGreater(hauler.cargo["He-3"], 0)
+        self.assertTrue(any("DEEP SPACE MINER" in l for l in logs))
+
+        # 2. Simulate return to origin sector 1
+        initial_cr = self.player.credits
+        hauler.sector_id = 1
+        hauler.current_path = []
+        logs_return = self.kernel.market_manager.tick_trade_haulers(self.kernel)
+        self.assertEqual(hauler.cargo.get("He-3", 0), 0)
+        self.assertGreater(hauler.lifetime_profit, 0)
+        self.assertGreater(self.player.credits, initial_cr)
+        self.assertTrue(any("HARVESTER OFFLOAD" in l for l in logs_return))
+
+    def test_fleet_contract_security_escort(self):
+        """Test contracting naval defense escort patrols (Levels 1-5) via kernel dispatch."""
+        res_comm = self.kernel.dispatch(
+            self.player_id,
+            ActionType.HAULER_COMMISSION,
+            hull_class="STANDARD",
+            origin_sector=1,
+            dest_sector=self.dest_port,
+            commodity_outbound="EQUIPMENT",
+            commodity_return="ORGANICS",
+        )
+        self.assertTrue(res_comm.success)
+        hid = res_comm.data["hauler"]["id"]
+        hauler = self.kernel.market_manager.trade_haulers[hid]
+
+        # Contract Level 3 escort
+        self.player.credits = 50000
+        res_sec = self.kernel.dispatch(
+            self.player_id,
+            ActionType.FLEET_CONTRACT_SECURITY,
+            hauler_id=hid,
+            security_level=3,
+        )
+        self.assertTrue(res_sec.success, res_sec.message)
+        self.assertEqual(hauler.security_escort, 3)
+        cost = res_sec.data["cost"]
+        self.assertEqual(cost, 7500)
+        self.assertEqual(self.player.credits, 50000 - cost)
+
+        # Invalid security level bounds
+        res_sec_invalid = self.kernel.dispatch(
+            self.player_id,
+            ActionType.FLEET_CONTRACT_SECURITY,
+            hauler_id=hid,
+            security_level=6,
+        )
+        self.assertFalse(res_sec_invalid.success)
+
+    def test_hedge_derivative_short_and_cover(self):
+        """Test hedging long-haul fleet assets against depreciation via ISSE short sales and covers."""
+        companies = list(self.kernel.market_manager.companies.values())
+        self.assertTrue(len(companies) > 0)
+        comp = companies[0]
+        ticker = comp.ticker
+
+        self.player.credits = 100000
+        self.player.credit_rating = 600
+
+        # 1. Short sell to hedge
+        res_short = self.kernel.dispatch(
+            self.player_id,
+            ActionType.HEDGE_DERIVATIVE,
+            company_ticker=ticker,
+            shares=50,
+            hedge_type="SHORT",
+        )
+        self.assertTrue(res_short.success, res_short.message)
+        self.assertIn(ticker, self.player.short_positions)
+        self.assertEqual(self.player.short_positions[ticker]["shares"], 50)
+
+        # 2. Cover short position
+        res_cover = self.kernel.dispatch(
+            self.player_id,
+            ActionType.HEDGE_DERIVATIVE,
+            company_ticker=ticker,
+            shares=50,
+            hedge_type="COVER",
+        )
+        self.assertTrue(res_cover.success, res_cover.message)
+        self.assertEqual(self.player.short_positions.get(ticker, {}).get("shares", 0), 0)
 
 
 if __name__ == "__main__":

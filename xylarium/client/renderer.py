@@ -1216,7 +1216,7 @@ class TerminalRenderer:
 
         lines.append("-" * 78)
         lines.append(
-            f"Commands: {c_gold('[C]ommission')} │ {c_gold('[R]eassign Route')} │ {c_gold('[E]scort Wings')} │ {c_gold('[H]alt/Recall')} │ {c_gold('[S]crap')} │ {c_gold('[V]C Desk')} │ {c_gold('[X] Exit')}"
+            f"Commands: {c_gold('[C]ommission')} │ {c_gold('[R]eassign Route')} │ {c_gold('[E]scort Wings')} │ {c_gold('[N]aval Security')} │ {c_gold('[D]erivative Hedge')} │ {c_gold('[H]alt/Recall')} │ {c_gold('[S]crap')} │ {c_gold('[V]C Desk')} │ {c_gold('[X] Exit')}"
         )
         return "\n".join(lines)
 

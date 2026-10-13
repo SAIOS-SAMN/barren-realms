@@ -1251,6 +1251,56 @@ class GameKernel:
             logs=[msg] if ok else [],
         )
 
+    def _handle_fleet_contract_security(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        hauler_id = kwargs.get("hauler_id", "")
+        try:
+            level = int(kwargs.get("security_level", kwargs.get("level", 1)))
+        except (ValueError, TypeError):
+            level = 1
+        ok, msg, data = self.market_manager.contract_security_escort(
+            captain=captain,
+            hauler_id=hauler_id,
+            security_level=level,
+            kernel=self,
+        )
+        return ActionResult(
+            success=ok,
+            action=ActionType.FLEET_CONTRACT_SECURITY,
+            message=msg,
+            turns_spent=0,
+            data=data,
+            logs=[msg] if ok else [],
+        )
+
+    def _handle_hedge_derivative(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        ticker = kwargs.get("company_ticker", kwargs.get("ticker", "")).strip().upper()
+        try:
+            shares = int(kwargs.get("shares", kwargs.get("amount", 0)))
+        except (ValueError, TypeError):
+            shares = 0
+        hedge_type = str(kwargs.get("hedge_type", kwargs.get("action", kwargs.get("mode", "SHORT")))).strip().upper()
+
+        if hedge_type == "SHORT":
+            ok, msg, data = self.market_manager.short_sell(captain, ticker, shares, kernel=self)
+        elif hedge_type == "COVER":
+            ok, msg, data = self.market_manager.cover_short(captain, ticker, shares, kernel=self)
+        else:
+            return ActionResult(
+                success=False,
+                action=ActionType.HEDGE_DERIVATIVE,
+                message=f"Unknown hedge derivative operation '{hedge_type}'. Choose 'SHORT' or 'COVER'.",
+                turns_spent=0,
+            )
+
+        return ActionResult(
+            success=ok,
+            action=ActionType.HEDGE_DERIVATIVE,
+            message=f"[MARKET HEDGE] {msg}",
+            turns_spent=0,
+            data=data,
+            logs=[msg] if ok else [],
+        )
+
     def _handle_fleet_recall(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
         hauler_id = kwargs.get("hauler_id", "")
         try:

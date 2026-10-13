@@ -530,4 +530,33 @@ Commercial activity across the spherical universe operates through dynamic livin
 * **Files:** [`xylarium/kernel/epistemics.py`](file:///opt/barren-realms/xylarium/kernel/epistemics.py) (`execute_epistemic_agency`), [`xylarium/kernel/observation.py`](file:///opt/barren-realms/xylarium/kernel/observation.py) (`living_trade_fleets`)
 * **Praxis:** Civilizations with economic paradigms `RELATIVISTIC_FLUID` or `HOMOLOGICAL_SYNTHESIS` invest resource surpluses into commissioning specialized stardock haulers (`SUPERHEAVY_TRANSPORTER`, `ACTINIDE_HAULER`, `BIOSPHERE_VESSEL`, `BULK_FREIGHTER`), expanding inter-civilizational trade networks across the cosmos. Real-time telemetry is sampled under Manifold 12 (`living_trade_fleets`).
 
+---
+
+## 13. Asteroid & Deep-Space Harvesters, In-Console Security & ISSE Derivative Hedging
+
+To eliminate test theatre, disconnected parallel harnesses, and UX gaps, the trade and fleet systems have been unified into a first-class, fully playable experience covering autonomous resource extraction, naval escort contracting, and financial risk hedging:
+
+### 13.1 Specialized Harvester Classes & Extraction Physics
+* **Files:** [`xylarium/config.py`](file:///opt/barren-realms/config.py), [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`commission_trade_hauler`, `tick_trade_haulers`)
+* **`ASTEROID_HARVESTER`:** Built with heavy rock-crushing kinetic smelters and tractor grapples (120 holds, 26,000 Cr, `HEAVY_METALLIC` chemical rating). Targets raw asteroid belts (`sec.belts`), extracting bulk ores ($Fe, Ni, Si, Ti, ORE$) directly from celestial belt reserves without requiring spaceports at the extraction site.
+* **`DEEP_SPACE_MINER`:** Outfitted with deep-void magnetic ramscoops and accretion-tail collectors (70 holds, 38,000 Cr, `ACTINIDE_EXOTIC` rating, wormhole-capable). Harvests throat accretion debris and relativistic gas ($H, He\text{-}3, Pt, U$) from unported deep-space sectors.
+
+### 13.2 Autonomous Extraction, Return Transit & Port Turnaround Orbits
+* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`tick_trade_haulers`)
+* **Extraction Phase:** When harvesters reach destination extraction sectors, they scoop ore or ramscoop gas directly into their cargo holds, reducing belt reserves and logging physical extraction events.
+* **Return Transit & Offload:** With cargo onboard, harvesters reverse geodesic trajectories back to their home spaceport (`origin_sector`). Upon arrival, raw commodities in `hauler.cargo` are sold directly into the origin port's purchasing window, crediting realized profit to the owner's liquid credits or planetary treasury.
+* **Continuous Orbit:** Once holds are offloaded, the harvester re-computes an optimal path (including Einstein-Cartan wormhole throat hops if wormhole-capable) back to the extraction site, establishing a continuous autonomous harvesting cycle.
+
+### 13.3 In-Console Naval Patrol Security Contracting
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.FLEET_CONTRACT_SECURITY`), [`xylarium/kernel/actions.py`](file:///opt/barren-realms/xylarium/kernel/actions.py), [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py) (`_handle_fleet_contract_security`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
+* **Live In-Console Dispatch:** Players can directly contract naval defense escort forces (Levels 1–5: Sloop, Corvette, Frigate, Destroyer, Cruiser) from the Fleet Control Console via `[N] Naval Security`.
+* **Economic Escrow:** Fees scale dynamically with local wage levels and corvette displacement, circulating directly into the origin port's treasury.
+* **Tactical Holonomy Integration:** Escorts actively participate in $SU(2)$ tactical holonomy evaluations during transit, absorbing pirate ambush salvos and defending haulers against hull wear and cargo theft.
+
+### 13.4 Long-Haul ISSE Derivative Hedging Against Asset Depreciation
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.HEDGE_DERIVATIVE`), [`xylarium/kernel/actions.py`](file:///opt/barren-realms/xylarium/kernel/actions.py), [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py) (`_handle_hedge_derivative`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py)
+* **Risk Hedging Engine:** Long interstellar hauls subject ships to mechanical wear (+1 wear/tick) and periodic maintenance overhauls (500 Cr per 50 cycles). To protect balance sheets, players can execute financial derivatives on the Interstellar Stock Exchange (ISSE) via `[D]erivative Hedge` in the fleet console.
+* **Short Sale Derivative (`SHORT`):** Borrows and shorts corporate sector shares (e.g., commodity index or mining firm shares) on margin, generating immediate cash proceeds while holding collateral in Federal escrow.
+* **Short Cover Derivative (`COVER`):** Closes short positions upon route completion, locking in financial returns that offset ship maintenance and depreciation costs across multi-sector transit networks.
+
 
