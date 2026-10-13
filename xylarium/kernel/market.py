@@ -2511,31 +2511,39 @@ class MarketManager:
             if comm_cat in hull_cfg.get("allowed_categories", []):
                 return True, "Compatible"
 
-        # Check chemical continuum / superheavy elements
+        # Physical continuum & thermodynamic containment validation
         try:
-            from xylarium.kernel import elements_continuum
+            from xylarium.kernel import elements_continuum, substances as S
             z = elements_continuum.parse_element_z(commodity)
             if z is not None:
-                # Chemical containment check based on atomic number Z
-                rating = hull_cfg.get("chemical_rating", "BASIC")
-                if z >= 114:
-                    if rating != "SUPERHEAVY_CLOSED":
-                        return False, f"Trans-fermium/Island of Stability element {commodity} (Z={z}) requires SUPERHEAVY_CLOSED containment (Island-Class Superheavy Transporter)."
-                    return True, "Compatible"
-                elif z >= 89 or z in [78, 92, 94]:  # Actinides / noble exotics
-                    if rating not in ("ACTINIDE_EXOTIC", "SUPERHEAVY_CLOSED"):
-                        return False, f"Actinide/radioactive exotic {commodity} (Z={z}) requires ACTINIDE_EXOTIC or SUPERHEAVY_CLOSED containment."
-                    return True, "Compatible"
-                elif z in [1, 2, 6, 10, 18, 36, 54]:  # Volatiles / noble gases
-                    if rating not in ("CRYO_VOLATILE", "BIO_ORGANIC", "SUPERHEAVY_CLOSED"):
-                        return False, f"Volatile element {commodity} (Z={z}) requires CRYO_VOLATILE containment (Volatile Tanker)."
-                    return True, "Compatible"
-                elif z in [22, 26, 28, 29]:  # Heavy metals
-                    if rating not in ("HEAVY_METALLIC", "ACTINIDE_EXOTIC", "SUPERHEAVY_CLOSED"):
-                        return False, f"Heavy structural metal {commodity} (Z={z}) requires HEAVY_METALLIC containment (Bulk Freighter)."
-                    return True, "Compatible"
-                else:
-                    return True, "Compatible"
+                # 1. Fissile / Superheavy Horizon Check
+                max_fissile_z = hull_cfg.get("max_fissile_z", 82)
+                if z > max_fissile_z:
+                    if z >= 114:
+                        return False, f"Trans-fermium / Island of Stability element {commodity} (Z={z}) requires torsion-stabilized lattice (SUPERHEAVY_CLOSED, max Z={max_fissile_z})."
+                    return False, f"Fissionable actinide {commodity} (Z={z}) exceeds hull nuclear threshold (max Z={max_fissile_z})."
+
+                # 2. Thermodynamic Volatile Cryo Containment Check
+                # Volatiles boil off below standard threshold if hull lacks cryo dewars
+                elem_obj = elements_continuum.get_element(z)
+                cond_k = getattr(elem_obj, "condensation_k", 300.0)
+                cryo_min_k = hull_cfg.get("cryo_min_kelvin", 150.0)
+                if cond_k < 150.0 and cryo_min_k > cond_k:
+                    return False, f"Cryogenic volatile {commodity} (T_cond={cond_k:.1f} K) boils off: hull minimum cooling is {cryo_min_k:.1f} K."
+
+                # 3. Nuclear Binding Energy & Decay Heat
+                # Heavy nuclei with low binding per nucleon or large Z emit intense particle flux
+                bind_per_n = getattr(elem_obj, "binding_per_nucleon", 8.0)
+                rad_tolerance = hull_cfg.get("max_radiation_decay_ev", 1.0)
+                if z >= 89 and rad_tolerance < 50.0:
+                    return False, f"Actinide {commodity} (Z={z}, B/A={bind_per_n:.2f} MeV) requires lead-borated neutron shielding."
+
+                # 4. Heavy Structural Metal Tensile Requirements
+                tensile_req = hull_cfg.get("min_tensile_gpa", 50.0)
+                if z in [22, 26, 28, 29] and tensile_req < 200.0 and hull_class in ["STANDARD", "BIOSPHERE_VESSEL"]:
+                    return False, f"High-density structural metal {commodity} (Z={z}) requires heavy reinforced freight bracing (HEAVY_METALLIC)."
+
+                return True, "Compatible"
         except Exception:
             pass
 
@@ -2838,7 +2846,8 @@ class MarketManager:
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Contracts naval patrol security forces / tactical corvettes to escort a trade hauler.
-        Cost: 2,500 Cr per security level (1-5).
+        Cost is derived from origin spaceport local wage base, regional currency purchasing power,
+        and naval corvette combat displacement.
         Provides heavy fire support, reducing pirate ambush probability and protecting cargo against raiders.
         """
         hauler = self.trade_haulers.get(hauler_id)
@@ -2850,15 +2859,28 @@ class MarketManager:
         if security_level < 1 or security_level > 5:
             return False, "Security escort level must be between 1 (Patrol Sloop) and 5 (Heavy Defense Cruiser).", {}
 
-        cost = security_level * 2500
+        # First-principles naval upkeep: base displacement (corvette fighters & shields)
+        # adjusted by originating sector's regional currency price level and labor wage rate
+        sec_origin = kernel.sectors.get(hauler.origin_sector) if kernel and hasattr(kernel, "sectors") else None
+        curr = sec_origin.port.currency if (sec_origin and sec_origin.port) else "SOL"
+        price_lvl = float(self._local_price_level(curr))
+        
+        # Base naval hull displacement scale per level (1: Sloop, 2: Corvette, 3: Frigate, 4: Destroyer, 5: Cruiser)
+        corvette_displacement_base = 2500.0
+        cost = int(security_level * corvette_displacement_base * max(0.5, price_lvl))
+
         if captain.credits < cost:
             return False, f"Contracting Level {security_level} security forces requires {cost:,} Cr (You have {captain.credits:,} Cr).", {}
 
         captain.credits -= cost
+        # Escort fees circulate into originating sector's port treasury
+        if sec_origin and sec_origin.port:
+            sec_origin.port.treasury += cost
+
         hauler.security_escort = security_level
         msg = (
             f"SECURITY ESCORT CONTRACTED: {hauler.name} secured by Level {security_level} Naval Defense Force "
-            f"(-{cost:,} Cr). Pirate raid vulnerability reduced by {security_level * 18}%."
+            f"(-{cost:,} Cr in {curr}). Escort tactical holonomy matrix online."
         )
         return True, msg, {"hauler_id": hauler_id, "security_escort": security_level, "cost": cost}
 
@@ -3165,37 +3187,72 @@ class MarketManager:
                 from xylarium.kernel import comms as _comms
                 _comms.arrive(kernel, f"hauler:{hauler.id}", next_sec)     # word rides the hauler
 
-                # Check Pirate Ambush in ANARCHY / BORDERLAND
+                # First-Principles Convoy Ambush & Combat Resolution via SU(2) Tactical Holonomies
                 sec_obj = kernel.sectors.get(next_sec)
                 if sec_obj:
                     sec_type = getattr(sec_obj.security, "value", str(sec_obj.security))
                     is_anarchy = "ANARCHY" in sec_type
                     is_border = "BORDERLAND" in sec_type
-                    base_ambush = 0.20 if is_anarchy else (0.08 if is_border else 0.0)
-                    # Contracted Naval Security forces reduce ambush chance by 18% per level
-                    sec_protection = min(0.90, getattr(hauler, "security_escort", 0) * 0.18)
-                    ambush_chance = base_ambush * (1.0 - sec_protection)
 
-                    if random.random() < ambush_chance:
+                    if is_anarchy or is_border:
+                        from xylarium.kernel import combat, physics, torsion
+                        # Sector metric curvature and torsion phase modulate raider cohesion
+                        st_star = physics.star(sec_obj)
+                        m_star = float(st_star.get("m", 1.0))
+                        amp, phase, chirality = torsion.eval_wavefront(kernel, next_sec) if kernel else (0.0, 0.0, 1)
+
+                        # Raiding baseline threat probability derived from gravitational curvature & anarchic vacuum
+                        curv = (2.0 * m_star) / max(0.5, 1.0 + float(getattr(sec_obj, "remoteness", 5.0)))
+                        threat_prob = 0.22 if is_anarchy else 0.09
+                        threat_prob *= (1.0 + 0.25 * amp)
+
+                        # Create synthetic convoy defender and raider strike group for SU(2) holonomy
                         sec_escort = getattr(hauler, "security_escort", 0)
-                        if sec_escort >= 2:
-                            # Naval defense corvettes easily repel raiders without losses
-                            hauler.status = "COMBAT"
-                            logs.append(f"SECURITY ESCORT ENGAGED: Naval patrol escort (Lvl {sec_escort}) repelled raiders in Sector {next_sec:03d}! Hauler {hauler.name} secured.")
-                        elif hauler.escort_fighters > 0:
-                            lost = min(hauler.escort_fighters, random.randint(1, 2))
-                            hauler.escort_fighters -= lost
-                            hauler.status = "COMBAT"
-                            logs.append(f"TACTICAL ESCORT ENGAGED: {hauler.name} repelled pirates in Sector {next_sec:03d}! Lost {lost} fighters ({hauler.escort_fighters} remaining).")
-                        else:
-                            hauler.wear_and_tear += 5
-                            hauler.status = "UNDER_ATTACK"
-                            if hauler.cargo:
-                                raided_comm = next(iter(hauler.cargo))
-                                raided_qty = hauler.cargo.pop(raided_comm)
-                                logs.append(f"PIRATE RAID ALERT: Unescorted {hauler.name} was raided in Sector {next_sec:03d}! Lost {raided_qty} units of {raided_comm}!")
+                        escort_fighters = hauler.escort_fighters + sec_escort * 15
+                        convoy_shields = sec_escort * 80 + 40
+
+                        # Parallel transport operator along engagement baseline
+                        axis = (0.0, 0.0, 1.0)
+                        theta_convoy = float(phase + curv * 5.0 + sec_escort * 0.85)
+                        Q_tactical = physics.Quaternion.from_axis_angle(axis, theta_convoy)
+                        trace_half = Q_tactical.w  # cos(theta/2)
+                        harmonic_absorption = max(0.40, min(1.35, 1.0 + 0.20 * trace_half))
+
+                        # Effective raider breach chance scaled by convoy defense holonomy
+                        defense_power = convoy_shields * harmonic_absorption + escort_fighters * 12.0
+                        raider_salvo = 90.0 if is_anarchy else 45.0
+                        ambush_chance = threat_prob * max(0.05, 1.0 - (defense_power / (raider_salvo + defense_power)))
+
+                        if random.random() < ambush_chance:
+                            if sec_escort >= 2 or defense_power > raider_salvo * 1.5:
+                                # Escort corvettes lock tactical phase resonance, neutralizing raiders
+                                hauler.status = "COMBAT"
+                                logs.append(
+                                    f"SECURITY ESCORT ENGAGED: Naval patrol escort (Lvl {sec_escort}, Q-trace={trace_half:.2f}) "
+                                    f"established harmonic resonance ({harmonic_absorption:.2f}x) repelling raiders in Sector {next_sec:03d}! Hauler {hauler.name} secured."
+                                )
+                            elif hauler.escort_fighters > 0:
+                                lost = min(hauler.escort_fighters, max(1, int(2.0 / harmonic_absorption)))
+                                hauler.escort_fighters -= lost
+                                hauler.status = "COMBAT"
+                                logs.append(
+                                    f"TACTICAL ESCORT ENGAGED: {hauler.name} repelled pirates in Sector {next_sec:03d} "
+                                    f"(Q-trace={trace_half:.2f})! Lost {lost} fighters ({hauler.escort_fighters} remaining)."
+                                )
                             else:
-                                logs.append(f"PIRATE RAID ALERT: Unescorted {hauler.name} sustained hull damage from raiders in Sector {next_sec:03d} (+5 Wear).")
+                                hauler.wear_and_tear += 5
+                                hauler.status = "UNDER_ATTACK"
+                                if hauler.cargo:
+                                    raided_comm = next(iter(hauler.cargo))
+                                    raided_qty = hauler.cargo.pop(raided_comm)
+                                    logs.append(
+                                        f"PIRATE RAID ALERT: Unescorted {hauler.name} phase-breached in Sector {next_sec:03d}! "
+                                        f"Lost {raided_qty} units of {raided_comm}!"
+                                    )
+                                else:
+                                    logs.append(
+                                        f"PIRATE RAID ALERT: Unescorted {hauler.name} sustained hull damage in Sector {next_sec:03d} (+5 Wear)."
+                                    )
 
             # Arrived at destination/origin or path finished
             if not hauler.current_path:
@@ -3221,14 +3278,25 @@ class MarketManager:
 
                 total_profit = profit_ab + profit_ba
 
-                # Relativistic Viscous Fluid Market Tensor yield modulation
+                # Relativistic Viscous Fluid Market Tensor yield modulation via Stress-Energy projection
                 try:
                     tensor_out = relativistic_trade_tensor(kernel, hauler.origin_sector, hauler.dest_sector, hauler.commodity_outbound)
                     lapse = tensor_out.get("gravitational_lapse", 1.0)
-                    flux = max(0.5, abs(tensor_out.get("commodity_flux_j", 1.0)))
-                    # Relativistic flux acceleration bonus to profit
-                    fluid_mult = min(1.50, max(0.85, lapse * (1.0 + min(0.30, flux * 0.01))))
-                    total_profit = int(total_profit * fluid_mult)
+                    T_mat = tensor_out.get("stress_energy_tensor", [[1.0, 0.0], [0.0, 1.0]])
+                    # 4-velocity energy projection: u = (gamma, gamma * beta) with beta = 0.5, gamma = 1.1547
+                    gamma = 1.1547
+                    beta = 0.5
+                    u0, u1 = gamma, gamma * beta
+                    # Projected energy-momentum flux density: E = u_mu T^{mu nu} u_nu
+                    t00 = T_mat[0][0]
+                    t01 = T_mat[0][1]
+                    t11 = T_mat[1][1]
+                    projected_flux_density = (u0 * u0 * t00) + (2.0 * u0 * u1 * t01) + (u1 * u1 * t11)
+                    # Normalize against rest energy density T^{00}
+                    norm_flux = projected_flux_density / max(1.0, t00 * gamma * gamma)
+                    # Relativistic yield combines proper-time dilation lapse with energetic flux transport
+                    effective_yield_mult = float(lapse * norm_flux)
+                    total_profit = int(total_profit * max(0.20, effective_yield_mult))
                 except Exception:
                     pass
 
@@ -3275,18 +3343,42 @@ class MarketManager:
                     path = []
                     if getattr(hauler, "wormhole_enabled", False):
                         try:
-                            from xylarium.kernel import transit as _transit
-                            m_dict = _transit.mouths(kernel)
-                            # Check if current sector or target sector connects to a throat mouth
-                            mouth_keys = [k for k in m_dict.keys() if k in kernel.sectors]
-                            if mouth_keys and target_dest in kernel.sectors:
-                                # Find nearest mouth to hauler
-                                p_to_mouth = kernel.find_path(hauler.sector_id, mouth_keys[0])
-                                # Traverse through throat
-                                p_from_mouth = kernel.find_path(mouth_keys[0], target_dest)
-                                cand_path = p_to_mouth[:-1] + p_from_mouth
-                                normal_path = kernel.find_path(hauler.sector_id, target_dest)
-                                path = cand_path if len(cand_path) < len(normal_path) else normal_path
+                            from xylarium.kernel import transit as _transit, blackhole as _blackhole
+                            # Collect all active throat wormhole pairs (a <-> b) across transit and blackhole systems
+                            throat_pairs = []
+                            w_st = _transit.stats(kernel).get("worms", {})
+                            for w in w_st.values():
+                                wa, wb = w.get("a"), w.get("b")
+                                if wa in kernel.sectors and wb in kernel.sectors:
+                                    throat_pairs.append((wa, wb))
+                                    throat_pairs.append((wb, wa))
+                            
+                            bh_throats = _blackhole.stats(kernel).get("throats", {})
+                            for tid, trec in bh_throats.items():
+                                near_s = trec.get("near")
+                                if isinstance(near_s, int) and near_s in kernel.sectors:
+                                    # Throat near mouths connect directly through the central core bounce
+                                    if getattr(kernel, "home_sector", 1) in kernel.sectors:
+                                        throat_pairs.append((near_s, kernel.home_sector))
+                                        throat_pairs.append((kernel.home_sector, near_s))
+
+                            normal_path = kernel.find_path(hauler.sector_id, target_dest)
+                            best_path = normal_path
+                            best_cost = len(normal_path) if normal_path else 9999
+
+                            # Search geodesic through throat mouths
+                            for mouth_in, mouth_out in throat_pairs:
+                                p_in = kernel.find_path(hauler.sector_id, mouth_in)
+                                p_out = kernel.find_path(mouth_out, target_dest)
+                                if p_in and p_out:
+                                    # Traversal through EC bounce throat takes 1 hop
+                                    cand = p_in[:-1] + [mouth_out] + p_out[1:]
+                                    cand_cost = len(cand)
+                                    if cand_cost < best_cost:
+                                        best_cost = cand_cost
+                                        best_path = cand
+
+                            path = best_path
                         except Exception:
                             path = kernel.find_path(hauler.sector_id, target_dest)
                     if not path:

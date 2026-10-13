@@ -503,27 +503,28 @@ While universe laws are objective, civilizations act strictly according to their
 
 Commercial activity across the spherical universe operates through dynamic living fleets comprising purpose-built hulls, escort protection, relativistic fluid tensors, and wormhole traversal:
 
-### 12.1 Specialized Stardock Hulls & Strict Chemical Containment
+### 12.1 Specialized Stardock Hulls & First-Principles Containment Physics
 * **Files:** [`xylarium/config.py`](file:///opt/barren-realms/config.py) (`SPECIALIZED_HULLS`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`TradeHauler`), [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`is_commodity_compatible`, `commission_trade_hauler`)
-* **Chemical Containment Granularity:** Universal commodities and continuum elements ($Z \ge 1$) enforce strict containment ratings—preventing generic "one size fits all" haulers:
-  - `BULK_FREIGHTER` (`ORE_BULK`): Restricts to standard ores and construction metals. Volatiles ($H, He, Xe$), actinides, and superheavies prohibited.
-  - `CRYOGENIC_TANKER` (`VOLATILE_CRYO`): Vacuum-dewared cryo cells for cryogenic volatiles ($H, He, N, O, F, Ne, Cl, Ar, Kr, Xe, Rn$).
-  - `ACTINIDE_HAULER` (`ACTINIDE_EXOTIC`): Lead-borated neutron shielding for radioactive actinides and heavy transuranics ($89 \le Z < 114$).
-  - `SUPERHEAVY_TRANSPORTER` (`SUPERHEAVY_CLOSED`): Torsion-stabilized magnetic lattice for Island of Stability superheavies ($Z \ge 114$, $Z \ge 119$, and $Z=126$). Wormhole-capable.
-  - `BIOSPHERE_VESSEL` (`BIOLOGICAL_LIVING`): Climate-controlled hydroponic holds for living livestock, pharmaceuticals, and biomass.
+* **Physical Field Constraints (Eliminating Arbitrary Label Ladders):**
+  - **Thermodynamic Condensation Barrier ($T_{\text{cond}}$ vs. $T_{\text{min,cryo}}$):** Elements with low condensation/boiling points (e.g., $H$ at 5.0 K, $He$ at 3.0 K, $Xe$ at 165 K) undergo boil-off and containment failure unless the hull has vacuum-dewared cryo cooling ($T_{\text{min,cryo}} \le T_{\text{cond}}$).
+  - **Nuclear Decay Heat & Radiation Tolerance:** Fissionable actinides ($Z \ge 89$) with low binding energy per nucleon ($B/A$) require lead-borated neutron shielding ($\ge 50$ eV radiation tolerance); unshielded freighters reject loading.
+  - **Superheavy & Fissile Horizon ($Z_{\text{max}}$):** Island of Stability superheavies ($Z \ge 114, 119, 126$) exceed non-stabilized nuclear thresholds, strictly requiring torsion-stabilized magnetic lattice hulls (`SUPERHEAVY_TRANSPORTER`, $Z_{\text{max}} \le 200$).
+  - **Tensile Modulus & Grapple Shear:** High-density structural transition metals ($Fe, Ti, Ni, Cu$) require reinforced mechanical grapples ($\ge 200$ GPa minimum tensile modulus).
 
-### 12.2 Naval Security Force Escorts
-* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`contract_security_escort`, `tick_trade_haulers`)
-* **Escort Mechanics:**
-  - Captains and planetary governments contract naval security patrol corvettes (Levels 1–5, 2,500 Cr per level).
-  - Each security level provides an 18% reduction in pirate ambush vulnerability.
-  - At Security Level $\ge 2$, pirate ambushes are repelled automatically with zero cargo loss or hull wear.
+### 12.2 First-Principles Naval Security & $SU(2)$ Tactical Ambush Holonomies
+* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`contract_security_escort`, `tick_trade_haulers`), [`xylarium/kernel/combat.py`](file:///opt/barren-realms/xylarium/kernel/combat.py)
+* **Economic Circulation:** Contract cost is derived dynamically from the originating spaceport's currency purchasing power $P_{\text{local}}$ and combat displacement scale ($2,500 \times \text{level} \times P_{\text{local}}$), circulating contract funds directly back into port treasuries.
+* **Non-Abelian $SU(2)$ Ambush Holonomies:** Replaces arbitrary percentage chances with live physical evaluations:
+  - Raid threat probability is modulated by local metric curvature $R_{\text{curv}} = \frac{2M}{(1+r_{\text{gal}})^2}$ and torsion amplitude $\Psi$.
+  - Tactical parallel transport operator along the engagement baseline yields Wilson line trace $\frac{1}{2}\text{Tr}(\mathbf{Q}) = \cos(\theta/2)$.
+  - Harmonic resonance factor $\chi = 1.0 + 0.20 \cos(\theta/2)$ scales convoy shield absorption and fighter defense power against raider salvos. Escorts locking constructive phase resonance neutralize attacks with zero cargo loss.
 
-### 12.3 Einstein-Cartan Wormhole Traversal & Relativistic Yield Modulation
-* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`tick_trade_haulers`, `relativistic_trade_tensor`)
-* **Transit & Commercial Mechanics:**
-  - Wormhole-enabled haulers (`wormhole_enabled: True`) crossing sectors with open Einstein-Cartan throat mouths execute topological shortcuts, hopping intermediate transit sectors instantaneously.
-  - Every arrival computes the relativistic trade tensor $T^{\mu\nu}_{\text{trade}}$ and gravitational lapse $(1+z) = \sqrt{1 - 2M/r}$, scaling realized profits according to time-dilated commercial transport.
+### 12.3 Einstein-Cartan Throat Wormholes & Stress-Energy 4-Velocity Projection
+* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`tick_trade_haulers`, `relativistic_trade_tensor`), [`xylarium/kernel/blackhole.py`](file:///opt/barren-realms/xylarium/kernel/blackhole.py), [`xylarium/kernel/transit.py`](file:///opt/barren-realms/xylarium/kernel/transit.py)
+* **Topological Shortcut Discovery:** Wormhole-capable haulers search all active Einstein-Cartan throat mouths across transit networks and distributed black hole singularities, calculating affine parameter lengths through throat bounces to bypass high-drag interstellar corridors.
+* **Stress-Energy Tensor Projection:** Commercial yield modulation is derived directly from the relativistic fluid 4-velocity contraction:
+  $$\mathcal{E} = u_\mu T^{\mu\nu}_{\text{trade}} u_\nu = \gamma^2 T^{00} + 2\gamma^2\beta T^{01} + \gamma^2\beta^2 T^{11}$$
+  Normalized against rest energy density and scaled by Schwarzschild gravitational lapse $(1+z) = \sqrt{1 - 2M/r}$, eliminating arbitrary heuristic multipliers.
 
 ### 12.4 Autonomous Civilizational Fleet Praxis
 * **Files:** [`xylarium/kernel/epistemics.py`](file:///opt/barren-realms/xylarium/kernel/epistemics.py) (`execute_epistemic_agency`), [`xylarium/kernel/observation.py`](file:///opt/barren-realms/xylarium/kernel/observation.py) (`living_trade_fleets`)

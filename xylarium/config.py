@@ -299,6 +299,10 @@ SPECIALIZED_HULLS = {
         "icon": "🚚",
         "chemical_rating": "BASIC",
         "wormhole_capable": False,
+        "cryo_min_kelvin": 150.0,       # Cannot store cryogenic volatiles below 150 K
+        "max_radiation_decay_ev": 1.0,  # Unshielded against ionizing alpha/beta decay
+        "max_fissile_z": 82,            # Cannot hold heavy fissionable actinides (Z > 82)
+        "min_tensile_gpa": 50.0,
     },
     "CRYO_TANKER": {
         "name": "Volatile Tanker",
@@ -310,6 +314,10 @@ SPECIALIZED_HULLS = {
         "icon": "❄️",
         "chemical_rating": "CRYO_VOLATILE",
         "wormhole_capable": False,
+        "cryo_min_kelvin": 0.0,         # Near absolute zero vacuum-dewared cryo containment
+        "max_radiation_decay_ev": 2.0,
+        "max_fissile_z": 82,
+        "min_tensile_gpa": 80.0,
     },
     "BULK_FREIGHTER": {
         "name": "Bulk Freighter",
@@ -321,6 +329,10 @@ SPECIALIZED_HULLS = {
         "icon": "🏗️",
         "chemical_rating": "HEAVY_METALLIC",
         "wormhole_capable": False,
+        "cryo_min_kelvin": 200.0,       # High boil-off rate: rejects cryogenic volatiles
+        "max_radiation_decay_ev": 5.0,
+        "max_fissile_z": 88,            # Structural plating fails under actinide neutron flux
+        "min_tensile_gpa": 400.0,       # High tensile strength for dense metals
     },
     "BIOSPHERE_VESSEL": {
         "name": "Biosphere Vessel",
@@ -332,6 +344,10 @@ SPECIALIZED_HULLS = {
         "icon": "🌿",
         "chemical_rating": "BIO_ORGANIC",
         "wormhole_capable": False,
+        "cryo_min_kelvin": 260.0,       # Mesic temperatures for organic viability (260-320 K)
+        "max_radiation_decay_ev": 0.5,  # Zero ionizing radiation tolerance (living biomes)
+        "max_fissile_z": 82,
+        "min_tensile_gpa": 60.0,
     },
     "QUANTUM_SKIFF": {
         "name": "Quantum Skiff",
@@ -343,6 +359,10 @@ SPECIALIZED_HULLS = {
         "icon": "⚡",
         "chemical_rating": "ACTINIDE_EXOTIC",
         "wormhole_capable": True,
+        "cryo_min_kelvin": 10.0,
+        "max_radiation_decay_ev": 50.0,
+        "max_fissile_z": 113,
+        "min_tensile_gpa": 250.0,
     },
     "ACTINIDE_HAULER": {
         "name": "Actinide Shielded Transport",
@@ -354,6 +374,10 @@ SPECIALIZED_HULLS = {
         "icon": "☢️",
         "chemical_rating": "ACTINIDE_EXOTIC",
         "wormhole_capable": True,
+        "cryo_min_kelvin": 50.0,
+        "max_radiation_decay_ev": 100.0, # Lead-borated moderator for intense actinide decay heat
+        "max_fissile_z": 113,            # Up to Copernicium / Nihonium
+        "min_tensile_gpa": 350.0,
     },
     "SUPERHEAVY_TRANSPORTER": {
         "name": "Island-Class Superheavy Transporter",
@@ -365,6 +389,10 @@ SPECIALIZED_HULLS = {
         "icon": "💠",
         "chemical_rating": "SUPERHEAVY_CLOSED",
         "wormhole_capable": True,
+        "cryo_min_kelvin": 0.0,
+        "max_radiation_decay_ev": 500.0, # Torsion lattice dampens spontaneous fission
+        "max_fissile_z": 200,            # Uncapped superheavy handling (Z >= 114, 119, 126, 164)
+        "min_tensile_gpa": 1200.0,
     },
 }
 
