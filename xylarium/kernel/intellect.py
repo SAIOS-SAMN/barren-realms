@@ -572,8 +572,9 @@ def verify_harmonic_convergence(
             "lane": "INTELLECT",
         }
 
+        from xylarium.kernel import constellations
         ancients = board.ancient_peoples(kernel)
-        house = ancients[0] if ancients else None
+        house = ancients[0] if ancients else constellations.ELDERS
         if house and hypha.uplinked(kernel, house):
             hypha.append(
                 kernel,

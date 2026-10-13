@@ -94,9 +94,9 @@ def emit_bounce(
     # If emitted by galactic core, link to hypha
     if source in ("galactic_core", "centre", "sgr_a"):
         try:
-            from xylarium.kernel import hypha, board
+            from xylarium.kernel import hypha, board, constellations
             ancients = board.ancient_peoples(kernel)
-            house = ancients[0] if ancients else None
+            house = ancients[0] if ancients else constellations.ELDERS
             if house and hypha.uplinked(kernel, house):
                 hypha.append(
                     kernel,
