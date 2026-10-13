@@ -149,6 +149,30 @@ class SurfaceGrid:
         angle = math.acos(max(-1.0, min(1.0, cos_angle)))
         return planet_radius_km * angle
 
+    def compute_climate_tiles(self, planet: Any, kernel: Any = None) -> Dict[Tuple[int, int], Dict[str, float]]:
+        """Map continuous S^2 climate manifold onto surface grid tiles."""
+        from xylarium.kernel import skies
+        climate = skies.compute_climate_manifold(planet, kernel=kernel)
+        prof = climate["thermal_profile"]
+        winds = climate["zonal_wind_profile"]
+        
+        tile_climate: Dict[Tuple[int, int], Dict[str, float]] = {}
+        for tile in self.tiles:
+            tile_lat_deg = math.degrees(tile.lat)
+            nearest_p = min(prof, key=lambda p: abs(p["lat_deg"] - tile_lat_deg))
+            nearest_w = min(winds, key=lambda w: abs(w["lat_deg"] - tile_lat_deg)) if winds else {"wind_ms": 0.0}
+            
+            tile_climate[(tile.x, tile.y)] = {
+                "lat": round(tile.lat, 4),
+                "lon": round(tile.lon, 4),
+                "temp_k": nearest_p["temp_k"],
+                "insolation_wm2": nearest_p["insolation_wm2"],
+                "albedo": nearest_p["albedo"],
+                "wind_ms": nearest_w["wind_ms"],
+                "area_weight": round(tile.area_weight, 4),
+            }
+        return tile_climate
+
     def __init__(
         self,
         width: int = SURFACE_GRID_WIDTH,

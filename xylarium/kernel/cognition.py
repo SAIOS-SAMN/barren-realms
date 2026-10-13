@@ -2100,7 +2100,8 @@ class CognitiveOrgan:
                 }
                 planet.grown_basis.append(crystal)
                 if len(planet.grown_basis) > 50:
-                    planet.grown_basis.pop(0)
+                    popped = planet.grown_basis.pop(0)
+                    _compact_crystal_to_manifold(planet, popped)
             return res
 
         if not isinstance(entity, Captain):
@@ -2486,7 +2487,8 @@ class CognitiveOrgan:
             if not any(c.get("rcf_sig") == crystal["rcf_sig"] for c in captain.grown_basis):
                 captain.grown_basis.append(crystal)
                 if len(captain.grown_basis) > 50:
-                    captain.grown_basis.pop(0)
+                    popped = captain.grown_basis.pop(0)
+                    _compact_crystal_to_manifold(captain, popped)
         elif deed.seat == "SURVIVE" and deed.deed_name in [
             "COLONIZE_TERRESTRIAL_BODY",
             "DEPLOY_ORBITAL_TOLL_GATE",
@@ -2502,4 +2504,22 @@ class CognitiveOrgan:
             }
             captain.grown_basis.append(crystal)
             if len(captain.grown_basis) > 50:
-                captain.grown_basis.pop(0)
+                popped = captain.grown_basis.pop(0)
+                _compact_crystal_to_manifold(captain, popped)
+
+
+def _compact_crystal_to_manifold(entity: Any, crystal: Dict[str, Any]) -> None:
+    """Compact aging crystal into continuous AssociativeAttractorManifold on SU(2) with Casimir invariant."""
+    import struct
+    from xylarium.kernel import mindcore, physics
+    manifold = getattr(entity, "attractor_manifold", None)
+    if manifold is None:
+        manifold = mindcore.AssociativeAttractorManifold()
+        setattr(entity, "attractor_manifold", manifold)
+    raw = json.dumps(crystal, sort_keys=True, default=str).encode("utf-8")
+    h = hashlib.sha256(raw).digest()
+    w, x, y, z = struct.unpack(">ffff", h[:16])
+    q_state = physics.Quaternion(w, x, y, z).normalized()
+    manifold.add_memory(q_state, weight=1.0)
+    manifold.compact_oldest(keep_count=50)
+

@@ -35,6 +35,7 @@ falls with its mastery of the process, when the decision rule finds the people i
 import math
 import random
 import zlib
+from dataclasses import dataclass
 from fractions import Fraction as F
 from typing import Any, Dict, List, Optional
 
@@ -42,6 +43,150 @@ AXES = ("light", "tolerance", "chemistry", "birth", "temperature", "aptitude")
 VARIANCE = 0.01             # additive genetic variance per axis per generation (log scale; heritable variation)
 SPECIATION_SD = 3.0         # a deme this many additive deviations from its people's mean is another people
 EPS = 1e-3
+
+# Fundamental constants for metabolic thermodynamics
+K_BOLTZMANN_EV = 8.617333262e-5  # eV / K
+
+METABOLIC_BASINS: Dict[str, Dict[str, Any]] = {
+    "CARBON_AQUEOUS": {
+        "ratios": {"C": 0.50, "N": 0.15, "P": 0.05, "O": 0.25, "H2O": 0.05},
+        "delta_h_ev": 0.85,
+        "delta_s_ev_k": 0.0022,
+    },
+    "IRON_SULFUR_LITHOTROPH": {
+        "ratios": {"Fe": 0.40, "S": 0.35, "C": 0.15, "Ni": 0.05, "P": 0.05},
+        "delta_h_ev": 1.45,
+        "delta_s_ev_k": 0.0031,
+    },
+    "METHANOGENIC_CRYOPHILIC": {
+        "ratios": {"C": 0.35, "H": 0.45, "N": 0.10, "Ni": 0.05, "Co": 0.05},
+        "delta_h_ev": 0.55,
+        "delta_s_ev_k": 0.0018,
+    },
+    "PLASMIC_HELIUM": {
+        "ratios": {"He": 0.60, "H": 0.30, "Ne": 0.08, "e_": 0.02},
+        "delta_h_ev": 3.20,
+        "delta_s_ev_k": 0.0055,
+    },
+}
+
+
+@dataclass
+class MorphospaceCoordinate:
+    elemental_ratios: Dict[str, float]
+    activation_energy_ev: float
+    catalytic_entropy: float
+    basin_id: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "elemental_ratios": {k: round(v, 4) for k, v in self.elemental_ratios.items()},
+            "activation_energy_ev": round(self.activation_energy_ev, 4),
+            "catalytic_entropy": round(self.catalytic_entropy, 5),
+            "basin_id": self.basin_id,
+        }
+
+
+def evaluate_waddington_drift(
+    kernel: Any,
+    planet: Any,
+    coord: MorphospaceCoordinate,
+) -> MorphospaceCoordinate:
+    """Evaluate non-linear metabolic phase transitions driven by starlight and minerals.
+    
+    Models continuous biochemistry over a thermodynamic Waddington potential landscape
+    V(x; Starlight, Elements). Populations drift toward thermodynamic attractors;
+    when thermal fluctuations or stellar UV flux exceed catalytic free-energy barriers
+    Delta G = Delta H - T * Delta S, demes cross saddle points into new metabolic basins,
+    triggering organic speciation without arbitrary threshold checks.
+    """
+    # 1. Ambient planetary surface temperature
+    t_surf = 288.15
+    soc = getattr(planet, "society", {}) or {}
+    if "surface_t" in soc:
+        t_surf = max(10.0, float(soc["surface_t"]))
+    elif kernel is not None and getattr(planet, "sector_id", None) in getattr(kernel, "sectors", {}):
+        try:
+            from xylarium.kernel import skies
+            clim = skies.compute_climate_manifold(planet, kernel=kernel)
+            t_surf = float(clim.get("t_mean_k", 288.15))
+        except Exception:
+            pass
+            
+    # Thermal energy kT in eV
+    kt_ev = K_BOLTZMANN_EV * t_surf
+    
+    # Stellar UV flux factor
+    uv_flux = 1.0
+    try:
+        from xylarium.kernel import physics
+        if kernel is not None and getattr(planet, "sector_id", None) in getattr(kernel, "sectors", {}):
+            sec = kernel.sectors[planet.sector_id]
+            uv_flux = float(physics.planet_flux(sec, planet))
+    except Exception:
+        pass
+    e_uv = 0.20 * max(0.01, min(5.0, uv_flux))
+    e_available = kt_ev + e_uv
+    
+    # 2. Evaluate free-energy landscape across metabolic basins
+    current_basin = coord.basin_id if coord.basin_id in METABOLIC_BASINS else "CARBON_AQUEOUS"
+    best_basin = current_basin
+    min_potential = float("inf")
+    
+    for basin_name, basin_spec in METABOLIC_BASINS.items():
+        delta_h = basin_spec["delta_h_ev"]
+        delta_s = basin_spec["delta_s_ev_k"]
+        # Free energy barrier Delta G = Delta H - T * Delta S
+        delta_g = delta_h - t_surf * delta_s
+        
+        # Distance from current ratios to basin target
+        dist_sq = 0.0
+        all_keys = set(coord.elemental_ratios) | set(basin_spec["ratios"])
+        for k in all_keys:
+            val_c = coord.elemental_ratios.get(k, 0.0)
+            val_t = basin_spec["ratios"].get(k, 0.0)
+            dist_sq += (val_c - val_t) ** 2
+            
+        # Effective potential V(x)
+        pot = max(0.01, delta_g) * (1.0 + 3.0 * dist_sq)
+        
+        # If reachable via available energy fluctuation and deeper potential well:
+        if delta_g <= e_available * 1.5 and pot < min_potential:
+            min_potential = pot
+            best_basin = basin_name
+            
+    # 3. Continuous Langevin drift toward attractor of best_basin
+    target_ratios = METABOLIC_BASINS[best_basin]["ratios"]
+    eta = 0.20  # relaxation rate
+    
+    # Deterministic pseudo-random seed from planet id and cycle
+    p_id = getattr(planet, "id", 1)
+    cycle = getattr(kernel, "cycle_count", 0) if kernel else 0
+    seed_val = zlib.crc32(f"{p_id}:{cycle}:{best_basin}".encode()) & 0xFFFFFFFF
+    rng = random.Random(seed_val)
+    
+    new_ratios: Dict[str, float] = {}
+    combined_keys = set(coord.elemental_ratios) | set(target_ratios)
+    for k in combined_keys:
+        curr = coord.elemental_ratios.get(k, 0.0)
+        targ = target_ratios.get(k, 0.0)
+        drift = eta * (targ - curr)
+        noise = (rng.random() - 0.5) * 0.02 * math.sqrt(kt_ev / 0.025)
+        new_ratios[k] = max(0.001, curr + drift + noise)
+        
+    # Normalize ratios to sum to 1.0
+    total_r = sum(new_ratios.values())
+    if total_r > 0:
+        new_ratios = {k: v / total_r for k, v in new_ratios.items()}
+        
+    spec = METABOLIC_BASINS[best_basin]
+    return MorphospaceCoordinate(
+        elemental_ratios=new_ratios,
+        activation_energy_ev=spec["delta_h_ev"],
+        catalytic_entropy=spec["delta_s_ev_k"],
+        basin_id=best_basin,
+    )
+
 
 
 def _quarter() -> int:

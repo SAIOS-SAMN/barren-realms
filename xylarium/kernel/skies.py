@@ -22,7 +22,8 @@ diaspora) - a nomad's way; one rooted for generations pays to keep its sky.
 """
 
 import math
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 from xylarium.kernel import interior
 from xylarium.kernel.fx import hub as _hub
@@ -33,6 +34,207 @@ STANDOFF_RADII = 2.0            # the shield's bubble spans a couple of the worl
 OUTGAS_J_PER_KG = 4.0e6         # breaking carbonate rock to carbon dioxide (enthalpy of CaCO3 -> CaO + CO2)
 NUDGE_SHARE = 0.1               # steering belt ice down takes ~ a tenth of the world's orbital speed (declared)
 MIX_E_FOLD = 1.0 - math.exp(-1.0)   # an atmosphere mixes in about a year: at most one e-fold of repair a year
+
+# Fundamental thermodynamic & atmospheric physical constants
+STEFAN_BOLTZMANN = 5.670374419e-8  # W / (m^2 K^4)
+SOLAR_CONSTANT_1AU = 1361.0        # W / m^2 (mean solar flux at 1 AU)
+GAS_CONSTANT_R = 8.314462618       # J / (mol K)
+MOLAR_MASS_AIR = 0.02897           # kg / mol (Earth-like N2/O2 mix)
+T_FREEZE_WATER_K = 273.15          # Freezing point of water at 1 atm
+
+
+@dataclass
+class AtmosphericColumn:
+    p_surface_bar: float
+    scale_height_km: float
+    optical_depth_tau: float
+    greenhouse_warming_k: float
+    albedo: float
+    zonal_wind_max_ms: float
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "p_surface_bar": round(self.p_surface_bar, 4),
+            "scale_height_km": round(self.scale_height_km, 3),
+            "optical_depth_tau": round(self.optical_depth_tau, 4),
+            "greenhouse_warming_k": round(self.greenhouse_warming_k, 2),
+            "albedo": round(self.albedo, 4),
+            "zonal_wind_max_ms": round(self.zonal_wind_max_ms, 2),
+        }
+
+
+def compute_climate_manifold(
+    planet: Any,
+    star_dict: Optional[Dict[str, Any]] = None,
+    kernel: Any = None,
+) -> Dict[str, Any]:
+    """Compute continuous S^2 thermal field T(theta) and circulation regime.
+    
+    Lifts planetary climate from bulk scalar approximations to a continuous
+    thermodynamic equilibrium on S^2 with latitude-dependent insolation,
+    dynamic ice-albedo phase bifurcations, and Coriolis-balanced thermal wind shear.
+    """
+    from xylarium.kernel import physics
+    
+    # Atmospheric surface pressure
+    soc = getattr(planet, "society", {}) or {}
+    p_bar = max(1e-4, float(soc.get("atmosphere", 1.0)))
+    
+    # Stellar flux factor relative to 1 AU solar
+    if star_dict is not None and "luminosity" in star_dict:
+        lum = float(star_dict["luminosity"])
+        q = float(getattr(planet, "q", 1.0) or 1.0)
+        flux_factor = lum / (q ** 4) if q > 0 else 1.0
+    elif kernel is not None and getattr(planet, "sector_id", None) in getattr(kernel, "sectors", {}):
+        sec = kernel.sectors[planet.sector_id]
+        flux_factor = float(physics.planet_flux(sec, planet))
+    else:
+        flux_factor = 1.0
+
+    # Planetary dimensions & gravity
+    body_data = physics.body(planet) if hasattr(planet, "society") else {}
+    r_earth = max(0.1, float(body_data.get("radius", 1.0)))
+    m_earth = max(0.01, float(body_data.get("mass", 1.0)))
+    g = 9.80665 * (m_earth / (r_earth ** 2))
+    r_planet_m = r_earth * interior.R_EARTH_M
+    
+    # Stellar irradiance at subsolar point
+    s_subsolar = SOLAR_CONSTANT_1AU * max(1e-6, flux_factor)
+    
+    # Obliquity (axial tilt in radians)
+    obliquity_rad = math.radians(23.44)
+    
+    # Rotation rate Omega (rad/s)
+    period_hours = float(body_data.get("period_h", 24.0)) if body_data else 24.0
+    period_s = max(3600.0, period_hours * 3600.0)
+    omega = 2.0 * math.pi / period_s
+    
+    # Latitude insolation profile over S^2
+    # Latitudes theta from -pi/2 to +pi/2 sampled at 9 nodes
+    lat_nodes = [-80.0, -60.0, -40.0, -20.0, 0.0, 20.0, 40.0, 60.0, 80.0]
+    thermal_profile = []
+    absorbed_flux_list = []
+    albedo_list = []
+    
+    # Optical depth tau from pressure column
+    tau = 0.84 * (p_bar ** 0.8)
+    
+    for lat_deg in lat_nodes:
+        theta = math.radians(lat_deg)
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        cos_delta = math.cos(obliquity_rad)
+        sin_delta = math.sin(obliquity_rad)
+        
+        f_in = (s_subsolar / math.pi) * max(0.02, cos_theta * cos_delta + 0.5 * abs(sin_theta * sin_delta))
+        
+        # Estimate bare temperature to test phase bifurcation
+        t_est = (f_in * (1.0 - 0.25) / STEFAN_BOLTZMANN) ** 0.25
+        
+        # Dynamic albedo feedback:
+        # Ice bifurcation below freezing point, open ocean/temperate otherwise
+        if t_est < T_FREEZE_WATER_K:
+            alpha = 0.65  # Glaciated ice-sheet albedo
+        elif abs(lat_deg) < 30.0:
+            alpha = 0.12  # Equatorial ocean/tropical loam
+        else:
+            alpha = 0.22  # Temperate land/cloud mixture
+            
+        f_abs = f_in * (1.0 - alpha)
+        absorbed_flux_list.append(f_abs)
+        albedo_list.append(alpha)
+        
+    # Global mean absorbed flux weighted by cos(theta)
+    weights = [math.cos(math.radians(deg)) for deg in lat_nodes]
+    sum_w = sum(weights)
+    f_abs_mean = sum(f * w for f, w in zip(absorbed_flux_list, weights)) / sum_w
+    mean_albedo = sum(a * w for a, w in zip(albedo_list, weights)) / sum_w
+    
+    # Effective radiating temperature and surface equilibrium with greenhouse
+    t_eff_global = (f_abs_mean / STEFAN_BOLTZMANN) ** 0.25
+    t_surf_global = t_eff_global * ((1.0 + 0.75 * tau) ** 0.25)
+    greenhouse_warming = t_surf_global - t_eff_global
+    
+    # Scale height H = R_gas * T / (mu * g)
+    scale_height_km = (GAS_CONSTANT_R * t_surf_global) / (MOLAR_MASS_AIR * g) * 1e-3
+    
+    # Budyko-Sellers meridional diffusion relaxation
+    d_diff = 3.8  # W / (m^2 K) meridional heat transport coefficient
+    zonal_winds = []
+    
+    for i, lat_deg in enumerate(lat_nodes):
+        theta = math.radians(lat_deg)
+        # Local equilibrium temperature with meridional transport
+        transport_q = d_diff * (t_surf_global - t_eff_global) * math.cos(theta)
+        f_net = max(1.0, absorbed_flux_list[i] + transport_q)
+        t_eff_loc = (f_net / STEFAN_BOLTZMANN) ** 0.25
+        t_surf_loc = t_eff_loc * ((1.0 + 0.75 * tau) ** 0.25)
+        
+        thermal_profile.append({
+            "lat_deg": lat_deg,
+            "temp_k": round(t_surf_loc, 2),
+            "insolation_wm2": round(absorbed_flux_list[i], 1),
+            "albedo": round(albedo_list[i], 3),
+        })
+        
+    # Compute Thermal Wind Shear:
+    # du / dln(p) = - (R_gas / (f * mu)) * (dT / dy)
+    r_specific = GAS_CONSTANT_R / MOLAR_MASS_AIR
+    max_zonal_wind = 0.0
+    
+    for i in range(len(lat_nodes) - 1):
+        lat_mid = 0.5 * (lat_nodes[i] + lat_nodes[i+1])
+        theta_mid = math.radians(lat_mid)
+        # Coriolis parameter f = 2 * Omega * sin(theta)
+        f_coriolis = 2.0 * omega * math.sin(theta_mid)
+        
+        # Temperature gradient dT / dy = (1 / R) * (dT / dtheta)
+        d_theta = math.radians(lat_nodes[i+1] - lat_nodes[i])
+        dy = r_planet_m * d_theta
+        dt = thermal_profile[i+1]["temp_k"] - thermal_profile[i]["temp_k"]
+        dt_dy = dt / max(100.0, dy)
+        
+        # Regularize near equator where f -> 0
+        if abs(f_coriolis) > 1e-6:
+            # ln(p_surf / p_tropo) ~ ln(1.0 / 0.2) ~ 1.6
+            u_wind = - (r_specific / f_coriolis) * dt_dy * 1.6
+        else:
+            # Equatorial Kelvin/Rossby scale
+            u_wind = math.sqrt(max(0.0, r_specific * abs(dt)))
+            
+        u_wind = min(300.0, max(-300.0, u_wind))
+        zonal_winds.append({"lat_deg": round(lat_mid, 1), "wind_ms": round(u_wind, 2)})
+        if abs(u_wind) > max_zonal_wind:
+            max_zonal_wind = abs(u_wind)
+            
+    # Determine circulation regime
+    if p_bar < 0.01:
+        regime = "EXOSPHERE_BALLISTIC"
+    elif t_surf_global < 240.0:
+        regime = "SNOWBALL_GLACIATED"
+    elif t_surf_global > 360.0:
+        regime = "RUNAWAY_GREENHOUSE"
+    else:
+        regime = "3_CELL_HADLEY_FERREL_POLAR"
+        
+    column = AtmosphericColumn(
+        p_surface_bar=p_bar,
+        scale_height_km=scale_height_km,
+        optical_depth_tau=tau,
+        greenhouse_warming_k=greenhouse_warming,
+        albedo=mean_albedo,
+        zonal_wind_max_ms=max_zonal_wind,
+    )
+    
+    return {
+        "column": column,
+        "t_mean_k": round(t_surf_global, 2),
+        "t_equator_k": thermal_profile[4]["temp_k"],  # lat 0.0
+        "t_pole_k": 0.5 * (thermal_profile[0]["temp_k"] + thermal_profile[-1]["temp_k"]),
+        "thermal_profile": thermal_profile,
+        "zonal_wind_profile": zonal_winds,
+        "circulation_regime": regime,
+    }
 
 
 def stats(kernel: Any) -> Dict[str, Any]:

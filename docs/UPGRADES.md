@@ -216,3 +216,44 @@ XYLARIUM LIVE IN-GAME EXECUTION PROOF
 ALL UPGRADED MECHANICS VERIFIED LIVE AND OPERATIONAL IN GAME!
 ================================================================================
 ```
+
+---
+
+## 4. The 5 Fundamental Manifold Expansions (Cycle 2 In-Place Implementations)
+
+Building upon the initial anti-spreadsheet audit in [`docs/MANIFOLD_REMEDIATION.md`](file:///opt/barren-realms/docs/MANIFOLD_REMEDIATION.md), the 5 targeted underdeveloped domains have been fully developed in-place without parallel machinery or dimensional loss:
+
+### 4.1 Domain 1: Continuous Planetary Climate & Atmospheric Circulation on $S^2$
+* **Files:** [`xylarium/kernel/skies.py`](file:///opt/barren-realms/xylarium/kernel/skies.py), [`xylarium/kernel/surface.py`](file:///opt/barren-realms/xylarium/kernel/surface.py)
+* **Mechanics:**
+  - `AtmosphericColumn` tracks surface pressure, scale height $H = R_{\text{gas}}T/\mu g$, optical depth $\tau = 0.84 p^{0.8}$, greenhouse warming, and albedo.
+  - `compute_climate_manifold()` calculates continuous latitude-dependent insolation $F_{\text{in}}(\theta)$, dynamic ice-albedo phase feedback ($\alpha_{\text{ice}} = 0.65$ below freezing vs $\alpha_{\text{ocean}} = 0.12$ in tropics), and Navier-Stokes thermal wind balance $\partial u / \partial \ln p = -(R/f)\partial T/\partial y$.
+  - Mapped directly onto `SurfaceGrid.compute_climate_tiles()` across all 64 tiles on $S^2$.
+
+### 4.2 Domain 2: Relativistic Viscous Fluid Markets & Geodesic Trade Tensors
+* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py)
+* **Mechanics:**
+  - `relativistic_trade_tensor()` models interstellar commodity flows as relativistic viscous fluids along curved spacetime geodesics.
+  - Metric lapse rate $(1+z) = \alpha_1 / \alpha_2$ dilates interest carrying costs near deep gravitational wells (Sgr A* at core).
+  - Formulates complete $4 \times 4$ stress-energy tensor $T^{\mu\nu}_{\text{trade}} = (\rho + p)u^\mu u^\nu + p g^{\mu\nu} + \pi^{\mu\nu}$ with viscous shear damping dissipation.
+
+### 4.3 Domain 3: Continuous Biochemical Morphospace & Epigenetic Speciation
+* **Files:** [`xylarium/kernel/genome.py`](file:///opt/barren-realms/xylarium/kernel/genome.py)
+* **Mechanics:**
+  - `MorphospaceCoordinate` and `METABOLIC_BASINS` represent life over continuous elemental assimilation ratios (`CARBON_AQUEOUS`, `IRON_SULFUR_LITHOTROPH`, `METHANOGENIC_CRYOPHILIC`, `PLASMIC_HELIUM`).
+  - `evaluate_waddington_drift()` models Langevin drift $\dot{\vec{x}} = -\nabla V + \sqrt{2D}\vec{\eta}$ across the Waddington landscape, where thermal fluctuations and stellar UV photochemical energy drive demes across catalytic saddle points $\Delta G^\ddagger = \Delta H^\ddagger - T\Delta S^\ddagger$, triggering speciation from first-principles thermodynamics.
+
+### 4.4 Domain 4: Continuous Associative Cognitive Memory (Hilbert Attractor Manifolds)
+* **Files:** [`xylarium/kernel/mindcore.py`](file:///opt/barren-realms/xylarium/kernel/mindcore.py), [`xylarium/kernel/cognition.py`](file:///opt/barren-realms/xylarium/kernel/cognition.py)
+* **Mechanics:**
+  - `AssociativeAttractorManifold` implements a continuous Modern Hopfield energy surface $E(\mathbf{q}) = -\frac{1}{\beta}\ln \sum_k w_k e^{\beta \langle \mathbf{\xi}_k, \mathbf{q} \rangle} + \frac{1}{2}\|\mathbf{q}\|^2$ over unit quaternions in $SU(2) \cong \text{Spin}(3)$.
+  - Replaces discrete FIFO queue dropping in `cognition.py` with non-abelian holonomy contraction:
+    $$\mathbf{Q}_{\text{agg}} = \prod_k \mathbf{q}_k \in SU(2), \quad C_2 = \vec{J}^2 = 1 - w^2$$
+    compacting older experiences into Casimir topological invariants without losing historical volume.
+
+### 4.5 Domain 5: Multi-Path Metric Reverberation & Magnetohydrodynamic Ringdown
+* **Files:** [`xylarium/kernel/torsion.py`](file:///opt/barren-realms/xylarium/kernel/torsion.py), [`xylarium/kernel/hydromagnetics.py`](file:///opt/barren-realms/xylarium/kernel/hydromagnetics.py)
+* **Mechanics:**
+  - `compute_quasinormal_ringdown()` evaluates Einstein-Cartan damped quasi-normal mode ringing $\Psi(r, t) = \sum A_n (e^{-\omega_I t}/r) \cos(\omega_R (t - r/c)) \mathbf{U}_{\text{chiral}}$ derived from Kerr-Cartan spin $a_*$.
+  - `couple_torsion_ringdown()` feeds the torsional perturbation $\alpha_{\text{torsion}} = \alpha_0 \Psi(r, t) \sigma$ into the stellar dynamo induction loop $\partial\vec{B}/\partial t = \nabla \times (\vec{v}\times\vec{B}) + \alpha_{\text{torsion}}\nabla\times\vec{B}$, dynamically amplifying magnetic flux and driving coronal mass ejection flares.
+

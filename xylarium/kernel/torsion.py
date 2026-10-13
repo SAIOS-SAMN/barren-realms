@@ -185,6 +185,74 @@ def orbital_secular_drift(kernel: Any, sector_id: int, q_initial: Fraction) -> F
     return q_initial + delta_q
 
 
+def compute_quasinormal_ringdown(
+    kernel: Any,
+    target_sector_id: int,
+    spin_param_a: float = 0.7,
+) -> Dict[str, Any]:
+    """Compute Einstein-Cartan damped quasi-normal mode ringdown Psi(r, t).
+    
+    Singular bounces excite metric reverberation modes:
+        Psi(r, t) = sum_n A_n * (exp(-omega_I * t) / r) * cos(omega_R * (t - r/c)) * U_chiral
+    where frequency omega_R and damping omega_I are derived from Kerr-Cartan spin a_*.
+    """
+    st = stats(kernel)
+    if not st.get("bounces"):
+        return {
+            "psi_amplitude": 0.0,
+            "phase": 0.0,
+            "omega_r": 0.0,
+            "omega_i": 0.0,
+            "chirality": 1,
+            "reverberation_mode": "DORMANT",
+        }
+        
+    current_cycle = int(getattr(kernel, "cycle_count", 0))
+    a_star = max(0.0, min(0.99, spin_param_a))
+    
+    # QNM frequency and damping from Kerr-Cartan metric:
+    # omega_R = omega_0 * (1 - 0.63 * (1 - a_*)^0.3)
+    # omega_I = (omega_0 / 2) * (1 - a_*)^0.45
+    omega_0 = 1.25
+    omega_r = omega_0 * (1.0 - 0.63 * ((1.0 - a_star) ** 0.3))
+    omega_i = (omega_0 * 0.5) * ((1.0 - a_star) ** 0.45)
+    
+    from xylarium.kernel import cosmos
+    c_torsion = speed_of_torsion(kernel)
+    
+    total_psi = 0.0
+    total_phase = 0.0
+    net_chirality = 0
+    
+    for b in st["bounces"]:
+        dt = max(0, current_cycle - b["cycle"])
+        r_t = cosmos.from_centre_kpc(kernel, target_sector_id)
+        r_o = cosmos.from_centre_kpc(kernel, b["sector"])
+        dist_kpc = abs(float(r_t) - float(r_o)) if (r_t is not None and r_o is not None) else abs(target_sector_id - b["sector"]) * 0.1
+        
+        retarded_time = dt - (dist_kpc / max(0.01, c_torsion))
+        if retarded_time >= 0:
+            damping = math.exp(-omega_i * (dt * 0.1))
+            geometric_decay = 1.0 / max(0.5, dist_kpc)
+            oscillation = math.cos(omega_r * retarded_time * 0.2)
+            
+            mode_amp = b["energy"] * damping * geometric_decay * oscillation
+            total_psi += mode_amp
+            total_phase += omega_r * retarded_time
+            net_chirality += b.get("chirality", 1)
+            
+    dominant_chirality = 1 if net_chirality >= 0 else -1
+    return {
+        "psi_amplitude": round(total_psi, 6),
+        "phase": round(total_phase, 4),
+        "omega_r": round(omega_r, 4),
+        "omega_i": round(omega_i, 4),
+        "chirality": dominant_chirality,
+        "reverberation_mode": "ACTIVE_REVERBERATION" if abs(total_psi) > 1e-4 else "QUIESCENT",
+    }
+
+
+
 def season(kernel: Any) -> List[str]:
     """Seasonal check: prune ancient attenuated bounces beyond light cone horizons."""
     st = stats(kernel)

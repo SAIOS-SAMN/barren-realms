@@ -222,3 +222,55 @@ def health(kernel: Any, planet: Any) -> float:
     soc["_rad"] = [key, round(value, 6)]
     return value
 
+
+def couple_torsion_ringdown(
+    kernel: Any,
+    sector_id: int,
+    torsion_wave: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Couple metric torsion ringdown into stellar dynamo alpha-omega induction loop.
+    
+    When an Einstein-Cartan quasi-normal metric reverberation wave intersects
+    a stellar plasma core, the torsional induction term:
+        alpha_torsion = alpha_0 * Psi(r, t) * chirality
+    modulates the stellar dynamo induction equation:
+        dB/dt = curl(v x B) + eta * laplacian(B) + alpha_torsion * curl(B)
+    amplifying stellar magnetic dipole moment and driving coronal mass ejection flares.
+    """
+    from xylarium.kernel import torsion
+    if torsion_wave is None:
+        torsion_wave = torsion.compute_quasinormal_ringdown(kernel, sector_id)
+        
+    psi = float(torsion_wave.get("psi_amplitude", 0.0))
+    chirality = int(torsion_wave.get("chirality", 1))
+    
+    # Base convective dynamo alpha parameter
+    alpha_0 = 0.05
+    alpha_torsion = alpha_0 * psi * chirality
+    
+    # Amplification factor on stellar magnetic field: (1 + alpha_torsion)
+    mag_amplification = max(0.2, min(5.0, 1.0 + alpha_torsion))
+    
+    # Stellar sector data
+    sec = kernel.sectors.get(sector_id) if kernel and hasattr(kernel, "sectors") else None
+    star_data = getattr(sec, "star", {}) if sec else {}
+    base_activity = float(star_data.get("activity", 1.0)) if isinstance(star_data, dict) else 1.0
+    
+    # Modulate stellar activity
+    modulated_activity = base_activity * mag_amplification
+    
+    # Coronal flare energy release: E_flare ~ B^2 / (2 * mu0) * alpha_torsion
+    cme_flare_joules = max(0.0, abs(alpha_torsion) * 1.5e25)
+    
+    return {
+        "sector_id": sector_id,
+        "psi_amplitude": psi,
+        "alpha_torsion": round(alpha_torsion, 6),
+        "magnetic_amplification": round(mag_amplification, 4),
+        "base_activity": round(base_activity, 3),
+        "modulated_activity": round(modulated_activity, 3),
+        "cme_flare_joules": float(f"{cme_flare_joules:.3e}"),
+        "reverberation_mode": torsion_wave.get("reverberation_mode", "QUIESCENT"),
+    }
+
+

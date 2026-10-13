@@ -3556,3 +3556,139 @@ class MarketManager:
         mgr.next_exec_id = data.get("next_exec_id", 101)
         mgr.next_hauler_id = data.get("next_hauler_id", 101)
         return mgr
+
+
+def relativistic_trade_tensor(
+    kernel: Any,
+    source_sec: int,
+    target_sec: int,
+    commodity: str,
+) -> Dict[str, Any]:
+    """Compute geodesic price transport with gravitational lapse and viscous transit drag.
+    
+    Treats interstellar commerce as a relativistic viscous fluid flowing along
+    spacetime geodesics. Capital near deep gravitational wells (Sgr A*) experiences
+    gravitational time dilation (lapse rate), dilating interest rates and carrying costs,
+    while physical commodity flux obeys curved manifold Navier-Stokes transport with
+    interstellar plasma shear drag.
+    """
+    import math
+    from xylarium.config import COMMODITY_CONFIG
+    
+    # 1. Distances from galactic core (kpc)
+    r1 = 8.0
+    r2 = 8.0
+    try:
+        from xylarium.kernel import cosmos
+        if hasattr(cosmos, "from_centre_kpc"):
+            c1 = cosmos.from_centre_kpc(kernel, source_sec)
+            c2 = cosmos.from_centre_kpc(kernel, target_sec)
+            if c1 is not None:
+                r1 = float(c1)
+            if c2 is not None:
+                r2 = float(c2)
+    except Exception:
+        pass
+        
+    # Sgr A* event horizon / core throat scale
+    r_s = 0.05
+    # Schwarzschild lapse factors alpha = sqrt(1 - r_s / r)
+    alpha1 = math.sqrt(max(0.01, 1.0 - r_s / max(r_s * 1.05, r1)))
+    alpha2 = math.sqrt(max(0.01, 1.0 - r_s / max(r_s * 1.05, r2)))
+    
+    # Gravitational lapse (1 + z)
+    lapse_factor = alpha1 / max(1e-4, alpha2)
+    
+    # Relativistic interest rate dilation: asymptotic baseline 5%
+    asymptotic_rate = 0.05
+    local_rate = asymptotic_rate * lapse_factor
+    
+    # Geodesic transit distance
+    hops = 1
+    try:
+        from xylarium.kernel import topology
+        t_dist, _ = topology.tree(kernel, source_sec)
+        hops = t_dist.get(target_sec, abs(target_sec - source_sec) or 1)
+    except Exception:
+        hops = abs(target_sec - source_sec) or 1
+        
+    geodesic_distance = float(max(1.0, hops))
+    
+    # Interstellar plasma shear viscosity & viscous friction kappa
+    sec_data = getattr(kernel, "sectors", {}).get(source_sec) if kernel else None
+    sec_level = getattr(sec_data, "security", None)
+    sec_drag = 0.03 if str(sec_level) == "SecurityLevel.ANARCHY" else 0.015
+    kappa_friction = 0.02 + sec_drag
+    shear_viscosity_eta = 0.12 * (1.0 + sec_drag)
+    
+    # Base commodity price from ports or config
+    base_price = 100.0
+    if commodity in COMMODITY_CONFIG:
+        base_price = float(COMMODITY_CONFIG[commodity].get("base_price", 100))
+        
+    p1 = base_price
+    p2 = base_price
+    
+    try:
+        from xylarium.kernel.economy import EconomyManager
+        if sec_data and getattr(sec_data, "port", None):
+            _, p1_sell = EconomyManager.get_unit_prices(sec_data.port, commodity)
+            if p1_sell > 0:
+                p1 = float(p1_sell)
+                
+        target_sec_data = getattr(kernel, "sectors", {}).get(target_sec) if kernel else None
+        if target_sec_data and getattr(target_sec_data, "port", None):
+            p2_buy, _ = EconomyManager.get_unit_prices(target_sec_data.port, commodity)
+            if p2_buy > 0:
+                p2 = float(p2_buy)
+    except Exception:
+        pass
+        
+    # Relativistic price transport with metric lapse and viscous dissipation
+    dissipation = math.exp(-kappa_friction * geodesic_distance)
+    p_delivered = p1 * lapse_factor * dissipation
+    
+    # Arbitrage margin & Navier-Stokes commodity flux
+    margin = p2 - p_delivered
+    flux_rate = margin / (shear_viscosity_eta * geodesic_distance)
+    
+    # Relativistic 4-velocity and fluid stress-energy tensor T^{mu nu}
+    # Warp beta = v / c ~ 0.5 -> Lorentz gamma = 1 / sqrt(1 - beta^2)
+    beta = 0.5
+    gamma = 1.0 / math.sqrt(1.0 - beta ** 2)
+    rho_energy = p1 * 1.0  # commodity energy density
+    p_fluid = p1 * 0.1     # commodity pressure
+    
+    # T^{00} = (rho + p) * gamma^2 - p
+    t_00 = (rho_energy + p_fluid) * (gamma ** 2) - p_fluid
+    # T^{0i} = (rho + p) * gamma^2 * beta
+    t_01 = (rho_energy + p_fluid) * (gamma ** 2) * beta
+    # T^{11} = (rho + p) * gamma^2 * beta^2 + p + viscous_shear
+    viscous_shear = -2.0 * shear_viscosity_eta * (flux_rate / max(1.0, geodesic_distance))
+    t_11 = (rho_energy + p_fluid) * (gamma ** 2) * (beta ** 2) + p_fluid + viscous_shear
+    
+    stress_energy_tensor = [
+        [round(t_00, 3), round(t_01, 3), 0.0, 0.0],
+        [round(t_01, 3), round(t_11, 3), 0.0, 0.0],
+        [0.0, 0.0, round(p_fluid, 3), 0.0],
+        [0.0, 0.0, 0.0, round(p_fluid, 3)],
+    ]
+    
+    return {
+        "commodity": commodity,
+        "source_sector": source_sec,
+        "target_sector": target_sec,
+        "r1_kpc": round(r1, 3),
+        "r2_kpc": round(r2, 3),
+        "gravitational_lapse": round(lapse_factor, 5),
+        "local_interest_rate": round(local_rate, 5),
+        "geodesic_distance": geodesic_distance,
+        "p_source": round(p1, 2),
+        "p_target": round(p2, 2),
+        "p_delivered": round(p_delivered, 2),
+        "arbitrage_margin": round(margin, 2),
+        "commodity_flux": round(flux_rate, 3),
+        "viscous_drag": round(kappa_friction, 4),
+        "stress_energy_tensor": stress_energy_tensor,
+    }
+

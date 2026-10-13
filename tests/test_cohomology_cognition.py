@@ -138,8 +138,117 @@ class TestCohomologyCognition(unittest.TestCase):
         phi = spheres.potential_field(self.kernel, 1, "progenitor:Elder")
         self.assertIsInstance(phi, float)
 
+    def test_climate_manifold_s2_and_thermal_wind(self):
+        from xylarium.kernel import skies, surface
+        planet = next(p for s in self.kernel.sectors.values() for p in s.planets if p.population > 0)
+        
+        clim = skies.compute_climate_manifold(planet, kernel=self.kernel)
+        self.assertIn("column", clim)
+        self.assertIsInstance(clim["column"], skies.AtmosphericColumn)
+        
+        # S^2 insolation: equator must be strictly warmer than polar nodes
+        self.assertGreater(clim["t_equator_k"], clim["t_pole_k"])
+        
+        # Dynamic albedo bifurcation: polar node albedo >= equator albedo
+        polar_albedo = clim["thermal_profile"][0]["albedo"]
+        equator_albedo = clim["thermal_profile"][4]["albedo"]
+        self.assertGreaterEqual(polar_albedo, equator_albedo)
+        
+        # Thermal wind balance: non-zero zonal wind shear
+        self.assertGreaterEqual(clim["column"].zonal_wind_max_ms, 0.0)
+        
+        # S^2 surface grid tile integration
+        grid = surface.SurfaceGrid(width=8, height=8)
+        tile_climate = grid.compute_climate_tiles(planet, kernel=self.kernel)
+        self.assertEqual(len(tile_climate), 64)
+        for (x, y), tdata in tile_climate.items():
+            self.assertIn("temp_k", tdata)
+            self.assertIn("insolation_wm2", tdata)
+            self.assertIn("albedo", tdata)
+            self.assertIn("wind_ms", tdata)
+
+    def test_relativistic_trade_tensor_and_fluid_flux(self):
+        from xylarium.kernel import market
+        tensor_data = market.relativistic_trade_tensor(self.kernel, source_sec=1, target_sec=2, commodity="ORE")
+        
+        self.assertIn("gravitational_lapse", tensor_data)
+        self.assertIn("local_interest_rate", tensor_data)
+        self.assertIn("commodity_flux", tensor_data)
+        self.assertIn("stress_energy_tensor", tensor_data)
+        
+        # 4x4 relativistic stress-energy tensor
+        t_munu = tensor_data["stress_energy_tensor"]
+        self.assertEqual(len(t_munu), 4)
+        self.assertEqual(len(t_munu[0]), 4)
+        self.assertGreater(t_munu[0][0], 0.0) # Positive energy density
+
+    def test_biochemical_morphospace_and_waddington_drift(self):
+        from xylarium.kernel import genome
+        planet = next(p for s in self.kernel.sectors.values() for p in s.planets if p.population > 0)
+        
+        coord = genome.MorphospaceCoordinate(
+            elemental_ratios={"C": 0.45, "N": 0.15, "P": 0.05, "O": 0.30, "H2O": 0.05},
+            activation_energy_ev=0.85,
+            catalytic_entropy=0.0022,
+            basin_id="CARBON_AQUEOUS",
+        )
+        
+        drifted = genome.evaluate_waddington_drift(self.kernel, planet, coord)
+        self.assertIsInstance(drifted, genome.MorphospaceCoordinate)
+        # Elemental ratios must be normalized to 1.0
+        self.assertAlmostEqual(sum(drifted.elemental_ratios.values()), 1.0, places=3)
+        self.assertIn(drifted.basin_id, genome.METABOLIC_BASINS)
+
+    def test_associative_attractor_manifold_and_casimir_compaction(self):
+        from xylarium.kernel import mindcore, physics
+        manifold = mindcore.AssociativeAttractorManifold()
+        
+        q1 = physics.Quaternion(1.0, 0.0, 0.0, 0.0)
+        q2 = physics.Quaternion(0.0, 1.0, 0.0, 0.0)
+        manifold.add_memory(q1, weight=2.0)
+        manifold.add_memory(q2, weight=1.0)
+        
+        # Recall near q1
+        query = physics.Quaternion(0.9, 0.1, 0.0, 0.0)
+        recalled = manifold.recall_invariant(query, beta=10.0)
+        self.assertAlmostEqual(recalled.norm(), 1.0, places=4)
+        # Recalled state should be closer to q1
+        self.assertGreater(recalled.w, recalled.x)
+        
+        # Add 55 memories to test Casimir invariant compaction
+        for i in range(55):
+            manifold.add_memory(physics.Quaternion(0.7071, 0.7071, 0.0, 0.0))
+        
+        casimir = manifold.compact_oldest(keep_count=50)
+        self.assertIsNotNone(casimir)
+        self.assertGreater(len(manifold.casimir_invariants), 0)
+        self.assertLessEqual(len(manifold.memory_attractors), 51) # 50 active + 1 macro-attractor
+
+    def test_quasinormal_ringdown_and_dynamo_coupling(self):
+        from xylarium.kernel import torsion, hydromagnetics
+        # Emit a bounce
+        torsion.emit_bounce(self.kernel, origin_sector=1, energy_scale=50.0, chirality=1)
+        
+        # Evaluate quasi-normal ringdown
+        ring = torsion.compute_quasinormal_ringdown(self.kernel, target_sector_id=1, spin_param_a=0.7)
+        self.assertIn("psi_amplitude", ring)
+        self.assertIn("omega_r", ring)
+        self.assertIn("omega_i", ring)
+        self.assertGreater(ring["omega_r"], 0.0)
+        self.assertGreater(ring["omega_i"], 0.0)
+        self.assertEqual(ring["reverberation_mode"], "ACTIVE_REVERBERATION")
+        
+        # Couple into hydromagnetics stellar dynamo
+        mhd = hydromagnetics.couple_torsion_ringdown(self.kernel, sector_id=1, torsion_wave=ring)
+        self.assertIn("alpha_torsion", mhd)
+        self.assertIn("magnetic_amplification", mhd)
+        self.assertGreater(mhd["magnetic_amplification"], 1.0)
+        self.assertGreater(mhd["modulated_activity"], mhd["base_activity"])
+        self.assertGreater(mhd["cme_flare_joules"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

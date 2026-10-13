@@ -220,3 +220,108 @@ def reading(books: Dict[str, Any], other: str) -> Dict[str, Optional[Fraction]]:
         s, e = Fraction(c[axis][0]), Fraction(c[axis][1])
         out[axis] = s / (s + e) if s + e else None
     return out
+
+
+from dataclasses import dataclass, field
+import math
+
+
+@dataclass
+class AssociativeAttractorManifold:
+    """Continuous Associative Cognitive Memory on SU(2) / Hilbert Hypersphere.
+    
+    Replaces discrete FIFO queue truncation with a continuous Modern Hopfield
+    energy manifold and non-abelian Casimir invariant compaction:
+    - Queries retrieve irreducible semantic attractors via exponential energy gradients
+    - Aging experiences contract via SU(2) holonomy into Casimir invariants C_2 = J^2
+      with zero dimensional loss.
+    """
+    memory_attractors: List[Tuple[Any, float]] = field(default_factory=list)
+    casimir_invariants: List[float] = field(default_factory=list)
+
+    def add_memory(self, q_state: Any, weight: float = 1.0) -> None:
+        """Add a continuous quaternion attractor state to the memory manifold."""
+        from xylarium.kernel import physics
+        if not isinstance(q_state, physics.Quaternion):
+            if isinstance(q_state, (list, tuple)) and len(q_state) == 4:
+                q_state = physics.Quaternion(*q_state)
+            else:
+                q_state = physics.Quaternion(1.0, 0.0, 0.0, 0.0)
+        q_norm = q_state.normalized()
+        self.memory_attractors.append((q_norm, float(weight)))
+
+    def recall_invariant(self, query: Any, beta: float = 8.0) -> Any:
+        """Recall nearest topological attractor via continuous exponential energy gradient."""
+        from xylarium.kernel import physics
+        if not self.memory_attractors:
+            return query if isinstance(query, physics.Quaternion) else physics.Quaternion(1.0, 0.0, 0.0, 0.0)
+            
+        if not isinstance(query, physics.Quaternion):
+            if isinstance(query, (list, tuple)) and len(query) == 4:
+                query = physics.Quaternion(*query)
+            else:
+                query = physics.Quaternion(1.0, 0.0, 0.0, 0.0)
+        q_unit = query.normalized()
+
+        scores = []
+        for att, w in self.memory_attractors:
+            dot = att.w * q_unit.w + att.x * q_unit.x + att.y * q_unit.y + att.z * q_unit.z
+            scores.append(beta * dot)
+
+        max_s = max(scores)
+        exp_weights = [w * math.exp(s - max_s) for (_, w), s in zip(self.memory_attractors, scores)]
+        sum_exp = sum(exp_weights) or 1.0
+
+        nw = sum(exp_w * att.w for (att, _), exp_w in zip(self.memory_attractors, exp_weights)) / sum_exp
+        nx = sum(exp_w * att.x for (att, _), exp_w in zip(self.memory_attractors, exp_weights)) / sum_exp
+        ny = sum(exp_w * att.y for (att, _), exp_w in zip(self.memory_attractors, exp_weights)) / sum_exp
+        nz = sum(exp_w * att.z for (att, _), exp_w in zip(self.memory_attractors, exp_weights)) / sum_exp
+
+        retrieved = physics.Quaternion(nw, nx, ny, nz)
+        return retrieved.normalized()
+
+    def compact_oldest(self, keep_count: int = 50) -> Optional[float]:
+        """Compact oldest memories into a non-abelian Casimir invariant and aggregate macro-attractor."""
+        from xylarium.kernel import physics
+        if len(self.memory_attractors) <= keep_count:
+            return None
+
+        excess = len(self.memory_attractors) - keep_count
+        to_compact = self.memory_attractors[:excess]
+        self.memory_attractors = self.memory_attractors[excess:]
+
+        q_agg = physics.Quaternion(1.0, 0.0, 0.0, 0.0)
+        weight_sum = 0.0
+        for att, w in to_compact:
+            q_agg = q_agg * att
+            weight_sum += w
+
+        q_agg = q_agg.normalized()
+        casimir = max(0.0, min(1.0, 1.0 - (q_agg.w ** 2)))
+        self.casimir_invariants.append(round(casimir, 6))
+
+        self.memory_attractors.insert(0, (q_agg, weight_sum))
+        return casimir
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "memory_attractors": [
+                (att.to_dict() if hasattr(att, "to_dict") else {"w": att.w, "x": att.x, "y": att.y, "z": att.z}, w)
+                for att, w in self.memory_attractors
+            ],
+            "casimir_invariants": list(self.casimir_invariants),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AssociativeAttractorManifold":
+        from xylarium.kernel import physics
+        manifold = cls()
+        for att_data, w in data.get("memory_attractors", []):
+            if isinstance(att_data, dict):
+                q = physics.Quaternion.from_dict(att_data)
+            else:
+                q = physics.Quaternion(1.0, 0.0, 0.0, 0.0)
+            manifold.memory_attractors.append((q, float(w)))
+        manifold.casimir_invariants = [float(c) for c in data.get("casimir_invariants", [])]
+        return manifold
+
