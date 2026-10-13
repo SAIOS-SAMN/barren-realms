@@ -433,8 +433,9 @@ def execute_epistemic_agency(
                 out_comm = "H"
                 ret_comm = "ORGANICS"
 
-            # Destination sector: adjacent or trading hub (e.g. Sector 1 or (sec_id + 10) % 100)
-            target_sec = 1 if sec_id != 1 else 30
+            # Destination sector: select reachable commercial spaceport
+            ported_secs = [s.id for s in kernel.sectors.values() if s.port and s.id != sec_id]
+            target_sec = 1 if (sec_id != 1 and 1 in ported_secs) else (ported_secs[0] if ported_secs else 1)
             # Deduct cost from planet treasury
             from xylarium.config import SPECIALIZED_HULLS
             h_cfg = SPECIALIZED_HULLS.get(hull_choice, {})

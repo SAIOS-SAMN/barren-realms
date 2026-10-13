@@ -3121,16 +3121,23 @@ class MarketManager:
         if units <= 0:
             return 0.0
         cost = buy_p * units
+        owner_liquid = getattr(owner, "credits", getattr(owner, "treasury", 0))
         if market and src.currency != _hub():
             if not market.ensure_local(owner, src.currency, cost):
                 return 0.0
-        elif owner.credits < cost:
+        elif owner_liquid < cost:
             return 0.0
-        fx.debit(owner, src.currency, cost)
+        if hasattr(owner, "credits"):
+            fx.debit(owner, src.currency, cost)
+        else:
+            owner.treasury -= cost
         src.treasury += cost
         revenue = sell_p * units
         dst.treasury -= revenue
-        fx.credit(owner, dst.currency, revenue)
+        if hasattr(owner, "credits"):
+            fx.credit(owner, dst.currency, revenue)
+        else:
+            owner.treasury += revenue
         src.stock[comm] -= units
         dst.stock[comm] = dst.stock.get(comm, 0) + units
         return to_sol(dst.currency, revenue) - to_sol(src.currency, cost)
@@ -3270,11 +3277,25 @@ class MarketManager:
                 port_b = sec_b.port
 
                 owner = kernel.captains.get(hauler.owner_id)
-                if owner is None:
+                civ_owner = None
+                if owner is None and str(hauler.owner_id).startswith("civ:"):
+                    # Civilizational trade hauler: find civilization planet
+                    civ_name = str(hauler.owner_id).replace("civ:", "")
+                    for sec in kernel.sectors.values():
+                        for pl in sec.planets:
+                            if getattr(pl, "civilization", None) and pl.civilization.name == civ_name:
+                                civ_owner = pl
+                                break
+                        if civ_owner:
+                            break
+
+                if owner is None and civ_owner is None:
                     continue
+
                 # Both legs settle through the ports' treasuries in their own currencies
-                profit_ab = self._hauler_leg(owner, port_a, port_b, hauler.commodity_outbound, hauler.capacity)
-                profit_ba = self._hauler_leg(owner, port_b, port_a, hauler.commodity_return, hauler.capacity)
+                trade_actor = owner if owner is not None else civ_owner
+                profit_ab = self._hauler_leg(trade_actor, port_a, port_b, hauler.commodity_outbound, hauler.capacity)
+                profit_ba = self._hauler_leg(trade_actor, port_b, port_a, hauler.commodity_return, hauler.capacity)
 
                 total_profit = profit_ab + profit_ba
 
@@ -3333,6 +3354,13 @@ class MarketManager:
                         royalty_str = f" [VC Royalty Skim: -{royalty_cut:,} Cr]" if royalty_cut > 0 else ""
                         worm_str = " (Wormhole Traversed)" if hauler.wormhole_enabled else ""
                         log_text = f"AUTOMATED FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{net_profit:,} Cr!{royalty_str}"
+                        logs.append(log_text)
+                        if hasattr(kernel, "action_logs"):
+                            kernel.action_logs.append(log_text)
+                    elif civ_owner:
+                        civ_owner.treasury += total_profit
+                        worm_str = " (Wormhole Traversed)" if hauler.wormhole_enabled else ""
+                        log_text = f"CIVILIZATION FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{total_profit:,} Cr for {civ_owner.name}!"
                         logs.append(log_text)
                         if hasattr(kernel, "action_logs"):
                             kernel.action_logs.append(log_text)
