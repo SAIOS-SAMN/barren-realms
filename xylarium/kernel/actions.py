@@ -609,6 +609,41 @@ def _xenobiology_graft(k: Any, captain: Any, current_sector: Any, kwargs: Dict[s
     return k._handle_xenobiology_graft(captain, kwargs)
 
 
+@action(ActionType.WORKBENCH_TECH_TUNE, turns=0)
+def _workbench_tech_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_tech_tune(captain, kwargs)
+
+
+@action(ActionType.WORKBENCH_MARKET_TUNE, turns=0)
+def _workbench_market_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_market_tune(captain, kwargs)
+
+
+@action(ActionType.WORKBENCH_FX_TUNE, turns=0)
+def _workbench_fx_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_fx_tune(captain, kwargs)
+
+
+@action(ActionType.WORKBENCH_DIPLOMACY_TUNE, turns=0)
+def _workbench_diplomacy_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_diplomacy_tune(captain, kwargs)
+
+
+@action(ActionType.WORKBENCH_STARCRAFT_TUNE, turns=0)
+def _workbench_starcraft_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_starcraft_tune(captain, kwargs)
+
+
+@action(ActionType.WORKBENCH_DOCK_TUNE, turns=0)
+def _workbench_dock_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_dock_tune(captain, kwargs)
+
+
+@action(ActionType.WORKBENCH_SATELLITE_TUNE, turns=0)
+def _workbench_satellite_tune(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_workbench_satellite_tune(captain, kwargs)
+
+
 @action(ActionType.SENATE_CAMPAIGN, turns=0)
 def _senate_campaign(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     office = kwargs.get("office", SenateOffice.CHANCELLOR)

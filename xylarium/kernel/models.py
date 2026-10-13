@@ -138,7 +138,16 @@ class ActionType(str, Enum):
     XENOBIOLOGY_CULTURE = "XENOBIOLOGY_CULTURE"
     XENOBIOLOGY_GRAFT = "XENOBIOLOGY_GRAFT"
 
-    # [5] Imperial Senate & Governance Actions
+    # [5] Interactive Workbenches & In-Game Minigames
+    WORKBENCH_TECH_TUNE = "WORKBENCH_TECH_TUNE"
+    WORKBENCH_MARKET_TUNE = "WORKBENCH_MARKET_TUNE"
+    WORKBENCH_FX_TUNE = "WORKBENCH_FX_TUNE"
+    WORKBENCH_DIPLOMACY_TUNE = "WORKBENCH_DIPLOMACY_TUNE"
+    WORKBENCH_STARCRAFT_TUNE = "WORKBENCH_STARCRAFT_TUNE"
+    WORKBENCH_DOCK_TUNE = "WORKBENCH_DOCK_TUNE"
+    WORKBENCH_SATELLITE_TUNE = "WORKBENCH_SATELLITE_TUNE"
+
+    # [6] Imperial Senate & Governance Actions
     SENATE_CAMPAIGN = "SENATE_CAMPAIGN"
     SENATE_VOTE = "SENATE_VOTE"
     SENATE_ENACT_EDICT = "SENATE_ENACT_EDICT"
@@ -881,6 +890,7 @@ class Captain:
     wages_due: int = 0                    # crew pay accrued at sea, settled at the next port
     escort: Optional[Dict[str, Any]] = None   # a world's fighters sailing with it (fxroutes.py)
     discovered_elements: List[str] = field(default_factory=list)  # Elements discovered via alchemical induction
+    workbenches: Dict[str, Any] = field(default_factory=dict)  # In-game tuning & minigame workbench states
 
     def __post_init__(self):
         if not self.phylogeny_node_id:
@@ -1198,6 +1208,7 @@ class Captain:
             "wages_due": self.wages_due,
             "escort": dict(self.escort) if self.escort else None,
             "discovered_elements": list(getattr(self, "discovered_elements", [])),
+            "workbenches": _deep_copy(getattr(self, "workbenches", {})),
         }
 
     @classmethod
@@ -1289,6 +1300,7 @@ class Captain:
             wages_due=int(data.get("wages_due", 0)),
             escort=dict(data["escort"]) if data.get("escort") else None,
             discovered_elements=list(data.get("discovered_elements", [])),
+            workbenches=dict(data.get("workbenches", {})),
         )
 
 

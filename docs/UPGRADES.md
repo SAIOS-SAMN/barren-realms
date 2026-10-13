@@ -655,3 +655,81 @@ To expand biological complexity beyond sentient civilizations into deep planetar
   - **`BIO_CHITIN` Graft:** Integrates biomorphic carapaces into colony architecture, adding **+50 max shields**.
   - **`NEURO_SPORE` Graft:** Enhances collective cognitive synthesis, increasing planetary **research output by +25%**.
 
+---
+
+## 16. Interactive In-Game Workbenches & Progressive Capability Minigames
+
+To empower players to custom tune their technologies, economies, starcraft, and interstellar operations as capabilities unlock, an interactive multi-workbench architecture has been established across seven distinct domains:
+
+### 16.1 Technology Resonance Workbench (`WORKBENCH_TECH_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_technology`, `calc_tech_resonance`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_TECH_TUNE`)
+* **Capability Gating:** Unlocked as individual capabilities (`radio`, `orbit`, `fission`, `computation`, `networks`, `cyber`, `medicine`, `genetics`, `synthesis`, `robotics`) are discovered by the captain or their planetary colonies.
+* **Harmonic Resonance Calibration:**
+  - Evaluates harmonic frequency $\omega$, magnetic flux $\Phi$, and circuit efficiency $\eta$ against native physical resonance targets $(\omega^*, \Phi^*, \eta^*)$ derived deterministically from the capability hash.
+  - Quality Factor:
+    $$Q = \exp\left( -\frac{(\omega - \omega^*)^2}{2\sigma^2} - \frac{(\Phi - \Phi^*)^2}{2\sigma^2} - \frac{(\eta - \eta^*)^2}{2\sigma^2} \right)$$
+  - Constructive Interference ($Q \ge 0.70$) locks active operational perks:
+    - `fission`: +$30\% \times Q$ reactor power, +$25\% \times Q$ fuel economy.
+    - `computation`: +$35\% \times Q$ research speed, +$20\% \times Q$ market alpha.
+    - `networks`: +$30\% \times Q$ transaction fee discount, +$40\% \times Q$ relay bandwidth.
+    - `genetics`: +$25\% \times Q$ metabolic efficiency, +$30\% \times Q$ cellular repair.
+    - `synthesis`: +$25\% \times Q$ transmutation yield, +$20\% \times Q$ refining speed.
+    - `robotics`: +$30\% \times Q$ spaceport turnaround, +$25\% \times Q$ drone repair.
+    - `orbit`: +$30\% \times Q$ sublight delta-v efficiency.
+    - `radio`: +$45\% \times Q$ long-range sensor acuity.
+
+### 16.2 Stock Markets Workbench (`WORKBENCH_MARKET_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_market_index`, `calc_market_index`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_MARKET_TUNE`)
+* **Capability Gating:** Requires `computation` or `networks` capability.
+* **Synthetic Index Basket & ISSE Arbitrage:**
+  - Players construct multi-asset commodity and corporate equity ETF baskets $[w_1, \dots, w_k]$ with leverage $L \in [1.0, 3.0]$ and bid-ask spread friction thresholds.
+  - Mathematical Backtest: Computes portfolio expected return $\mu_p = L \sum w_i \mu_i - 0.4 \Delta p$ and cross-commodity covariance $\sigma_p = \sqrt{L^2 w^T \mathbf{\Sigma} w + \text{leverage\_risk}}$.
+  - Sharpe Ratio: $\mathcal{S} = \frac{\mu_p - R_f}{\sigma_p}$ ($R_f = 0.02$).
+  - When $\mathcal{S} \ge 1.20$, the index is registered on the Interstellar Stock Exchange (ISSE), generating **passive cyclical management fee dividends** ($+50 \times \mathcal{S} \times L$ credits/cycle) and trade fee rebates (up to $-50\%$).
+
+### 16.3 FX Markets Workbench (`WORKBENCH_FX_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_fx_reserves`, `calc_fx_corridor`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_FX_TUNE`)
+* **Capability Gating:** Requires `networks` capability or active multi-currency FX wallet holdings.
+* **Reserve Corridor Defense & Carry Trade:**
+  - Configures reserve allocations and defends exchange rate corridors $[C_{\text{min}}, C_{\text{max}}]$ for regional currency pairs (e.g. `SOL`/`TERRA`, `SOL`/`CYGNUS`).
+  - Stability Metric: Evaluates exchange drift breach $\Delta = \max(0, |R_{\text{live}} - R_0| - W)$ to compute stability score $P_{\text{stability}} \in [0.0, 1.0]$.
+  - Defended Corridors ($P \ge 0.70$) pay **cyclical carry trade interest yields** directly into the captain's FX wallet and grant **0% currency conversion fee permits**.
+
+### 16.4 Diplomacies Workbench (`WORKBENCH_DIPLOMACY_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_diplomatic_treaty`, `calc_diplomatic_resonance`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_DIPLOMACY_TUNE`)
+* **Capability Gating:** Requires `radio` or `networks` capability.
+* **$SU(2)$ Epistemic Resonance & Clause Tailoring:**
+  - Players tailor 5 bilateral treaty clauses: tariff reduction percentage, mutual defense escort wings, asteroid mining concessions (`SHARED`/`EXCLUSIVE`/`RESERVED`), scientific data sharing, and migration quotas.
+  - Epistemic Holonomy Trace: Evaluates $U_A, U_B \in SU(2)$ worldview overlap:
+    $$\chi = \frac{1}{2}\left|\text{Tr}(U_A \cdot U_B^\dagger)\right| \in [0.0, 1.0]$$
+  - Concord Ratification ($\chi \ge 0.65$): Enacts non-aggression pacts with sovereign alien fleets, eliminates hostile port tariffs, and grants $+25\%$ scientific XP on contact anomalies.
+
+### 16.5 Starcraft / Starships Workbench (`WORKBENCH_STARCRAFT_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_starcraft`, `calc_starcraft_tuning`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_STARCRAFT_TUNE`)
+* **Capability Gating:** Requires `orbit` capability or Rank Tier $\ge 1$.
+* **Subsystem Power Harmonics & Living Hull Culturing:**
+  - Subsystem Power Distribution: Balances total vessel power across Weapons, Kinetics, Shields, and Drives ($\sum = 100\%$). Harmonic grid efficiency scales up to $1.35\times$, directly augmenting maximum shields and combat attack rolls.
+  - Living Bio-Chitin Culturing: Consumes xenobiotic biomaterials (`BIO_CHITIN`, `EXTREMOPHILE_POLYMER`, `XENOPROTEIN`) to culture living organic bulkheads, granting **+15 shields passive regeneration per cycle**, **-25% combat damage mitigation**, and **+15% thrust velocity**.
+
+### 16.6 Docks & Logistics Workbench (`WORKBENCH_DOCK_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_dock_logistics`, `calc_dock_logistics`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_DOCK_TUNE`)
+* **Capability Gating:** Requires `orbit` or `fission` capability.
+* **$M/M/c$ Spaceport Turnaround Theory:**
+  - Tunes automated crane berths ($c \in [1, 8]$), high-pressure fuel hydrant throughput, and port docking fee rates.
+  - Traffic Intensity: Evaluates arrival rate $\lambda$ against service capacity $c \mu$:
+    $$\rho = \frac{\lambda}{c \mu}$$
+  - Stable Queues ($\rho < 0.92$): Eliminates commercial hauler demurrage delays, boosts port turnaround efficiency, and generates **cyclical port fee revenues** deposited into colony treasuries and captain accounts.
+
+### 16.7 Satellites & Constellations Workbench (`WORKBENCH_SATELLITE_TUNE`)
+* **Files:** [`xylarium/kernel/workbenches.py`](file:///opt/barren-realms/xylarium/kernel/workbenches.py) (`tune_satellite_constellation`, `calc_satellite_constellation`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.WORKBENCH_SATELLITE_TUNE`)
+* **Capability Gating:** Requires `orbit` or `radio` capability.
+* **Walker-Delta $T/P/F$ Constellation Geometry:**
+  - Deploys multi-satellite constellations characterized by total satellites $T$, orbital planes $P$, relative phasing $F$, and orbital altitude $h$.
+  - Geometric Surface Coverage: Computes spherical cap footprint angle $\theta_{\text{cov}} = \arccos\left(\frac{R}{R+h}\cos\epsilon\right) - \epsilon$ and multi-plane dispersion to achieve coverage $C \in [0.0, 1.0]$.
+  - Operational Constellations ($C \ge 0.75$) activate specialized planetary perks:
+    - `RELAY`: Zero communications blackout, $+35\%$ commercial hauler coordination bandwidth.
+    - `SCANNER`: Reveals hidden ore/volatiles deposits, $+40\%$ scan range, pirate ambush alerts.
+    - `DEFENSE`: Orbital kinetic platform providing **+120 planetary shields** and auto-intercepting invaders.
+    - `GEOENGINEERING`: Planetary albedo reflectors delivering $+30\%$ terraforming speed and climate stabilization.
+
+

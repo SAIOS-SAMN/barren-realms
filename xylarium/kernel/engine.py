@@ -80,6 +80,7 @@ from xylarium.kernel.experience import ExperienceManager
 from xylarium.kernel.factions import FactionManager
 from xylarium.kernel.natives import NativeManager
 from xylarium.kernel.chronicle import ChronicleEngine
+from xylarium.kernel.workbenches import WorkbenchManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -183,6 +184,7 @@ class GameKernel:
         self.npc_lineages: Dict[str, Dict[str, Any]] = {}  # the many houses the simulation runs
         self.banking = BankingSystem()                   # federations' central banks + the clearing union
         self.settlement = SettlementChain()              # chain-shaped quarterly settlement record
+        self.workbench_manager = WorkbenchManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
@@ -1425,6 +1427,67 @@ class GameKernel:
         metab = kwargs.get("metabolite", "")
         return xenobiology.graft_xenobiology(captain, planet, metab, kernel=self)
 
+    def _handle_workbench_tech_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        cap = kwargs.get("capability", "radio")
+        freq = float(kwargs.get("frequency", 5.0))
+        flux = float(kwargs.get("flux", 5.0))
+        eff = float(kwargs.get("efficiency", 5.0))
+        return self.workbench_manager.tune_technology(captain, cap, freq, flux, eff, kernel=self)
+
+    def _handle_workbench_market_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        index_name = kwargs.get("index_name", "QUANTUM-ETF")
+        basket = kwargs.get("basket", ["ORE", "ORGANICS", "EQUIPMENT", "EXOTICS"])
+        weights = kwargs.get("weights", [0.25, 0.25, 0.25, 0.25])
+        leverage = float(kwargs.get("leverage", 1.0))
+        spread = float(kwargs.get("spread_threshold", 0.02))
+        return self.workbench_manager.tune_market_index(captain, index_name, basket, weights, leverage, spread, kernel=self)
+
+    def _handle_workbench_fx_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        anchor = kwargs.get("anchor_currency", "SOL")
+        peg = kwargs.get("peg_currency", "TERRA")
+        c_min = float(kwargs.get("corridor_min", 0.95))
+        c_max = float(kwargs.get("corridor_max", 1.05))
+        alloc = float(kwargs.get("reserve_allocation_pct", 0.30))
+        return self.workbench_manager.tune_fx_reserves(captain, anchor, peg, c_min, c_max, alloc, kernel=self)
+
+    def _handle_workbench_diplomacy_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        civ_name = kwargs.get("civ_name", "Imperium")
+        tariff = float(kwargs.get("tariff_reduction_pct", 20.0))
+        escorts = int(kwargs.get("escort_wings", 2))
+        concessions = kwargs.get("mining_concessions", "SHARED")
+        science = float(kwargs.get("scientific_exchange_pct", 25.0))
+        migration = int(kwargs.get("migration_quota", 100))
+        return self.workbench_manager.tune_diplomatic_treaty(
+            captain, civ_name, tariff, escorts, concessions, science, migration, kernel=self
+        )
+
+    def _handle_workbench_starcraft_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        weapons = float(kwargs.get("weapons_pct", 25.0))
+        kinetic = float(kwargs.get("kinetic_pct", 25.0))
+        shields = float(kwargs.get("shields_pct", 25.0))
+        drives = float(kwargs.get("drives_pct", 25.0))
+        living_mat = kwargs.get("living_material")
+        return self.workbench_manager.tune_starcraft(captain, weapons, kinetic, shields, drives, living_mat, kernel=self)
+
+    def _handle_workbench_dock_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        pid = kwargs.get("planet_id")
+        berths = int(kwargs.get("crane_automation_berths", 3))
+        fuel_rate = float(kwargs.get("fuel_hydrant_throughput", 30.0))
+        fee = int(kwargs.get("docking_fee_rate", 50))
+        express = bool(kwargs.get("express_lane", False))
+        return self.workbench_manager.tune_dock_logistics(captain, pid, berths, fuel_rate, fee, express, kernel=self)
+
+    def _handle_workbench_satellite_tune(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        pid = kwargs.get("planet_id")
+        payload = kwargs.get("payload_type", "RELAY")
+        total_sats = int(kwargs.get("total_satellites", 24))
+        planes = int(kwargs.get("orbital_planes", 4))
+        phase = int(kwargs.get("phase_factor", 1))
+        alt = float(kwargs.get("altitude_km", 1200.0))
+        return self.workbench_manager.tune_satellite_constellation(
+            captain, pid, payload, total_sats, planes, phase, alt, kernel=self
+        )
+
     def _handle_empire_overview(self, captain: Captain) -> ActionResult:
         owned_planets = []
         for s in self.sectors.values():
@@ -2542,6 +2605,10 @@ class GameKernel:
             for cap in self.captains.values():
                 self.alchemy_manager.tick_cooldown(cap)
 
+        # 11. In-game Interactive Workbenches passive dividends and yields
+        if hasattr(self, "workbench_manager"):
+            self.workbench_manager.tick(self)
+
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
         """Finds planet across all sectors by ID or name (by ID through an index rebuilt whenever it misses)."""
         if not planet_id_or_name:
@@ -2888,6 +2955,7 @@ class GameKernel:
                 "active_canopy_override": getattr(captain, "active_canopy_override", None),
                 "ascii_cladogram": self.phylogeny_manager.render_ascii_cladogram(captain) if hasattr(self, "phylogeny_manager") else "",
             },
+            "workbenches": self.workbench_manager.get_view(captain, self) if hasattr(self, "workbench_manager") else {},
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

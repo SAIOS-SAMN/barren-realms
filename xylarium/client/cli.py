@@ -191,6 +191,7 @@ class TerminalClient:
         **{w: "W" for w in ["ORBIT", "RADAR", "ASTRO", "EPHEMERIS"]},
         **{w: "SENATE" for w in ["SENATE", "SEN", "GOV_SENATE", "VOTE", "OFFICES"]},
         **{w: "XENOBIOLOGY" for w in ["XENO", "XENOBIOLOGY", "BIO", "BIOLOGY", "ECOSYSTEM"]},
+        **{w: "WORKBENCH" for w in ["WORKBENCH", "WB", "BENCH", "LAB", "TUNE", "MINIGAME"]},
         **{w: "SURFACE" for w in ["SURFACE", "GRID", "DISTRICT", "INVADE"]},
         **{w: "REST" for w in ["REST", "QUARTERS"]},
         **{w: "S" for w in ["BANK", "LOAN", "REPAY"]},
@@ -275,7 +276,7 @@ class TerminalClient:
         except Exception:
             pass                                   # the hint line is a courtesy; it never blocks the prompt
         try:
-            choice = input(f"{bold(c_white('Command [M/T/P/A/S/C/O/E/I/G/N/J/B/X/K/R/H/Q] > '))}").strip().upper()
+            choice = input(f"{bold(c_white('Command [M/T/P/A/S/C/O/E/I/G/N/J/B/X/K/WB/R/H/Q] > '))}").strip().upper()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting Xylarium...")
             self.running = False
@@ -304,6 +305,9 @@ class TerminalClient:
             return
         if choice == "XENOBIOLOGY":
             self._prompt_xenobiology(view)
+            return
+        if choice == "WORKBENCH":
+            self._prompt_workbenches(view)
             return
         if choice == "SURFACE":
             self._prompt_surface(view)
@@ -3049,6 +3053,266 @@ class TerminalClient:
                     self._print_result(res)
                 except (ValueError, KeyboardInterrupt, EOFError):
                     print(c_red("Invalid drop division count."))
+
+    def _prompt_workbenches(self, view: Dict[str, Any]) -> None:
+        """Interactive workbench hub: 7 in-game minigames and tuning labs."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_workbenches_hub(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Select Workbench [1-7 / Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "1":
+                self._prompt_tech_workbench(fresh_view)
+            elif cmd == "2":
+                self._prompt_market_workbench(fresh_view)
+            elif cmd == "3":
+                self._prompt_fx_workbench(fresh_view)
+            elif cmd == "4":
+                self._prompt_diplomacy_workbench(fresh_view)
+            elif cmd == "5":
+                self._prompt_starcraft_workbench(fresh_view)
+            elif cmd == "6":
+                self._prompt_dock_workbench(fresh_view)
+            elif cmd == "7":
+                self._prompt_satellite_workbench(fresh_view)
+
+    def _prompt_tech_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_tech_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('Tech Workbench [T/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "T":
+                try:
+                    cap = input("Capability to tune (e.g. RADIO, ORBIT, FISSION, COMPUTATION, NETWORKS) > ").strip().lower()
+                    freq = float(input("Harmonic Frequency ω [0.1 - 10.0] (default 5.0) > ").strip() or "5.0")
+                    flux = float(input("Magnetic Flux Φ [0.1 - 10.0] (default 5.0) > ").strip() or "5.0")
+                    eff = float(input("Circuit Efficiency η [0.1 - 10.0] (default 5.0) > ").strip() or "5.0")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_TECH_TUNE,
+                        capability=cap,
+                        frequency=freq,
+                        flux=flux,
+                        efficiency=eff,
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid parameter input."))
+
+    def _prompt_market_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_market_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('Stock Workbench [C/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "C":
+                try:
+                    idx_name = input("Index Name (default QUANTUM-ETF) > ").strip().upper() or "QUANTUM-ETF"
+                    basket_in = input("Basket commodities (comma-separated, default ORE,EQUIPMENT,EXOTICS) > ").strip()
+                    basket = [x.strip().upper() for x in basket_in.split(",") if x.strip()] if basket_in else ["ORE", "EQUIPMENT", "EXOTICS"]
+                    weights_in = input(f"Weights for {len(basket)} assets (comma-separated, or Enter for equal) > ").strip()
+                    if weights_in:
+                        weights = [float(x.strip()) for x in weights_in.split(",") if x.strip()]
+                    else:
+                        weights = [1.0 / len(basket)] * len(basket)
+                    lev = float(input("Leverage Multiplier [1.0 - 3.0] (default 1.5) > ").strip() or "1.5")
+                    spread = float(input("Bid-Ask Spread threshold [0.01 - 0.10] (default 0.02) > ").strip() or "0.02")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_MARKET_TUNE,
+                        index_name=idx_name,
+                        basket=basket,
+                        weights=weights,
+                        leverage=lev,
+                        spread_threshold=spread,
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid market parameters."))
+
+    def _prompt_fx_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_fx_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('FX Workbench [P/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "P":
+                try:
+                    anchor = input("Anchor currency (default SOL) > ").strip().upper() or "SOL"
+                    peg = input("Peg currency (default TERRA) > ").strip().upper() or "TERRA"
+                    c_min = float(input("Corridor Minimum (default 0.95) > ").strip() or "0.95")
+                    c_max = float(input("Corridor Maximum (default 1.05) > ").strip() or "1.05")
+                    alloc = float(input("Reserve Allocation Share [0.10 - 0.90] (default 0.30) > ").strip() or "0.30")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_FX_TUNE,
+                        anchor_currency=anchor,
+                        peg_currency=peg,
+                        corridor_min=c_min,
+                        corridor_max=c_max,
+                        reserve_allocation_pct=alloc,
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid FX parameters."))
+
+    def _prompt_diplomacy_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_diplomacy_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('Diplomacy Workbench [N/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "N":
+                try:
+                    civ = input("Civilization Name (default Imperium) > ").strip() or "Imperium"
+                    tariff = float(input("Tariff Reduction % [0 - 50] (default 20) > ").strip() or "20")
+                    escorts = int(input("Defense Escort Wings [0 - 5] (default 2) > ").strip() or "2")
+                    conc = input("Mining Concession [SHARED / EXCLUSIVE / RESERVED] (default SHARED) > ").strip().upper() or "SHARED"
+                    sci = float(input("Scientific Exchange % [0 - 50] (default 25) > ").strip() or "25")
+                    mig = int(input("Migration Quota [0 - 500] (default 100) > ").strip() or "100")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_DIPLOMACY_TUNE,
+                        civ_name=civ,
+                        tariff_reduction_pct=tariff,
+                        escort_wings=escorts,
+                        mining_concessions=conc,
+                        scientific_exchange_pct=sci,
+                        migration_quota=mig,
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid treaty parameters."))
+
+    def _prompt_starcraft_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_starcraft_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('Starcraft Workbench [T/G/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "T":
+                try:
+                    w = float(input("Weapons Power % (e.g. 25) > ").strip() or "25")
+                    k = float(input("Kinetics Power % (e.g. 25) > ").strip() or "25")
+                    s = float(input("Shields Power % (e.g. 25) > ").strip() or "25")
+                    d = float(input("Drives Power % (e.g. 25) > ").strip() or "25")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_STARCRAFT_TUNE,
+                        weapons_pct=w,
+                        kinetic_pct=k,
+                        shields_pct=s,
+                        drives_pct=d,
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid power distribution values."))
+            elif cmd == "G":
+                try:
+                    mat = input("Biomaterial to culture (BIO_CHITIN, EXTREMOPHILE_POLYMER, XENOPROTEIN) > ").strip().upper()
+                    if mat:
+                        res = self.kernel.dispatch(
+                            self.player_id,
+                            ActionType.WORKBENCH_STARCRAFT_TUNE,
+                            living_material=mat,
+                        )
+                        self._print_result(res)
+                        input(c_gold("Press Enter to continue..."))
+                except (KeyboardInterrupt, EOFError):
+                    break
+
+    def _prompt_dock_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_dock_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('Dock Workbench [O/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "O":
+                try:
+                    berths = int(input("Crane Berths [1 - 8] (default 3) > ").strip() or "3")
+                    fuel = float(input("Fuel Hydrant Throughput [10 - 100] (default 30) > ").strip() or "30")
+                    fee = int(input("Docking Fee Rate [10 - 500 Cr] (default 50) > ").strip() or "50")
+                    exp_in = input("Express Lane Priority? [y/N] > ").strip().lower()
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_DOCK_TUNE,
+                        crane_automation_berths=berths,
+                        fuel_hydrant_throughput=fuel,
+                        docking_fee_rate=fee,
+                        express_lane=(exp_in == "y"),
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid dock parameters."))
+
+    def _prompt_satellite_workbench(self, view: Dict[str, Any]) -> None:
+        while True:
+            fresh = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_satellite_workbench(fresh))
+            try:
+                cmd = input(f"{c_gold('Satellite Workbench [D/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                break
+            if cmd == "D":
+                try:
+                    payload = input("Payload Type [RELAY / SCANNER / DEFENSE / GEOENGINEERING] (default RELAY) > ").strip().upper() or "RELAY"
+                    sats = int(input("Total Satellites T [3 - 60] (default 24) > ").strip() or "24")
+                    planes = int(input("Orbital Planes P [1 - 12] (default 4) > ").strip() or "4")
+                    phase = int(input(f"Phase Factor F [0 - {planes-1}] (default 1) > ").strip() or "1")
+                    alt = float(input("Altitude km [300 - 20000] (default 1200) > ").strip() or "1200")
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.WORKBENCH_SATELLITE_TUNE,
+                        payload_type=payload,
+                        total_satellites=sats,
+                        orbital_planes=planes,
+                        phase_factor=phase,
+                        altitude_km=alt,
+                    )
+                    self._print_result(res)
+                    input(c_gold("Press Enter to continue..."))
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid satellite parameters."))
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

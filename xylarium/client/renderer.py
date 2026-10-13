@@ -2960,6 +2960,290 @@ class TerminalRenderer:
         return "\n".join(lines)
 
     @classmethod
+    def render_workbenches_hub(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        caps = wb.get("unlocked_capabilities", [])
+        c_wb = wb.get("captain_workbenches", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_cyan('XYLARIUM ADVANCED WORKBENCHES & IN-GAME TUNING LABS'))}              {bold(c_gold('║'))}",
+            f"{bold(c_gold('╠' + '═' * 76 + '╣'))}",
+            f"{bold(c_gold('║'))}  Unlocked Capabilities: {c_green(', '.join(caps) if caps else 'None'):<51} {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            bold(c_white("SEVEN SOVEREIGN TUNING WORKBENCHES (MINIGAMES):")),
+            f"{'-' * 78}",
+        ]
+
+        items = [
+            ("1", "Technologies Workbench", "Harmonic Resonance Calibration", wb.get("can_tune_tech", False), "technologies"),
+            ("2", "Stock Markets Workbench", "Synthetic Index & ISSE Arbitrage", wb.get("can_tune_market", False), "market_indices"),
+            ("3", "FX Markets Workbench", "Peg Corridor Defense & Carry Trade", wb.get("can_tune_fx", False), "fx_pegs"),
+            ("4", "Diplomacies Workbench", "SU(2) Epistemic Treaty Concord", wb.get("can_tune_diplomacy", False), "diplomacy_treaties"),
+            ("5", "Starcraft Workbench", "Power Grid Harmonics & Living Hull", wb.get("can_tune_starcraft", False), "starcraft"),
+            ("6", "Docks & Logistics Workbench", "M/M/c Spaceport Turnaround", wb.get("can_tune_dock", False), "dock_logistics"),
+            ("7", "Satellites Workbench", "Walker-Delta Constellation Geometry", wb.get("can_tune_satellite", False), "constellations"),
+        ]
+
+        for num, title, subtitle, unlocked, key in items:
+            status_badge = c_green("[READY]") if unlocked else c_gray("[LOCKED]")
+            active_count = 0
+            if key in c_wb:
+                val = c_wb[key]
+                if isinstance(val, dict):
+                    active_count = len(val) if key != "starcraft" else (1 if val.get("is_balanced") else 0)
+
+            active_info = c_gold(f"Active: {active_count}") if active_count > 0 else c_gray("Untuned")
+            lines.append(f"  {bold(c_gold(f'[{num}]'))} {c_cyan(f'{title:<26}')} {status_badge}  {c_white(f'{subtitle:<30}')} {active_info}")
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(
+            f"  Select Workbench: {c_gold('[1-7]')}  │  "
+            f"Return: {c_white('[Q / Enter]')}"
+        )
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_tech_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        caps = wb.get("unlocked_capabilities", [])
+        c_wb = wb.get("captain_workbenches", {}).get("technologies", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_cyan('TECHNOLOGY WORKBENCH │ HARMONIC RESONANCE CALIBRATION'))}              {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Tune frequency (ω), magnetic flux (Φ), and circuit efficiency (η) in [0.1, 10.0].",
+            "Harmonic constructive resonance (Q >= 70%) unlocks permanent operational perks.",
+            f"{'-' * 78}",
+            bold(c_cyan("AVAILABLE CAPABILITIES FOR TUNING:")),
+        ]
+        for cap in caps:
+            t_data = c_wb.get(cap.lower())
+            if t_data and t_data.get("is_locked"):
+                status = c_green(f"LOCKED (Q={t_data['q_score']:.1%}) [{t_data['grade']}]")
+                perk_str = ", ".join(f"{k}: +{v:.1%}" for k, v in t_data.get("perks", {}).items())
+            else:
+                status = c_gray("UNTUNED")
+                perk_str = "No active resonance perks"
+            lines.append(f"  • {c_gold(cap.upper()):<16} : {status:<30} │ {c_white(perk_str)}")
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[T]')}une Capability  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_market_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        c_wb = wb.get("captain_workbenches", {}).get("market_indices", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_green('STOCK MARKETS WORKBENCH │ SYNTHETIC INDEX & ARBITRAGE DESK'))}         {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Construct synthetic commodity/equity ETF baskets with leverage in [1.0, 3.0].",
+            "Backtested Sharpe Ratio >= 1.20 registers index on ISSE for passive cycle yields.",
+            f"{'-' * 78}",
+            bold(c_cyan("REGISTERED SYNTHETIC INDICES / ETFS:")),
+        ]
+        if not c_wb:
+            lines.append("  No synthetic indices currently registered.")
+        else:
+            for name, idx in c_wb.items():
+                sh = idx.get("sharpe_ratio", 0.0)
+                ret = idx.get("expected_return", 0.0)
+                vol = idx.get("volatility", 0.0)
+                div = idx.get("cycle_dividend", 0)
+                lines.append(
+                    f"  ★ {c_gold(name):<18} │ Sharpe: {c_green(f'{sh:.2f}')} │ Return: {c_cyan(f'{ret:.1%}')} │ "
+                    f"Vol: {c_white(f'{vol:.1%}')} │ Yield: {c_green(f'+{div} Cr/cycle')}"
+                )
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[C]')}reate & Backtest Index  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_fx_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        c_wb = wb.get("captain_workbenches", {}).get("fx_pegs", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_magenta('FX MARKETS WORKBENCH │ PEG CORRIDOR DEFENSE & CARRY TRADE'))}         {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Establish currency reserve bands to defend peg corridors against exchange drift.",
+            "Stability >= 70% pays daily carry trade yields and eliminates exchange fees.",
+            f"{'-' * 78}",
+            bold(c_cyan("ACTIVE CURRENCY PEGS & CORRIDORS:")),
+        ]
+        if not c_wb:
+            lines.append("  No currency pegs currently established.")
+        else:
+            for pair, peg in c_wb.items():
+                stab = peg.get("stability_score", 0.0)
+                c_min = peg.get("corridor_min", 0.0)
+                c_max = peg.get("corridor_max", 0.0)
+                y = peg.get("daily_carry_yield", 0)
+                cur = peg.get("peg_currency", "TERRA")
+                status = c_green("DEFENDED") if peg.get("is_defended") else c_red("BREACHED")
+                lines.append(
+                    f"  ◆ {c_gold(pair):<14} │ [{c_min:.2f}-{c_max:.2f}] │ Stability: {c_green(f'{stab:.1%}')} [{status}] │ "
+                    f"Yield: {c_green(f'+{y} {cur}/cycle')}"
+                )
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[P]')}eg Currency Pair  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_diplomacy_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        c_wb = wb.get("captain_workbenches", {}).get("diplomacy_treaties", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_cyan('DIPLOMACIES WORKBENCH │ SU(2) EPISTEMIC TREATY CONCORD'))}           {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Tailor 5 bilateral treaty clauses (tariffs, escorts, mining, science, migration).",
+            "SU(2) epistemic holonomy overlap >= 65% ratifies non-aggression and mutual perks.",
+            f"{'-' * 78}",
+            bold(c_cyan("RATIFIED INTERSTELLAR TREATIES:")),
+        ]
+        if not c_wb:
+            lines.append("  No bilateral treaties currently negotiated.")
+        else:
+            for civ, t in c_wb.items():
+                res = t.get("su2_resonance", 0.0)
+                t_red = t.get("tariff_reduction_pct", 0.0)
+                status = c_green("RATIFIED") if t.get("is_ratified") else c_red("REJECTED")
+                lines.append(
+                    f"  ✦ {c_gold(civ):<20} │ SU(2) Resonance: {c_green(f'{res:.1%}')} [{status}] │ "
+                    f"Tariff Relief: -{t_red:.0f}% │ Peace: Active"
+                )
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[N]')}egotiate Treaty  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_starcraft_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        c_wb = wb.get("captain_workbenches", {}).get("starcraft", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_gold('STARCRAFT WORKBENCH │ POWER GRID HARMONICS & LIVING HULL'))}          {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Balance starship power across Weapons, Kinetics, Shields, and Drives (Sum = 100%).",
+            "Culture living bio-chitin tissue for passive self-repair and impact dampening.",
+            f"{'-' * 78}",
+        ]
+        if not c_wb or not c_wb.get("is_balanced"):
+            lines.append("  Starship power grid running at factory baseline (25/25/25/25).")
+        else:
+            w = c_wb.get("weapons_pct", 25.0)
+            k = c_wb.get("kinetic_pct", 25.0)
+            s = c_wb.get("shields_pct", 25.0)
+            d = c_wb.get("drives_pct", 25.0)
+            h = c_wb.get("harmonic_factor", 1.0)
+            living = c_wb.get("living_hull_active", False)
+            lines.append(f"  Power Distribution: Weapons {w:.0f}% │ Kinetics {k:.0f}% │ Shields {s:.0f}% │ Drives {d:.0f}%")
+            lines.append(f"  Harmonic Grid Efficiency: {c_green(f'{h:.2f}x')}")
+            if living:
+                mat = c_wb.get("living_hull_perks", {}).get("material", "BIO_CHITIN")
+                lines.append(f"  Living Hull Status: {c_green('ACTIVE')} ({mat}) │ Regen: +15 shields/cycle │ Damage Dampening: -25%")
+            else:
+                lines.append("  Living Hull Status: None cultured.")
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[T]')}une Power Grid  │  {c_green('[G]')}raft Living Biomaterial  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_dock_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        c_wb = wb.get("captain_workbenches", {}).get("dock_logistics", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_cyan('DOCKS & LOGISTICS WORKBENCH │ M/M/C SPACEPORT QUEUEING'))}           {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Tune crane berths and fuel hydrant throughput to eliminate hauler demurrage.",
+            "Traffic intensity rho < 0.92 stabilizes turnaround and collects port fee dividends.",
+            f"{'-' * 78}",
+            bold(c_cyan("MANAGED SPACEPORTS:")),
+        ]
+        if not c_wb:
+            lines.append("  No orbital dock configurations deployed.")
+        else:
+            for pid, d in c_wb.items():
+                p_name = d.get("planet_name", pid)
+                b = d.get("berths", 3)
+                rho = d.get("traffic_intensity_rho", 0.0)
+                eff = d.get("turnaround_efficiency", 0.0)
+                rev = d.get("port_revenue_per_cycle", 0)
+                status = c_green("STABLE") if d.get("is_stable") else c_red("CONGESTED")
+                lines.append(
+                    f"  ⚓ {c_gold(p_name):<18} │ Berths: {b} │ rho: {c_cyan(f'{rho:.2f}')} [{status}] │ "
+                    f"Turnaround: {c_green(f'{eff:.1%}')} │ Port Rev: {c_green(f'+{rev} Cr/cycle')}"
+                )
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[O]')}ptimize Local Dock  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_satellite_workbench(cls, view: Dict[str, Any]) -> str:
+        wb = view.get("workbenches", {})
+        c_wb = wb.get("captain_workbenches", {}).get("constellations", {})
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_green('SATELLITES WORKBENCH │ WALKER-DELTA CONSTELLATION GEOMETRY'))}       {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+            "Deploy Walker-Delta (T/P/F) constellations for planetary communications & defense.",
+            "Surface coverage >= 75% unlocks orbital relay, deep scanning, or kinetic barriers.",
+            f"{'-' * 78}",
+            bold(c_cyan("DEPLOYED SATELLITE CONSTELLATIONS:")),
+        ]
+        if not c_wb:
+            lines.append("  No satellite constellations currently deployed.")
+        else:
+            for key, s in c_wb.items():
+                p_name = s.get("planet_name", key)
+                pay = s.get("payload_type", "RELAY")
+                t = s.get("total_satellites", 24)
+                p = s.get("orbital_planes", 4)
+                f = s.get("phase_factor", 1)
+                cov = s.get("surface_coverage", 0.0)
+                status = c_green("OPERATIONAL") if s.get("is_operational") else c_red("BLIND SPOTS")
+                lines.append(
+                    f"  🛰  {c_gold(p_name):<16} │ {c_cyan(f'[{pay}]'):<15} │ {t}/{p}/{f} @ {s.get('altitude_km', 0):.0f}km │ "
+                    f"Coverage: {c_green(f'{cov:.1%}')} [{status}]"
+                )
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[D]')}eploy Constellation  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
     def render_help(cls) -> str:
         """Renders classic BBS door game guide and mechanics."""
         return f"""
