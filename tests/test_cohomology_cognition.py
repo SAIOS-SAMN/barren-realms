@@ -583,6 +583,30 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertIn("Ubu", cap.discovered_elements)
         self.assertIn("Ubu", cap.ship.cargo.elements)
 
+    def test_observer_telemetry_and_continuous_orbit(self):
+        from xylarium.kernel import observation
+        
+        # 1. Non-destructive telemetry sampling
+        tel = observation.sample_telemetry(self.kernel)
+        self.assertTrue(tel.get("healthy"))
+        self.assertIn("climate", tel)
+        self.assertIn("markets", tel)
+        self.assertIn("morphospace", tel)
+        self.assertIn("associative_memory", tel)
+        self.assertIn("metric_reverberation", tel)
+        self.assertIn("spheres_360", tel)
+        self.assertIn("civilization_bridges", tel)
+        self.assertIn("combat_holonomy", tel)
+        self.assertIn("distributed_singularities", tel)
+        self.assertIn("alchemy_continuum", tel)
+
+        # 2. Continuous orbit execution (headless engine ticking)
+        orbit_result = observation.run_orbit(self.kernel, cycles=10, interval_cycles=5, verbose=False)
+        self.assertEqual(orbit_result["cycles_completed"], 10)
+        self.assertTrue(orbit_result["engine_healthy"])
+        self.assertGreaterEqual(orbit_result["final_cycle"], 10)
+        self.assertGreaterEqual(len(orbit_result["final_telemetry"]), 10)
+
 
 if __name__ == "__main__":
     unittest.main()

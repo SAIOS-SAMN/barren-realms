@@ -214,6 +214,16 @@ def main():
     print(f"  [Alchemical Induction] Periodic Table Almanac: Name={disc_elem.name}, Family={disc_elem.family_name}, Phase={disc_elem.phase_name}")
     print(f"  [Alchemical Induction] New Element Discovered: {res_ind.data['is_new_discovery']} (Discovered Roster: {cap_alch.discovered_elements})")
 
+    # --------------------------------------------------------------------------
+    # 9. First-Class Observer Telemetry Sampling
+    # --------------------------------------------------------------------------
+    print("\n[9] FIRST-CLASS OBSERVER TELEMETRY SAMPLING:")
+    from xylarium.kernel import observation
+    tel = observation.sample_telemetry(kernel)
+    print(f"  Observer Manifolds Sampled: {len(tel)} telemetry channels")
+    print(f"  Healthy: {tel.get('healthy')} | Universal Scale Factor a(t): {tel['distributed_singularities']['universal_scale_factor']:.6f}")
+    print(f"  S^2 Climate Equator: {tel['climate']['t_equator_k']} K | S^60 Area: {tel['spheres_360']['s60_area']:.3e}")
+
     print("\n" + "=" * 80)
     print("ALL MANIFOLD EXPANSIONS, BRIDGES & ADVANCED FRONTIERS VERIFIED FUNCTIONAL IN LIVE RUNTIME!")
     print("=" * 80)

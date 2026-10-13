@@ -417,11 +417,40 @@ The complete test suite and live simulation verification demonstrate total physi
 ```bash
 # Core Unmocked Unit Test Suite
 $ python3 -m unittest tests/test_cohomology_cognition.py tests/test_torsion_continuum.py tests/test_kernel.py tests/test_mindcore.py tests/test_genome_enterprise.py
-Ran 65 tests in 9.218s
+Ran 66 tests in 9.350s
 OK
 
 # Live Runtime Manifold Verification
 $ python3 verify_cycle2_expansions.py
 ALL MANIFOLD EXPANSIONS, BRIDGES & ADVANCED FRONTIERS VERIFIED FUNCTIONAL IN LIVE RUNTIME!
 ```
+
+---
+
+## 10. First-Class In-Kernel Telemetry & Continuous Orbit Runner
+
+Eliminating isolated or parallel verification harnesses, real-time diagnostics and telemetry are embedded directly into the running game kernel via the `observation` subsystem:
+
+### 10.1 Diagnostic Telemetry Sampling (`observation.sample_telemetry`)
+* **Files:** [`xylarium/kernel/observation.py`](file:///opt/barren-realms/xylarium/kernel/observation.py)
+* **Mechanics:**
+  - Non-destructively reads state directly from the active kernel and its registered subsystems across all 10 physical, topological, cognitive, and metabolic manifolds:
+    1. **Climate & Column Dynamics:** Surface pressure, equatorial/polar temperatures, scale height, and active $S^2$ surface grid tiles.
+    2. **Fluid Markets & Geodesic Trade:** Gravitational lapse $(1+z)$, dilated interest rates, Navier-Stokes commodity flux $J$, and stress-energy trace.
+    3. **Morphospace & Waddington Drift:** Active metabolic basins, activation energy $\Delta H^\ddagger$, and continuous elemental assimilation ratios.
+    4. **Associative Cognitive Memory:** $SU(2)$ memory norms, active attractors, and Casimir invariants $C_2$.
+    5. **Metric Reverberation & Stellar Dynamos:** Quasi-normal ringdown amplitude $\Psi$, complex eigenfrequencies $(\omega_R, \omega_I)$, and magnetic dynamo amplification.
+    6. **Hyperspherical Topology ($S^{60} / S^{360}$):** $S^{60}$ surface area, Lévy equatorial variance, waveguide collimation gain, and caustic curvature.
+    7. **Civilization Bridges:** $S^{360}$ horizon coherence, transit permissions, and Mayer-Vietoris cohomology theorems.
+    8. **Tactical Combat Holonomies:** $SU(2)$ tactical Wilson line trace $\frac{1}{2}\text{Tr}(\mathbf{Q})$, resonance mode, and shield absorption efficiency.
+    9. **Distributed Singularities & Cosmic Expansion:** Distributed throat count, vacuum intake $\rho_{\text{vac}}$, Friedmann-Cartan acceleration $\ddot{a}/a$, and universal scale factor $a(t)$.
+    10. **Continuum Nucleosynthesis:** Superheavy elements ($Z \ge 119$, $Z=126$), binding energy per nucleon, and Island of Stability shell factors.
+  - Telemetry is continuously recorded during the engine's seasonal simulation loop (`quarter()` in `observation.py`) into a rolling ring buffer in kernel state (`kernel.state["observation"]["telemetry"]`).
+
+### 10.2 Continuous Headless Engine Orbit (`run_orbit.py`)
+* **Files:** [`run_orbit.py`](file:///opt/barren-realms/run_orbit.py), [`xylarium/kernel/observation.py`](file:///opt/barren-realms/xylarium/kernel/observation.py) (`run_orbit`)
+* **Mechanics:**
+  - Runs the authentic production engine loop without mocks or sidecars (`kernel.tick_simulation()`).
+  - Progresses universal cycles, advances seasons, executes all physical manifolds, and logs real-time telemetry frames.
+  - Executable: `python3 run_orbit.py <cycles>` (defaults to 100 cycles).
 
