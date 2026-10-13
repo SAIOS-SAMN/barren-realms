@@ -1322,6 +1322,66 @@ class GameKernel:
             logs=[msg] if ok else [],
         )
 
+    def _handle_forward_freight_contract(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        mode = str(kwargs.get("mode", kwargs.get("action", "WRITE"))).strip().upper()
+        if mode in ("WRITE", "PROPOSE", "BUY"):
+            comm = kwargs.get("commodity", "ORE")
+            orig = int(kwargs.get("origin_sector", captain.sector_id))
+            dest = int(kwargs.get("dest_sector", kwargs.get("destination_sector", 30)))
+            qty = int(kwargs.get("quantity", kwargs.get("amount", 20)))
+            target_cycles = int(kwargs.get("target_cycles", kwargs.get("duration", 30)))
+            ok, msg, data = self.market_manager.write_forward_contract(
+                captain, comm, orig, dest, qty, target_cycles=target_cycles, kernel=self
+            )
+            return ActionResult(
+                success=ok,
+                action=ActionType.FORWARD_FREIGHT_CONTRACT,
+                message=msg,
+                turns_spent=0,
+                data=data,
+                logs=[msg] if ok else [],
+            )
+        elif mode in ("SETTLE", "CLOSE"):
+            fid = kwargs.get("contract_id", kwargs.get("ffa_id", ""))
+            ok, msg, data = self.market_manager.settle_forward_contract(
+                captain, fid, kernel=self
+            )
+            return ActionResult(
+                success=ok,
+                action=ActionType.FORWARD_FREIGHT_CONTRACT,
+                message=msg,
+                turns_spent=0,
+                data=data,
+                logs=[msg] if ok else [],
+            )
+        elif mode in ("LIST", "STATUS"):
+            contracts = [f.to_dict() for f in self.market_manager.forward_contracts.values() if f.issuer_id == captain.id]
+            return ActionResult(
+                success=True,
+                action=ActionType.FORWARD_FREIGHT_CONTRACT,
+                message=f"Retrieved {len(contracts)} forward freight contracts.",
+                turns_spent=0,
+                data={"contracts": contracts},
+            )
+        return ActionResult(
+            success=False,
+            action=ActionType.FORWARD_FREIGHT_CONTRACT,
+            message=f"Unknown forward contract operation '{mode}'. Choose 'WRITE', 'SETTLE', or 'LIST'.",
+            turns_spent=0,
+        )
+
+    def _handle_biosphere_seed(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        pid = kwargs.get("planet_id")
+        planet = None
+        if pid:
+            planet = self.get_planet(pid)
+        if not planet:
+            sec = self.sectors.get(captain.sector_id)
+            if sec and sec.planets:
+                planet = sec.planets[0]
+        from xylarium.kernel import biosphere
+        return biosphere.seed_biosphere_pack(captain, planet, kernel=self)
+
     def _handle_empire_overview(self, captain: Captain) -> ActionResult:
         owned_planets = []
         for s in self.sectors.values():
@@ -2516,6 +2576,7 @@ class GameKernel:
             "executives": [ex.to_dict() for ex in self.market_manager.executives.values() if ex.owner_id == captain.id],
             "all_executives": [ex.to_dict() for ex in self.market_manager.executives.values()],
             "trade_council": self.market_manager.trade_council.to_dict(),
+            "forward_contracts": [f.to_dict() for f in self.market_manager.forward_contracts.values() if f.issuer_id == captain.id],
         }
 
         # Get port catalog if present
@@ -2692,6 +2753,10 @@ class GameKernel:
             "alchemy": {
                 "recipes": [r.to_dict() for r in self.alchemy_manager.get_available_recipes(captain)] if hasattr(self, "alchemy_manager") else [],
                 "all_recipes": [r.to_dict() for r in self.alchemy_manager.recipes.values()] if hasattr(self, "alchemy_manager") else [],
+                "isru_recipes": [
+                    {"id": r.id, "name": r.name, "inputs": r.inputs, "outputs": r.outputs, "description": r.description}
+                    for r in __import__("xylarium.kernel.alchemy", fromlist=["ISRU_RECIPES"]).ISRU_RECIPES.values()
+                ],
                 "reactor": {
                     "installed": bool(getattr(captain, "alchemy_reactor", False)),
                     "heat": self.alchemy_manager.get_heat(captain.id) if hasattr(self, "alchemy_manager") else 0.0,

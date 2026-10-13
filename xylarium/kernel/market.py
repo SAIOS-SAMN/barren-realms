@@ -372,6 +372,55 @@ def ledger_debit_port_sol(port: Any, sol: int) -> None:
         port.treasury += fx.ACTIVE_FX.swap_sol_to(port.currency, got - sol)
 
 
+@dataclass
+class ForwardFreightAgreement:
+    id: str
+    issuer_id: str
+    commodity: str
+    origin_sector: int
+    dest_sector: int
+    quantity: int
+    strike_price: int
+    margin_escrow: int
+    created_cycle: int
+    expiry_cycle: int
+    status: str = "OPEN"      # "OPEN", "SETTLED", "EXPIRED"
+    realized_pnl: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "issuer_id": self.issuer_id,
+            "commodity": self.commodity,
+            "origin_sector": self.origin_sector,
+            "dest_sector": self.dest_sector,
+            "quantity": self.quantity,
+            "strike_price": self.strike_price,
+            "margin_escrow": self.margin_escrow,
+            "created_cycle": self.created_cycle,
+            "expiry_cycle": self.expiry_cycle,
+            "status": self.status,
+            "realized_pnl": self.realized_pnl,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ForwardFreightAgreement":
+        return cls(
+            id=data["id"],
+            issuer_id=data["issuer_id"],
+            commodity=data["commodity"],
+            origin_sector=data["origin_sector"],
+            dest_sector=data["dest_sector"],
+            quantity=data["quantity"],
+            strike_price=data["strike_price"],
+            margin_escrow=data["margin_escrow"],
+            created_cycle=data["created_cycle"],
+            expiry_cycle=data["expiry_cycle"],
+            status=data.get("status", "OPEN"),
+            realized_pnl=int(data.get("realized_pnl", 0)),
+        )
+
+
 class MarketManager:
     """
     Authoritative manager for corporate enterprises, the stock exchange,
@@ -386,9 +435,11 @@ class MarketManager:
         self.executives: Dict[str, SalesExecutive] = {}
         self.trade_haulers: Dict[str, TradeHauler] = {}
         self.trade_council: TradeCouncil = TradeCouncil()
+        self.forward_contracts: Dict[str, ForwardFreightAgreement] = {}
         self.next_contract_id: int = 101
         self.next_exec_id: int = 101
         self.next_hauler_id: int = 101
+        self.next_ffa_id: int = 101
         self._initialize_flagship_corporations()
 
     def _initialize_flagship_corporations(self) -> None:
@@ -2113,6 +2164,141 @@ class MarketManager:
             "remaining_position": shorts.get(ticker),
         }
 
+    def write_forward_contract(
+        self,
+        captain: Any,
+        commodity: str,
+        origin_sector: int,
+        dest_sector: int,
+        quantity: int,
+        target_cycles: int = 30,
+        kernel: Any = None,
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Underwrites an ISSE Forward Freight Agreement (FFA) to hedge long-haul market price risk.
+        Locks in a guaranteed delivery strike price, requiring a 20% margin escrow.
+        """
+        if not captain:
+            return False, "Captain profile required.", {}
+        if quantity <= 0:
+            return False, "Quantity must be greater than zero.", {}
+        if origin_sector == dest_sector:
+            return False, "Origin and destination sectors must differ.", {}
+
+        comm_u = commodity.strip().upper()
+        if not kernel or not hasattr(kernel, "sectors"):
+            return False, "Kernel sectors unavailable.", {}
+
+        sec_dst = kernel.sectors.get(dest_sector)
+        if not sec_dst or not sec_dst.port:
+            return False, f"Destination Sector {dest_sector:03d} has no commercial spaceport to settle forward pricing.", {}
+
+        from xylarium.kernel.economy import EconomyManager
+        buy_p, _ = EconomyManager.get_unit_prices(sec_dst.port, comm_u)
+        if buy_p <= 0:
+            buy_p = 40
+
+        # Strike price reflects spot price plus time-convenience yield
+        strike_price = max(10, int(buy_p * (1.0 + 0.002 * max(5, target_cycles))))
+        notional_val = quantity * strike_price
+        margin_req = max(100, int(notional_val * 0.20))
+
+        if captain.credits < margin_req:
+            return False, f"Insufficient margin: Writing forward contract requires {margin_req:,} Cr (You have {captain.credits:,} Cr).", {}
+
+        captain.credits -= margin_req
+        fed = getattr(kernel, "federal_reserve", None)
+        if fed is not None:
+            fed.receive(margin_req, "ffa_margin_escrow")
+
+        fid = f"FFA-{self.next_ffa_id}"
+        self.next_ffa_id += 1
+
+        cycle = kernel.cycle_count if kernel else 0
+        expiry = cycle + max(10, target_cycles)
+
+        ffa = ForwardFreightAgreement(
+            id=fid,
+            issuer_id=captain.id,
+            commodity=comm_u,
+            origin_sector=origin_sector,
+            dest_sector=dest_sector,
+            quantity=quantity,
+            strike_price=strike_price,
+            margin_escrow=margin_req,
+            created_cycle=cycle,
+            expiry_cycle=expiry,
+            status="OPEN",
+        )
+        self.forward_contracts[fid] = ffa
+
+        msg = (
+            f"FORWARD FREIGHT AGREEMENT ISSUED: {fid} created! Locked {quantity} units of [{comm_u}] "
+            f"at strike price {strike_price:,} Cr/unit (Expiry: Cycle {expiry}). "
+            f"Escrowed {margin_req:,} Cr margin collateral."
+        )
+        if hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(f"[MARKET FFA] {msg}")
+
+        return True, msg, {
+            "contract": ffa.to_dict(),
+            "ffa_id": fid,
+            "margin_escrow": margin_req,
+            "strike_price": strike_price,
+        }
+
+    def settle_forward_contract(
+        self,
+        captain: Any,
+        contract_id: str,
+        kernel: Any = None,
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Settles a Forward Freight Agreement against prevailing spot market prices at destination.
+        P&L = (Strike Price - Spot Price) * Quantity.
+        If spot price drops, hedge generates cash profit; if spot price rises, margin absorbs delta.
+        """
+        ffa = self.forward_contracts.get(contract_id)
+        if not ffa:
+            return False, f"Forward contract '{contract_id}' not found.", {}
+        if ffa.status != "OPEN":
+            return False, f"Forward contract '{contract_id}' is already {ffa.status}.", {}
+        if captain and ffa.issuer_id != captain.id:
+            return False, "Access Denied: You are not the contract issuer.", {}
+
+        if not kernel or not hasattr(kernel, "sectors"):
+            return False, "Kernel sectors unavailable.", {}
+
+        sec_dst = kernel.sectors.get(ffa.dest_sector)
+        port_dst = sec_dst.port if sec_dst else None
+        from xylarium.kernel.economy import EconomyManager
+        if port_dst:
+            spot_p, _ = EconomyManager.get_unit_prices(port_dst, ffa.commodity)
+        else:
+            spot_p = ffa.strike_price
+
+        price_diff = ffa.strike_price - spot_p
+        payoff = price_diff * ffa.quantity
+        total_payout = max(0, ffa.margin_escrow + payoff)
+
+        if captain:
+            captain.credits += total_payout
+            from xylarium.kernel.experience import ExperienceManager
+            ExperienceManager.award(captain, "commerce", 15, kernel, key=f"ffa:{ffa.id}")
+
+        ffa.status = "SETTLED"
+        ffa.realized_pnl = payoff
+
+        sign = "+" if payoff >= 0 else ""
+        msg = (
+            f"FFA CONTRACT SETTLED: {ffa.id} ({ffa.commodity} x{ffa.quantity}) settled at Spot {spot_p} Cr/unit "
+            f"(Strike: {ffa.strike_price} Cr). PnL: {sign}{payoff:,} Cr. Total payout returned: +{total_payout:,} Cr."
+        )
+        if hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(f"[MARKET FFA] {msg}")
+
+        return True, msg, {"contract": ffa.to_dict(), "payout": total_payout, "pnl": payoff, "spot_price": spot_p}
+
     def set_sector_tariff(
         self,
         captain: Any,
@@ -3531,6 +3717,12 @@ class MarketManager:
                     comp.share_price = max(1, comp.share_price - 1)
                     comp.price_history.append(comp.share_price)
 
+        # 1b. Check expiring Forward Freight Agreements (FFAs)
+        for ffa_id, ffa in list(self.forward_contracts.items()):
+            if ffa.status == "OPEN" and current_cycle >= ffa.expiry_cycle:
+                issuer = kernel.captains.get(ffa.issuer_id) if hasattr(kernel, "captains") else None
+                self.settle_forward_contract(issuer, ffa_id, kernel=kernel)
+
         # Prune settled contracts once past their retention window so the board stays bounded
         for cid, contract in list(self.contracts.items()):
             if contract.status in ("COMPLETED", "EXPIRED") and current_cycle > contract.expiry_cycle + CONTRACT_RETENTION_CYCLES:
@@ -3828,9 +4020,11 @@ class MarketManager:
             "executives": {eid: ex.to_dict() for eid, ex in self.executives.items()},
             "trade_haulers": {hid: h.to_dict() for hid, h in self.trade_haulers.items()},
             "trade_council": self.trade_council.to_dict(),
+            "forward_contracts": {fid: f.to_dict() for fid, f in self.forward_contracts.items()},
             "next_contract_id": self.next_contract_id,
             "next_exec_id": self.next_exec_id,
             "next_hauler_id": self.next_hauler_id,
+            "next_ffa_id": self.next_ffa_id,
         }
 
     @classmethod
@@ -3857,9 +4051,14 @@ class MarketManager:
             mgr.trade_council = TradeCouncil.from_dict(data["trade_council"])
         else:
             mgr.trade_council = TradeCouncil()
+        mgr.forward_contracts = {
+            fid: ForwardFreightAgreement.from_dict(f_data)
+            for fid, f_data in data.get("forward_contracts", {}).items()
+        }
         mgr.next_contract_id = data.get("next_contract_id", 101)
         mgr.next_exec_id = data.get("next_exec_id", 101)
         mgr.next_hauler_id = data.get("next_hauler_id", 101)
+        mgr.next_ffa_id = data.get("next_ffa_id", 101)
         return mgr
 
 

@@ -122,11 +122,19 @@ class ActionType(str, Enum):
     IDEOLOGY_TREATY_PROPOSE = "IDEOLOGY_TREATY_PROPOSE"
     IDEOLOGY_TREATY_SIGN = "IDEOLOGY_TREATY_SIGN"
     IDEOLOGY_AID_DISPATCH = "IDEOLOGY_AID_DISPATCH"
+    TRADE_COMPACT_NEGOTIATE = "TRADE_COMPACT_NEGOTIATE"
 
     # [2] Precursor Alchemy & Transmutation Actions
     ALCHEMY_TRANSMUTE = "ALCHEMY_TRANSMUTE"
+    ISRU_REFINE = "ISRU_REFINE"
 
-    # [4] Imperial Senate & Governance Actions
+    # [3] Financial Derivatives & Freight Forward Contracts
+    FORWARD_FREIGHT_CONTRACT = "FORWARD_FREIGHT_CONTRACT"
+
+    # [4] Ecology & Biosphere Seeding
+    BIOSPHERE_SEED = "BIOSPHERE_SEED"
+
+    # [5] Imperial Senate & Governance Actions
     SENATE_CAMPAIGN = "SENATE_CAMPAIGN"
     SENATE_VOTE = "SENATE_VOTE"
     SENATE_ENACT_EDICT = "SENATE_ENACT_EDICT"

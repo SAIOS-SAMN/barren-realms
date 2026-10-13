@@ -927,12 +927,46 @@ class TerminalClient:
                 except ValueError:
                     print(c_red("Invalid share quantity."))
 
+            elif action == "F":
+                # Forward Freight Agreements (FFA Futures)
+                try:
+                    op = input("[W]rite Forward Freight Contract or [S]ettle Contract? ").strip().upper()
+                    if op.startswith("S"):
+                        fid = input("Forward Contract ID (e.g. FFA-101): ").strip().upper()
+                        res = self.kernel.dispatch(
+                            self.player_id,
+                            ActionType.FORWARD_FREIGHT_CONTRACT,
+                            mode="SETTLE",
+                            contract_id=fid,
+                        )
+                        self._print_result(res)
+                    else:
+                        comm = input("Commodity to forward hedge (e.g. ORE, He-3, Pt): ").strip().upper()
+                        dest_s = input("Destination Sector ID (e.g. 30): ").strip()
+                        dest = int(dest_s) if dest_s.isdigit() else 30
+                        qty_s = input("Quantity to hedge (e.g. 20): ").strip()
+                        qty = int(qty_s) if qty_s.isdigit() else 20
+                        dur_s = input("Forward horizon cycles (e.g. 30): ").strip()
+                        dur = int(dur_s) if dur_s.isdigit() else 30
+                        res = self.kernel.dispatch(
+                            self.player_id,
+                            ActionType.FORWARD_FREIGHT_CONTRACT,
+                            mode="WRITE",
+                            commodity=comm,
+                            dest_sector=dest,
+                            quantity=qty,
+                            target_cycles=dur,
+                        )
+                        self._print_result(res)
+                except (ValueError, KeyboardInterrupt, EOFError):
+                    print(c_red("Invalid input for Forward Freight Contract."))
+
             elif action == "V":
                 # Venture Capital Desk
                 self._prompt_vc_desk(fresh_view)
 
             else:
-                print(c_gold("Valid commands: [C]ommission, [R]eassign, [E]scort Wings, [N]aval Security, [D]erivative Hedge, [H]alt, [S]crap, [V]C Desk, [X] Exit"))
+                print(c_gold("Valid commands: [C]ommission, [R]eassign, [E]scort Wings, [N]aval Security, [D]erivative Hedge, [F]FA Futures, [H]alt, [S]crap, [V]C Desk, [X] Exit"))
 
     def _prompt_vc_desk(self, view: Dict[str, Any]) -> None:
         """Interactive Venture Capital and Debt Syndicate Console."""
@@ -1938,8 +1972,20 @@ class TerminalClient:
                 except (KeyboardInterrupt, EOFError):
                     pass
                 input(c_gold("Press Enter to continue..."))
+            elif action in ["B", "BIOSPHERE", "SEED"]:
+                try:
+                    pid = input("Colony Planet ID to inoculate with Biosphere Pack (or Enter for local world): ").strip()
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.BIOSPHERE_SEED,
+                        planet_id=pid if pid else None,
+                    )
+                    self._print_result(res)
+                except (KeyboardInterrupt, EOFError):
+                    pass
+                input(c_gold("Press Enter to continue..."))
             else:
-                print(c_red(f"Unknown Imperial command: '{cmd}'. Use T, W, C, R, D, or Q."))
+                print(c_red(f"Unknown Imperial command: '{cmd}'. Use T, W, C, R, D, B, or Q."))
                 input(c_gold("Press Enter to continue..."))
 
     def _prompt_exchange(self, view: Dict[str, Any]) -> None:
@@ -2677,7 +2723,7 @@ class TerminalClient:
             fresh_view = self.kernel.get_player_view(self.player_id)
             print(TerminalRenderer.render_ideology_screen(fresh_view))
             try:
-                cmd = input(f"{c_gold('Diplomacy Command [P/S/D/Q] > ')}").strip().upper()
+                cmd = input(f"{c_gold('Diplomacy Command [P/S/C/D/Q] > ')}").strip().upper()
             except (KeyboardInterrupt, EOFError):
                 break
 
@@ -2711,6 +2757,17 @@ class TerminalClient:
                     self._print_result(res)
                 except (KeyboardInterrupt, EOFError):
                     break
+            elif cmd == "C":
+                try:
+                    civ = input("Civilization Name (e.g. Veyren Sovereignty): ").strip()
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.TRADE_COMPACT_NEGOTIATE,
+                        civilization_name=civ,
+                    )
+                    self._print_result(res)
+                except (KeyboardInterrupt, EOFError):
+                    break
             elif cmd == "D":
                 try:
                     pid = input("Colony Planet ID (or Enter for local world): ").strip()
@@ -2731,7 +2788,7 @@ class TerminalClient:
             fresh_view = self.kernel.get_player_view(self.player_id)
             print(TerminalRenderer.render_alchemy_screen(fresh_view))
             try:
-                cmd = input(f"{c_gold('Alchemy Command [T/A/Q] > ')}").strip().upper()
+                cmd = input(f"{c_gold('Alchemy Command [T/R/A/Q] > ')}").strip().upper()
             except (KeyboardInterrupt, EOFError):
                 break
 
@@ -2748,6 +2805,24 @@ class TerminalClient:
                         recipe_id=rec_id,
                     )
                     self._print_result(res)
+                except (KeyboardInterrupt, EOFError):
+                    break
+            elif cmd == "R":
+                isru_recs = fresh_view.get("alchemy", {}).get("isru_recipes", [])
+                print(f"\n{bold(c_cyan('IN-SITU RESOURCE UTILIZATION (ISRU) REFINERY RECIPES:'))}")
+                for r in isru_recs:
+                    inps = ", ".join(f"{v}x {k}" for k, v in r["inputs"].items())
+                    outs = ", ".join(f"{v}x {k}" for k, v in r["outputs"].items())
+                    print(f"  ► {c_gold(r['id'])}: {r['name']} ({inps} -> {outs})")
+                try:
+                    chosen = input(c_gold("Recipe ID to refine (e.g. RAW_ORE_SMELT, VOLATILE_FRACTIONATION): ")).strip().upper()
+                    if chosen:
+                        res = self.kernel.dispatch(
+                            self.player_id,
+                            ActionType.ISRU_REFINE,
+                            recipe_id=chosen,
+                        )
+                        self._print_result(res)
                 except (KeyboardInterrupt, EOFError):
                     break
             elif cmd == "A":

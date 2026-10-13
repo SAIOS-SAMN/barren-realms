@@ -358,6 +358,12 @@ def _hedge_derivative(k: Any, captain: Any, current_sector: Any, kwargs: Dict[st
     return result
 
 
+@action(ActionType.FORWARD_FREIGHT_CONTRACT, turns=0)
+def _forward_freight_contract(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    result = k._handle_forward_freight_contract(captain, kwargs)
+    return result
+
+
 @action(ActionType.FLEET_RECALL, turns=0)
 def _fleet_recall(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     result = k._handle_fleet_recall(captain, kwargs)
@@ -547,6 +553,17 @@ def _ideology_aid_dispatch(k: Any, captain: Any, current_sector: Any, kwargs: Di
     return result
 
 
+@action(ActionType.TRADE_COMPACT_NEGOTIATE, turns=0)
+def _trade_compact_negotiate(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    civ_name = kwargs.get("civilization_name", kwargs.get("target_civ", kwargs.get("target_id", "")))
+    return k.ideology_manager.negotiate_civilization_compact(
+        proposer_id=captain.id,
+        civilization_name=civ_name,
+        terms=kwargs,
+        kernel=k,
+    )
+
+
 @action(ActionType.ALCHEMY_TRANSMUTE, turns=TURN_COST_PLANET_OP)
 def _alchemy_transmute(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     result = k.alchemy_manager.transmute(
@@ -555,6 +572,21 @@ def _alchemy_transmute(k: Any, captain: Any, current_sector: Any, kwargs: Dict[s
         iterations=int(kwargs.get("iterations", 1)),
     )
     return result
+
+
+@action(ActionType.ISRU_REFINE, turns=0)
+def _isru_refine(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    recipe_id = kwargs.get("recipe_id", "")
+    return k.alchemy_manager.refine_isru(
+        captain=captain,
+        recipe_id=recipe_id,
+        kernel=k,
+    )
+
+
+@action(ActionType.BIOSPHERE_SEED, turns=0)
+def _biosphere_seed(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_biosphere_seed(captain, kwargs)
 
 
 @action(ActionType.SENATE_CAMPAIGN, turns=0)

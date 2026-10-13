@@ -29,6 +29,7 @@ class TreatyType(str, Enum):
     DEFENSIVE_PACT = "DEFENSIVE_PACT"
     ALLIANCE = "ALLIANCE"
     SANCTION = "SANCTION"
+    BILATERAL_TRADE_COMPACT = "BILATERAL_TRADE_COMPACT"
 
 
 @dataclass
@@ -165,6 +166,10 @@ class Treaty:
     duration_cycles: int = 150
     tariff_discount_pct: int = 15
     active: bool = True
+    mining_concession: bool = False
+    joint_security: bool = False
+    bilateral_quota_commodity: Optional[str] = None
+    bilateral_quota_units: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -176,6 +181,10 @@ class Treaty:
             "duration_cycles": self.duration_cycles,
             "tariff_discount_pct": self.tariff_discount_pct,
             "active": self.active,
+            "mining_concession": self.mining_concession,
+            "joint_security": self.joint_security,
+            "bilateral_quota_commodity": self.bilateral_quota_commodity,
+            "bilateral_quota_units": self.bilateral_quota_units,
         }
 
     @classmethod
@@ -189,6 +198,10 @@ class Treaty:
             duration_cycles=data.get("duration_cycles", 150),
             tariff_discount_pct=data.get("tariff_discount_pct", 15),
             active=data.get("active", True),
+            mining_concession=bool(data.get("mining_concession", False)),
+            joint_security=bool(data.get("joint_security", False)),
+            bilateral_quota_commodity=data.get("bilateral_quota_commodity"),
+            bilateral_quota_units=int(data.get("bilateral_quota_units", 0)),
         )
 
 
@@ -472,6 +485,137 @@ class IdeologyManager:
             ActionType.IDEOLOGY_TREATY_SIGN,
             f"Treaty {treaty_id} ratified and active.",
             data=treaty.to_dict(),
+        )
+
+    def negotiate_civilization_compact(
+        self,
+        proposer_id: str,
+        civilization_name: str,
+        terms: Optional[Dict[str, Any]] = None,
+        kernel: Any = None,
+    ) -> ActionResult:
+        """
+        Negotiates a bilateral trade compact with a sovereign planetary civilization.
+        Evaluates SU(2) epistemic worldview resonance, moral standing, and treaty covenants:
+        - 100% tariff exemption in territorial sectors
+        - Exclusive or authorized mining concessions in planetary asteroid belts
+        - Mutual naval escort defense against raiders
+        """
+        if not kernel:
+            return ActionResult(False, ActionType.TRADE_COMPACT_NEGOTIATE, "Simulation kernel required.")
+
+        proposer_cap = kernel.captains.get(proposer_id)
+        if not proposer_cap:
+            return ActionResult(False, ActionType.TRADE_COMPACT_NEGOTIATE, "Proposer captain not found.")
+
+        # Locate civilization across all charted worlds
+        c_query = civilization_name.strip().lower()
+        target_civ = None
+        target_world = None
+        for sec in kernel.sectors.values():
+            for pl in sec.planets:
+                civ = getattr(pl, "civilization", None)
+                if civ and (c_query in civ.name.lower() or civ.name.lower() in c_query):
+                    target_civ = civ
+                    target_world = pl
+                    break
+            if target_civ:
+                break
+
+        if not target_civ:
+            return ActionResult(
+                False,
+                ActionType.TRADE_COMPACT_NEGOTIATE,
+                f"Civilization '{civilization_name}' could not be located in charted space.",
+            )
+
+        civ_entity_id = f"civ:{target_civ.name}"
+
+        # Check existing active compact
+        pair = self._pair_key(proposer_id, civ_entity_id)
+        for t in self.treaties.values():
+            if self._pair_key(t.signatory_a, t.signatory_b) == pair and t.treaty_type == TreatyType.BILATERAL_TRADE_COMPACT and t.active:
+                return ActionResult(
+                    False,
+                    ActionType.TRADE_COMPACT_NEGOTIATE,
+                    f"Active Bilateral Trade Compact already in effect with {target_civ.name} (Treaty {t.id}).",
+                )
+
+        # Evaluate SU(2) Epistemic Resonance
+        onto = getattr(target_civ, "epistemic_ontology", None)
+        resonance = 0.5
+        if onto and hasattr(onto, "quaternion"):
+            from xylarium.kernel import physics
+            q_civ = onto.quaternion()
+            rot_z = (hash(proposer_cap.id) % 360) * (3.14159 / 180.0)
+            q_cap = physics.Quaternion.from_axis_angle((0.0, 0.0, 1.0), rot_z)
+            q_rel = q_cap.conjugate() * q_civ
+            resonance = max(-1.0, min(1.0, q_rel.w))
+
+        standing = self.get_standing(proposer_id, civ_entity_id)
+
+        # Rejection only if severe epistemic polarization and low standing
+        if resonance < -0.70 and standing < 0.30:
+            return ActionResult(
+                False,
+                ActionType.TRADE_COMPACT_NEGOTIATE,
+                f"COMPACT REJECTED: The Council of {target_civ.name} rejected terms due to severe epistemic dissonance "
+                f"(SU(2) Holonomy Resonance: {resonance:.2f}, Standing: {standing:.2f}). Enhance cooperation first.",
+                data={"resonance": resonance, "standing": standing},
+            )
+
+        # Parse terms
+        terms = terms or {}
+        duration = int(terms.get("duration", 200))
+        quota_comm = terms.get("quota_commodity", "ORE")
+        quota_units = int(terms.get("quota_units", 100))
+
+        tid = f"compact_{self.next_treaty_id}"
+        self.next_treaty_id += 1
+
+        compact = Treaty(
+            id=tid,
+            signatory_a=proposer_id,
+            signatory_b=civ_entity_id,
+            treaty_type=TreatyType.BILATERAL_TRADE_COMPACT,
+            signed_cycle=kernel.cycle_count,
+            duration_cycles=duration,
+            tariff_discount_pct=100,
+            active=True,
+            mining_concession=True,
+            joint_security=True,
+            bilateral_quota_commodity=quota_comm,
+            bilateral_quota_units=quota_units,
+        )
+        self.treaties[tid] = compact
+
+        # Reward syntropic deeds on ledger (+40.0 resonance, +25.0 integrity)
+        self.record_deed(proposer_id, civ_entity_id, "resonance", 40.0, is_syntropic=True)
+        self.record_deed(proposer_id, civ_entity_id, "integrity", 25.0, is_syntropic=True)
+
+        from xylarium.kernel.experience import ExperienceManager
+        ExperienceManager.award(proposer_cap, "governance", 25, kernel, key=f"compact:{tid}")
+
+        msg = (
+            f"BILATERAL TRADE COMPACT RATIFIED: {proposer_cap.name} and the {target_civ.name} "
+            f"concluded diplomatic accords! Granted 100% tariff exemption, mining concessions in {target_world.name}'s system, "
+            f"and mutual naval security escorts. (Resonance: {resonance:.2f}, Standing: {standing:.2f})"
+        )
+        if kernel.event_bus:
+            kernel.event_bus.broadcast_radio(
+                sender="DIPLO-ACCORD",
+                text=msg,
+                channel="SYSTEM",
+                sector_id=target_world.sector_id,
+            )
+        if hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(f"[DIPLOMACY] {msg}")
+
+        return ActionResult(
+            True,
+            ActionType.TRADE_COMPACT_NEGOTIATE,
+            msg,
+            data={"treaty": compact.to_dict(), "resonance": resonance, "civilization": target_civ.name},
         )
 
     def tick_ideology(self, kernel: Any) -> None:

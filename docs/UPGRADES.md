@@ -557,6 +557,44 @@ To eliminate test theatre, disconnected parallel harnesses, and UX gaps, the tra
 * **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.HEDGE_DERIVATIVE`), [`xylarium/kernel/actions.py`](file:///opt/barren-realms/xylarium/kernel/actions.py), [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py) (`_handle_hedge_derivative`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py)
 * **Risk Hedging Engine:** Long interstellar hauls subject ships to mechanical wear (+1 wear/tick) and periodic maintenance overhauls (500 Cr per 50 cycles). To protect balance sheets, players can execute financial derivatives on the Interstellar Stock Exchange (ISSE) via `[D]erivative Hedge` in the fleet console.
 * **Short Sale Derivative (`SHORT`):** Borrows and shorts corporate sector shares (e.g., commodity index or mining firm shares) on margin, generating immediate cash proceeds while holding collateral in Federal escrow.
-* **Short Cover Derivative (`COVER`):** Closes short positions upon route completion, locking in financial returns that offset ship maintenance and depreciation costs across multi-sector transit networks.
+---
 
+## 14. Inter-Civilization Trade Compacts, ISRU Orbital Refineries, FFAs & Ecological Biome Succession
 
+To realize the complete vision of a rich, vibrant, cognitive intelligent, spherical universe without dead wires, mock harnesses, or test theatre, four interconnected strategic orders have been unified into production loops:
+
+### 14.1 Order 1: Bilateral Inter-Civilization Trade Compacts (`TRADE_COMPACT_NEGOTIATE`)
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.TRADE_COMPACT_NEGOTIATE`, `TreatyType.BILATERAL_TRADE_COMPACT`, `Treaty`), [`xylarium/kernel/ideology.py`](file:///opt/barren-realms/xylarium/kernel/ideology.py) (`negotiate_civilization_compact`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
+* **Epistemic Resonance Calculation:** Evaluates $SU(2)$ epistemic worldview resonance between the captain's orientation and the civilization's ontology:
+  $$\chi = \frac{1}{2}\text{Tr}(Q_{\text{captain}}^\dagger Q_{\text{civ}}) = \cos(\theta/2) \in [-1.0, 1.0]$$
+  Rejection is strictly bounded by ideological dissonance ($\chi < -0.70$ and standing $< 0.30$), avoiding arbitrary wall blocks while rewarding ideological alignment.
+* **Compact Covenants:**
+  - **100% Tariff Exemption:** Ratified signatories receive full tariff exemption across all sovereign spaceports.
+  - **Asteroid Mining Concessions:** Grants legal rights to extract mineral reserves from territorial asteroid belts without sovereign interdiction.
+  - **Mutual Naval Escort Defense:** Sovereign patrol wings coordinate with signatory freighters against raiders.
+* **Syntropic Record:** Logs syntropic deed receipts (+40 resonance, +25 integrity), awards governance XP, and broadcasts diplomatic receipts over sector radio channels.
+
+### 14.2 Order 2: In-Situ Resource Utilization (ISRU) Orbital Refineries (`ISRU_REFINE`)
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.ISRU_REFINE`), [`xylarium/kernel/alchemy.py`](file:///opt/barren-realms/xylarium/kernel/alchemy.py) (`ISRU_RECIPES`, `refine_isru`), [`xylarium/kernel/actions.py`](file:///opt/barren-realms/xylarium/kernel/actions.py), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
+* **First-Principles Chemical Transformations:**
+  - **Induction Ore Smelting (`RAW_ORE_SMELT`):** Crushes and induction-smelts raw asteroid ore (4 ORE) into pure iron, silicon, and titanium ($2\text{Fe} + 1\text{Si} + 1\text{Ti}$).
+  - **Cryogenic Volatile Fractionation (`VOLATILE_FRACTIONATION`):** Flash distillation and fractional distillation of raw ice ($4\text{H}_2\text{O}$) into rocket fuel and cryogenite ($2\text{H} + 1\text{cryogenite}$).
+  - **Magnetic Isotope Centrifuge (`ACTINIDE_CENTRIFUGE`):** Centrifugal enrichment of radioactive actinides ($3\text{U} + 1\text{Pt}$) into pyrosite and adamant lode ($2\text{pyrosite} + 1\text{AdL}$).
+  - **Fischer-Tropsch Synthesis (`HYDROCARBON_CRACK`):** Polymerizes carbon and hydrogen gas ($3\text{C} + 2\text{H}$) into bio-nutrients ($2\text{ORGANICS}$).
+  - **Ferrolattice Forging (`FERROLATTICE_FORGE`):** Anneals iron and carbon matrices ($3\text{Fe} + 2\text{C}$) into reinforced framing ($2\text{ferrolattice}$).
+* **Unified Cargo Bridge:** Bridges standard bulk cargo attributes (`cargo.ore`, `cargo.organics`, `cargo.equipment`) and granular 24-element periodic dictionaries seamlessly. Awards industry experience upon refinement.
+
+### 14.3 Order 3: Forward Freight Agreements (FFAs) & Futures Derivatives (`FORWARD_FREIGHT_CONTRACT`)
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.FORWARD_FREIGHT_CONTRACT`), [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`ForwardFreightAgreement`, `write_forward_contract`, `settle_forward_contract`, `tick_market`), [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
+* **Long-Haul Price-Depreciation Hedge:** Shippers hauling across 20+ sectors lock in a guaranteed delivery strike price to hedge against commodity price drops during extended travel times:
+  $$P_{\text{strike}} = \max\left(10, \lfloor P_{\text{spot}} \times (1.0 + 0.002 \times \Delta t) \rfloor\right)$$
+* **Margin Escrow & Federal Clearing:** Shippers deposit a 20% margin escrow held by the Federal Reserve clearinghouse.
+* **Derivative Settlement:** Upon arrival at destination port or contract maturity, payoff settles against destination spot prices:
+  $$\text{Payoff} = (P_{\text{strike}} - P_{\text{spot}}) \times \text{Quantity}$$
+  If destination spot prices crash, the contract pays out the difference in liquid credits, insulating fleet operating margins from cargo depreciation.
+
+### 14.4 Order 4: Xenobiology, Biome Succession & Ecological Thermodynamics (`BIOSPHERE_SEED`)
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.BIOSPHERE_SEED`), [`xylarium/kernel/biosphere.py`](file:///opt/barren-realms/xylarium/kernel/biosphere.py) (`get_biome_health`, `set_biome_health`, `seed_biosphere_pack`), [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py) (`_handle_biosphere_seed`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
+* **Ecological Trophic Balance:** Tracks planetary biome health $\mathcal{B} \in [0.0, 1.0]$. Degraded worlds exhibit reduced food production and carrying capacity.
+* **Stratospheric Inoculation:** Captains or automated `BIOSPHERE_VESSEL` haulers disperse an `M2_BIOSPHERE_PACK` or 10 units of viable Organics into planetary skies.
+* **Climax Succession:** Restores biome health to 100.0%, advances ecological succession state to `CLIMAX_EQUILIBRIUM`, increases baseline fertility by +0.25, and awards biological research experience.

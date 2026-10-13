@@ -328,6 +328,118 @@ def alchemical_induction(
     )
 
 
+@dataclass
+class ISRURefineryRecipe:
+    id: str
+    name: str
+    inputs: Dict[str, int]
+    outputs: Dict[str, int]
+    description: str
+
+
+ISRU_RECIPES: Dict[str, ISRURefineryRecipe] = {
+    "RAW_ORE_SMELT": ISRURefineryRecipe(
+        id="RAW_ORE_SMELT",
+        name="Induction Furnace Ore Smelting",
+        inputs={"ORE": 4},
+        outputs={"Fe": 2, "Si": 1, "Ti": 1},
+        description="Crushes and induction-smelts raw asteroid ore into pure iron, silicon, and titanium ingots.",
+    ),
+    "VOLATILE_FRACTIONATION": ISRURefineryRecipe(
+        id="VOLATILE_FRACTIONATION",
+        name="Cryogenic Volatile Fractionation",
+        inputs={"H2O": 4},
+        outputs={"H": 2, "cryogenite": 1},
+        description="Vacuum distillation and flash fractionation of raw ice into liquid hydrogen and cryogenite.",
+    ),
+    "ACTINIDE_CENTRIFUGE": ISRURefineryRecipe(
+        id="ACTINIDE_CENTRIFUGE",
+        name="Magnetic Isotope Centrifuge",
+        inputs={"U": 3, "Pt": 1},
+        outputs={"pyrosite": 2, "AdL": 1},
+        description="Enriches radioactive actinides and heavy platinum into high-energy pyrosite and adamant lode.",
+    ),
+    "HYDROCARBON_CRACK": ISRURefineryRecipe(
+        id="HYDROCARBON_CRACK",
+        name="Fischer-Tropsch Hydrocarbon Synthesis",
+        inputs={"C": 3, "H": 2},
+        outputs={"ORGANICS": 2},
+        description="Polymerizes carbon and hydrogen gas into bio-compatible organic nutrients and polymers.",
+    ),
+    "FERROLATTICE_FORGE": ISRURefineryRecipe(
+        id="FERROLATTICE_FORGE",
+        name="High-Tensile Ferrolattice Forging",
+        inputs={"Fe": 3, "C": 2},
+        outputs={"ferrolattice": 2},
+        description="Anneals iron and carbon matrices into reinforced high-tensile ferrolattice framing.",
+    ),
+}
+
+
+def _get_cargo_avail(cargo: Any, item: str) -> int:
+    item_u = item.upper()
+    if item_u == "ORE":
+        return getattr(cargo, "ore", 0) + getattr(cargo, "elements", {}).get("ORE", 0)
+    elif item_u in ("ORGANICS", "ORG"):
+        return getattr(cargo, "organics", 0) + getattr(cargo, "elements", {}).get("ORGANICS", 0)
+    elif item_u in ("EQUIPMENT", "EQP"):
+        return getattr(cargo, "equipment", 0) + getattr(cargo, "elements", {}).get("EQUIPMENT", 0)
+    return getattr(cargo, "elements", {}).get(item, getattr(cargo, "elements", {}).get(item_u, 0))
+
+
+def _deduct_cargo(cargo: Any, item: str, qty: int) -> None:
+    item_u = item.upper()
+    rem = qty
+    if item_u == "ORE":
+        take = min(cargo.ore, rem)
+        cargo.ore -= take
+        rem -= take
+        if rem > 0 and "ORE" in cargo.elements:
+            take_el = min(cargo.elements["ORE"], rem)
+            cargo.elements["ORE"] -= take_el
+            rem -= take_el
+            if cargo.elements["ORE"] <= 0:
+                del cargo.elements["ORE"]
+    elif item_u in ("ORGANICS", "ORG"):
+        take = min(cargo.organics, rem)
+        cargo.organics -= take
+        rem -= take
+        if rem > 0 and "ORGANICS" in cargo.elements:
+            take_el = min(cargo.elements["ORGANICS"], rem)
+            cargo.elements["ORGANICS"] -= take_el
+            rem -= take_el
+            if cargo.elements["ORGANICS"] <= 0:
+                del cargo.elements["ORGANICS"]
+    elif item_u in ("EQUIPMENT", "EQP"):
+        take = min(cargo.equipment, rem)
+        cargo.equipment -= take
+        rem -= take
+        if rem > 0 and "EQUIPMENT" in cargo.elements:
+            take_el = min(cargo.elements["EQUIPMENT"], rem)
+            cargo.elements["EQUIPMENT"] -= take_el
+            rem -= take_el
+            if cargo.elements["EQUIPMENT"] <= 0:
+                del cargo.elements["EQUIPMENT"]
+    else:
+        k = item if item in cargo.elements else item_u
+        if k in cargo.elements:
+            cargo.elements[k] = max(0, cargo.elements[k] - rem)
+            if cargo.elements[k] <= 0:
+                del cargo.elements[k]
+
+
+def _add_cargo(cargo: Any, item: str, qty: int) -> None:
+    item_u = item.upper()
+    if item_u == "ORE":
+        cargo.ore += qty
+    elif item_u in ("ORGANICS", "ORG"):
+        cargo.organics += qty
+    elif item_u in ("EQUIPMENT", "EQP"):
+        cargo.equipment += qty
+    else:
+        cargo.elements[item] = cargo.elements.get(item, 0) + qty
+
+
 class AlchemyManager:
     """
     Governs sub-atomic particle synthesizers and transmutations.
@@ -542,6 +654,54 @@ class AlchemyManager:
             self.cool_reactor(cid, amount=5.0)
             if self.heat_accumulated[cid] <= 0:
                 del self.heat_accumulated[cid]
+
+    def refine_isru(self, captain: Captain, recipe_id: str, kernel: Any = None) -> ActionResult:
+        """
+        Executes In-Situ Resource Utilization (ISRU) orbital smelting and chemical refining.
+        Converts raw asteroid and deep-space extractions into high-value pure commodities and alloys.
+        """
+        rec_key = recipe_id.strip().upper()
+        recipe = ISRU_RECIPES.get(rec_key)
+        if not recipe:
+            available = ", ".join(ISRU_RECIPES.keys())
+            return ActionResult(False, ActionType.ISRU_REFINE, f"Unknown ISRU recipe '{recipe_id}'. Available: {available}")
+
+        cargo = captain.ship.cargo
+
+        # 1. Validate inputs
+        for inp, qty in recipe.inputs.items():
+            avail = _get_cargo_avail(cargo, inp)
+            if avail < qty:
+                return ActionResult(False, ActionType.ISRU_REFINE, f"Insufficient input [{inp}]: {qty} units required, {avail} available in hold.")
+
+        # 2. Check hold capacity delta
+        input_total = sum(recipe.inputs.values())
+        output_total = sum(recipe.outputs.values())
+        delta = output_total - input_total
+        if delta > 0 and getattr(cargo, "available_space", 30) < delta:
+            return ActionResult(False, ActionType.ISRU_REFINE, "Cargo holds full! Insufficient capacity for refined outputs.")
+
+        # 3. Deduct inputs
+        for inp, qty in recipe.inputs.items():
+            _deduct_cargo(cargo, inp, qty)
+
+        # 4. Deposit outputs
+        for out, qty in recipe.outputs.items():
+            _add_cargo(cargo, out, qty)
+
+        ExperienceManager.award(captain, "industry", 15, kernel, key=f"isru:{recipe.id}")
+
+        out_summary = ", ".join(f"+{v} [{k}]" for k, v in recipe.outputs.items())
+        msg = f"ISRU REFINING COMPLETE: {recipe.name} executed successfully! Yielded {out_summary}."
+        if kernel and hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(f"[ISRU] {captain.name} refined {recipe.name} ({out_summary}).")
+
+        return ActionResult(
+            True,
+            ActionType.ISRU_REFINE,
+            msg,
+            data={"recipe_id": recipe.id, "outputs": dict(recipe.outputs)},
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return {

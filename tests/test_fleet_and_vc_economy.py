@@ -10,6 +10,7 @@ import unittest
 from xylarium.config import COMMODITY_CONFIG, COMMODITY_CATEGORIES, SPECIALIZED_HULLS, VC_SYNDICATES
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel.models import ActionType, Port, PortClass, TradeHauler
+from xylarium.kernel.ideology import TreatyType
 from xylarium.kernel.economy import EconomyManager
 from xylarium.client.renderer import TerminalRenderer
 
@@ -451,6 +452,114 @@ class TestFleetAndVCEconomy(unittest.TestCase):
         self.assertTrue(res_cover.success, res_cover.message)
         self.assertEqual(self.player.short_positions.get(ticker, {}).get("shares", 0), 0)
 
+    def test_bilateral_trade_compact_negotiation(self):
+        """Order 1: Test inter-civilization bilateral trade compact accord negotiation and benefits."""
+        civ_name = next(p.civilization.name for s in self.kernel.sectors.values() for p in s.planets if getattr(p, "civilization", None))
+        res = self.kernel.dispatch(
+            self.player_id,
+            ActionType.TRADE_COMPACT_NEGOTIATE,
+            civilization_name=civ_name,
+        )
+        self.assertTrue(res.success, res.message)
+        treaty_data = res.data.get("treaty", {})
+        self.assertEqual(treaty_data.get("treaty_type"), TreatyType.BILATERAL_TRADE_COMPACT.value)
+        self.assertEqual(treaty_data.get("tariff_discount_pct"), 100)
+        self.assertTrue(treaty_data.get("mining_concession"))
+        self.assertTrue(treaty_data.get("joint_security"))
+        self.assertIn("100% tariff exemption", res.message)
+
+    def test_isru_orbital_refinery_operations(self):
+        """Order 2: Test in-situ resource utilization (ISRU) induction smelting, fractionation, and centrifuging."""
+        # 1. Smelt raw ore into Fe, Si, Ti
+        self.player.ship.cargo.ore = 30
+        res_smelt = self.kernel.dispatch(
+            self.player_id,
+            ActionType.ISRU_REFINE,
+            recipe_id="RAW_ORE_SMELT",
+        )
+        self.assertTrue(res_smelt.success, res_smelt.message)
+        self.assertEqual(self.player.ship.cargo.ore, 26)
+        self.assertEqual(self.player.ship.cargo.elements.get("Fe", 0), 2)
+        self.assertEqual(self.player.ship.cargo.elements.get("Si", 0), 1)
+        self.assertEqual(self.player.ship.cargo.elements.get("Ti", 0), 1)
+
+        # 2. Volatile cryogenic fractionation (H2O -> H + cryogenite)
+        self.player.ship.cargo.elements["H2O"] = 25
+        res_frac = self.kernel.dispatch(
+            self.player_id,
+            ActionType.ISRU_REFINE,
+            recipe_id="VOLATILE_FRACTIONATION",
+        )
+        self.assertTrue(res_frac.success, res_frac.message)
+        self.assertEqual(self.player.ship.cargo.elements.get("H2O", 0), 21)
+        self.assertEqual(self.player.ship.cargo.elements.get("H", 0), 2)
+        self.assertEqual(self.player.ship.cargo.elements.get("cryogenite", 0), 1)
+
+        # 3. Invalid recipe rejected
+        res_invalid = self.kernel.dispatch(
+            self.player_id,
+            ActionType.ISRU_REFINE,
+            recipe_id="INVALID_RECIPE",
+        )
+        self.assertFalse(res_invalid.success)
+
+    def test_forward_freight_agreement_futures(self):
+        """Order 3: Test writing, escrowing margin, and settling Forward Freight Agreements (FFAs)."""
+        self.player.credits = 50000
+        # Write FFA
+        res_write = self.kernel.dispatch(
+            self.player_id,
+            ActionType.FORWARD_FREIGHT_CONTRACT,
+            mode="WRITE",
+            commodity="ORE",
+            quantity=50,
+            dest_sector=self.dest_port,
+            duration_ticks=5,
+        )
+        self.assertTrue(res_write.success, res_write.message)
+        ffa_id = res_write.data.get("ffa_id")
+        self.assertIsNotNone(ffa_id)
+        margin = res_write.data.get("margin_escrow", 0)
+        self.assertGreater(margin, 0)
+        self.assertEqual(self.player.credits, 50000 - margin)
+
+        # Settle FFA
+        res_settle = self.kernel.dispatch(
+            self.player_id,
+            ActionType.FORWARD_FREIGHT_CONTRACT,
+            mode="SETTLE",
+            contract_id=ffa_id,
+        )
+        self.assertTrue(res_settle.success, res_settle.message)
+        settled_data = res_settle.data.get("contract", {})
+        self.assertEqual(settled_data.get("status"), "SETTLED")
+
+    def test_biosphere_pack_seeding(self):
+        """Order 4: Test planetary biome health restoration and trophic equilibrium seeding."""
+        sec = self.kernel.sectors[self.player.sector_id]
+        if not sec.planets:
+            p_sec = next(s for s in self.kernel.sectors.values() if s.planets)
+            self.player.sector_id = p_sec.id
+            sec = p_sec
+        planet = sec.planets[0]
+
+        from xylarium.kernel.biosphere import get_biome_health, set_biome_health
+        set_biome_health(planet, 0.25)
+        self.assertAlmostEqual(get_biome_health(planet), 0.25)
+
+        # Seed with 10x Organics
+        self.player.ship.cargo.organics = 15
+        res_seed = self.kernel.dispatch(
+            self.player_id,
+            ActionType.BIOSPHERE_SEED,
+            planet_id=planet.id,
+        )
+        self.assertTrue(res_seed.success, res_seed.message)
+        self.assertEqual(self.player.ship.cargo.organics, 5)
+        self.assertAlmostEqual(get_biome_health(planet), 1.0)
+        self.assertEqual(planet.society.get("ecological_succession"), "CLIMAX_EQUILIBRIUM")
+
 
 if __name__ == "__main__":
     unittest.main()
+

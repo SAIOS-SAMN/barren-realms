@@ -1156,6 +1156,12 @@ class TerminalRenderer:
         else:
             lines.append(f"VC Covenant: {c_green('None (100% Retained Fleet Profits)')}")
 
+        ffas = view.get("market_info", {}).get("forward_contracts", []) or view.get("forward_contracts", [])
+        active_ffas = [f for f in ffas if f.get("status") == "OPEN"]
+        if active_ffas:
+            ffa_summary = ", ".join([f"{f['id']}:{f['commodity']}({f['duration_ticks'] - f.get('ticks_elapsed', 0)}t)" for f in active_ffas[:3]])
+            lines.append(f"Hedging FFAs: {c_cyan(str(len(active_ffas)))} Open [{c_gold(ffa_summary)}]")
+
         lines.append("-" * 78)
         lines.append(f"{'ID':<9} {'Hull & Name':<20} {'Status':<13} {'Sec':<5} {'Route':<13} {'Manifest':<10} {'Escort':<7} {'Profit':<10}")
         lines.append("-" * 78)
@@ -1216,7 +1222,7 @@ class TerminalRenderer:
 
         lines.append("-" * 78)
         lines.append(
-            f"Commands: {c_gold('[C]ommission')} │ {c_gold('[R]eassign Route')} │ {c_gold('[E]scort Wings')} │ {c_gold('[N]aval Security')} │ {c_gold('[D]erivative Hedge')} │ {c_gold('[H]alt/Recall')} │ {c_gold('[S]crap')} │ {c_gold('[V]C Desk')} │ {c_gold('[X] Exit')}"
+            f"Commands: {c_gold('[C]ommission')} │ {c_gold('[R]eassign Route')} │ {c_gold('[E]scort Wings')} │ {c_gold('[N]aval Security')} │ {c_gold('[D]erivative Hedge')} │ {c_gold('[F]FA Futures')} │ {c_gold('[H]alt/Recall')} │ {c_gold('[S]crap')} │ {c_gold('[V]C Desk')} │ {c_gold('[X] Exit')}"
         )
         return "\n".join(lines)
 
@@ -2152,7 +2158,10 @@ class TerminalRenderer:
         )
         lines.append(
             f"  {c_gold('[D]')} Decommission Trade Hauler (Scrap for 2,000 Cr)  "
-            f"{c_gold('[Q]')} Return to Main Dispatch"
+            f"{c_gold('[B]')} Biosphere Seed World"
+        )
+        lines.append(
+            f"  {c_gold('[Q]')} Return to Main Dispatch"
         )
         return "\n".join(lines)
 
@@ -2589,6 +2598,7 @@ class TerminalRenderer:
         lines.append(
             f"  Commands: {c_gold('[P]')}ropose Treaty  "
             f"{c_gold('[S]')}ign Treaty  "
+            f"{c_gold('[C]')}ompact Accord  "
             f"{c_gold('[D]')}ispatch Famine Aid  "
             f"{c_gold('[Q]')}uit / Return"
         )
@@ -2629,6 +2639,7 @@ class TerminalRenderer:
         lines.append(f"\n{bold(c_gold('═' * 78))}")
         lines.append(
             f"  Commands: {c_gold('[T]')}ransmute Recipe  "
+            f"{c_gold('[R]')}efine ISRU  "
             f"{c_gold('[A]')}ll Recipes  "
             f"{c_gold('[Q]')}uit / Return"
         )

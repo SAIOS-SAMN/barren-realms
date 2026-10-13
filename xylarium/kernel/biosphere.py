@@ -413,3 +413,87 @@ def births(kernel: Any, planet: Any, ceiling: int) -> int:
     whole = micro // MICRO if micro >= 0 else -((-micro) // MICRO)
     planet.growth_carry = str(micro - whole * MICRO)
     return whole
+
+
+def get_biome_health(planet: Any) -> float:
+    """Returns ecological health index in [0.0, 1.0], representing trophic integrity."""
+    soc = getattr(planet, "society", {}) or {}
+    return float(soc.get("biome_health", 1.0))
+
+
+def set_biome_health(planet: Any, health: float) -> None:
+    """Updates ecological health index."""
+    if getattr(planet, "society", None) is None:
+        planet.society = {}
+    planet.society["biome_health"] = max(0.0, min(1.0, round(float(health), 3)))
+
+
+def seed_biosphere_pack(
+    captain: Any,
+    planet: Any,
+    kernel: Any = None,
+) -> Any:
+    """
+    Inoculates planetary crust and atmosphere with synthesized M2_BIOSPHERE_PACK or live biological cultures.
+    Restores degraded planetary ecosystems to 100% biome health, boosts carrying capacity,
+    and revitalizes agrarian yields.
+    """
+    from xylarium.kernel.models import ActionResult, ActionType
+    if not planet:
+        return ActionResult(False, ActionType.BIOSPHERE_SEED, "Target planet required.")
+
+    cargo = captain.ship.cargo
+    has_pack = cargo.elements.get("M2_BIOSPHERE_PACK", 0) >= 1
+    has_org = getattr(cargo, "organics", 0) >= 10 or cargo.elements.get("ORGANICS", 0) >= 10
+
+    if not has_pack and not has_org:
+        return ActionResult(
+            False,
+            ActionType.BIOSPHERE_SEED,
+            "Missing biological inoculation payload: Requires 1x [M2_BIOSPHERE_PACK] or 10x Organics.",
+        )
+
+    if has_pack:
+        cargo.elements["M2_BIOSPHERE_PACK"] -= 1
+        if cargo.elements["M2_BIOSPHERE_PACK"] <= 0:
+            del cargo.elements["M2_BIOSPHERE_PACK"]
+        used_item = "M2_BIOSPHERE_PACK"
+    else:
+        if getattr(cargo, "organics", 0) >= 10:
+            cargo.organics -= 10
+        else:
+            cargo.elements["ORGANICS"] -= 10
+            if cargo.elements["ORGANICS"] <= 0:
+                del cargo.elements["ORGANICS"]
+        used_item = "10x Organics"
+
+    old_health = get_biome_health(planet)
+    set_biome_health(planet, 1.0)
+    soc = planet.society
+    soc["fertility"] = min(2.5, float(soc.get("fertility", 1.0)) + 0.25)
+    soc["ecological_succession"] = "CLIMAX_EQUILIBRIUM"
+
+    from xylarium.kernel.experience import ExperienceManager
+    ExperienceManager.award(captain, "biology", 35, kernel, key=f"seed:{planet.id}")
+
+    msg = (
+        f"BIOSPHERE SEEDING COMPLETE: Dispersed {used_item} into {planet.name}'s stratosphere! "
+        f"Keystone trophic web established; Biome Health restored from {old_health * 100:.1f}% -> 100.0%. "
+        f"Agricultural carrying capacity expanded."
+    )
+    if kernel and getattr(kernel, "event_bus", None):
+        kernel.event_bus.broadcast_radio(
+            sender="ECO-SEEDED",
+            text=msg,
+            channel="SYSTEM",
+            sector_id=planet.sector_id,
+        )
+    if kernel and hasattr(kernel, "action_logs"):
+        kernel.action_logs.append(f"[ECOLOGY] {captain.name} seeded {planet.name} with {used_item}.")
+
+    return ActionResult(
+        True,
+        ActionType.BIOSPHERE_SEED,
+        msg,
+        data={"planet_id": planet.id, "biome_health": 1.0, "old_health": old_health},
+    )
