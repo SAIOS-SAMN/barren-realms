@@ -1328,12 +1328,16 @@ class CartographyManager:
             if not sec or not sec.warps:
                 continue
 
-            unvisited = [w for w in sec.warps if w not in probe.sectors_surveyed]
+            surveyed_all = set(getattr(probe, "survey_manifold", []) or [])
+            surveyed_all.update(probe.sectors_surveyed)
+            unvisited = [w for w in sec.warps if w not in surveyed_all]
             next_sec_id = random.choice(unvisited if unvisited else sec.warps)
             probe.current_sector = next_sec_id
             probe.sectors_surveyed.append(next_sec_id)
-            if len(probe.sectors_surveyed) > 20:
-                probe.sectors_surveyed = probe.sectors_surveyed[-20:]
+            surveyed_all.add(next_sec_id)
+            setattr(probe, "survey_manifold", sorted(surveyed_all))
+            if len(probe.sectors_surveyed) > 50:
+                probe.sectors_surveyed = probe.sectors_surveyed[-50:]
 
             target_sec = kernel.sectors.get(next_sec_id)
             is_anarchy_or_frontier = (target_sec and target_sec.security == SecurityLevel.ANARCHY) or next_sec_id >= 60

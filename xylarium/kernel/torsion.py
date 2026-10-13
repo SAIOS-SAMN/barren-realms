@@ -160,6 +160,8 @@ def eval_wavefront(kernel: Any, target_sector_id: int) -> Tuple[float, float, in
             net_phase += phase
             net_chirality += b["chirality"]
             
+    # Include eternal cosmological background strain from ancient attenuated bounces
+    net_amp += float(st.get("background_strain", 0.0))
     dominant_chirality = 1 if net_chirality >= 0 else -1
     return (net_amp, net_phase, dominant_chirality)
 
@@ -254,12 +256,17 @@ def compute_quasinormal_ringdown(
 
 
 def season(kernel: Any) -> List[str]:
-    """Seasonal check: prune ancient attenuated bounces beyond light cone horizons."""
+    """Seasonal check: prune ancient attenuated bounces into the stochastic cosmological background strain."""
     st = stats(kernel)
     current_cycle = int(getattr(kernel, "cycle_count", 0))
-    # Keep last 50 significant bounces
     if len(st["bounces"]) > 50:
-        st["bounces"] = st["bounces"][-50:]
+        excess = len(st["bounces"]) - 50
+        pruned = st["bounces"][:excess]
+        st["bounces"] = st["bounces"][excess:]
+        bg = float(st.get("background_strain", 0.0))
+        for b in pruned:
+            bg += float(b.get("energy", 0.0)) * 0.0001
+        st["background_strain"] = round(bg, 8)
     return []
 
 

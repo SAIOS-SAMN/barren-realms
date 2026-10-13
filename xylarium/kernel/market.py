@@ -3239,9 +3239,15 @@ class MarketManager:
 
         # Bound per-company chart history and council archives (both ship in every player view)
         for comp in self.companies.values():
+            if comp.price_history:
+                comp.all_time_high = max(getattr(comp, "all_time_high", 0), *comp.price_history)
+                comp.all_time_low = min(getattr(comp, "all_time_low", float("inf")), *comp.price_history)
             if len(comp.price_history) > PRICE_HISTORY_RETENTION:
                 del comp.price_history[:-PRICE_HISTORY_RETENTION]
         if len(self.trade_council.resolution_history) > RESOLUTION_HISTORY_RETENTION:
+            excess = len(self.trade_council.resolution_history) - RESOLUTION_HISTORY_RETENTION
+            pruned = self.trade_council.resolution_history[:excess]
+            self.trade_council.total_resolutions_enacted = getattr(self.trade_council, "total_resolutions_enacted", 0) + len(pruned)
             del self.trade_council.resolution_history[:-RESOLUTION_HISTORY_RETENTION]
 
         # 2. Spawn population enterprises

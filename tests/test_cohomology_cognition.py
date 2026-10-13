@@ -261,6 +261,44 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertNotEqual(eng.archive_hash, "genesis")
         self.assertGreaterEqual(len(eng.entries), 100)
 
+    def test_deep_clean_manifold_continuities(self):
+        from xylarium.kernel import torsion, cartography, market, intellect, matter, models
+        
+        # 1. Torsion background strain accumulation
+        for i in range(60):
+            torsion.emit_bounce(self.kernel, origin_sector=1, energy_scale=10.0, chirality=1)
+        torsion.season(self.kernel)
+        st_t = torsion.stats(self.kernel)
+        self.assertGreater(st_t.get("background_strain", 0.0), 0.0)
+        amp, _, _ = torsion.eval_wavefront(self.kernel, 1)
+        self.assertGreaterEqual(amp, st_t["background_strain"])
+
+        # 2. Cartography survey probe manifold preservation
+        probe = models.SurveyProbe(
+            id="PROBE-01",
+            owner_id="cap_01",
+            current_sector=1,
+            target_sector=1,
+        )
+        self.kernel.cartography_manager.survey_probes["PROBE-01"] = probe
+        for s_id in range(1, 35):
+            probe.sectors_surveyed.append(s_id)
+        # Advance probe tick in cartography manager
+        self.kernel.cartography_manager.tick_survey_probes(self.kernel)
+        self.assertGreaterEqual(len(getattr(probe, "survey_manifold", [])), 20)
+
+        # 3. Market corporate envelope (ATH / ATL)
+        comp = next(iter(self.kernel.market_manager.companies.values()))
+        for p in [50, 200, 10, 80]:
+            comp.price_history.append(p)
+        self.kernel.market_manager.tick_market(self.kernel)
+        self.assertEqual(comp.all_time_high, 200)
+        self.assertEqual(comp.all_time_low, 10)
+
+        # 4. Intellect proof Merkle root
+        st_i = intellect.stats(self.kernel)
+        self.assertIn("proof_roots", st_i)
+
 
 if __name__ == "__main__":
     unittest.main()

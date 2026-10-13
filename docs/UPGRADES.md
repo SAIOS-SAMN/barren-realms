@@ -257,3 +257,23 @@ Building upon the initial anti-spreadsheet audit in [`docs/MANIFOLD_REMEDIATION.
   - `compute_quasinormal_ringdown()` evaluates Einstein-Cartan damped quasi-normal mode ringing $\Psi(r, t) = \sum A_n (e^{-\omega_I t}/r) \cos(\omega_R (t - r/c)) \mathbf{U}_{\text{chiral}}$ derived from Kerr-Cartan spin $a_*$.
   - `couple_torsion_ringdown()` feeds the torsional perturbation $\alpha_{\text{torsion}} = \alpha_0 \Psi(r, t) \sigma$ into the stellar dynamo induction loop $\partial\vec{B}/\partial t = \nabla \times (\vec{v}\times\vec{B}) + \alpha_{\text{torsion}}\nabla\times\vec{B}$, dynamically amplifying magnetic flux and driving coronal mass ejection flares.
 
+---
+
+## 5. Deeper Clean: Secondary Boundary Vents & Memory Preservation
+
+Following the implementation of the 5 core manifold expansions, a thorough deep-clean audit identified and remediated all peripheral data-dropping vents across the simulation infrastructure:
+
+1. **Eternal Cosmological Background Strain ([`xylarium/kernel/torsion.py`](file:///opt/barren-realms/xylarium/kernel/torsion.py)):**
+   - Older attenuated torsion bounces pruned from the active event queue ($N > 50$) are integrated into `st["background_strain"]` with coupling scale $\kappa = 10^{-4}$.
+   - Evaluated continuously in `eval_wavefront(kernel, target_sector_id)` to form a persistent, non-zero stochastic cosmological gravitational strain baseline.
+2. **Infinite Frontier Survey Manifold ([`xylarium/kernel/cartography.py`](file:///opt/barren-realms/xylarium/kernel/cartography.py)):**
+   - Autonomous survey probes retain a continuous cumulative topology set `probe.survey_manifold` before `probe.sectors_surveyed` is truncated to an active navigation breadcrumb trail.
+   - Prevents probes from cyclically rediscovering already chartered sectors over cosmic epochs.
+3. **Continuous Commodity Conservation Divergence ([`xylarium/kernel/matter.py`](file:///opt/barren-realms/xylarium/kernel/matter.py)):**
+   - In-memory matter ledger audits maintain `rec["cum_divergence"][commodity]` and cumulative absolute unmetered mass `rec["total_undeclared_abs"]` before sliding the recent telemetry history window (`del v[:-200]`).
+4. **Corporate Extremum Envelopes & Council Enactment Roots ([`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py)):**
+   - Preserves `comp.all_time_high` and `comp.all_time_low` across the lifetime of corporate stock issues before price history trimming (`del comp.price_history[:-PRICE_HISTORY_RETENTION]`).
+   - Tracks `self.trade_council.total_resolutions_enacted` across parliamentary history.
+5. **Civilization Intellectual Proof Merkle Hash Chains ([`xylarium/kernel/intellect.py`](file:///opt/barren-realms/xylarium/kernel/intellect.py)):**
+   - Rather than dropping theorem proofs past the last two exhibited examples, all solved proofs are cryptographically chained via SHA-256 into `st["proof_roots"][holder]` on the civilization state.
+

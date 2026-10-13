@@ -61,12 +61,30 @@ Across complex simulations, engineering compromises often discretize continuous 
   - `history.py`: Maintain an unbroken Merkle root hash chain `st["history_root"]` covering every event in cosmic history.
   - `chronicle.py`: Chain every recorded and archived entry into an unbroken cryptographic `archive_hash`.
 
+### 2.6 Deep Clean: Secondary Memory & Boundary Vents Sealed
+* **Audited Additional Vents & In-Place Remediations:**
+  1. **Torsion Cosmological Background Strain ([`torsion.py`](file:///opt/barren-realms/xylarium/kernel/torsion.py)):**
+     - *Old:* Ancient bounces pruned at $N > 50$ were dropped completely.
+     - *Remediation:* Pruned bounces accumulate into the continuous stochastic cosmological background strain `st["background_strain"] += energy * 1e-4`, which is coupled into metric wavefront amplitude evaluations in `eval_wavefront()`.
+  2. **Cartography Survey Manifolds ([`cartography.py`](file:///opt/barren-realms/xylarium/kernel/cartography.py)):**
+     - *Old:* Probe survey history was sliced with `probe.sectors_surveyed = probe.sectors_surveyed[-20:]`, losing discovered topology.
+     - *Remediation:* All visited frontier sectors are permanently unioned into `probe.survey_manifold` before active navigation trail slicing, ensuring probes retain complete topological awareness across cosmic time.
+  3. **Matter Conservation Divergence Accumulators ([`matter.py`](file:///opt/barren-realms/xylarium/kernel/matter.py)):**
+     - *Old:* Matter balance violations truncated with `del v[:-200]`, discarding cumulative unmetered commodity mass.
+     - *Remediation:* Integrated cumulative conservation divergence `rec["cum_divergence"][commodity] += undeclared` and absolute unmetered mass `rec["total_undeclared_abs"] += abs(undeclared)` before trimming recent telemetry logs.
+  4. **Corporate Price Envelopes & Council Legislative Throughput ([`market.py`](file:///opt/barren-realms/xylarium/kernel/market.py)):**
+     - *Old:* Company price charts pruned to `PRICE_HISTORY_RETENTION` and trade council resolutions pruned to `RESOLUTION_HISTORY_RETENTION` without recording extrema.
+     - *Remediation:* Corporate all-time highs (`comp.all_time_high`) and all-time lows (`comp.all_time_low`) are dynamically enveloped, and pruned council resolutions are counted into `self.trade_council.total_resolutions_enacted`.
+  5. **Intellectual Civilization Proof Merkle Root Chains ([`intellect.py`](file:///opt/barren-realms/xylarium/kernel/intellect.py)):**
+     - *Old:* Solved theorem proofs displayed in player views were clipped to `proofs[-2:]`, discarding historical mathematical proofs.
+     - *Remediation:* Every solved civilization proof is cryptographically folded into a persistent SHA-256 Merkle root chain `st["proof_roots"][holder]` prior to view clipping.
+
 ---
 
 ## 3. Backward Compatibility & Test Verification
 
 All remediations are implemented as conservative, non-breaking structural extensions:
 - Legacy dictionary access and existing method signatures remain 100% operational.
-- All new continuous manifold properties (`spherical_coords`, `pareto_rank`, `manifold_volume`, `potential_field`, `history_root`, `archive_hash`) are dynamically available to high-order cognitive processes.
-- Verification ensures zero test theatre, with unmocked unit tests asserting geometric invariance across 59 tests.
+- All new continuous manifold properties (`spherical_coords`, `pareto_rank`, `manifold_volume`, `potential_field`, `history_root`, `archive_hash`, `background_strain`, `survey_manifold`, `cum_divergence`, `all_time_high`, `proof_roots`) are dynamically available to high-order cognitive processes.
+- Verification ensures zero test theatre, with unmocked unit tests asserting geometric invariance across 60 unit tests in the core simulation suite.
 

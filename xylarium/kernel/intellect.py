@@ -33,6 +33,7 @@ set by its mastery and its thought. A composite it keeps writing is crystallised
 less where households have the leisure to teach.
 """
 
+import hashlib
 import math
 import random
 import zlib
@@ -522,7 +523,12 @@ def quarter(kernel: Any) -> List[str]:
         budget = rec["effort"] * OPS_PER_UNIT * 4
         reached, proofs, minted = _attempt(kernel, holder, budget, seed)
         st["gauge"][holder] = reached
-        st["proofs"][holder] = proofs[-2:]               # the hardest planar and volumetric feats, for anyone to check
+        proof_archive = st.setdefault("proof_roots", {})
+        prev_root = str(proof_archive.get(holder, "genesis"))
+        for p in proofs:
+            prev_root = hashlib.sha256(f"{prev_root}:{p.get('id', '')}:{p.get('hash', '')}".encode()).hexdigest()
+        proof_archive[holder] = prev_root
+        st["proofs"][holder] = proofs[-2:]
         if minted > 0:
             knowledge.learn(kernel, holder, "information", minted, "useful_work")
         st["stats"]["solved"] += len(proofs)
@@ -614,7 +620,7 @@ from xylarium.kernel.subsystem import Subsystem, register as register_subsystem 
 
 register_subsystem(Subsystem(
     name="intellect",
-    state=lambda: {"vocab": {}, "gauge": {}, "proofs": {}, "usage": {},
+    state=lambda: {"vocab": {}, "gauge": {}, "proofs": {}, "usage": {}, "proof_roots": {},
                    "stats": {"solved": 0, "discovered": 0, "taught": 0, "forgotten": 0, "abstractions": 0,
                              "from_relics": 0}},
     season=quarter,

@@ -237,6 +237,8 @@ def audit(kernel: Any) -> None:
             if d:
                 v = rec["violations"]
                 v.append({"cycle": kernel.cycle_count, "commodity": c, "undeclared": d})
+                rec.setdefault("cum_divergence", {})[c] = rec.get("cum_divergence", {}).get(c, 0) + d
+                rec["total_undeclared_abs"] = rec.get("total_undeclared_abs", 0) + abs(d)
                 del v[:-200]
     rec["base"] = now
 
