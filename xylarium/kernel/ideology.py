@@ -75,6 +75,35 @@ class CohesionLedger:
         ]
         return round(sum(ratios) / len(ratios), 3)
 
+    def stress_energy_tensor(self) -> List[List[float]]:
+        """Construct the 4x4 Cohesion Stress-Energy Tensor T_ab across behavioral axes."""
+        # Vector of net signed deed flux: (syntropic - entropic)
+        v = [
+            self.compassion_syntropic - self.compassion_entropic,
+            self.resonance_syntropic - self.resonance_entropic,
+            self.integrity_syntropic - self.integrity_entropic,
+            self.morality_syntropic - self.morality_entropic,
+        ]
+        # Outer product T_ab = v_a * v_b with self-interaction trace
+        tensor = [[round(v[i] * v[j] + (1.0 if i == j else 0.0), 3) for j in range(4)] for i in range(4)]
+        return tensor
+
+    @property
+    def manifold_volume(self) -> float:
+        """Compute the continuous 4-volume of the relationship manifold sqrt(det(T + I)).
+        
+        Distinguishes rich, multi-faceted alliances from flat 1D transactional alignments.
+        """
+        # Magnitudes along the 4 independent orthogonal axes
+        mags = [
+            1.0 + abs(self.compassion_syntropic - self.compassion_entropic),
+            1.0 + abs(self.resonance_syntropic - self.resonance_entropic),
+            1.0 + abs(self.integrity_syntropic - self.integrity_entropic),
+            1.0 + abs(self.morality_syntropic - self.morality_entropic),
+        ]
+        vol = mags[0] * mags[1] * mags[2] * mags[3]
+        return round(vol, 3)
+
     def record_deed(self, axis: str, amount: float, is_syntropic: bool) -> None:
         if amount <= 0:
             return

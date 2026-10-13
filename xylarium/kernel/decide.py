@@ -160,6 +160,13 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
     from xylarium.kernel import scheduler
     rng = scheduler.rng(kernel, "decide", kernel.cycle_count, *salt)     # this universe's own misjudgements
     seen = [n + rng.gauss(0.0, JUDGEMENT_ERROR * m["noise"] * scale) for n in nets]
+    # Multi-dimensional consequence manifold vectors: (net_sol, learning_multiplier, steward_weight)
+    vectors = [
+        (n, float(lz), float(steward.weight(kernel, holder, o, len(options))))
+        for n, o, lz in zip(nets, options, lesson)
+    ]
+    frontier_indices = pareto_frontier(vectors)
+
     # need orders: the options serving the book its council leads with (its posture, strategy.py) are weighed first,
     # among themselves only; the rest only if none of those is worth doing - worth against cost within one book,
     # never one book's worth against another's
@@ -173,11 +180,34 @@ def choose(kernel: Any, options: List[Dict[str, Any]], m: Dict[str, float], *sal
         if best is not None:
             break
     if best is not None:
+        best_idx = options.index(best)
+        best["manifold_vector"] = vectors[best_idx]
+        best["pareto_frontier_size"] = len(frontier_indices)
+        best["is_pareto_optimal"] = best_idx in frontier_indices
+
         st = stats(kernel)
         st["chosen"][best["name"]] = st["chosen"].get(best["name"], 0) + 1
         learning.record(kernel, holder, best["name"])
         steward.chosen(kernel, holder, best)
     return best
+
+
+def pareto_frontier(vectors: List[Tuple[float, ...]]) -> List[int]:
+    """Identify the Pareto-optimal non-dominated subset in multi-dimensional consequence space.
+    
+    Prevents dimensional collapse: vector v_i is dominated if another vector v_j is >= in all
+    dimensions and strictly > in at least one.
+    """
+    frontier = []
+    for i, v1 in enumerate(vectors):
+        dominated = False
+        for j, v2 in enumerate(vectors):
+            if i != j and all(x2 >= x1 for x1, x2 in zip(v1, v2)) and any(x2 > x1 for x1, x2 in zip(v1, v2)):
+                dominated = True
+                break
+        if not dominated:
+            frontier.append(i)
+    return frontier
 
 
 def agree(kernel: Any, a: Dict[str, Any], b: Dict[str, Any], ma: Dict[str, float], mb: Dict[str, float],

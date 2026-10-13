@@ -137,6 +137,44 @@ def distance(kernel: Any, a: int, b: int) -> float:
     return float(universe.warp_distances(kernel.sectors, a).get(b, float("inf")))
 
 
+def potential_field(kernel: Any, target_sector_id: int, presence: str) -> float:
+    """Compute continuous 3D gravito-warp potential field Phi(x) exerted by a network.
+    
+    Transforms discrete set-membership spheres into continuous 3D field manifolds:
+        Phi(x) = sum_{s in systems} Power_s / max(0.1, ||x - x_s||)
+    """
+    st = stats(kernel)
+    net = st.get("nets", {}).get(presence)
+    if not net:
+        return 0.0
+
+    held_systems = net.get("systems", [])
+    if not held_systems:
+        return 0.0
+
+    total_potential = 0.0
+    for s_id in held_systems:
+        if s_id == target_sector_id:
+            total_potential += 10.0
+            continue
+        d = distance(kernel, s_id, target_sector_id)
+        if d < float("inf"):
+            total_potential += 1.0 / max(0.1, float(d))
+    return round(total_potential, 4)
+
+
+def is_within_potential_basin(kernel: Any, sector_id: int, presence: str) -> bool:
+    """Check if target system lies within the continuous potential dominance basin of presence."""
+    st = stats(kernel)
+    my_phi = potential_field(kernel, sector_id, presence)
+    if my_phi <= 0.0:
+        return False
+    for other in st.get("nets", {}):
+        if other != presence and potential_field(kernel, sector_id, other) > my_phi:
+            return False
+    return True
+
+
 # ---------------------------------------------------------------------- holding
 def owner(kernel: Any, sector_id: int) -> Optional[str]:
     """The realm that holds a system (the first network to reach it), if any."""

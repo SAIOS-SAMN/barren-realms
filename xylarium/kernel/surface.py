@@ -98,10 +98,27 @@ class SurfaceTile:
     district: DistrictType = DistrictType.EMPTY
     level: int = 1
 
+    @property
+    def lat(self) -> float:
+        """Latitude theta in [-pi/2, +pi/2] on S^2 spherical manifold."""
+        return math.pi * ((self.y + 0.5) / float(SURFACE_GRID_HEIGHT) - 0.5)
+
+    @property
+    def lon(self) -> float:
+        """Longitude phi in [-pi, +pi] on S^2 spherical manifold."""
+        return 2.0 * math.pi * ((self.x + 0.5) / float(SURFACE_GRID_WIDTH) - 0.5)
+
+    @property
+    def area_weight(self) -> float:
+        """Metric area scale factor cos(theta) on S^2."""
+        return max(0.05, math.cos(self.lat))
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "x": self.x,
             "y": self.y,
+            "lat": round(self.lat, 4),
+            "lon": round(self.lon, 4),
             "terrain": self.terrain.value,
             "district": self.district.value,
             "level": self.level,
@@ -120,9 +137,17 @@ class SurfaceTile:
 
 class SurfaceGrid:
     """
-    8x8 district grid managing terrain, buildings, adjacency bonuses,
-    and ground garrison defense on a planetary surface.
+    S^2 spherical district manifold managing terrain, buildings, adjacency synergies,
+    and ground garrison defense across continuous planetary geometry.
     """
+
+    def spherical_distance(self, t1: SurfaceTile, t2: SurfaceTile, planet_radius_km: float = 6371.0) -> float:
+        """Compute exact Great Circle geodesic distance on S^2 spherical manifold."""
+        lat1, lon1 = t1.lat, t1.lon
+        lat2, lon2 = t2.lat, t2.lon
+        cos_angle = math.sin(lat1) * math.sin(lat2) + math.cos(lat1) * math.cos(lat2) * math.cos(lon1 - lon2)
+        angle = math.acos(max(-1.0, min(1.0, cos_angle)))
+        return planet_radius_km * angle
 
     def __init__(
         self,

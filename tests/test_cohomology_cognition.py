@@ -99,7 +99,47 @@ class TestCohomologyCognition(unittest.TestCase):
             w_loop = next(iter(plaquettes.values()))
             self.assertIsInstance(w_loop, physics.Quaternion)
 
+    def test_remediated_manifolds(self):
+        from xylarium.kernel import decide, surface, ideology, spheres
+        
+        # 1. Pareto Frontier Multi-Objective Manifold
+        vectors = [
+            (100.0, 1.0, 0.5), # Option A: High net, moderate syntropy
+            (50.0, 2.0, 0.8),  # Option B: Lower net, high syntropy (non-dominated!)
+            (30.0, 0.5, 0.2),  # Option C: Dominated by both A and B
+        ]
+        frontier = decide.pareto_frontier(vectors)
+        self.assertIn(0, frontier)
+        self.assertIn(1, frontier)
+        self.assertNotIn(2, frontier) # Option C is strictly dominated
+
+        # 2. S^2 Spherical Planetary Manifold
+        grid = surface.SurfaceGrid(width=8, height=8)
+        t_equator = surface.SurfaceTile(x=4, y=4, terrain=surface.TerrainType.PLAINS)
+        t_pole = surface.SurfaceTile(x=4, y=7, terrain=surface.TerrainType.PLAINS)
+        
+        self.assertGreater(t_equator.area_weight, t_pole.area_weight) # Cosine latitude scaling
+        dist_s2 = grid.spherical_distance(t_equator, t_pole, planet_radius_km=1000.0)
+        self.assertGreater(dist_s2, 0.0)
+
+        # 3. Ideology Cohesion Stress-Energy Tensor and 4-Volume
+        ledger = ideology.CohesionLedger()
+        ledger.record_deed("compassion", 20.0, is_syntropic=True)
+        ledger.record_deed("resonance", 15.0, is_syntropic=True)
+        ledger.record_deed("integrity", 10.0, is_syntropic=True)
+        ledger.record_deed("morality", 5.0, is_syntropic=False)
+        
+        tensor = ledger.stress_energy_tensor()
+        self.assertEqual(len(tensor), 4)
+        self.assertEqual(len(tensor[0]), 4)
+        self.assertGreater(ledger.manifold_volume, 1.0)
+
+        # 4. Spheres Continuous Potential Field
+        phi = spheres.potential_field(self.kernel, 1, "progenitor:Elder")
+        self.assertIsInstance(phi, float)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
