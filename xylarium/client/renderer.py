@@ -2697,6 +2697,95 @@ class TerminalRenderer:
         return "\n".join(lines)
 
     @classmethod
+    def render_xenobiology_screen(cls, view: Dict[str, Any], chosen_planet_idx: int = 0) -> str:
+        sector = view.get("sector", {})
+        planets = sector.get("planets", [])
+        xeno = view.get("xenobiology", {})
+        ecos = xeno.get("local_ecosystems", [])
+
+        eco = None
+        target_p = None
+        if ecos and 0 <= chosen_planet_idx < len(ecos):
+            eco = ecos[chosen_planet_idx]
+            target_p = planets[chosen_planet_idx] if chosen_planet_idx < len(planets) else None
+        elif ecos:
+            eco = ecos[0]
+            target_p = planets[0] if planets else None
+
+        sec_id = sector.get("id", 1)
+        p_name = target_p.get("name", "Deep Space") if target_p else "None"
+        p_type = target_p.get("planet_type", "UNKNOWN") if target_p else "VACUUM"
+
+        lines = [
+            f"\n{bold(c_gold('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_gold('║'))}  {bold(c_green('XYLARIUM BBS │ XENOBIOLOGY & ALIEN TROPHIC ECOSYSTEMS'))}            {bold(c_gold('║'))}",
+            f"{bold(c_gold('╠' + '═' * 76 + '╣'))}",
+            f"{bold(c_gold('║'))}  World: {c_cyan(f'{p_name} ({p_type})'):<32} "
+            f"Sector: {c_gold(f'#{sec_id:03d}'):<26} {bold(c_gold('║'))}",
+            f"{bold(c_gold('╚' + '═' * 76 + '╝'))}",
+            "",
+        ]
+
+        if not eco or not eco.get("taxa"):
+            lines.append("  No indigenous xenobiological ecosystems detected in this planetary orbit.")
+            lines.append(f"\n{bold(c_gold('═' * 78))}")
+            lines.append(f"  Commands: {c_gold('[Q]')}uit / Return")
+            lines.append(f"{bold(c_gold('═' * 78))}")
+            return "\n".join(lines)
+
+        backbone = eco.get("backbone", "PHOSPHO_RIBOSE")
+        shannon = eco.get("shannon_entropy", 1.5)
+        eta = eco.get("trophic_efficiency", 0.10)
+        biomass = eco.get("native_biomass_kg_m2", 4.5)
+        grafts = eco.get("grafted_traits", [])
+
+        lines.append(f"  Polymer Backbone: {c_magenta(backbone)} │ Shannon Entropy H: {c_green(f'{shannon:.2f}')} │ Trophic Efficiency: {c_cyan(f'{eta*100:.1f}%')}")
+        lines.append(f"  Biomass Density: {c_gold(f'{biomass:.2f} kg/m²')} │ Active Transgenic Grafts: {c_white(', '.join(grafts) if grafts else 'None')}")
+        lines.append(f"{'-' * 78}")
+        lines.append(bold(c_cyan("INDIGENOUS TROPHIC PYRAMID & NATIVE TAXA:")))
+        lines.append(f"{'Taxon ID':<10} {'Species & Scientific Name':<28} {'Trophic':<11} {'Biomass':<8} {'Metabolite':<16}")
+        lines.append(f"{'-' * 78}")
+
+        for t in eco.get("taxa", []):
+            tid = t.get("id", "TAXON")
+            tname = f"{t.get('name', 'Taxon')} ({t.get('scientific_name', '')})"[:26]
+            trophic = t.get("trophic_level", "PRODUCER")
+            b_pct = f"{t.get('biomass_share', 0.1)*100:.1f}%"
+            metab = f"+{t.get('metabolite_yield', 2)} [{t.get('metabolite', 'BIO')}]"
+
+            if trophic == "PRODUCER":
+                trophic_badge = c_green("PRODUCER")
+            elif trophic == "GRAZER":
+                trophic_badge = c_cyan("GRAZER")
+            elif trophic == "PREDATOR":
+                trophic_badge = c_red("PREDATOR")
+            else:
+                trophic_badge = c_magenta("DECOMPOSER")
+
+            lines.append(f"{tid:<10} {c_white(tname):<37} {trophic_badge:<20} {b_pct:<8} {c_gold(metab):<25}")
+            lines.append(f"    └─ Feeding: {c_gray(t.get('feeding_strategy', ''))} — {c_gray(t.get('description', ''))[:50]}")
+
+        lines.append(f"\n{bold(c_cyan('AVAILABLE BIOREACTOR SYNTHESIS RECIPES:'))}")
+        lines.append(f"{'-' * 78}")
+        recipes = xeno.get("culture_recipes", [])
+        for r in recipes[:4]:
+            inps = ", ".join(f"{v}x {k}" for k, v in r["inputs"].items())
+            outs = ", ".join(f"{v}x {k}" for k, v in r["outputs"].items())
+            lines.append(f"  ► {c_gold(r['id'])}: {c_white(r['name'])} ({inps} -> {c_green(outs)})")
+
+        lines.append(f"\n{bold(c_gold('═' * 78))}")
+        lines.append(
+            f"  Commands: {c_gold('[S]')}urvey World  "
+            f"{c_gold('[H]')}arvest Specimen  "
+            f"{c_gold('[C]')}ulture Recipe  "
+            f"{c_gold('[G]')}raft Transgenic Trait  "
+            f"{c_gold('[W]')}orld Switch  "
+            f"{c_gold('[Q]')}uit / Return"
+        )
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
     def render_senate_screen(cls, view: Dict[str, Any]) -> str:
         sen = view.get("senate", {})
         treasury = sen.get("federal_treasury", 100000)

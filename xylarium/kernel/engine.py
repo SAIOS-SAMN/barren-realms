@@ -1382,6 +1382,49 @@ class GameKernel:
         from xylarium.kernel import biosphere
         return biosphere.seed_biosphere_pack(captain, planet, kernel=self)
 
+    def _handle_xenobiology_survey(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        pid = kwargs.get("planet_id")
+        planet = self.get_planet(pid) if pid else None
+        if not planet:
+            sec = self.sectors.get(captain.sector_id)
+            if sec and sec.planets:
+                planet = sec.planets[0]
+        if not planet:
+            return ActionResult(False, ActionType.XENOBIOLOGY_SURVEY, "No celestial body in this sector to survey.")
+        from xylarium.kernel import xenobiology
+        return xenobiology.survey_xenobiology(captain, planet, kernel=self)
+
+    def _handle_xenobiology_sample(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        pid = kwargs.get("planet_id")
+        planet = self.get_planet(pid) if pid else None
+        if not planet:
+            sec = self.sectors.get(captain.sector_id)
+            if sec and sec.planets:
+                planet = sec.planets[0]
+        if not planet:
+            return ActionResult(False, ActionType.XENOBIOLOGY_SAMPLE, "No celestial body in this sector to sample.")
+        from xylarium.kernel import xenobiology
+        taxon_id = kwargs.get("taxon_id")
+        return xenobiology.sample_xenobiology(captain, planet, taxon_id=taxon_id, kernel=self)
+
+    def _handle_xenobiology_culture(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        rec_id = kwargs.get("recipe_id", "")
+        from xylarium.kernel import xenobiology
+        return xenobiology.culture_xenobiology(captain, rec_id, kernel=self)
+
+    def _handle_xenobiology_graft(self, captain: Captain, kwargs: Dict[str, Any]) -> ActionResult:
+        pid = kwargs.get("planet_id")
+        planet = self.get_planet(pid) if pid else None
+        if not planet:
+            sec = self.sectors.get(captain.sector_id)
+            if sec and sec.planets:
+                planet = sec.planets[0]
+        if not planet:
+            return ActionResult(False, ActionType.XENOBIOLOGY_GRAFT, "No celestial body in this sector for transgenic grafting.")
+        from xylarium.kernel import xenobiology
+        metab = kwargs.get("metabolite", "")
+        return xenobiology.graft_xenobiology(captain, planet, metab, kernel=self)
+
     def _handle_empire_overview(self, captain: Captain) -> ActionResult:
         owned_planets = []
         for s in self.sectors.values():
@@ -2787,6 +2830,23 @@ class GameKernel:
                     for p in sector.planets
                 ] if hasattr(self, "surface_manager") else [],
                 "player_troops": getattr(captain, "troops", 0),
+            },
+            "xenobiology": {
+                "local_ecosystems": [
+                    __import__("xylarium.kernel.xenobiology", fromlist=["generate_xeno_ecosystem"]).generate_xeno_ecosystem(p, self).to_dict()
+                    for p in sector.planets
+                ],
+                "culture_recipes": [
+                    {
+                        "id": r.id,
+                        "name": r.name,
+                        "inputs": r.inputs,
+                        "outputs": r.outputs,
+                        "catalyst_heat": r.catalyst_heat,
+                        "description": r.description,
+                    }
+                    for r in __import__("xylarium.kernel.xenobiology", fromlist=["XENO_CULTURE_RECIPES"]).XENO_CULTURE_RECIPES.values()
+                ],
             },
             "fx": {
                 "wallet": dict(captain.fx_wallet),

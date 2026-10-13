@@ -167,6 +167,14 @@ COMMODITY_CONFIG = {
     "aetherium": {"name": "Aetherium", "symbol": "Aeth", "category": "EXOTICS", "base_price": 220, "min_price": 100, "max_price": 550, "volatility": 0.70},
     "ferrolattice": {"name": "Ferrolattice", "symbol": "Flt", "category": "EXOTICS", "base_price": 90, "min_price": 45, "max_price": 230, "volatility": 0.50},
 
+    # [3b] XENOBIOLOGICAL SPECIMENS & EXTREMOPHILE METABOLITES
+    "XENOPROTEIN": {"name": "Xenoprotein Isolates", "symbol": "Xpr", "category": "EXOTICS", "base_price": 95, "min_price": 45, "max_price": 240, "volatility": 0.50},
+    "CRYOPROTECTANT": {"name": "Cryoprotectant Enzymes", "symbol": "Cpe", "category": "EXOTICS", "base_price": 105, "min_price": 50, "max_price": 270, "volatility": 0.55},
+    "PIEZO_ENZYME": {"name": "Piezo-Enzymatic Crystals", "symbol": "Pze", "category": "EXOTICS", "base_price": 115, "min_price": 55, "max_price": 290, "volatility": 0.55},
+    "RADIOTROPHIC_MELANIN": {"name": "Radiotrophic Melanin Matrix", "symbol": "Rmm", "category": "EXOTICS", "base_price": 135, "min_price": 60, "max_price": 340, "volatility": 0.60},
+    "BIO_CHITIN": {"name": "Bio-Adaptive Chitin", "symbol": "Bch", "category": "EXOTICS", "base_price": 80, "min_price": 38, "max_price": 200, "volatility": 0.50},
+    "NEURO_SPORE": {"name": "Synaptic Neuro-Spores", "symbol": "Nsp", "category": "EXOTICS", "base_price": 175, "min_price": 85, "max_price": 440, "volatility": 0.65},
+
     # [4] MANUFACTURED VALUE-ADDED COMPONENTS (Industrial Goods)
     "M1_SUPERCONDUCTOR": {"name": "Superconducting Solenoids", "symbol": "M1", "category": "MANUFACTURED", "base_price": 180, "min_price": 80, "max_price": 450, "volatility": 0.55, "recipe": {"Ti": 1, "Cu": 1, "He-3": 1}},
     "M2_BIOSPHERE_PACK": {"name": "Biosphere Hydration Packs", "symbol": "M2", "category": "MANUFACTURED", "base_price": 140, "min_price": 65, "max_price": 360, "volatility": 0.50, "recipe": {"H2O": 2, "C": 1}},
@@ -338,9 +346,13 @@ SPECIALIZED_HULLS = {
         "name": "Biosphere Vessel",
         "holds": 100,
         "price": 14000,
-        "allowed_categories": ["VOLATILES"],
-        "allowed_commodities": ["H2O", "C", "ORGANICS", "chitinium", "M2_BIOSPHERE_PACK"],
-        "description": "Climate-controlled, sterile life-support hull designed for agricultural biologicals and biomaterials.",
+        "allowed_categories": ["VOLATILES", "EXOTICS"],
+        "allowed_commodities": [
+            "H2O", "C", "ORGANICS", "chitinium", "M2_BIOSPHERE_PACK",
+            "XENOPROTEIN", "CRYOPROTECTANT", "PIEZO_ENZYME",
+            "RADIOTROPHIC_MELANIN", "BIO_CHITIN", "NEURO_SPORE",
+        ],
+        "description": "Climate-controlled, sterile life-support hull designed for agricultural biologicals, xenobiotic isolates, and biomaterials.",
         "icon": "🌿",
         "chemical_rating": "BIO_ORGANIC",
         "wormhole_capable": False,
@@ -1096,6 +1108,10 @@ XP_FREIGHT_MAX = 20
 XP_COMBAT_BASE = 15                    # Scaled by opponent strength ratio (clamped 0..2)
 XP_SCIENCE_PUZZLE = 25
 XP_SCIENCE_ANOMALY = 15
+XP_XENOBIOLOGY_SURVEY = 20
+XP_XENOBIOLOGY_SAMPLE = 30
+XP_XENOBIOLOGY_CULTURE = 25
+XP_XENOBIOLOGY_GRAFT = 40
 XP_INDUSTRY_DISTRICT = 8
 XP_INDUSTRY_CITADEL = 20
 XP_INDUSTRY_GROWTH_MILESTONE = 10      # Per +25% population milestone on an owned colony

@@ -131,8 +131,12 @@ class ActionType(str, Enum):
     # [3] Financial Derivatives & Freight Forward Contracts
     FORWARD_FREIGHT_CONTRACT = "FORWARD_FREIGHT_CONTRACT"
 
-    # [4] Ecology & Biosphere Seeding
+    # [4] Ecology, Xenobiology & Biosphere Seeding
     BIOSPHERE_SEED = "BIOSPHERE_SEED"
+    XENOBIOLOGY_SURVEY = "XENOBIOLOGY_SURVEY"
+    XENOBIOLOGY_SAMPLE = "XENOBIOLOGY_SAMPLE"
+    XENOBIOLOGY_CULTURE = "XENOBIOLOGY_CULTURE"
+    XENOBIOLOGY_GRAFT = "XENOBIOLOGY_GRAFT"
 
     # [5] Imperial Senate & Governance Actions
     SENATE_CAMPAIGN = "SENATE_CAMPAIGN"

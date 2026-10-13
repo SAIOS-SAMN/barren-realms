@@ -596,5 +596,62 @@ To realize the complete vision of a rich, vibrant, cognitive intelligent, spheri
 ### 14.4 Order 4: Xenobiology, Biome Succession & Ecological Thermodynamics (`BIOSPHERE_SEED`)
 * **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.BIOSPHERE_SEED`), [`xylarium/kernel/biosphere.py`](file:///opt/barren-realms/xylarium/kernel/biosphere.py) (`get_biome_health`, `set_biome_health`, `seed_biosphere_pack`), [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py) (`_handle_biosphere_seed`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
 * **Ecological Trophic Balance:** Tracks planetary biome health $\mathcal{B} \in [0.0, 1.0]$. Degraded worlds exhibit reduced food production and carrying capacity.
-* **Stratospheric Inoculation:** Captains or automated `BIOSPHERE_VESSEL` haulers disperse an `M2_BIOSPHERE_PACK` or 10 units of viable Organics into planetary skies.
 * **Climax Succession:** Restores biome health to 100.0%, advances ecological succession state to `CLIMAX_EQUILIBRIUM`, increases baseline fertility by +0.25, and awards biological research experience.
+
+---
+
+## 15. Xenobiology, Alien Trophic Pyramids, Extremophile Polymers & Transgenic Bioprospecting
+
+To expand biological complexity beyond sentient civilizations into deep planetary ecosystems, a first-principles xenobiology engine has been established, bridging non-sentient alien life, trophic food webs, bioprospecting, and transgenic agriculture into the production simulation loop:
+
+### 15.1 Genetic Polymer Backbones & Thermodynamic Solvents
+* **Files:** [`xylarium/kernel/xenobiology.py`](file:///opt/barren-realms/xylarium/kernel/xenobiology.py) (`PolymerBackbone`, `generate_xeno_ecosystem`)
+* **Solvent & Thermal Constraints:** Replaces generic life labels with distinct polymer backbone chemistries derived from planetary temperature, pressure, and atmospheric composition:
+  - **`PHOSPHO_RIBOSE`:** Standard nucleic acid backbone stabilized by aqueous solvent dipoles ($T \in [260, 360]\text{ K}$). Characteristic of Terrestrial and Oceanic biospheres.
+  - **`SILOXANE_PEPTIDE`:** Flexible silicon-oxygen spines functionalized with peptide side chains, soluble in sub-zero liquid methane and ammonia ($T \in [70, 190]\text{ K}$). Native to Barren and Cryogenic worlds.
+  - **`BORON_NITRIDE_LATTICE`:** Robust covalent boron-nitride ceramic lattices resisting superheated sulfuric and molten basalt environments ($T \in [360, 650]\text{ K}$). Characteristic of Volcanic and Pyrosynthetic worlds.
+  - **`FLUOROCARBON_HELIX`:** Super-inert fluorinated polymer helices impervious to concentrated halogen acids and caustic atmospheres.
+  - **`MAGNETO_IONIC_PLASMA`:** Helical magnetic solitons confined within gas giant magnetospheres, self-replicating along ion flux vortices.
+
+### 15.2 Lindeman Trophic Pyramids & Shannon Biodiversity Index
+* **Files:** [`xylarium/kernel/xenobiology.py`](file:///opt/barren-realms/xylarium/kernel/xenobiology.py) (`XenoTaxon`, `XenoEcosystem`, `TrophicLevel`)
+* **Trophic Hierarchy:** Each planetary ecosystem models four thermodynamic trophic tiers:
+  - **$T_1$ Primary Producers:** Autotrophic solar phototrophs, mineral chemo-lithotrophs, or radiotrophs converting ambient energy flux into initial biomass.
+  - **$T_2$ Primary Consumers:** Grazers, lithophages, and atmospheric filter-feeders ingesting primary biomass.
+  - **$T_3$ Apex Xenopredators:** Pack hunters, bioelectric predators, and kinetic ambushers enforcing population regulation.
+  - **$T_0$ Decomposers:** Sub-surface mycelial mats and catalytic bacteria lysing dead cellular structures into bio-salts.
+* **Thermodynamic Metrics:**
+  - **Shannon Biodiversity Index:** $\mathcal{H} = -\sum_{i=1}^{S} p_i \ln(p_i)$ measuring ecological entropy and genetic resilience.
+  - **Lindeman Trophic Efficiency:** $\eta_{\text{trophic}} = \frac{\sum_{T_2} B_{T_2}}{\sum_{T_1} B_{T_1}} \approx 0.10$, enforcing realistic biomass scaling across predator-prey chains.
+
+### 15.3 Bioprospecting Specimen Sampling & Living Fleet Integration
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.XENOBIOLOGY_SAMPLE`, `ActionType.XENOBIOLOGY_SURVEY`), [`xylarium/kernel/xenobiology.py`](file:///opt/barren-realms/xylarium/kernel/xenobiology.py) (`sample_xenobiology`, `survey_xenobiology`), [`xylarium/config.py`](file:///opt/barren-realms/xylarium/config.py)
+* **Specimen Metabolites:** Sampling native taxa extracts high-value biochemical commodities into ship holds:
+  - **`XENOPROTEIN`:** Hyper-dense peptide folds extracted from autotrophic canopies.
+  - **`CRYOPROTECTANT`:** Antifreeze enzymes synthesized by methane cryophiles.
+  - **`PIEZO_ENZYME`:** Hyperbaric catalytic enzymes from abyssal lithophages.
+  - **`RADIOTROPHIC_MELANIN`:** Radiation-absorbing biological compounds from volcanic basalt corals.
+  - **`BIO_CHITIN`:** Regenerative ductile chitin carapaces from armored grazers.
+  - **`NEURO_SPORE`:** Synaptic bio-accelerants from predatory fungal mats.
+* **`BIOSPHERE_VESSEL` Bonus:** Haulers of the `BIOSPHERE_VESSEL` class utilize climate-controlled life-support holds to grant a **+50% bonus** to specimen sampling yields.
+
+### 15.4 Bioreactor Culturing & Industrial Synthesis
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.XENOBIOLOGY_CULTURE`), [`xylarium/kernel/xenobiology.py`](file:///opt/barren-realms/xylarium/kernel/xenobiology.py) (`XENO_CULTURE_RECIPES`, `culture_xenobiology`)
+* **Biochemical Recipes:**
+  - **`ADAPTIVE_BIOMASS`:** $2\text{ XENOPROTEIN} + 2\text{ Organics} \rightarrow 6\text{ Organics}$ (accelerated food synthesis).
+  - **`CRYO_STABILIZER`:** $2\text{ CRYOPROTECTANT} + 1\text{ cryogenite} \rightarrow 2\text{ M1_SUPERCONDUCTOR}$.
+  - **`BIO_COMPOSITE_ARMOR`:** $3\text{ BIO_CHITIN} + 1\text{ Fe} \rightarrow 2\text{ ferrolattice}$.
+  - **`SYNAPTIC_NEUROGEL`:** $2\text{ NEURO_SPORE} + 1\text{ H2O} \rightarrow 1\text{ M4_WARP_CORE}$.
+  - **`RAD_SHIELD_MATRIX`:** $2\text{ RADIOTROPHIC_MELANIN} + 1\text{ U} \rightarrow 2\text{ M3_ENGINE_MANIFOLD}$.
+  - **`ENZYME_CATALYSIS`:** $2\text{ PIEZO_ENZYME} + 2\text{ ORE} \rightarrow 3\text{ Ti}$.
+
+### 15.5 Transgenic Gene Grafting & Planetary Ecological Modifications
+* **Files:** [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`ActionType.XENOBIOLOGY_GRAFT`), [`xylarium/kernel/xenobiology.py`](file:///opt/barren-realms/xylarium/kernel/xenobiology.py) (`graft_xenobiology`), [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py), [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py)
+* **Permanent Colony Benefits:** Players graft sampled xenobiotic traits into colonized planetary biospheres:
+  - **`CRYOPROTECTANT` Graft:** Cold-hardens agricultural crops, conferring **+30% planetary fertility** in sub-zero environments.
+  - **`RADIOTROPHIC_MELANIN` Graft:** Inoculates populations against stellar flare radiation, increasing **habitability by +0.20**.
+  - **`PIEZO_ENZYME` Graft:** Catalyzes deep crustal ore digestion, boosting planetary **mining efficiency by +25%**.
+  - **`XENOPROTEIN` Graft:** Enriches baseline food nutrition, expanding **carrying capacity by +20%** and raising morale by **+10**.
+  - **`BIO_CHITIN` Graft:** Integrates biomorphic carapaces into colony architecture, adding **+50 max shields**.
+  - **`NEURO_SPORE` Graft:** Enhances collective cognitive synthesis, increasing planetary **research output by +25%**.
+

@@ -190,6 +190,7 @@ class TerminalClient:
         **{w: "Y" for w in ["ALCH", "ALCHEMY", "TRANSMUTE"]},
         **{w: "W" for w in ["ORBIT", "RADAR", "ASTRO", "EPHEMERIS"]},
         **{w: "SENATE" for w in ["SENATE", "SEN", "GOV_SENATE", "VOTE", "OFFICES"]},
+        **{w: "XENOBIOLOGY" for w in ["XENO", "XENOBIOLOGY", "BIO", "BIOLOGY", "ECOSYSTEM"]},
         **{w: "SURFACE" for w in ["SURFACE", "GRID", "DISTRICT", "INVADE"]},
         **{w: "REST" for w in ["REST", "QUARTERS"]},
         **{w: "S" for w in ["BANK", "LOAN", "REPAY"]},
@@ -274,7 +275,7 @@ class TerminalClient:
         except Exception:
             pass                                   # the hint line is a courtesy; it never blocks the prompt
         try:
-            choice = input(f"{bold(c_white('Command [M/T/P/A/S/C/O/E/I/G/N/J/X/K/R/H/Q] > '))}").strip().upper()
+            choice = input(f"{bold(c_white('Command [M/T/P/A/S/C/O/E/I/G/N/J/B/X/K/R/H/Q] > '))}").strip().upper()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting Xylarium...")
             self.running = False
@@ -300,6 +301,9 @@ class TerminalClient:
             return
         if choice == "SENATE":
             self._prompt_senate(view)
+            return
+        if choice == "XENOBIOLOGY":
+            self._prompt_xenobiology(view)
             return
         if choice == "SURFACE":
             self._prompt_surface(view)
@@ -418,6 +422,8 @@ class TerminalClient:
                 self._prompt_research_anomaly(view)
         elif cmd == "J":
             self._prompt_jump_warp(view)
+        elif cmd == "B":
+            self._prompt_xenobiology(view)
         elif cmd == "X":
             self._prompt_cartography(view)
         elif cmd == "K":
@@ -2860,6 +2866,66 @@ class TerminalClient:
                     print(f"  Transit Multiplier: {c_green(f'{win.transit_multiplier:.2f}x')} [{win.window_grade}]")
                     print(f"  Angular Phase Delta: {win.delta_angle_deg:.1f}°")
                     print(f"  Cycles to Conjunction: {win.cycles_to_next_conjunction} cycles\n")
+                    input(c_gold("Press Enter to continue..."))
+
+    def _prompt_xenobiology(self, view: Dict[str, Any]) -> None:
+        """Handle xenobiology, alien trophic webs, bioprospecting, and transgenic grafting."""
+        chosen_idx = 0
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            planets = fresh_view.get("sector", {}).get("planets", [])
+            print(TerminalRenderer.render_xenobiology_screen(fresh_view, chosen_planet_idx=chosen_idx))
+            try:
+                cmd = input(f"{c_gold('Xenobiology Command [S/H/C/G/W/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            target_pid = planets[chosen_idx]["id"] if (planets and 0 <= chosen_idx < len(planets)) else None
+
+            if cmd == "S":
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.XENOBIOLOGY_SURVEY,
+                    planet_id=target_pid,
+                )
+                self._print_result(res)
+            elif cmd == "H":
+                taxon_in = input("Taxon ID or species name to sample (or Enter for primary producer) > ").strip()
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.XENOBIOLOGY_SAMPLE,
+                    planet_id=target_pid,
+                    taxon_id=taxon_in if taxon_in else None,
+                )
+                self._print_result(res)
+            elif cmd == "C":
+                rec_in = input("Bioreactor culture recipe ID (e.g. ADAPTIVE_BIOMASS, CRYO_STABILIZER, BIO_COMPOSITE_ARMOR, SYNAPTIC_NEUROGEL) > ").strip().upper()
+                if rec_in:
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.XENOBIOLOGY_CULTURE,
+                        recipe_id=rec_in,
+                    )
+                    self._print_result(res)
+            elif cmd == "G":
+                metab_in = input("Transgenic metabolite trait to graft (e.g. CRYOPROTECTANT, RADIOTROPHIC_MELANIN, PIEZO_ENZYME, XENOPROTEIN, BIO_CHITIN, NEURO_SPORE) > ").strip().upper()
+                if metab_in:
+                    res = self.kernel.dispatch(
+                        self.player_id,
+                        ActionType.XENOBIOLOGY_GRAFT,
+                        planet_id=target_pid,
+                        metabolite=metab_in,
+                    )
+                    self._print_result(res)
+            elif cmd == "W":
+                if len(planets) > 1:
+                    chosen_idx = (chosen_idx + 1) % len(planets)
+                else:
+                    print(c_gold("Only 1 celestial body in this system."))
                     input(c_gold("Press Enter to continue..."))
 
     def _prompt_senate(self, view: Dict[str, Any]) -> None:

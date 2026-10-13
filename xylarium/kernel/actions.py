@@ -589,6 +589,26 @@ def _biosphere_seed(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str,
     return k._handle_biosphere_seed(captain, kwargs)
 
 
+@action(ActionType.XENOBIOLOGY_SURVEY, turns=0)
+def _xenobiology_survey(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_xenobiology_survey(captain, kwargs)
+
+
+@action(ActionType.XENOBIOLOGY_SAMPLE, turns=0)
+def _xenobiology_sample(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_xenobiology_sample(captain, kwargs)
+
+
+@action(ActionType.XENOBIOLOGY_CULTURE, turns=0)
+def _xenobiology_culture(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_xenobiology_culture(captain, kwargs)
+
+
+@action(ActionType.XENOBIOLOGY_GRAFT, turns=0)
+def _xenobiology_graft(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k._handle_xenobiology_graft(captain, kwargs)
+
+
 @action(ActionType.SENATE_CAMPAIGN, turns=0)
 def _senate_campaign(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
     office = kwargs.get("office", SenateOffice.CHANCELLOR)
