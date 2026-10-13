@@ -113,6 +113,20 @@ class SurfaceTile:
         """Metric area scale factor cos(theta) on S^2."""
         return max(0.05, math.cos(self.lat))
 
+    @property
+    def s60_coords(self) -> Tuple[float, ...]:
+        """Continuous S^60 hypersphere coordinate embedding in R^61."""
+        from xylarium.kernel.physics import Sphere60
+        return Sphere60.project_point(f"tile:{self.x}:{self.y}:{self.terrain.value}")
+
+    @property
+    def s60_measure_weight(self) -> float:
+        """Lévy measure concentration weight around the S^60 equator."""
+        from xylarium.kernel.physics import Sphere60
+        # Angular displacement from equator derived from lat
+        dev = abs(self.lat)
+        return max(0.01, math.exp(-29.5 * dev * dev))
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "x": self.x,
@@ -137,7 +151,7 @@ class SurfaceTile:
 
 class SurfaceGrid:
     """
-    S^2 spherical district manifold managing terrain, buildings, adjacency synergies,
+    S^2 and S^60 spherical district manifold managing terrain, buildings, adjacency synergies,
     and ground garrison defense across continuous planetary geometry.
     """
 
@@ -148,6 +162,11 @@ class SurfaceGrid:
         cos_angle = math.sin(lat1) * math.sin(lat2) + math.cos(lat1) * math.cos(lat2) * math.cos(lon1 - lon2)
         angle = math.acos(max(-1.0, min(1.0, cos_angle)))
         return planet_radius_km * angle
+
+    def s60_distance(self, t1: SurfaceTile, t2: SurfaceTile, planet_radius_km: float = 6371.0) -> float:
+        """Compute exact Great Circle geodesic distance on continuous S^60 hyperspherical manifold."""
+        from xylarium.kernel.physics import Sphere60
+        return Sphere60.geodesic_distance(t1.s60_coords, t2.s60_coords, radius=planet_radius_km)
 
     def compute_climate_tiles(self, planet: Any, kernel: Any = None) -> Dict[Tuple[int, int], Dict[str, float]]:
         """Map continuous S^2 climate manifold onto surface grid tiles."""

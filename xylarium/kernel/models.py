@@ -543,6 +543,25 @@ class Planet:
             crowded_cycles=int(data.get("crowded_cycles", 0)),
         )
 
+    def s60_manifold(self) -> Dict[str, Any]:
+        """Compute the continuous 60-sphere geometric and holographic manifold for this planet."""
+        from xylarium.kernel.physics import Sphere60
+        r_scale = max(0.1, float(self.orbital_radius))
+        area = Sphere60.surface_area(r_scale)
+        vol = Sphere60.volume(r_scale)
+        var = Sphere60.equatorial_variance()
+        return {
+            "dimension": 60,
+            "embedding_dimension": 61,
+            "surface_area_s60": area,
+            "enclosed_volume_b61": vol,
+            "equatorial_variance_rad": round(var, 6),
+            "equatorial_variance_deg": round(math.degrees(var), 4),
+            "levy_bound_1pct": Sphere60.levy_concentration_bound(0.01),
+            "landauer_depth": float(self.population) * 1e20 * max(1e-18, area),
+            "uncollapsed": True,
+        }
+
 
 @dataclass
 class Ship:

@@ -299,9 +299,88 @@ class TestCohomologyCognition(unittest.TestCase):
         st_i = intellect.stats(self.kernel)
         self.assertIn("proof_roots", st_i)
 
+    def test_s60_and_s360_cone_manifolds(self):
+        import math
+        from xylarium.kernel import physics, surface
+        
+        # 1. Sphere60 continuous geometry & measure concentration
+        s_area = physics.Sphere60.surface_area(1.0)
+        self.assertGreater(s_area, 0.0)
+        vol = physics.Sphere60.volume(1.0)
+        self.assertAlmostEqual(vol, s_area / 61.0, places=12)
+        
+        # Levy concentration
+        bound = physics.Sphere60.levy_concentration_bound(0.1)
+        self.assertLess(bound, 2.0)
+        var = physics.Sphere60.equatorial_variance()
+        self.assertAlmostEqual(var, 1.0 / math.sqrt(59.0), places=6)
+        
+        # Deterministic projection onto S^60 in R^61
+        pt1 = physics.Sphere60.project_point("terra")
+        pt2 = physics.Sphere60.project_point("mars")
+        self.assertEqual(len(pt1), 61)
+        self.assertEqual(len(pt2), 61)
+        norm1 = math.sqrt(sum(x * x for x in pt1))
+        self.assertAlmostEqual(norm1, 1.0, places=6)
+        dist_s60 = physics.Sphere60.geodesic_distance(pt1, pt2, radius=1.0)
+        self.assertGreater(dist_s60, 0.0)
+        
+        # 2. Gravitational Cone Manifold join metric
+        sec = next(s for s in self.kernel.sectors.values() if len(s.planets) >= 2)
+        p_a = sec.planets[0]
+        p_b = sec.planets[1]
+        cone = physics.GravitationalConeManifold(p_a, p_b, distance_au=1.5)
+        # Collimation half width ~ 3.7 degrees
+        sigma_psi = cone.collimation_half_width()
+        self.assertAlmostEqual(math.degrees(sigma_psi), 3.69838, places=3)
+        # Directed flux
+        flux = cone.gravitational_flux(math.pi / 4.0)
+        self.assertGreater(flux, 0.0)
+        # Cross-section at apex vs midpoint
+        w_mid = cone.cross_section_weight(math.pi / 4.0)
+        w_apex = cone.cross_section_weight(0.0)
+        self.assertGreater(w_mid, w_apex)
+        self.assertEqual(w_apex, 0.0)
+        
+        # 3. Overlapping S^360 universe manifold
+        u360 = physics.Universe360(cosmic_radius=1.0)
+        emb_a = u360.embed_body(p_a, sector_id=p_a.sector_id)
+        emb_b = u360.embed_body(p_b, sector_id=p_b.sector_id)
+        self.assertEqual(len(emb_a), 361)
+        self.assertEqual(len(emb_b), 361)
+        norm_360 = math.sqrt(sum(x * x for x in emb_a))
+        self.assertAlmostEqual(norm_360, 1.0, places=6)
+        
+        # Overlapping cone caustics & Mayer-Vietoris cohomology
+        cone2 = physics.GravitationalConeManifold(p_b, p_a, distance_au=2.0)
+        caustic = cone.caustic_overlap(cone2)
+        self.assertIn("caustic_curvature", caustic)
+        cohomology = u360.compute_mayer_vietoris_cohomology([cone, cone2])
+        self.assertTrue(cohomology["uncollapsed_manifold"])
+        self.assertGreater(cohomology["total_harmonic_capacity"], 2)
+        self.assertIn(60, cohomology["betti_numbers"])
+        self.assertIn(120, cohomology["betti_numbers"])
+        
+        # 4. Planetary surface tile S^60 integration
+        tile = surface.SurfaceTile(x=3, y=4, terrain=surface.TerrainType.PLAINS)
+        self.assertEqual(len(tile.s60_coords), 61)
+        self.assertGreater(tile.s60_measure_weight, 0.0)
+        grid = surface.SurfaceGrid(width=8, height=8)
+        t_other = surface.SurfaceTile(x=5, y=2, terrain=surface.TerrainType.MOUNTAINS)
+        s60_dist = grid.s60_distance(tile, t_other, planet_radius_km=6371.0)
+        self.assertGreater(s60_dist, 0.0)
+        
+        # 5. Planet model S^60 manifold
+        p_manifold = p_a.s60_manifold()
+        self.assertEqual(p_manifold["dimension"], 60)
+        self.assertEqual(p_manifold["embedding_dimension"], 61)
+        self.assertGreater(p_manifold["surface_area_s60"], 0.0)
+        self.assertTrue(p_manifold["uncollapsed"])
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

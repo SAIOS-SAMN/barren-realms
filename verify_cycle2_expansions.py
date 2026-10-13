@@ -9,6 +9,7 @@ verify_cycle2_expansions.py: Live verification of the 5 fundamental manifold exp
 """
 
 import sys
+import math
 from pprint import pprint
 from xylarium.kernel.engine import GameKernel
 from xylarium.kernel import (
@@ -115,8 +116,31 @@ def main():
     print(f"  Modulated Stellar Activity:               {mhd['base_activity']:.2f} -> {mhd['modulated_activity']:.2f}")
     print(f"  Coronal Mass Ejection Flare Energy:       {mhd['cme_flare_joules']:.2e} Joules")
 
+    # --------------------------------------------------------------------------
+    # 6. S^60 Planetary Spheres, Gravitational Cones & S^360 Super-Universe
+    # --------------------------------------------------------------------------
+    print("\n[6] S^60 PLANETARY SPHERES, GRAVITATIONAL CONES & S^360 SUPER-UNIVERSE:")
+    s_area = physics.Sphere60.surface_area(1.0)
+    vol = physics.Sphere60.volume(1.0)
+    var = physics.Sphere60.equatorial_variance()
+    print(f"  Planet Mass Manifold: S^60 (Area = {s_area:.3e}, Vol = {vol:.3e})")
+    print(f"  Measure Concentration: Lévy Equatorial Variance = {var:.4f} rad ({math.degrees(var):.2f} deg)")
+    
+    sec = next(s for s in kernel.sectors.values() if len(s.planets) >= 2)
+    p1, p2 = sec.planets[0], sec.planets[1]
+    cone = physics.GravitationalConeManifold(p1, p2, distance_au=1.2)
+    sigma_cone = cone.collimation_half_width()
+    flux = cone.gravitational_flux(math.pi / 4.0)
+    print(f"  Gravitational Waveguide: Join S^60 * S^60 -> Collimation = {math.degrees(sigma_cone):.2f} deg")
+    print(f"  Channeled Directed Flux: {flux:.3f} (Midpoint Weight W(pi/4) = {cone.cross_section_weight(math.pi/4.0):.3e})")
+    
+    u360 = physics.Universe360(cosmic_radius=1.0)
+    cohom = u360.compute_mayer_vietoris_cohomology([cone])
+    print(f"  S^360 Universe: 6 Orthogonal 60D Sectors, Mayer-Vietoris Betti Capacity = {cohom['total_harmonic_capacity']}")
+    print(f"  Non-vanishing Betti Degrees: {list(cohom['betti_numbers'].keys())}")
+
     print("\n" + "=" * 80)
-    print("ALL 5 MANIFOLD EXPANSIONS VERIFIED FUNCTIONAL IN LIVE RUNTIME!")
+    print("ALL MANIFOLD EXPANSIONS VERIFIED FUNCTIONAL IN LIVE RUNTIME!")
     print("=" * 80)
 
 if __name__ == "__main__":

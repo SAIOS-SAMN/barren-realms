@@ -548,6 +548,181 @@ def non_euclidean_geodesic(
     return geodesic_length, axis
 
 
+# ---------------------------------------------------------------------- S^60 Planetary Hyperspheres & S^360 Cone Manifolds
+class Sphere60:
+    """Continuous 60-dimensional hypersphere S^60 embedded in R^61.
+    
+    Represents planetary mass without dimensional flattening.
+    Preserves measure concentration (Levy's lemma), round hyperspherical metric,
+    surface area A(S^60) = 2*pi^(30.5)/Gamma(30.5) * R^60, and holographic entropy.
+    """
+    DIMENSION = 60
+    EMBEDDING_DIM = 61
+
+    @staticmethod
+    def surface_area(radius: float = 1.0) -> float:
+        """Surface area A(S^60, R) = 2 * pi^(30.5) / Gamma(30.5) * R^60."""
+        r = max(1e-9, float(radius))
+        # Log-gamma evaluation prevents numeric overflow/underflow
+        ln_a = math.log(2.0) + 30.5 * math.log(math.pi) - math.lgamma(30.5) + 60.0 * math.log(r)
+        return math.exp(ln_a) if ln_a > -700 else 0.0
+
+    @staticmethod
+    def volume(radius: float = 1.0) -> float:
+        """Volume of enclosed ball B^61: V = A * R / 61."""
+        return (Sphere60.surface_area(radius) * max(1e-9, float(radius))) / 61.0
+
+    @staticmethod
+    def levy_concentration_bound(epsilon: float) -> float:
+        """Upper bound on deviation probability P(|f - E[f]| >= eps) <= 2 * exp(-59/2 * eps^2)."""
+        eps = max(0.0, float(epsilon))
+        arg = -29.5 * (eps * eps)
+        return 2.0 * math.exp(arg) if arg > -700 else 0.0
+
+    @staticmethod
+    def equatorial_variance() -> float:
+        """Equatorial band angular variance sigma_theta = 1 / sqrt(59) rad (~7.46 degrees)."""
+        return 1.0 / math.sqrt(59.0)
+
+    @staticmethod
+    def project_point(seed_key: Any) -> Tuple[float, ...]:
+        """Deterministically project an entity onto the unit S^60 hypersphere in R^61."""
+        seed = zlib.crc32(str(seed_key).encode())
+        rng = random.Random(seed)
+        # Marsaglia normal variates method for uniform distribution on S^60
+        vec = [rng.gauss(0.0, 1.0) for _ in range(61)]
+        norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+        return tuple(x / norm for x in vec)
+
+    @staticmethod
+    def geodesic_distance(p1: Tuple[float, ...], p2: Tuple[float, ...], radius: float = 1.0) -> float:
+        """Geodesic Great Circle arc distance on S^60: d = R * arccos(p1 . p2)."""
+        dot = sum(a * b for a, b in zip(p1, p2))
+        clamped_dot = max(-1.0, min(1.0, dot))
+        return float(radius) * math.acos(clamped_dot)
+
+
+class GravitationalConeManifold:
+    """Overlapping gravitational cone manifold between two S^60 planetary masses.
+    
+    Topological join S^60_A * S^60_B =~ S^121 parameterized by psi in [0, pi/2].
+    Line element: ds^2 = dpsi^2 + sin^2(psi) ds_{S^60_A}^2 + cos^2(psi) ds_{S^60_B}^2.
+    Forms a collimated gravitational waveguide of half-width sigma_psi = 1/sqrt(240) ~ 3.7 degrees.
+    """
+    def __init__(
+        self,
+        planet_a: Any,
+        planet_b: Any,
+        distance_au: float = 1.0,
+        g_coupling: float = 1.0,
+    ):
+        self.planet_a = planet_a
+        self.planet_b = planet_b
+        self.distance = max(0.01, float(distance_au))
+        self.g_coupling = float(g_coupling)
+        
+        # Mass scales
+        self.mass_a = float(getattr(planet_a, "population", 500) + 10)
+        self.mass_b = float(getattr(planet_b, "population", 500) + 10)
+
+    def cross_section_weight(self, psi: float) -> float:
+        """Cross-sectional volume weight W(psi) = (1/2^60) * sin^60(2*psi)."""
+        sin_2psi = max(0.0, math.sin(2.0 * psi))
+        if sin_2psi <= 1e-12:
+            return 0.0
+        ln_w = 60.0 * (math.log(sin_2psi) - math.log(2.0))
+        return math.exp(ln_w) if ln_w > -700 else 0.0
+
+    def collimation_half_width(self) -> float:
+        """Angular collimation dispersion sigma_psi = 1 / sqrt(240) rad (~ 3.7 degrees)."""
+        return 1.0 / math.sqrt(240.0)
+
+    def conical_deficit_beta(self) -> float:
+        """Deficit angle parameter beta = sqrt(1 - 2*G*(Ma+Mb)/(c^2 * D))."""
+        pot = (2.0 * 0.001 * (self.mass_a + self.mass_b)) / self.distance
+        return math.sqrt(max(0.01, 1.0 - min(0.99, pot)))
+
+    def gravitational_flux(self, psi: float = math.pi / 4.0) -> float:
+        """Directed gravitational flux channeled through the waveguide at parameter psi."""
+        beta = self.conical_deficit_beta()
+        sigma = self.collimation_half_width()
+        collimation_gain = 1.0 / (math.sqrt(2.0 * math.pi) * sigma)
+        return (self.g_coupling * (self.mass_a * self.mass_b) / (self.distance * self.distance)) * collimation_gain * beta
+
+    def caustic_overlap(self, other: "GravitationalConeManifold") -> Dict[str, Any]:
+        """Caustic intersection between two overlapping gravitational cones."""
+        beta1 = self.conical_deficit_beta()
+        beta2 = other.conical_deficit_beta()
+        delta1 = 2.0 * math.pi * (1.0 - beta1)
+        delta2 = 2.0 * math.pi * (1.0 - beta2)
+        caustic_amp = math.sqrt(delta1 * delta2)
+        return {
+            "caustic_curvature": round(caustic_amp, 6),
+            "waveguide_intersection_angle_deg": round(math.degrees(abs(beta1 - beta2)), 4),
+            "non_abelian_overlap": caustic_amp > 1e-5,
+        }
+
+
+class Universe360:
+    """Overarching 360-sphere S^360 universe manifold embedded in R^361.
+    
+    S^360 decomposes into 6 orthogonal 60-dimensional sectors:
+        R^360 = V_1^60 (+) V_2^60 (+) ... (+) V_6^60.
+    Houses overlapping gravitational cone manifolds and non-vanishing Mayer-Vietoris cohomology.
+    """
+    TOTAL_DIMENSION = 360
+    EMBEDDING_DIM = 361
+    SECTOR_SLICES = 6
+    DIMS_PER_SECTOR = 60
+
+    def __init__(self, cosmic_radius: float = 1.0):
+        self.cosmic_radius = max(1e-6, float(cosmic_radius))
+
+    def embed_body(self, planet_or_body: Any, sector_id: int) -> Tuple[float, ...]:
+        """Embed an S^60 body into the global S^360 universe."""
+        sec_idx = int(sector_id) % self.SECTOR_SLICES
+        body_id = getattr(planet_or_body, "id", str(planet_or_body))
+        local_coords = Sphere60.project_point(body_id)
+        
+        full_vec = [0.0] * 361
+        start_idx = sec_idx * self.DIMS_PER_SECTOR
+        for i in range(self.DIMS_PER_SECTOR):
+            full_vec[start_idx + i] = local_coords[i]
+        full_vec[360] = local_coords[60] * 0.1
+        
+        norm = math.sqrt(sum(x * x for x in full_vec)) or 1.0
+        return tuple((x / norm) * self.cosmic_radius for x in full_vec)
+
+    def global_geodesic(self, p1_360: Tuple[float, ...], p2_360: Tuple[float, ...]) -> float:
+        """Great circle distance on the S^360 manifold."""
+        dot = sum(a * b for a, b in zip(p1_360, p2_360)) / (self.cosmic_radius * self.cosmic_radius)
+        clamped_dot = max(-1.0, min(1.0, dot))
+        return self.cosmic_radius * math.acos(clamped_dot)
+
+    def compute_mayer_vietoris_cohomology(self, active_cones: List[GravitationalConeManifold]) -> Dict[str, Any]:
+        """Compute intermediate cohomology dimensions generated by overlapping gravitational cones."""
+        n_cones = len(active_cones)
+        if n_cones == 0:
+            return {"betti_numbers": {0: 1, 360: 1}, "euler_characteristic": 2, "total_harmonic_capacity": 2}
+        
+        betti: Dict[int, int] = {0: 1, 360: 1}
+        betti[60] = max(1, n_cones)
+        betti[120] = max(1, n_cones * (n_cones - 1) // 2) if n_cones > 1 else 1
+        betti[1] = min(6, n_cones)
+        betti[59] = min(6, n_cones)
+        betti[121] = 1 if n_cones > 1 else 0
+        
+        chi = sum((-1)**k * b for k, b in betti.items())
+        total_harmonic_forms = sum(betti.values())
+        
+        return {
+            "betti_numbers": betti,
+            "euler_characteristic": chi,
+            "total_harmonic_capacity": total_harmonic_forms,
+            "uncollapsed_manifold": True,
+        }
+
+
 def summary(sectors: Dict[int, Any]) -> Dict[str, Any]:
     types: Dict[str, int] = {}
     locked = worlds = 0
