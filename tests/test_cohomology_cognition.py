@@ -599,6 +599,7 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertIn("combat_holonomy", tel)
         self.assertIn("distributed_singularities", tel)
         self.assertIn("alchemy_continuum", tel)
+        self.assertIn("epistemic_ontologies", tel)
 
         # 2. Continuous orbit execution (headless engine ticking)
         orbit_result = observation.run_orbit(self.kernel, cycles=10, interval_cycles=5, verbose=False)
@@ -606,6 +607,84 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertTrue(orbit_result["engine_healthy"])
         self.assertGreaterEqual(orbit_result["final_cycle"], 10)
         self.assertGreaterEqual(len(orbit_result["final_telemetry"]), 10)
+
+    def test_civilizational_epistemics_and_agency(self):
+        import math
+        from xylarium.kernel import epistemics, civilization
+        
+        # 1. EpistemicOntology creation & serialization
+        ont = epistemics.EpistemicOntology(
+            cosmology="NEWTONIAN_FLAT",
+            chemistry="EMPIRICAL_CORPOREAL",
+            biology="FIXED_ESSENCE",
+            economics="BARTER_MERCANTILE",
+        )
+        self.assertEqual(ont.collective_intelligence_index(), 0.04)
+        d = ont.to_dict()
+        ont_rec = epistemics.EpistemicOntology.from_dict(d)
+        self.assertEqual(ont_rec.cosmology, "NEWTONIAN_FLAT")
+        self.assertEqual(ont_rec.worldview_q, ont.worldview_q)
+
+        # 2. Epistemic advancement through intellectual surplus
+        planet = next(p for s in self.kernel.sectors.values() for p in s.planets if p.population > 0)
+        civ = planet.civilization
+        self.assertIsNotNone(civ)
+        self.assertIsNotNone(civ.epistemics)
+
+        # Set starting paradigm to NEWTONIAN_FLAT to test evolution
+        civ.epistemics.cosmology = "NEWTONIAN_FLAT"
+        civ.epistemics.paradigm_progress["physics"] = 0.0
+
+        # Inject intellectual surplus to trigger breakthroughs
+        adv_res = epistemics.advance_epistemics(
+            kernel=self.kernel,
+            civ=civ,
+            planet=planet,
+            research_surplus=30.0,
+            event_bus=self.kernel.event_bus,
+        )
+        self.assertGreater(adv_res["intelligence_index"], 0.10)
+        self.assertTrue(len(civ.epistemics.theorems_discovered) > 0)
+        self.assertIn(civ.epistemics.cosmology, epistemics.COSMOLOGY_PARADIGMS)
+
+        # 3. Autonomous Civilizational Agency
+        # Set chemistry to TORSION_INDUCTION and give ore
+        civ.epistemics.chemistry = "TORSION_INDUCTION"
+        planet.ore = 100
+        agency_res = epistemics.execute_epistemic_agency(
+            kernel=self.kernel,
+            civ=civ,
+            planet=planet,
+            event_bus=self.kernel.event_bus,
+        )
+        self.assertIn("alchemical_synthesis", agency_res)
+        synth = agency_res["alchemical_synthesis"]
+        self.assertTrue(synth["success"])
+        self.assertIn(synth["element"], civ.discovered_elements)
+        self.assertGreaterEqual(synth["atomic_number"], 114)
+
+        # 4. Inter-civilizational worldview SU(2) resonance & affinity
+        ont_b = epistemics.EpistemicOntology()
+        # Rotate worldview of B by 180 degrees around z-axis (cos(pi/2) = 0, trace = 0)
+        epistemics._rotate_worldview(ont_b, axis=(0.0, 0.0, 1.0), angle_rad=math.pi)
+        civ_b = civilization.CivilizationIntelligenceEngine.create_civilization({
+            "name": "Orthodox Polity",
+            "species_name": "orthodox",
+            "class_code": 1,
+            "sigil": "★",
+            "clade": "hypobiotid",
+            "metabolism": "biotic",
+            "disposition": "empiricist",
+            "motto": "canon is complete",
+            "epistemics": ont_b,
+        })
+        aff = epistemics.epistemic_diplomatic_affinity(civ, civ_b)
+        self.assertIn("resonance", aff)
+        self.assertIn("regime", aff)
+        self.assertIn(aff["regime"], [
+            "CONGRUENT_RESONANCE", "HARMONIC_ACCORD", "PRAGMATIC_NEUTRAL",
+            "ONTOLOGICAL_DISSONANCE", "POLARIZED_SHEAR"
+        ])
 
 
 if __name__ == "__main__":

@@ -223,6 +223,46 @@ def main():
     print(f"  Observer Manifolds Sampled: {len(tel)} telemetry channels")
     print(f"  Healthy: {tel.get('healthy')} | Universal Scale Factor a(t): {tel['distributed_singularities']['universal_scale_factor']:.6f}")
     print(f"  S^2 Climate Equator: {tel['climate']['t_equator_k']} K | S^60 Area: {tel['spheres_360']['s60_area']:.3e}")
+    ep_sample = tel.get('epistemic_ontologies', {})
+    print(f"  Epistemic Collective Intelligence Index: {ep_sample.get('avg_intelligence_index', 0.0):.4f} ({ep_sample.get('total_civilizations', 0)} civilizations)")
+
+    # --------------------------------------------------------------------------
+    # 10. Civilizational Epistemics, Autonomous Agency & SU(2) Worldview Resonance
+    # --------------------------------------------------------------------------
+    print("\n[10] CIVILIZATIONAL EPISTEMICS & AUTONOMOUS PRAXIS:")
+    from xylarium.kernel import epistemics, civilization
+    p_civ = planet.civilization
+    print(f"  Civilization: {p_civ.name} (Era: {p_civ.era_name}, Tech: {p_civ.tech_level})")
+    print(f"  Current Paradigm Matrix:")
+    print(f"    - Cosmology: {p_civ.epistemics.cosmology}")
+    print(f"    - Chemistry: {p_civ.epistemics.chemistry}")
+    print(f"    - Biology:   {p_civ.epistemics.biology}")
+    print(f"    - Economics: {p_civ.epistemics.economics}")
+    
+    # Trigger epistemic surplus advancement
+    ep_adv = epistemics.advance_epistemics(kernel, p_civ, planet, research_surplus=15.0)
+    print(f"  Advancement Post-Surplus: Intel Index = {ep_adv['intelligence_index']:.4f}")
+    if ep_adv['breakthroughs']:
+        print(f"  Breakthroughs Triggered: {[b['theorem'] for b in ep_adv['breakthroughs']]}")
+    
+    # Trigger autonomous civilizational agency
+    p_civ.epistemics.chemistry = "TORSION_INDUCTION"
+    planet.ore = 200
+    agency_act = epistemics.execute_epistemic_agency(kernel, p_civ, planet)
+    if "alchemical_synthesis" in agency_act:
+        syn = agency_act["alchemical_synthesis"]
+        print(f"  Autonomous Synthesis: Synthesized {syn['element']} (Z={syn['atomic_number']}, Magic Shell={syn['is_magic_shell']})")
+
+    # Inter-civilizational resonance
+    ont_other = epistemics.EpistemicOntology()
+    epistemics._rotate_worldview(ont_other, axis=(0.0, 1.0, 0.0), angle_rad=0.50)
+    civ_other = civilization.CivilizationIntelligenceEngine.create_civilization({
+        "name": "Mirror Concord", "species_name": "mirror-born", "class_code": 13,
+        "sigil": "☯", "clade": "metamorphid", "metabolism": "plasmic", "disposition": "empiricist",
+        "motto": "as above, so below", "epistemics": ont_other,
+    })
+    aff = epistemics.epistemic_diplomatic_affinity(p_civ, civ_other)
+    print(f"  SU(2) Epistemic Resonance with {civ_other.name}: {aff['resonance']} -> {aff['regime']} (Trade Mult: {aff['trade_multiplier']:.2f}x)")
 
     print("\n" + "=" * 80)
     print("ALL MANIFOLD EXPANSIONS, BRIDGES & ADVANCED FRONTIERS VERIFIED FUNCTIONAL IN LIVE RUNTIME!")

@@ -630,7 +630,7 @@ class ColonyManager:
                 "motto": "no one came back for us", "station": "unseated", "tech_level": 2})
         if getattr(planet, "civilization", None):
             civ_intel = CivilizationIntelligenceEngine.tick_civilization(
-                planet.civilization, planet, event_bus
+                planet.civilization, planet, event_bus, kernel=kernel
             )
 
         is_indigenous = (planet.owner_id is None and getattr(planet, "civilization", None) is not None)

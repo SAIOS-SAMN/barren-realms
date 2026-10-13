@@ -21,6 +21,8 @@ def main():
     print(f"Final Universe Cycle: {result['final_cycle']}")
     print(f"Universal Scale Factor a(t): {tel.get('distributed_singularities', {}).get('universal_scale_factor', 1.0):.6f}")
     print(f"Active Sectors: {tel.get('sectors_count')}, Captains: {tel.get('captains_count')}")
+    ep_data = tel.get('epistemic_ontologies', {})
+    print(f"Civilizational Intelligence Index: {ep_data.get('avg_intelligence_index', 0.0):.4f} across {ep_data.get('total_civilizations', 0)} civilizations")
     print(f"Physical Manifolds Status: {'HEALTHY' if result['engine_healthy'] else 'DEGRADED'}")
     print("=" * 80)
 

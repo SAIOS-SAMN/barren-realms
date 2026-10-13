@@ -454,3 +454,46 @@ Eliminating isolated or parallel verification harnesses, real-time diagnostics a
   - Progresses universal cycles, advances seasons, executes all physical manifolds, and logs real-time telemetry frames.
   - Executable: `python3 run_orbit.py <cycles>` (defaults to 100 cycles).
 
+---
+
+## 11. Civilizational Epistemic Ontologies & Autonomous Agency
+
+While universe laws are objective, civilizations act strictly according to their **subjective comprehension** of reality. The epistemic interiority layer bridges the engine's physical, chemical, biological, and economic manifolds directly into civilizational cognition and autonomous action:
+
+### 11.1 Epistemic Paradigm Matrix (`epistemics.py`)
+* **Files:** [`xylarium/kernel/epistemics.py`](file:///opt/barren-realms/xylarium/kernel/epistemics.py), [`xylarium/kernel/civilization.py`](file:///opt/barren-realms/xylarium/kernel/civilization.py)
+* **Pillars & Paradigms:**
+  1. **Cosmology & Physics:**
+     - `NEWTONIAN_FLAT`: Flat $\mathbb{R}^3$ space, $1/r^2$ mechanics, oblivious to metric curvature or torsion.
+     - `EINSTEIN_CARTAN_RESONANT`: Metric torsion $\Psi \ne 0$, spin-density repulsion halting horizon collapse, bounce dynamics.
+     - `HYPERSPHERICAL_S360`: $S^{60}$ compactification, $S^{360}$ universal manifold, gravitational cone waveguides ($S^{60} * S^{60}$ joins), caustic navigation.
+  2. **Chemistry & Nucleosynthesis:**
+     - `EMPIRICAL_CORPOREAL`: Classical periodic elements ($Z \le 82$); superheavies dismissed as impossible.
+     - `WEIZSACKER_SEMF`: Nuclear binding energy, magic shell numbers ($114, 120, 126, 184$), Island of Stability comprehension.
+     - `TORSION_INDUCTION`: Catalytic nucleosynthesis coupled to torsion wavefront resonance ($\cos(\text{phase})\sigma$) discovering $Z \ge 119$ superheavies.
+  3. **Biology & Evolution:**
+     - `FIXED_ESSENCE`: Species clades viewed as immutable; epigenetic drift viewed as genetic degradation.
+     - `WADDINGTON_ADAPTIVE`: Understanding continuous morphospace landscapes $\dot{\vec{x}} = -\nabla V + \sqrt{2D}\vec{\eta}$ and metabolic basin saddle barriers $\Delta G^\ddagger$.
+     - `TRANSSOMATIC_COSMIC`: Trans-metabolic cellular stability ($\ge 0.90$) across orthogonal cross-sector shear barriers.
+  4. **Economics & Trade:**
+     - `BARTER_MERCANTILE`: Local supply/demand balances oblivious to relativistic time lapse.
+     - `RELATIVISTIC_FLUID`: Relativistic Navier-Stokes commodity flux $J$, metric lapse $(1+z)$, trade stress-energy tensor $T^{\mu\nu}_{\text{trade}}$.
+     - `HOMOLOGICAL_SYNTHESIS`: Multi-sector tensor routing along Mayer-Vietoris cohomology chains across $S^{360}$.
+
+### 11.2 Worldview Quaternions in $SU(2)$ & Epistemic Resonance
+* Every civilization maintains a philosophical worldview unit quaternion $\mathbf{Q} \in SU(2)$.
+* Epistemic breakthroughs rotate $\mathbf{Q}$ along domain Lie algebra generators in $\mathfrak{su}(2)$.
+* **Inter-Civilizational Resonance:**
+  $$\mathcal{I}(\mathbf{Q}_A, \mathbf{Q}_B) = \frac{1}{2}\text{Tr}(\mathbf{Q}_A^\dagger \mathbf{Q}_B) \in [-1.0, 1.0]$$
+  Classifies diplomatic affinity into 5 regimes:
+  - `CONGRUENT_RESONANCE` ($\ge 0.70$): +0.25 trust, $1.30\times$ trade flux multiplier, joint research sharing.
+  - `HARMONIC_ACCORD` ($\ge 0.20$): +0.10 trust, $1.10\times$ trade flux multiplier.
+  - `PRAGMATIC_NEUTRAL` ($-0.20$ to $0.20$): $1.00\times$ trade flux multiplier.
+  - `ONTOLOGICAL_DISSONANCE` ($-0.60$ to $-0.20$): $-0.15$ trust, $0.85\times$ trade friction.
+  - `POLARIZED_SHEAR` ($< -0.60$): $-0.35$ trust, $0.70\times$ severe trade embargoes and ideological conflict.
+
+### 11.3 Autonomous Civilizational Praxis
+* **Autonomous Alchemical Transmutation:** Civilizations in `TORSION_INDUCTION` or `WEIZSACKER_SEMF` with mineral surplus synthesize unknown Island of Stability superheavies ($Z=114$ Flerovium, $Z=119$ Ununennium, $Z=126$ Unbihexium), adding them permanently to the universal discovery roster.
+* **Autonomous Waddington Steering:** Civilizations in `WADDINGTON_ADAPTIVE` detect local planetary $S^2$ climate (cryogenic or lithic) and steer population morphospace coordinates into optimal metabolic basins, mitigating famine and boosting morale.
+* **Autonomous Waveguide Tuning:** Civilizations in `HYPERSPHERICAL_S360` align planetary stations with sector gravitational waveguides, boosting defensive shield coherence and trade throughput.
+

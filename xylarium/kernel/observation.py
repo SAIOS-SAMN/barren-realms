@@ -280,6 +280,30 @@ def sample_telemetry(kernel: Any) -> Dict[str, Any]:
     except Exception as e:
         frame["alchemy_continuum"] = {"error": str(e)}
 
+    # 11. Civilizational Epistemic Ontologies & Collective Intelligence
+    try:
+        from xylarium.kernel import epistemics
+        civs = [p.civilization for s in kernel.sectors.values() for p in s.planets if getattr(p, "civilization", None) is not None]
+        # Unique civilizations by name
+        unique_civs = {c.name: c for c in civs}.values()
+        intel_indices = [c.epistemics.collective_intelligence_index() for c in unique_civs if getattr(c, "epistemics", None) is not None]
+        avg_intel = sum(intel_indices) / max(1, len(intel_indices)) if intel_indices else 0.10
+        
+        # Inter-civilizational resonance sample
+        uc_list = list(unique_civs)
+        sample_res = None
+        if len(uc_list) >= 2 and getattr(uc_list[0], "epistemics", None) and getattr(uc_list[1], "epistemics", None):
+            sample_res = epistemics.epistemic_diplomatic_affinity(uc_list[0], uc_list[1])
+
+        frame["epistemic_ontologies"] = {
+            "total_civilizations": len(unique_civs),
+            "avg_intelligence_index": round(avg_intel, 4),
+            "theorems_discovered_total": sum(len(getattr(c.epistemics, "theorems_discovered", [])) for c in unique_civs if getattr(c, "epistemics", None)),
+            "sample_affinity": sample_res,
+        }
+    except Exception as e:
+        frame["epistemic_ontologies"] = {"error": str(e)}
+
     frame["healthy"] = True
     return frame
 
@@ -304,7 +328,8 @@ def run_orbit(kernel: Any, cycles: int = 100, interval_cycles: int = 25, verbose
             if verbose:
                 a_scale = tel.get("distributed_singularities", {}).get("universal_scale_factor", 1.0)
                 bounces = tel.get("metric_reverberation", {}).get("psi_amplitude", 0.0)
-                print(f"  Orbit Step {step:3d}/{cycles} (Cycle {kernel.cycle_count:4d}): a(t)={a_scale:.5f} | Psi={bounces:.2f} | Manifolds=OK")
+                intel = tel.get("epistemic_ontologies", {}).get("avg_intelligence_index", 0.0)
+                print(f"  Orbit Step {step:3d}/{cycles} (Cycle {kernel.cycle_count:4d}): a(t)={a_scale:.5f} | Intel={intel:.3f} | Psi={bounces:.2f} | Manifolds=OK")
 
     final_tel = sample_telemetry(kernel)
     return {

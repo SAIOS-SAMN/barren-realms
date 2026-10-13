@@ -146,6 +146,36 @@ class Civilization:
     light_optimum: Optional[str] = None    # The light its biology evolved under (exact flux, Earth = 1)
     home_gravity: Optional[str] = None     # The surface gravity its bodies were built against (exact, Earth = 1)
     traits: Optional[Dict[str, Any]] = None   # what its world selected: strategy, body, senses, sociality, mind shape
+    epistemics: Any = None                 # EpistemicOntology: internal subjective comprehension of reality
+
+    def __post_init__(self) -> None:
+        if self.epistemics is None:
+            from xylarium.kernel.epistemics import (
+                EpistemicOntology,
+                COSMOLOGY_PARADIGMS,
+                CHEMISTRY_PARADIGMS,
+                BIOLOGY_PARADIGMS,
+                ECONOMICS_PARADIGMS,
+            )
+            c_idx = min(self.era_index, len(COSMOLOGY_PARADIGMS) - 1)
+            k_idx = min(self.era_index, len(CHEMISTRY_PARADIGMS) - 1)
+            b_idx = min(self.era_index, len(BIOLOGY_PARADIGMS) - 1)
+            e_idx = min(self.era_index, len(ECONOMICS_PARADIGMS) - 1)
+            self.epistemics = EpistemicOntology(
+                cosmology=COSMOLOGY_PARADIGMS[c_idx],
+                chemistry=CHEMISTRY_PARADIGMS[k_idx],
+                biology=BIOLOGY_PARADIGMS[b_idx],
+                economics=ECONOMICS_PARADIGMS[e_idx],
+                comprehension={
+                    "physics": min(1.0, 0.15 * (self.tech_level + 1)),
+                    "chemistry": min(1.0, 0.15 * (self.tech_level + 1)),
+                    "biology": min(1.0, 0.15 * (self.tech_level + 1)),
+                    "economics": min(1.0, 0.15 * (self.tech_level + 1)),
+                },
+            )
+        elif isinstance(self.epistemics, dict):
+            from xylarium.kernel.epistemics import EpistemicOntology
+            self.epistemics = EpistemicOntology.from_dict(self.epistemics)
 
     @property
     def era_name(self) -> str:
@@ -189,6 +219,7 @@ class Civilization:
             "light_optimum": self.light_optimum,
             "home_gravity": self.home_gravity,
             "traits": dict(self.traits) if self.traits else None,
+            "epistemics": self.epistemics.to_dict() if hasattr(self, "epistemics") and self.epistemics else None,
         }
 
     def dimensional_shear(self, source_world: Any, target_world: Any, kernel: Any = None) -> Dict[str, Any]:
@@ -229,6 +260,7 @@ class Civilization:
             light_optimum=data.get("light_optimum"),
             home_gravity=data.get("home_gravity"),
             traits=dict(data["traits"]) if data.get("traits") else None,
+            epistemics=data.get("epistemics"),
         )
 
 
@@ -538,6 +570,7 @@ class CivilizationIntelligenceEngine:
             era_index=pol_data.get("era_index", 0),
             tech_level=pol_data.get("tech_level", 1),
             discovered_elements=list(pol_data.get("discovered_elements", [])),
+            epistemics=pol_data.get("epistemics"),
         )
 
     @classmethod
@@ -583,6 +616,7 @@ class CivilizationIntelligenceEngine:
         civ: Civilization,
         planet: Any,
         event_bus: Optional[Any] = None,
+        kernel: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Executes one full cycle of civilization intelligence:
@@ -711,6 +745,22 @@ class CivilizationIntelligenceEngine:
                 if gap > 0:
                     civ.trade_urgency[carrier] = int(gap * 10)
 
+        # Epistemic ontology advancement & autonomous civilizational agency
+        from xylarium.kernel.epistemics import advance_epistemics, execute_epistemic_agency
+        epistemic_result = advance_epistemics(
+            kernel=kernel,
+            civ=civ,
+            planet=planet,
+            research_surplus=max(1.0, float(getattr(civ, "research_points", 0))),
+            event_bus=event_bus,
+        )
+        agency_result = execute_epistemic_agency(
+            kernel=kernel,
+            civ=civ,
+            planet=planet,
+            event_bus=event_bus,
+        )
+
         return {
             "civilization": civ.name,
             "metabolism": civ.metabolism,
@@ -723,6 +773,8 @@ class CivilizationIntelligenceEngine:
             "era_advanced": era_advanced,
             "tech_level": civ.tech_level,
             "era_name": civ.era_name,
+            "epistemics": epistemic_result,
+            "agency": agency_result,
         }
 
     @classmethod
