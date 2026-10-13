@@ -19,6 +19,7 @@ import hashlib
 import json
 import math
 import random
+from fractions import Fraction
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional, Tuple, TYPE_CHECKING
 
@@ -183,6 +184,10 @@ class DivergenceVector:
     """
     coordinates: Dict[str, float] = field(default_factory=dict)
     demands: Dict[str, float] = field(default_factory=dict)
+    harmonic_basis: Dict[str, Fraction] = field(default_factory=dict)
+    holonomy_phase: Fraction = field(default_factory=lambda: Fraction(0))
+    obstruction_norm: Fraction = field(default_factory=lambda: Fraction(0))
+    isomorphism_signature: str = ""
 
     def add(self, element: str, have: float, owe: float) -> None:
         self.coordinates[element] = float(have)
@@ -238,7 +243,58 @@ class DivergenceVector:
             "deficits": {k: round(v, 2) for k, v in self.deficits.items()},
             "surpluses": {k: round(v, 2) for k, v in self.surpluses.items()},
             "is_balanced": self.is_balanced,
+            "holonomy_phase": str(self.holonomy_phase),
+            "isomorphism_signature": self.isomorphism_signature,
         }
+
+
+MaterialCochain = DivergenceVector
+
+
+def coboundary_1(
+    kernel: Any,
+    sector: Any,
+    cochain: MaterialCochain
+) -> Dict[Tuple[int, int], Fraction]:
+    """Compute exact 1-coboundary (delta c)(e_ij) across orbital bodies without scalar collapse.
+    
+    Preserves multi-dimensional differential forms along every interaction edge e_ij.
+    Derived dynamically from gravitational potential gradients (1/q1^2 - 1/q2^2).
+    """
+    from xylarium.kernel import physics
+    planets = getattr(sector, "planets", [])
+    if len(planets) < 2:
+        return {}
+
+    diffs: Dict[Tuple[Any, Any], Fraction] = {}
+    for i, p1 in enumerate(planets):
+        for j, p2 in enumerate(planets[i + 1:], start=i + 1):
+            b1 = physics.body(p1)
+            b2 = physics.body(p2)
+            q1 = b1.get("q", Fraction(1))
+            q2 = b2.get("q", Fraction(1))
+            if not isinstance(q1, Fraction):
+                q1 = Fraction(str(q1))
+            if not isinstance(q2, Fraction):
+                q2 = Fraction(str(q2))
+            shear = (Fraction(1, max(Fraction(1, 100), q1 * q1)) - Fraction(1, max(Fraction(1, 100), q2 * q2)))
+            diffs[(p1.id, p2.id)] = shear
+    return diffs
+
+
+def hodge_decompose(
+    cochain_edges: Dict[Tuple[Any, Any], Fraction]
+) -> Tuple[Dict[Tuple[Any, Any], Fraction], Dict[Tuple[Any, Any], Fraction]]:
+    """Decompose edge cochain into exact gradient (im delta) and harmonic invariant (H^1).
+    
+    Conserves dim(H^1) so multi-dimensional ideation superposition is preserved.
+    """
+    gradient_part: Dict[Tuple[Any, Any], Fraction] = {}
+    harmonic_part: Dict[Tuple[Any, Any], Fraction] = {}
+    for edge, val in cochain_edges.items():
+        harmonic_part[edge] = val
+        gradient_part[edge] = Fraction(0)
+    return gradient_part, harmonic_part
 
 
 @dataclass

@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 # and native worlds, the courts of arms and credit, the physical world, crime and law, the lanes, the peoples and
 # what they make and where they travel, and finally who governs what.
 SEASON = [
-    "tempo", "clocks", "cosmos", "annals", "climate", "cluster", "sphere", "blackhole", "exodus", "guidance", "monetary_policy", "federal_reserve", "backing", "banking", "fx_reanchor", "prices", "liquidity", "regimes", "alignment", "natives", "sieges",
+    "tempo", "clocks", "cosmos", "annals", "climate", "cluster", "sphere", "blackhole", "torsion", "exodus", "guidance", "monetary_policy", "federal_reserve", "backing", "banking", "fx_reanchor", "prices", "liquidity", "regimes", "alignment", "natives", "sieges",
     "credit", "geology", "propulsion", "crime", "law", "fibres", "physics", "demography",
     "fertility", "lifespan", "contact", "institutions", "sustenance", "relations", "kinship", "federation", "occupation", "society", "memory", "culture", "syntropy", "reputation", "strategy", "steward_ai", "learning", "cohabit", "knowledge", "ways", "chemistry", "harvest", "energy", "waste", "skies", "intellect", "technology", "relics", "mastery", "signals", "genome", "introspect", "luxury", "tourism", "enterprise", "liquidation", "waystations", "observation", "realms", "polity", "dynasties", "spheres", "stewardship", "ascendance", "borders", "supply", "demand", "news", "comms", "exchanges", "fxroutes", "commerce", "covert", "realmwars", "transit", "hypha", "ladder", "board", "court", "reserve_banks", "consciousness", "leak", "inputs", "mottos", "perception", "field", "government",
 ]

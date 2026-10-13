@@ -51,8 +51,29 @@ class NullSpaceManager:
             lines.append("  Sentry picket: " + ", ".join(f"{owner} x{n}" for owner, n in sector.sentries.items()))
         if hostiles:
             lines.append(f"  Contacts: {len(hostiles)} vessel(s) in sector.")
+
+        # Torsion wavefront & spectral continuum sampling
+        spectral_data = {}
+        try:
+            from xylarium.kernel import torsion, elements_continuum
+            amp, phase, chir = torsion.eval_wavefront(kernel, sector.id)
+            if amp > 0.001:
+                chir_label = "right-chiral (+)" if chir > 0 else "left-chiral (-)"
+                lines.append(f"  Torsion wave: {amp:.3f} amplitude, phase {phase:.2f} rad, {chir_label}")
+            
+            # Sample first world if present, or sector ambient spectrum
+            p = sector.planets[0] if sector.planets else None
+            temp_k = float(getattr(p, "temperature", 288.0)) if p else 250.0
+            spec = elements_continuum.sample_spectrum(kernel, sector.id, temp_k, 1.0)
+            top_exotics = [sym for sym, q in sorted(spec.items(), key=lambda kv: -kv[1]) if sym not in ("H", "He", "C", "O", "Fe", "Si")][:3]
+            if top_exotics:
+                lines.append("  Spectrometry traces: " + ", ".join(top_exotics))
+            spectral_data = {"torsion_amp": amp, "spectrum_top": top_exotics}
+        except Exception:
+            pass
+
         return ActionResult(success=True, action=ActionType.SCAN_SPACE, message="\n".join(lines), turns_spent=1,
-                            data={"belts": [dict(b) for b in sector.belts], "debris": [dict(d) for d in sector.debris]})
+                            data={"belts": [dict(b) for b in sector.belts], "debris": [dict(d) for d in sector.debris], "spectral": spectral_data})
 
     # ------------------------------------------------------------------ mining
     @staticmethod

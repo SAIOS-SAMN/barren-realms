@@ -345,6 +345,12 @@ def quarter(kernel: Any) -> List[str]:
                       cause=f"it fed on {st.get('last_meal', 'the dead')}", magnitude=L,
                       data={"luminosity_lsun": L, "fed_units": fed})
         logs.append(f"[COSMOS] The galactic centre flares at {L:.1e} suns, feeding on {st.get('last_meal')}.")
+        try:
+            from xylarium.kernel import torsion
+            sec_id = getattr(kernel, "home_sector", 1)
+            torsion.emit_bounce(kernel, origin_sector=sec_id, energy_scale=min(100.0, float(L)), chirality=1, source="galactic_core")
+        except Exception:
+            pass
     # the throat's far face: its core's engine sends back on its own clock; our own Big Bang's face is on record
     from xylarium.kernel.market import FISCAL_QUARTER_CYCLES as _FQ
     _far_engine(kernel, _FQ / 100.0 * cosmos.ruler(kernel) / 1.0e6)

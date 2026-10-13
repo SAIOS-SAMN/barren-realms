@@ -97,7 +97,24 @@ class PeriodicTable:
         if element_id in chemistry.TABLE:
             return _view(element_id)
         low = {k.lower(): k for k in chemistry.TABLE}
-        return _view(low[element_id.lower()]) if element_id.lower() in low else None
+        if element_id.lower() in low:
+            return _view(low[element_id.lower()])
+        # Check 118+ continuum elements
+        try:
+            from xylarium.kernel import elements_continuum
+            symbols_lower = [s.lower() for s in elements_continuum.PERIODIC_SYMBOLS]
+            if element_id.lower() in symbols_lower:
+                z = symbols_lower.index(element_id.lower())
+                ce = elements_continuum.get_element(z)
+                return PeriodicElement(
+                    element_id=ce.symbol, name=ce.name, symbol=ce.symbol,
+                    line=ce.line, lane=ce.lane, shell=1,
+                    phase=1 if ce.condensation_k < 150 else (2 if ce.condensation_k < 600 else 3),
+                    spin=0, family="Continuum", description=f"Atomic number {ce.z}"
+                )
+        except Exception:
+            pass
+        return None
 
     @classmethod
     def all_canonical(cls) -> List[PeriodicElement]:

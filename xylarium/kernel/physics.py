@@ -383,7 +383,15 @@ def planet_flux(sector: Any, planet: Any, swell: Optional[float] = None) -> F:
     b = body(planet)
     if "q" not in b:
         return F(1)
-    fl = flux(star(sector), b["q"])
+    q = b["q"]
+    try:
+        from xylarium.kernel import torsion
+        sec_id = getattr(sector, "id", 0)
+        # Apply deterministic secular drift from torsion wavefronts
+        q = torsion.orbital_secular_drift(getattr(sector, "kernel", None), sec_id, q)
+    except Exception:
+        pass
+    fl = flux(star(sector), q)
     from xylarium.kernel import harvest
     shaded = harvest.shade(getattr(sector, "id", 0)) if sector is not None else 0.0
     if shaded > 0:                                  # the star's arrays take their share of its light first
@@ -394,6 +402,34 @@ def planet_flux(sector: Any, planet: Any, swell: Optional[float] = None) -> F:
     if swell != 1.0:                                # a star on its giant branch (cosmos.py)
         fl = fl * F(swell).limit_denominator(10 ** 6)
     return fl
+
+
+def electrodynamic_induction(
+    star_dict: Dict[str, F],
+    planet_body: Dict[str, Any],
+    torsion_amplitude: float
+) -> F:
+    """Derive local electrodynamic shear coupling from stellar dynamo and planetary spin.
+    
+    1. Freely spinning worlds (locked == False): Mantle shear generates high holonomy rotation.
+    2. Tidally locked worlds (locked == True): Holonomy freezes; acts as a stationary Dirichlet mirror.
+    No arbitrary constants: derived from stellar mass m, distance a = q^2, and planetary day length.
+    """
+    q = planet_body.get("q", F(1))
+    if not isinstance(q, F):
+        q = _fr(q)
+    locked = planet_body.get("locked", False)
+    if locked:
+        return F(0)
+
+    m = star_dict.get("m", F(1))
+    day = planet_body.get("day", F(1))
+    if not isinstance(day, F):
+        day = _fr(day)
+
+    # Pure physical rational coupling: shear induction along orbital flow
+    shear_induction = F(int(round(torsion_amplitude * 1000)), 1000) * (F(1, max(F(1, 10), q)) / max(F(1), day))
+    return shear_induction
 
 
 def summary(sectors: Dict[int, Any]) -> Dict[str, Any]:

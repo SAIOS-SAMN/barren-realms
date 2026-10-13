@@ -56,13 +56,23 @@ def foresight(kernel: Any, planet: Any) -> Dict[str, Any]:
 
 
 def breadth(kernel: Any, planet: Any, holder: str) -> List[Dict[str, Any]]:
-    """The plans it holds at once, with the chance its own mind judges each best."""
+    """The plans and sovereign ideation states it holds at once in non-collapsing superposition."""
+    from fractions import Fraction
     from xylarium.config import NATAL_POLICIES, PLANETARY_SPACEFLIGHT_COST, PRICE_LEVEL, DAUGHTER_EMIGRANTS_MAX
-    from xylarium.kernel import decide, demography, syntropy
+    from xylarium.kernel import decide, demography, syntropy, physics, torsion
     m = decide.mind_of_planet(kernel, planet)
     level = PRICE_LEVEL.get(planet.currency, 1.0)
     room = syntropy.room_in_reach(kernel, planet)
     out_value = demography.value_of_room(kernel, planet, room, m)
+
+    # Physical electrodynamic induction from stellar dynamo and planetary spin
+    sec_id = getattr(planet, "sector_id", 1)
+    b = physics.body(planet)
+    sec = kernel.sectors.get(sec_id) if hasattr(kernel, "sectors") else None
+    star_dict = physics.star(sec) if sec is not None else {"m": Fraction(1)}
+    amp, phase, chir = torsion.eval_wavefront(kernel, sec_id)
+    induction = physics.electrodynamic_induction(star_dict, b, amp)
+
     plans = [
         ("outward", "sail for the room in reach", out_value
          - math.ceil(room / DAUGHTER_EMIGRANTS_MAX) * PLANETARY_SPACEFLIGHT_COST * level if room else -1.0),
@@ -70,14 +80,23 @@ def breadth(kernel: Any, planet: Any, holder: str) -> List[Dict[str, Any]]:
          decide.worth(kernel, (NATAL_POLICIES["ascetic"].get("productivity", 1.0) - 1.0) * planet.population
                       * demography._tax_per_head_quarter(planet), m, planet.currency) - (out_value if room else 0.0)),
     ]
+
+    # Non-collapsing harmonic modes added to superposition directly from electrodynamic induction
+    harmonic_shift = float(induction)
+    if harmonic_shift != 0.0 or amp > 0.001:
+        plans.append(("harmonic_resonance", f"align social works to {phase:.2f} rad toroidal pulse",
+                      out_value * 0.5 + harmonic_shift * 1000.0))
+
     plans.sort(key=lambda x: (-x[2], x[0]))
     held = plans[:rungs(kernel, holder)]
     scale = max(abs(v) for _, _, v in held) or 1.0
     spread = max(1e-6, decide.JUDGEMENT_ERROR * m["noise"] * scale)
     weights = [math.exp((v - held[0][2]) / spread) for _, _, v in held]
     total = sum(weights)
-    out = [{"plan": k, "what": t, "net": round(v, 1), "chance": round(w / total, 3)}
+    out = [{"plan": k, "what": t, "net": round(v, 1), "chance": round(w / total, 3),
+            "holonomy_phase": f"{phase + harmonic_shift:.3f}"}
            for (k, t, v), w in zip(held, weights)]
+
     # and where to turn its inquiry: the goals it holds, by how far each falls short of what it wants (introspect)
     from xylarium.kernel import introspect
     rec = introspect.stats(kernel)["peoples"].get(holder) or {}
