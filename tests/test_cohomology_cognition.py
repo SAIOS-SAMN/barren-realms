@@ -246,6 +246,21 @@ class TestCohomologyCognition(unittest.TestCase):
         self.assertGreater(mhd["modulated_activity"], mhd["base_activity"])
         self.assertGreater(mhd["cme_flare_joules"], 0.0)
 
+    def test_unbroken_history_and_chronicle_causal_chains(self):
+        from xylarium.kernel import history, chronicle
+        # Record history event and verify unbroken hash root
+        event = history.event(self.kernel, "STAR_BORN", "Sol ignition", sector_id=1)
+        st = history.stats(self.kernel)
+        self.assertIn("history_root", st)
+        self.assertNotEqual(st["history_root"], "genesis")
+
+        # Record chronicle entries and verify unbroken archive hash on compaction
+        eng = chronicle.ChronicleEngine()
+        for i in range(120):
+            eng.record(self.kernel, "CAPTAINS_LOG", "cap_1", "Captain Test", f"Log {i}", f"Log body {i}")
+        self.assertNotEqual(eng.archive_hash, "genesis")
+        self.assertGreaterEqual(len(eng.entries), 100)
+
 
 if __name__ == "__main__":
     unittest.main()

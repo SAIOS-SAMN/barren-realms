@@ -20,6 +20,7 @@ Entries are stored in the kernel (bounded) and browsed at any starport through t
 Galactic Library console ([L]ibrary).
 """
 
+import hashlib
 import random
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
@@ -40,6 +41,7 @@ class ChronicleEngine:
         self.next_id: int = 1
         self.counts: Counter = Counter()
         self.last_era_cycle: int = 0
+        self.archive_hash: str = "genesis"
 
     # ------------------------------------------------------------------ store
     def record(self, kernel: Any, kind: str, subject_id: Optional[str], subject: str, title: str, body: str,
@@ -65,6 +67,8 @@ class ChronicleEngine:
         self.next_id += 1
         self.entries.append(entry)
         self.counts[kind] += 1
+        prev_h = getattr(self, "archive_hash", "genesis")
+        self.archive_hash = hashlib.sha256(f"{prev_h}:{entry['id']}:{entry['kind']}:{entry['cycle']}".encode()).hexdigest()
         if kernel is not None and kind != "MYTH":  # every written history is also a ledger event (history.py; myths
             # are written to it by society.py, with what they build on)
             from xylarium.kernel import history
@@ -72,13 +76,16 @@ class ChronicleEngine:
             history.event(kernel, kind, title, actors=[subject], planet=planet, sector_id=sector_id, text=body,
                           data={"chronicle": entry["id"], "tags": entry["tags"], "alignment": entry["alignment"]})
         if len(self.entries) > CHRONICLE_MAX_ENTRIES:
-            # Keep the galaxy's memory bounded: drop the oldest routine logs first, never history or manifestos
+            popped = None
             for i, e in enumerate(self.entries):
                 if e["kind"] not in ("GALACTIC_HISTORY", "GENESIS_MANIFESTO", "PERSONAL_LOG", "LINEAGE_LEGACY"):
-                    self.entries.pop(i)
+                    popped = self.entries.pop(i)
                     break
             else:
-                self.entries.pop(0)
+                popped = self.entries.pop(0)
+            if popped:
+                prev_h = getattr(self, "archive_hash", "genesis")
+                self.archive_hash = hashlib.sha256(f"{prev_h}:{popped['id']}:{popped['kind']}:{popped['cycle']}".encode()).hexdigest()
         return entry
 
     def query(self, kind: Optional[str] = None, subject: Optional[str] = None, text: Optional[str] = None,
@@ -104,7 +111,8 @@ class ChronicleEngine:
 
     def to_dict(self) -> Dict[str, Any]:
         return {"entries": [dict(e) for e in self.entries], "next_id": self.next_id,
-                "counts": dict(self.counts), "last_era_cycle": self.last_era_cycle}
+                "counts": dict(self.counts), "last_era_cycle": self.last_era_cycle,
+                "archive_hash": getattr(self, "archive_hash", "genesis")}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ChronicleEngine":
@@ -113,6 +121,7 @@ class ChronicleEngine:
         eng.next_id = int(data.get("next_id", len(eng.entries) + 1))
         eng.counts = Counter(data.get("counts", {}))
         eng.last_era_cycle = int(data.get("last_era_cycle", 0))
+        eng.archive_hash = str(data.get("archive_hash", "genesis"))
         return eng
 
 

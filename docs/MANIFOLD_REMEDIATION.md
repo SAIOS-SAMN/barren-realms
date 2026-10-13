@@ -49,11 +49,24 @@ Across complex simulations, engineering compromises often discretize continuous 
 * Boundaries between competing networks are defined as continuous 2D equipotential caustic manifolds:
   $$\mathcal{B}_{AB} = \{ \vec{x} \in \mathbb{R}^3 \mid \Phi_A(\vec{x}) = \Phi_B(\vec{x}) \}$$
 
+### 2.5 Temporal, Historical & Ledger Continuity: Unbroken Causal Hash Roots
+* **Old (Truncated):**
+  - In `experience.py`: Old revenue rows beyond `VC_REVENUE_WINDOW` were popped with `pop(0)`, discarding lifetime volume.
+  - In `prices.py`: Inflation history was pruned with `del h[:-5]`, discarding deep-time secular monetary drift.
+  - In `history.py`: `recent` event window was trimmed with `del recent[:-RECENT]`, losing in-memory causal links.
+  - In `chronicle.py`: Entries beyond `CHRONICLE_MAX_ENTRIES` were popped with `pop(0)` without a causal receipt.
+* **Remediation:**
+  - `experience.py`: Accumulate expired revenue into `captain.xp_window["lifetime_revenue"]`.
+  - `prices.py`: Continuously accumulate logarithmic drift $\Delta \ln P$ into `st["secular_drift"]`.
+  - `history.py`: Maintain an unbroken Merkle root hash chain `st["history_root"]` covering every event in cosmic history.
+  - `chronicle.py`: Chain every recorded and archived entry into an unbroken cryptographic `archive_hash`.
+
 ---
 
 ## 3. Backward Compatibility & Test Verification
 
 All remediations are implemented as conservative, non-breaking structural extensions:
 - Legacy dictionary access and existing method signatures remain 100% operational.
-- All new continuous manifold properties (`spherical_coords`, `pareto_rank`, `manifold_volume`, `potential_field`) are dynamically available to high-order cognitive processes.
-- Verification ensures zero test theatre, with unmocked unit tests asserting geometric invariance.
+- All new continuous manifold properties (`spherical_coords`, `pareto_rank`, `manifold_volume`, `potential_field`, `history_root`, `archive_hash`) are dynamically available to high-order cognitive processes.
+- Verification ensures zero test theatre, with unmocked unit tests asserting geometric invariance across 59 tests.
+

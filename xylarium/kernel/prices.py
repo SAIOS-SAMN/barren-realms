@@ -94,6 +94,9 @@ def quarter(kernel: Any) -> list:
         st["level"][cur] = round(new, 6)
         h = st["hist"].setdefault(cur, [])
         h.append(new)
+        if len(h) > 5:
+            dropped_drift = math.log(h[-1]) - math.log(h[0])
+            st.setdefault("secular_drift", {})[cur] = round(st.get("secular_drift", {}).get(cur, 0.0) + dropped_drift, 6)
         del h[:-5]
     return []
 

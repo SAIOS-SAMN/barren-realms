@@ -19,6 +19,7 @@ reads it back: a people's annals, an age's chronicle, a book, or a screenplay of
 replay.
 """
 
+import hashlib
 import json
 import math
 import re
@@ -102,6 +103,8 @@ def event(kernel: Any, kind: str, title: str, actors: Optional[List[str]] = None
         rec["data"] = data
     recent = st["recent"]
     recent.append(rec)
+    prev_root = str(st.get("history_root", "genesis"))
+    st["history_root"] = hashlib.sha256(f"{prev_root}:{rec['id']}:{rec['kind']}:{rec['cycle']}".encode()).hexdigest()
     del recent[:-RECENT]
     st["counts"][kind] = st["counts"].get(kind, 0) + 1
     for a in rec["actors"]:

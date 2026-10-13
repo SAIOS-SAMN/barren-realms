@@ -121,6 +121,7 @@ class ExperienceManager:
             hist.append([cycle, int(amount)])
         cutoff = cycle - VC_REVENUE_WINDOW
         while hist and hist[0][0] < cutoff:
+            captain.xp_window["lifetime_revenue"] = captain.xp_window.get("lifetime_revenue", 0) + hist[0][1]
             hist.pop(0)
         if len(hist) > REVENUE_HISTORY_MAX_ROWS:
             # Merge the oldest rows to stay bounded without losing totals
