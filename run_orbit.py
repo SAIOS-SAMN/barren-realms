@@ -23,6 +23,8 @@ def main():
     print(f"Active Sectors: {tel.get('sectors_count')}, Captains: {tel.get('captains_count')}")
     ep_data = tel.get('epistemic_ontologies', {})
     print(f"Civilizational Intelligence Index: {ep_data.get('avg_intelligence_index', 0.0):.4f} across {ep_data.get('total_civilizations', 0)} civilizations")
+    fleet_data = tel.get('living_trade_fleets', {})
+    print(f"Living Trade Fleets: {fleet_data.get('active_haulers', 0)} active haulers | Wormhole-Capable: {fleet_data.get('wormhole_capable_haulers', 0)} | Escorted: {fleet_data.get('escorted_haulers', 0)}")
     print(f"Physical Manifolds Status: {'HEALTHY' if result['engine_healthy'] else 'DEGRADED'}")
     print("=" * 80)
 

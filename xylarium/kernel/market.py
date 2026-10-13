@@ -2492,26 +2492,54 @@ class MarketManager:
         return True, msg, {"resolution": resolution, "sponsor": sponsor, "target": target}
 
     def is_commodity_compatible(self, hull_class: str, commodity: str) -> Tuple[bool, str]:
-        """Validates if a specialized hull type has containment support for the specified commodity."""
+        """Validates if a specialized hull type has containment support for the specified commodity or chemical element."""
         hull_cfg = SPECIALIZED_HULLS.get(hull_class)
         if not hull_cfg:
             return False, f"Unknown hull class '{hull_class}'."
 
         comm_upper = commodity.strip().upper()
-        comm_lookup = {k.upper(): k for k in COMMODITY_CONFIG.keys()}
-        matched_comm = comm_lookup.get(comm_upper, comm_upper)
-        comm_cfg = COMMODITY_CONFIG.get(matched_comm)
-        if not comm_cfg:
-            return False, f"Unknown commodity '{commodity}'."
-
         allowed_comms = [c.upper() for c in hull_cfg.get("allowed_commodities", [])]
-        if matched_comm.upper() in allowed_comms:
-            return True, "Compatible"
-        comm_cat = comm_cfg.get("category", "")
-        if comm_cat in hull_cfg.get("allowed_categories", []):
+        if comm_upper in allowed_comms:
             return True, "Compatible"
 
-        return False, f"Hull '{hull_cfg['name']}' ({hull_class}) cannot transport {matched_comm} (Requires specialized containment)."
+        # Check standard commodities
+        comm_lookup = {k.upper(): k for k in COMMODITY_CONFIG.keys()}
+        matched_comm = comm_lookup.get(comm_upper)
+        if matched_comm:
+            comm_cfg = COMMODITY_CONFIG[matched_comm]
+            comm_cat = comm_cfg.get("category", "")
+            if comm_cat in hull_cfg.get("allowed_categories", []):
+                return True, "Compatible"
+
+        # Check chemical continuum / superheavy elements
+        try:
+            from xylarium.kernel import elements_continuum
+            z = elements_continuum.parse_element_z(commodity)
+            if z is not None:
+                # Chemical containment check based on atomic number Z
+                rating = hull_cfg.get("chemical_rating", "BASIC")
+                if z >= 114:
+                    if rating != "SUPERHEAVY_CLOSED":
+                        return False, f"Trans-fermium/Island of Stability element {commodity} (Z={z}) requires SUPERHEAVY_CLOSED containment (Island-Class Superheavy Transporter)."
+                    return True, "Compatible"
+                elif z >= 89 or z in [78, 92, 94]:  # Actinides / noble exotics
+                    if rating not in ("ACTINIDE_EXOTIC", "SUPERHEAVY_CLOSED"):
+                        return False, f"Actinide/radioactive exotic {commodity} (Z={z}) requires ACTINIDE_EXOTIC or SUPERHEAVY_CLOSED containment."
+                    return True, "Compatible"
+                elif z in [1, 2, 6, 10, 18, 36, 54]:  # Volatiles / noble gases
+                    if rating not in ("CRYO_VOLATILE", "BIO_ORGANIC", "SUPERHEAVY_CLOSED"):
+                        return False, f"Volatile element {commodity} (Z={z}) requires CRYO_VOLATILE containment (Volatile Tanker)."
+                    return True, "Compatible"
+                elif z in [22, 26, 28, 29]:  # Heavy metals
+                    if rating not in ("HEAVY_METALLIC", "ACTINIDE_EXOTIC", "SUPERHEAVY_CLOSED"):
+                        return False, f"Heavy structural metal {commodity} (Z={z}) requires HEAVY_METALLIC containment (Bulk Freighter)."
+                    return True, "Compatible"
+                else:
+                    return True, "Compatible"
+        except Exception:
+            pass
+
+        return False, f"Hull '{hull_cfg['name']}' ({hull_class}) cannot transport {commodity} (Incompatible chemical containment)."
 
     def calculate_net_equity(self, captain: Any, kernel: Any = None) -> int:
         """
@@ -2801,6 +2829,39 @@ class MarketManager:
 
         return True, msg, {"escort_fighters": hauler.escort_fighters, "ship_fighters": captain.ship.fighters}
 
+    def contract_security_escort(
+        self,
+        captain: Any,
+        hauler_id: str,
+        security_level: int = 1,
+        kernel: Any = None,
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Contracts naval patrol security forces / tactical corvettes to escort a trade hauler.
+        Cost: 2,500 Cr per security level (1-5).
+        Provides heavy fire support, reducing pirate ambush probability and protecting cargo against raiders.
+        """
+        hauler = self.trade_haulers.get(hauler_id)
+        if not hauler:
+            return False, f"Trade Hauler '{hauler_id}' not found.", {}
+        if hauler.owner_id != captain.id:
+            return False, "Access Denied: You do not own this trade hauler.", {}
+
+        if security_level < 1 or security_level > 5:
+            return False, "Security escort level must be between 1 (Patrol Sloop) and 5 (Heavy Defense Cruiser).", {}
+
+        cost = security_level * 2500
+        if captain.credits < cost:
+            return False, f"Contracting Level {security_level} security forces requires {cost:,} Cr (You have {captain.credits:,} Cr).", {}
+
+        captain.credits -= cost
+        hauler.security_escort = security_level
+        msg = (
+            f"SECURITY ESCORT CONTRACTED: {hauler.name} secured by Level {security_level} Naval Defense Force "
+            f"(-{cost:,} Cr). Pirate raid vulnerability reduced by {security_level * 18}%."
+        )
+        return True, msg, {"hauler_id": hauler_id, "security_escort": security_level, "cost": cost}
+
     def recall_hauler(
         self,
         captain: Any,
@@ -2910,6 +2971,9 @@ class MarketManager:
             lifetime_profit=0,
             trips_completed=0,
             active=True,
+            wormhole_enabled=bool(hull_info.get("wormhole_capable", False)),
+            security_escort=0,
+            chemical_rating=hull_info.get("chemical_rating", "BASIC"),
         )
         self.trade_haulers[hid] = hauler
 
@@ -3107,10 +3171,18 @@ class MarketManager:
                     sec_type = getattr(sec_obj.security, "value", str(sec_obj.security))
                     is_anarchy = "ANARCHY" in sec_type
                     is_border = "BORDERLAND" in sec_type
-                    ambush_chance = 0.20 if is_anarchy else (0.08 if is_border else 0.0)
+                    base_ambush = 0.20 if is_anarchy else (0.08 if is_border else 0.0)
+                    # Contracted Naval Security forces reduce ambush chance by 18% per level
+                    sec_protection = min(0.90, getattr(hauler, "security_escort", 0) * 0.18)
+                    ambush_chance = base_ambush * (1.0 - sec_protection)
 
                     if random.random() < ambush_chance:
-                        if hauler.escort_fighters > 0:
+                        sec_escort = getattr(hauler, "security_escort", 0)
+                        if sec_escort >= 2:
+                            # Naval defense corvettes easily repel raiders without losses
+                            hauler.status = "COMBAT"
+                            logs.append(f"SECURITY ESCORT ENGAGED: Naval patrol escort (Lvl {sec_escort}) repelled raiders in Sector {next_sec:03d}! Hauler {hauler.name} secured.")
+                        elif hauler.escort_fighters > 0:
                             lost = min(hauler.escort_fighters, random.randint(1, 2))
                             hauler.escort_fighters -= lost
                             hauler.status = "COMBAT"
@@ -3148,6 +3220,18 @@ class MarketManager:
                 profit_ba = self._hauler_leg(owner, port_b, port_a, hauler.commodity_return, hauler.capacity)
 
                 total_profit = profit_ab + profit_ba
+
+                # Relativistic Viscous Fluid Market Tensor yield modulation
+                try:
+                    tensor_out = relativistic_trade_tensor(kernel, hauler.origin_sector, hauler.dest_sector, hauler.commodity_outbound)
+                    lapse = tensor_out.get("gravitational_lapse", 1.0)
+                    flux = max(0.5, abs(tensor_out.get("commodity_flux_j", 1.0)))
+                    # Relativistic flux acceleration bonus to profit
+                    fluid_mult = min(1.50, max(0.85, lapse * (1.0 + min(0.30, flux * 0.01))))
+                    total_profit = int(total_profit * fluid_mult)
+                except Exception:
+                    pass
+
                 if total_profit > 0:
                     hauler.lifetime_profit += total_profit
                     hauler.trips_completed += 1
@@ -3179,17 +3263,38 @@ class MarketManager:
                         owner.adjust_credit_rating(1, reason=f"Hauler {hauler.name} profitable trade")
 
                         royalty_str = f" [VC Royalty Skim: -{royalty_cut:,} Cr]" if royalty_cut > 0 else ""
-                        log_text = f"AUTOMATED FLEET YIELD: {hauler.name} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{net_profit:,} Cr!{royalty_str}"
+                        worm_str = " (Wormhole Traversed)" if hauler.wormhole_enabled else ""
+                        log_text = f"AUTOMATED FLEET YIELD: {hauler.name}{worm_str} completed route {hauler.origin_sector:03d}◄──►{hauler.dest_sector:03d}, generating +{net_profit:,} Cr!{royalty_str}"
                         logs.append(log_text)
                         if hasattr(kernel, "action_logs"):
                             kernel.action_logs.append(log_text)
 
-                # Set next leg path
+                # Set next leg path: evaluate Einstein-Cartan throat wormhole shortcut if hauler is wormhole_enabled
                 if kernel and hasattr(kernel, "find_path"):
                     target_dest = hauler.dest_sector if hauler.sector_id == hauler.origin_sector else hauler.origin_sector
-                    path = kernel.find_path(hauler.sector_id, target_dest)
+                    path = []
+                    if getattr(hauler, "wormhole_enabled", False):
+                        try:
+                            from xylarium.kernel import transit as _transit
+                            m_dict = _transit.mouths(kernel)
+                            # Check if current sector or target sector connects to a throat mouth
+                            mouth_keys = [k for k in m_dict.keys() if k in kernel.sectors]
+                            if mouth_keys and target_dest in kernel.sectors:
+                                # Find nearest mouth to hauler
+                                p_to_mouth = kernel.find_path(hauler.sector_id, mouth_keys[0])
+                                # Traverse through throat
+                                p_from_mouth = kernel.find_path(mouth_keys[0], target_dest)
+                                cand_path = p_to_mouth[:-1] + p_from_mouth
+                                normal_path = kernel.find_path(hauler.sector_id, target_dest)
+                                path = cand_path if len(cand_path) < len(normal_path) else normal_path
+                        except Exception:
+                            path = kernel.find_path(hauler.sector_id, target_dest)
+                    if not path:
+                        path = kernel.find_path(hauler.sector_id, target_dest)
                     hauler.current_path = path[1:] if len(path) > 1 else []
                     hauler.status = "IN_TRANSIT"
+
+        return logs
 
 
     def _revalue_shares(self, kernel: Any = None) -> None:

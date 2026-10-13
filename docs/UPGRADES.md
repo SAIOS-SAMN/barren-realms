@@ -497,3 +497,36 @@ While universe laws are objective, civilizations act strictly according to their
 * **Autonomous Waddington Steering:** Civilizations in `WADDINGTON_ADAPTIVE` detect local planetary $S^2$ climate (cryogenic or lithic) and steer population morphospace coordinates into optimal metabolic basins, mitigating famine and boosting morale.
 * **Autonomous Waveguide Tuning:** Civilizations in `HYPERSPHERICAL_S360` align planetary stations with sector gravitational waveguides, boosting defensive shield coherence and trade throughput.
 
+---
+
+## 12. Interstellar Living Trade Fleets, Specialized Stardocks & Security Forces
+
+Commercial activity across the spherical universe operates through dynamic living fleets comprising purpose-built hulls, escort protection, relativistic fluid tensors, and wormhole traversal:
+
+### 12.1 Specialized Stardock Hulls & Strict Chemical Containment
+* **Files:** [`xylarium/config.py`](file:///opt/barren-realms/config.py) (`SPECIALIZED_HULLS`), [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py) (`TradeHauler`), [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`is_commodity_compatible`, `commission_trade_hauler`)
+* **Chemical Containment Granularity:** Universal commodities and continuum elements ($Z \ge 1$) enforce strict containment ratings—preventing generic "one size fits all" haulers:
+  - `BULK_FREIGHTER` (`ORE_BULK`): Restricts to standard ores and construction metals. Volatiles ($H, He, Xe$), actinides, and superheavies prohibited.
+  - `CRYOGENIC_TANKER` (`VOLATILE_CRYO`): Vacuum-dewared cryo cells for cryogenic volatiles ($H, He, N, O, F, Ne, Cl, Ar, Kr, Xe, Rn$).
+  - `ACTINIDE_HAULER` (`ACTINIDE_EXOTIC`): Lead-borated neutron shielding for radioactive actinides and heavy transuranics ($89 \le Z < 114$).
+  - `SUPERHEAVY_TRANSPORTER` (`SUPERHEAVY_CLOSED`): Torsion-stabilized magnetic lattice for Island of Stability superheavies ($Z \ge 114$, $Z \ge 119$, and $Z=126$). Wormhole-capable.
+  - `BIOSPHERE_VESSEL` (`BIOLOGICAL_LIVING`): Climate-controlled hydroponic holds for living livestock, pharmaceuticals, and biomass.
+
+### 12.2 Naval Security Force Escorts
+* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`contract_security_escort`, `tick_trade_haulers`)
+* **Escort Mechanics:**
+  - Captains and planetary governments contract naval security patrol corvettes (Levels 1–5, 2,500 Cr per level).
+  - Each security level provides an 18% reduction in pirate ambush vulnerability.
+  - At Security Level $\ge 2$, pirate ambushes are repelled automatically with zero cargo loss or hull wear.
+
+### 12.3 Einstein-Cartan Wormhole Traversal & Relativistic Yield Modulation
+* **Files:** [`xylarium/kernel/market.py`](file:///opt/barren-realms/xylarium/kernel/market.py) (`tick_trade_haulers`, `relativistic_trade_tensor`)
+* **Transit & Commercial Mechanics:**
+  - Wormhole-enabled haulers (`wormhole_enabled: True`) crossing sectors with open Einstein-Cartan throat mouths execute topological shortcuts, hopping intermediate transit sectors instantaneously.
+  - Every arrival computes the relativistic trade tensor $T^{\mu\nu}_{\text{trade}}$ and gravitational lapse $(1+z) = \sqrt{1 - 2M/r}$, scaling realized profits according to time-dilated commercial transport.
+
+### 12.4 Autonomous Civilizational Fleet Praxis
+* **Files:** [`xylarium/kernel/epistemics.py`](file:///opt/barren-realms/xylarium/kernel/epistemics.py) (`execute_epistemic_agency`), [`xylarium/kernel/observation.py`](file:///opt/barren-realms/xylarium/kernel/observation.py) (`living_trade_fleets`)
+* **Praxis:** Civilizations with economic paradigms `RELATIVISTIC_FLUID` or `HOMOLOGICAL_SYNTHESIS` invest resource surpluses into commissioning specialized stardock haulers (`SUPERHEAVY_TRANSPORTER`, `ACTINIDE_HAULER`, `BIOSPHERE_VESSEL`, `BULK_FREIGHTER`), expanding inter-civilizational trade networks across the cosmos. Real-time telemetry is sampled under Manifold 12 (`living_trade_fleets`).
+
+

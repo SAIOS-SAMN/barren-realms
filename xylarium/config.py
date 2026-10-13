@@ -297,6 +297,8 @@ SPECIALIZED_HULLS = {
         "allowed_commodities": ["ORE", "ORGANICS", "EQUIPMENT"],
         "description": "Standard workhorse cargo hauler for basic commodities.",
         "icon": "🚚",
+        "chemical_rating": "BASIC",
+        "wormhole_capable": False,
     },
     "CRYO_TANKER": {
         "name": "Volatile Tanker",
@@ -306,6 +308,8 @@ SPECIALIZED_HULLS = {
         "allowed_commodities": ["H", "He-3", "C", "H2O", "Xe", "cryogenite", "ORGANICS"],
         "description": "Zero-Kelvin magnetic containment shielding for volatile gases and cryogenic compounds.",
         "icon": "❄️",
+        "chemical_rating": "CRYO_VOLATILE",
+        "wormhole_capable": False,
     },
     "BULK_FREIGHTER": {
         "name": "Bulk Freighter",
@@ -315,6 +319,8 @@ SPECIALIZED_HULLS = {
         "allowed_commodities": ["Fe", "Ti", "Si", "Ni", "Cu", "AdL", "ferrolattice", "stelalith", "ORE"],
         "description": "Reinforced magnetic grapples and structural bracing for high-density structural ores and heavy metals.",
         "icon": "🏗️",
+        "chemical_rating": "HEAVY_METALLIC",
+        "wormhole_capable": False,
     },
     "BIOSPHERE_VESSEL": {
         "name": "Biosphere Vessel",
@@ -324,6 +330,8 @@ SPECIALIZED_HULLS = {
         "allowed_commodities": ["H2O", "C", "ORGANICS", "chitinium", "M2_BIOSPHERE_PACK"],
         "description": "Climate-controlled, sterile life-support hull designed for agricultural biologicals and biomaterials.",
         "icon": "🌿",
+        "chemical_rating": "BIO_ORGANIC",
+        "wormhole_capable": False,
     },
     "QUANTUM_SKIFF": {
         "name": "Quantum Skiff",
@@ -333,6 +341,30 @@ SPECIALIZED_HULLS = {
         "allowed_commodities": ["U", "Pt", "SpR", "umbrite", "aetherium", "pyrosite", "ferrolattice", "M1_SUPERCONDUCTOR", "M2_BIOSPHERE_PACK", "M3_ENGINE_MANIFOLD", "M4_WARP_CORE", "EQUIPMENT"],
         "description": "Fast, light vessel outfitted with Subspace Resonators for precious isotopes, high-margin exotics, and tech cores.",
         "icon": "⚡",
+        "chemical_rating": "ACTINIDE_EXOTIC",
+        "wormhole_capable": True,
+    },
+    "ACTINIDE_HAULER": {
+        "name": "Actinide Shielded Transport",
+        "holds": 60,
+        "price": 28000,
+        "allowed_categories": ["EXOTICS"],
+        "allowed_commodities": ["U", "Pt", "pyrosite", "umbrite", "aetherium", "AdL", "AM"],
+        "description": "Heavy lead-borated neutron containment hull built to transport radioactive actinides and fissionable catalysts.",
+        "icon": "☢️",
+        "chemical_rating": "ACTINIDE_EXOTIC",
+        "wormhole_capable": True,
+    },
+    "SUPERHEAVY_TRANSPORTER": {
+        "name": "Island-Class Superheavy Transporter",
+        "holds": 30,
+        "price": 45000,
+        "allowed_categories": ["EXOTICS", "SUPERHEAVY"],
+        "allowed_commodities": ["Fl", "Uue", "Ubn", "Ubu", "Ubh", "pyrosite", "umbrite", "AdL", "SpR", "mirror_glass"],
+        "description": "Torsion-stabilized magnetic lattice hull engineered specifically for trans-fermium and Island of Stability superheavy elements (Z >= 114).",
+        "icon": "💠",
+        "chemical_rating": "SUPERHEAVY_CLOSED",
+        "wormhole_capable": True,
     },
 }
 

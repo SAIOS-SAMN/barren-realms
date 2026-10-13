@@ -397,6 +397,98 @@ def execute_epistemic_agency(
         except Exception as e:
             actions["waveguide_tuning"] = {"error": str(e)}
 
+    # --------------------------------------------------------------------------
+    # 4. Autonomous Living Trade Fleet Commissioning & Dispatch
+    # --------------------------------------------------------------------------
+    if ont.economics in ("RELATIVISTIC_FLUID", "HOMOLOGICAL_SYNTHESIS") and kernel and hasattr(kernel, "market_manager"):
+        treasury = getattr(planet, "treasury", 0)
+        # If planet has treasury and mineral surplus, check if civilization needs trade convoys
+        sec_id = planet.sector_id
+        mm = kernel.market_manager
+        # Check active haulers owned by this civ
+        civ_haulers = [h for h in mm.trade_haulers.values() if h.owner_id == f"civ:{civ.name}" and h.active]
+        if len(civ_haulers) < 3 and treasury >= 15000:
+            # Select hull class based on what the civilization produces and discovers
+            known_elems = getattr(civ, "discovered_elements", [])
+            has_superheavy = any(e in ("Fl", "Uue", "Ubn", "Ubu", "Ubh", "pyrosite", "umbrite", "AdL") for e in known_elems)
+            
+            if has_superheavy and ont.chemistry == "TORSION_INDUCTION":
+                hull_choice = "SUPERHEAVY_TRANSPORTER"
+                out_comm = next((e for e in ("Fl", "Uue", "Ubu", "Ubh", "pyrosite", "umbrite", "AdL") if e in known_elems), "AdL")
+                ret_comm = "ORE"
+            elif any(e in ("U", "Pt", "SpR") for e in known_elems):
+                hull_choice = "ACTINIDE_HAULER"
+                out_comm = "U"
+                ret_comm = "EQUIPMENT"
+            elif civ.metabolism == "biotic":
+                hull_choice = "BIOSPHERE_VESSEL"
+                out_comm = "ORGANICS"
+                ret_comm = "EQUIPMENT"
+            elif civ.metabolism == "mineral":
+                hull_choice = "BULK_FREIGHTER"
+                out_comm = "ORE"
+                ret_comm = "ORGANICS"
+            else:
+                hull_choice = "CRYO_TANKER"
+                out_comm = "H"
+                ret_comm = "ORGANICS"
+
+            # Destination sector: adjacent or trading hub (e.g. Sector 1 or (sec_id + 10) % 100)
+            target_sec = 1 if sec_id != 1 else 30
+            # Deduct cost from planet treasury
+            from xylarium.config import SPECIALIZED_HULLS
+            h_cfg = SPECIALIZED_HULLS.get(hull_choice, {})
+            cost = h_cfg.get("price", 10000)
+            if treasury >= cost:
+                planet.treasury -= cost
+                hid = f"CIV-HAUL-{mm.next_hauler_id}"
+                mm.next_hauler_id += 1
+                
+                # Check path
+                path = kernel.find_path(sec_id, target_sec)
+                p_steps = path[1:] if len(path) > 1 else []
+                from xylarium.kernel.models import TradeHauler
+                new_h = TradeHauler(
+                    id=hid,
+                    owner_id=f"civ:{civ.name}",
+                    name=f"{civ.name} {h_cfg.get('name', 'Conveyance')} {hid}",
+                    sector_id=sec_id,
+                    hull_class=hull_choice,
+                    status="IN_TRANSIT" if p_steps else "IDLE",
+                    capacity=h_cfg.get("holds", 50),
+                    origin_sector=sec_id,
+                    dest_sector=target_sec,
+                    commodity_outbound=out_comm,
+                    commodity_return=ret_comm,
+                    cargo={},
+                    escort_fighters=20,
+                    wear_and_tear=0,
+                    current_path=p_steps,
+                    lifetime_profit=0,
+                    trips_completed=0,
+                    active=True,
+                    wormhole_enabled=bool(h_cfg.get("wormhole_capable", False)),
+                    security_escort=2,
+                    chemical_rating=h_cfg.get("chemical_rating", "BASIC"),
+                )
+                mm.trade_haulers[hid] = new_h
+                actions["fleet_commissioned"] = {
+                    "hauler_id": hid,
+                    "hull_class": hull_choice,
+                    "origin": sec_id,
+                    "destination": target_sec,
+                    "chemical_rating": new_h.chemical_rating,
+                    "security_escort": 2,
+                    "wormhole_enabled": new_h.wormhole_enabled,
+                }
+                if event_bus:
+                    event_bus.broadcast_radio(
+                        sender=civ.name,
+                        text=f"The {civ.name} state stardocks launched merchant hauler {new_h.name} ({hull_choice}) on trade corridor {sec_id:03d} <-> {target_sec:03d}!",
+                        channel="COMM-1",
+                        sector_id=sec_id,
+                    )
+
     return actions
 
 

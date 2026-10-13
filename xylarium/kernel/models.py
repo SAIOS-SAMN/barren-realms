@@ -630,6 +630,9 @@ class TradeHauler:
     lifetime_profit: int = 0
     trips_completed: int = 0
     active: bool = True
+    wormhole_enabled: bool = False     # Can traverse Einstein-Cartan throat mouths across deep space
+    security_escort: int = 0          # Heavy patrol corvette / tactical escort force rating
+    chemical_rating: str = "BASIC"    # "BASIC", "CRYO_VOLATILE", "HEAVY_METALLIC", "BIO_ORGANIC", "ACTINIDE_EXOTIC", "SUPERHEAVY_CLOSED"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -652,6 +655,9 @@ class TradeHauler:
             "lifetime_profit": self.lifetime_profit,
             "trips_completed": self.trips_completed,
             "active": self.active,
+            "wormhole_enabled": self.wormhole_enabled,
+            "security_escort": self.security_escort,
+            "chemical_rating": self.chemical_rating,
         }
 
     @classmethod
@@ -676,6 +682,9 @@ class TradeHauler:
             lifetime_profit=data.get("lifetime_profit", 0),
             trips_completed=data.get("trips_completed", 0),
             active=data.get("active", True),
+            wormhole_enabled=data.get("wormhole_enabled", False),
+            security_escort=data.get("security_escort", 0),
+            chemical_rating=data.get("chemical_rating", "BASIC"),
         )
 
 

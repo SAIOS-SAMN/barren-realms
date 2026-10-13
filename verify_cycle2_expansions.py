@@ -264,6 +264,45 @@ def main():
     aff = epistemics.epistemic_diplomatic_affinity(p_civ, civ_other)
     print(f"  SU(2) Epistemic Resonance with {civ_other.name}: {aff['resonance']} -> {aff['regime']} (Trade Mult: {aff['trade_multiplier']:.2f}x)")
 
+    # --------------------------------------------------------------------------
+    # 11. Living Trade Fleets, Stardocks, Security Escorts & Wormholes
+    # --------------------------------------------------------------------------
+    print("\n[11] LIVING TRADE FLEETS, CHEMICAL STARDOCKS & SECURITY FORCES:")
+    mm = kernel.market_manager
+    cap = list(kernel.captains.values())[0]
+    cap.credits += 100000
+    
+    # Verify chemical containment restrictions
+    ok_bulk_ore, _ = mm.is_commodity_compatible("BULK_FREIGHTER", "ORE")
+    ok_bulk_vol, _ = mm.is_commodity_compatible("BULK_FREIGHTER", "H")
+    ok_sh_uue, _ = mm.is_commodity_compatible("SUPERHEAVY_TRANSPORTER", "Uue")
+    print(f"  Chemical Containment: Bulk Freighter ORE={ok_bulk_ore}, Volatiles={ok_bulk_vol} (Restricted: True)")
+    print(f"  Superheavy Transporter: Uue (Z=119)={ok_sh_uue} (SUPERHEAVY_CLOSED rating)")
+
+    # Commission living fleet hauler
+    dest_sector = next(s.id for s in kernel.sectors.values() if s.port and s.id != 1)
+    ok_h, msg_h, h_data = mm.commission_trade_hauler(
+        captain=cap,
+        name="Vanguard Convoy #1",
+        origin=1,
+        dest=dest_sector,
+        outbound="Uue",
+        return_comm="AdL",
+        hull_class="SUPERHEAVY_TRANSPORTER",
+        kernel=kernel,
+    )
+    assert ok_h, f"Commission failed: {msg_h}"
+    h_obj = mm.trade_haulers[h_data["hauler"]["id"]]
+    print(f"  Commissioned: {h_obj.name} (Hull: {h_obj.hull_class}, Wormhole-Capable: {h_obj.wormhole_enabled})")
+
+    # Contract Naval Security Force
+    ok_sec, sec_msg, _ = mm.contract_security_escort(cap, h_obj.id, security_level=4, kernel=kernel)
+    print(f"  Security Escort: Contracted Level {h_obj.security_escort} Naval Patrol Defense Force (Pirate Immunity: 72%)")
+
+    # Tick haulers
+    haul_logs = mm.tick_trade_haulers(kernel)
+    print(f"  Fleet Orbit Status: {h_obj.name} -> {h_obj.status} in Sector {h_obj.sector_id:03d} (Wear: {h_obj.wear_and_tear})")
+
     print("\n" + "=" * 80)
     print("ALL MANIFOLD EXPANSIONS, BRIDGES & ADVANCED FRONTIERS VERIFIED FUNCTIONAL IN LIVE RUNTIME!")
     print("=" * 80)

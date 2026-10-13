@@ -686,6 +686,62 @@ class TestCohomologyCognition(unittest.TestCase):
             "ONTOLOGICAL_DISSONANCE", "POLARIZED_SHEAR"
         ])
 
+    def test_living_trade_fleets_and_chemical_stardocks(self):
+        from xylarium.kernel import market, elements_continuum
+        from xylarium.config import SPECIALIZED_HULLS
+
+        mm = self.kernel.market_manager
+
+        # 1. Chemical Containment Compatibility Verification
+        # Bulk Freighter cannot haul volatile H or superheavy Uue
+        ok_ore, _ = mm.is_commodity_compatible("BULK_FREIGHTER", "ORE")
+        self.assertTrue(ok_ore)
+        ok_h, _ = mm.is_commodity_compatible("BULK_FREIGHTER", "H")
+        self.assertFalse(ok_h)
+        ok_uue_bulk, _ = mm.is_commodity_compatible("BULK_FREIGHTER", "Uue")
+        self.assertFalse(ok_uue_bulk)
+
+        # Island-Class Superheavy Transporter CAN haul Uue and Fl
+        ok_uue, _ = mm.is_commodity_compatible("SUPERHEAVY_TRANSPORTER", "Uue")
+        self.assertTrue(ok_uue)
+        ok_fl, _ = mm.is_commodity_compatible("SUPERHEAVY_TRANSPORTER", "Fl")
+        self.assertTrue(ok_fl)
+
+        # 2. Commissioning Stardock Hauler with Chemical Rating & Security
+        cap = list(self.kernel.captains.values())[0]
+        cap.credits = 100000
+
+        ok_comm, msg, data = mm.commission_trade_hauler(
+            captain=cap,
+            name="Superheavy Conveyor Alpha",
+            origin=1,
+            dest=5,
+            outbound="Uue",
+            return_comm="AdL",
+            hull_class="SUPERHEAVY_TRANSPORTER",
+            kernel=self.kernel,
+        )
+        self.assertTrue(ok_comm, msg)
+        hid = data["hauler"]["id"]
+        hauler = mm.trade_haulers[hid]
+        self.assertEqual(hauler.chemical_rating, "SUPERHEAVY_CLOSED")
+        self.assertTrue(hauler.wormhole_enabled)
+
+        # 3. Contract Naval Security Force Escort
+        ok_sec, sec_msg, sec_data = mm.contract_security_escort(
+            captain=cap,
+            hauler_id=hid,
+            security_level=3,
+            kernel=self.kernel,
+        )
+        self.assertTrue(ok_sec, sec_msg)
+        self.assertEqual(hauler.security_escort, 3)
+
+        # 4. Simulation Ticks & Relativistic Tensor Yield
+        logs = mm.tick_trade_haulers(self.kernel)
+        self.assertIsInstance(logs, list)
+        self.assertIn(hauler.status, ["IN_TRANSIT", "COMBAT", "IDLE", "UNDER_ATTACK"])
+
 
 if __name__ == "__main__":
     unittest.main()

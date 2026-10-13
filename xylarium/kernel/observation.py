@@ -304,6 +304,31 @@ def sample_telemetry(kernel: Any) -> Dict[str, Any]:
     except Exception as e:
         frame["epistemic_ontologies"] = {"error": str(e)}
 
+    # 12. Living Trade Fleets & Logistics Manifold
+    try:
+        mm = getattr(kernel, "market_manager", None)
+        haulers = list(mm.trade_haulers.values()) if mm else []
+        active_h = [h for h in haulers if h.active]
+        worm_h = [h for h in active_h if getattr(h, "wormhole_enabled", False)]
+        secured_h = [h for h in active_h if getattr(h, "security_escort", 0) > 0]
+        hulls_tally: Dict[str, int] = {}
+        chem_tally: Dict[str, int] = {}
+        for h in active_h:
+            hulls_tally[h.hull_class] = hulls_tally.get(h.hull_class, 0) + 1
+            chem_tally[getattr(h, "chemical_rating", "BASIC")] = chem_tally.get(getattr(h, "chemical_rating", "BASIC"), 0) + 1
+
+        frame["living_trade_fleets"] = {
+            "total_haulers": len(haulers),
+            "active_haulers": len(active_h),
+            "wormhole_capable_haulers": len(worm_h),
+            "escorted_haulers": len(secured_h),
+            "hull_classes": hulls_tally,
+            "chemical_ratings": chem_tally,
+            "total_lifetime_freight_profit": sum(h.lifetime_profit for h in haulers),
+        }
+    except Exception as e:
+        frame["living_trade_fleets"] = {"error": str(e)}
+
     frame["healthy"] = True
     return frame
 
