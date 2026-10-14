@@ -1399,6 +1399,42 @@ def _nursery_defend_clade(k: Any, captain: Any, current_sector: Any, kwargs: Dic
     )
 
 
+# ---------------------------------------------------------------------- [22] Pan-Galactic Conclave & Interstellar Law
+@action(ActionType.CONCLAVE_SPONSOR_RESOLUTION, turns=1)
+def _conclave_sponsor_resolution(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    key = kwargs.get("resolution_key", "")
+    return k.conclave_manager.sponsor_resolution(
+        kernel=k,
+        captain=captain,
+        resolution_key=key,
+    )
+
+
+@action(ActionType.CONCLAVE_CAST_VOTE, turns=1)
+def _conclave_cast_vote(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    res_id = kwargs.get("resolution_id", "")
+    favor = kwargs.get("in_favor", True)
+    if isinstance(favor, str):
+        favor = favor.lower() in ["true", "yes", "for", "1"]
+    return k.conclave_manager.cast_vote(
+        kernel=k,
+        captain=captain,
+        resolution_id=res_id,
+        in_favor=favor,
+    )
+
+
+@action(ActionType.CONCLAVE_ENFORCE_SANCTIONS, turns=1)
+def _conclave_enforce_sanctions(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    target = kwargs.get("target_captain_id", "")
+    return k.conclave_manager.enforce_sanctions(
+        kernel=k,
+        captain=captain,
+        target_captain_id=target,
+    )
+
+
+
 
 
 

@@ -3876,6 +3876,66 @@ class TerminalRenderer:
 
 
     @classmethod
+    def render_conclave_screen(cls, view: Dict[str, Any]) -> str:
+        """Pan-Galactic Conclave & Interstellar Law Console."""
+        conclave = view.get("conclave", {})
+        active_laws = conclave.get("active_laws", {})
+        proposals = conclave.get("proposals", {})
+        voting_weight = view.get("conclave_voting_weight", 10)
+        session_cycle = conclave.get("session_cycle", 1)
+
+        lines = [
+            f"{bold(c_gold('═════════════ [ PAN-GALACTIC CONCLAVE & INTERSTELLAR LAW ] ═════════════'))}",
+            f"  {c_white('The sovereign parliamentary assembly of interstellar nations and Progenitors.')}",
+            f"  Assembly Session: {c_gold(str(session_cycle))}  │  Your Parliamentary Voting Weight: {bold(c_cyan(str(voting_weight)))} Votes",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+
+        # Active Laws
+        lines.append(f"  {bold(c_white('BINDING GALACTIC LAWS IN EFFECT:'))}")
+        if not active_laws:
+            lines.append(f"    {c_gray('No interstellar accords currently ratified. The galaxy operates under open anarchy.')}")
+        else:
+            for lk, law in active_laws.items():
+                p_cyc = law.get("passed_cycle", "Past")
+                lines.append(f"    • {bold(c_green(law.get('name', lk)))} (Passed Cycle {p_cyc})")
+                lines.append(f"      {c_white(law.get('description', ''))}")
+        lines.append("")
+
+        # Open Proposals
+        lines.append(f"  {bold(c_white('RESOLUTIONS ON THE ASSEMBLY FLOOR:'))}")
+        if not proposals:
+            lines.append(f"    {c_gray('No active bills currently pending floor vote.')}")
+            lines.append(f"    {c_white('Tip: Sponsor a resolution below to rally the cluster behind your doctrine.')}")
+        else:
+            for pid, prop in proposals.items():
+                v_for = prop.get("votes_for", 0)
+                v_against = prop.get("votes_against", 0)
+                sponsor = prop.get("sponsor_id", "Unknown")
+                lines.append(f"    [{c_cyan(pid)}] {bold(c_white(prop.get('name', pid)))} │ Sponsor: {c_gold(sponsor)}")
+                lines.append(f"       Tally: {c_green(str(v_for))} FOR  vs  {c_red(str(v_against))} AGAINST  (Passage Threshold: 100 net)")
+                lines.append(f"       {c_gray(prop.get('description', ''))}")
+        lines.append("")
+
+        # Standard resolution blueprints
+        from xylarium.kernel.conclave import STANDARD_RESOLUTIONS
+        available_res = [k for k in STANDARD_RESOLUTIONS if k not in active_laws and not any(p.get("key") == k for p in proposals.values())]
+        if available_res:
+            lines.append(f"  {bold(c_white('RESOLUTIONS ELIGIBLE FOR SPONSORSHIP:'))}")
+            for k in available_res:
+                r_info = STANDARD_RESOLUTIONS[k]
+                lines.append(f"    • {c_gold(k)}: {bold(c_white(r_info['name']))} [{r_info['category']}]")
+                lines.append(f"      {c_gray(r_info['description'])}")
+            lines.append("")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[S]')}ponsor <KEY>  │  {c_gold('[V]')}ote <ID> <FOR/AGAINST>  │  {c_gold('[E]')}mbargo <Captain>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+
+
+    @classmethod
     def render_help(cls) -> str:
         """Renders classic BBS door game guide and mechanics."""
         return f"""

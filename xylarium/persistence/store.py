@@ -88,6 +88,7 @@ class StatePersistence:
             "epochs": kernel.epoch_manager.to_dict() if hasattr(kernel, "epoch_manager") else None,
             "relic_foundry": kernel.relic_foundry_manager.to_dict() if hasattr(kernel, "relic_foundry_manager") else None,
             "clade_nursery": kernel.clade_nursery_manager.to_dict() if hasattr(kernel, "clade_nursery_manager") else None,
+            "conclave": kernel.conclave_manager.to_dict() if hasattr(kernel, "conclave_manager") else None,
         }
         return data
 
@@ -293,6 +294,7 @@ class StatePersistence:
             from xylarium.kernel.civilizational_epochs import CivilizationalEpochManager
             from xylarium.kernel.relic_foundry import RelicFoundryManager
             from xylarium.kernel.clade_nursery import CladeNurseryManager
+            from xylarium.kernel.conclave import PanGalacticConclaveManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -335,6 +337,11 @@ class StatePersistence:
                 kernel.clade_nursery_manager = CladeNurseryManager.from_dict(data["clade_nursery"])
             else:
                 kernel.clade_nursery_manager = CladeNurseryManager()
+
+            if data.get("conclave"):
+                kernel.conclave_manager = PanGalacticConclaveManager.from_dict(data["conclave"])
+            else:
+                kernel.conclave_manager = PanGalacticConclaveManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):
