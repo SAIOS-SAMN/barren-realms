@@ -175,7 +175,7 @@ class TerminalClient:
     WORD_COMMANDS = {
         **{w: "EXCHANGE_DESK" for w in ["EXCHANGE", "STOCK", "STOCKS", "FREIGHT"]},
         **{w: "FLEET_DESK" for w in ["FLEET", "HAULER", "HAULERS", "LOGISTICS"]},
-        **{w: "EMPIRE" for w in ["EMPIRE_MODE", "SOVEREIGN", "BRE"]},
+        **{w: "EMPIRE" for w in ["EMPIRE_MODE", "BRE"]},
         **{w: "RETIRE" for w in ["RETIRE", "ABDICATE"]},
         **{w: "CLONE" for w in ["CLONE", "CLONES", "VATS"]},
         **{w: "I" for w in ["IMPERIAL", "EMPIRE", "DOMINION", "ASSET", "ASSETS"]},
@@ -246,6 +246,7 @@ class TerminalClient:
         **{w: "VOID_BRIDGES" for w in ["BRIDGES", "BRIDGE", "VOID", "CLUSTERS", "VOID_BRIDGES"]},
         **{w: "ENTROPY_TIDES" for w in ["ENTROPY", "GENESIS", "TIDES", "BIGBANG", "REBIRTH"]},
         **{w: "EMERGENT_ECONOMY" for w in ["UPLINK", "BARTER", "METABOLISM", "EMERGENT", "NURTURE"]},
+        **{w: "SOVEREIGN_MIND" for w in ["MIND", "SOVEREIGN", "SICE", "CONSCIOUSNESS", "SENTIENCE", "MIND_PARLIAMENT"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -388,6 +389,9 @@ class TerminalClient:
             return
         if choice == "EMERGENT_ECONOMY":
             self._prompt_emergent_economy(view)
+            return
+        if choice == "SOVEREIGN_MIND":
+            self._prompt_sovereign_mind(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3953,6 +3957,35 @@ class TerminalClient:
             elif cmd == "U":
                 p_id = input("Planet ID to uplink into realm trade network > ").strip()
                 res = self.kernel.dispatch(self.player_id, ActionType.EMERGENT_TRIGGER_UPLINK, planet_id=p_id)
+                self._print_result(res)
+
+    def _prompt_sovereign_mind(self, view: Dict[str, Any]) -> None:
+        """Interactive loop for Sovereign Indigenous Consciousness Engine (SICE)."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_sovereign_mind_screen(fresh_view))
+            try:
+                cmd = input(f"{c_magenta('Sovereign Mind Command [C/E/H/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "C":
+                p_id = input("Planet ID to commune with Parliament > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_COMMUNE_PARLIAMENT, planet_id=p_id)
+                self._print_result(res)
+            elif cmd == "E":
+                p_id = input("Planet ID to evaluate counterfactual regret > ").strip()
+                cand = input("Candidate action [CONSERVE_AND_HEAL / SURGE_EXTRACTION / TRANSCEND_SYNTHESIS] > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_EVALUATE_COUNTERFACTUAL, planet_id=p_id, candidate_action=cand if cand else None)
+                self._print_result(res)
+            elif cmd == "H":
+                p_id = input("Planet ID for The Hearing > ").strip()
+                prop = input("Proposal terms / intended action > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_HEAR_INTENT, planet_id=p_id, proposal_summary=prop)
                 self._print_result(res)
 
     def _print_result(self, res) -> None:

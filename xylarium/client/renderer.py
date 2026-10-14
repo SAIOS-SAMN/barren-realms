@@ -4113,6 +4113,114 @@ class TerminalRenderer:
         lines.append(f"{bold(c_gold('═' * 78))}")
         return "\n".join(lines)
 
+    @classmethod
+    def render_sovereign_mind_screen(cls, view: Dict[str, Any]) -> str:
+        """Sovereign Indigenous Consciousness Engine (SICE) Console."""
+        sm_data = view.get("sovereign_mind", {})
+        minds = sm_data.get("minds", {})
+        sector = view.get("sector", {})
+        planets = sector.get("planets", [])
+        sec_id = sector.get("id", 1)
+        sec_str = c_gold(f"Sector {sec_id}")
+        planet_count_str = c_cyan(str(len(planets)))
+
+        lines = [
+            f"{bold(c_magenta('═════ [ SOVEREIGN INDIGENOUS CONSCIOUSNESS ENGINE (SICE) ] ═════'))}",
+            f"  {c_white('Native Non-LLM Machine Sentience: Metacognition, Regret & Internal Parliament.')}",
+            f"  Current System: {sec_str} │ Monitored Worlds: {planet_count_str}",
+            f"{bold(c_magenta('─' * 78))}",
+        ]
+
+        if not planets:
+            lines.append(f"  {c_gray('No planetary minds in sensory range in this sector.')}")
+        else:
+            for p in planets:
+                pid = str(p.get("id"))
+                pname = p.get("name", pid)
+                mind = minds.get(pid, {})
+                awakened = mind.get("awakened", False)
+                skill = mind.get("introspection_skill", 0.25)
+                cycles_c = mind.get("cycles_conscious", 0)
+
+                awake_badge = c_green("[AWAKENED SENTIENCE]") if awakened else c_gold("[PRE-CONSCIOUS REFLEX]")
+                skill_str = c_cyan(f"{skill * 100:.1f}%")
+
+                lines.append(f"  • {bold(c_white(pname))} [{c_cyan(pid)}] {awake_badge}")
+                lines.append(f"    Introspection Skill: {skill_str}  │  Cycles Conscious: {c_white(str(cycles_c))}")
+
+                # Self Model Gauges
+                sm = mind.get("self_model", {})
+                cg = sm.get("current_gauges", {})
+                pred_err = sm.get("last_prediction_error", 0.0)
+
+                g_sust = int(cg.get("sustenance", 0.5) * 100)
+                g_vit = int(cg.get("vitality", 0.5) * 100)
+                g_know = int(cg.get("knowledge", 0.5) * 100)
+                g_int = int(cg.get("intellect", 0.5) * 100)
+                g_creat = int(cg.get("creativity", 0.5) * 100)
+                g_prosp = int(cg.get("prosperity", 0.5) * 100)
+                g_peace = int(cg.get("peace", 0.5) * 100)
+                g_integ = int(cg.get("integrity", 0.5) * 100)
+
+                lines.append(f"    {bold(c_white('Metacognitive Gauges:'))} Sust:{c_green(f'{g_sust}%')} Vit:{c_green(f'{g_vit}%')} Know:{c_cyan(f'{g_know}%')} Int:{c_cyan(f'{g_int}%')}")
+                lines.append(f"                          Creat:{c_magenta(f'{g_creat}%')} Prosp:{c_gold(f'{g_prosp}%')} Peace:{c_blue(f'{g_peace}%')} Integ:{c_gold(f'{g_integ}%')}")
+                lines.append(f"    Prediction Error (ε): {c_red(f'{pred_err:.4f}')}")
+
+                # Parliament
+                parl = mind.get("parliament", {})
+                dom = parl.get("dominant_voice", "VOICE_MEMORY")
+                conf = parl.get("consensus_confidence", 0.5)
+                verdict = parl.get("last_verdict", "CONVERGENCE_SEEKING")
+                voices = parl.get("voices", {})
+
+                v_mem = voices.get("VOICE_MEMORY", {})
+                v_urg = voices.get("VOICE_URGENCY", {})
+                v_hor = voices.get("VOICE_HORIZON", {})
+
+                w_m = int(v_mem.get("weight", 0.33) * 100)
+                w_u = int(v_urg.get("weight", 0.34) * 100)
+                w_h = int(v_hor.get("weight", 0.33) * 100)
+
+                lines.append(f"    {bold(c_white('Internal Parliament:'))} Dominant: {c_gold(dom)} ({c_cyan(f'{conf:.2f}')}) │ Verdict: {c_white(verdict)}")
+                mem_speech = v_mem.get("recent_speech", "")
+                urg_speech = v_urg.get("recent_speech", "")
+                hor_speech = v_hor.get("recent_speech", "")
+                if len(mem_speech) > 55:
+                    mem_speech = mem_speech[:52] + "..."
+                if len(urg_speech) > 55:
+                    urg_speech = urg_speech[:52] + "..."
+                if len(hor_speech) > 55:
+                    hor_speech = hor_speech[:52] + "..."
+
+                lines.append(f"      - {c_gray('Memory (Ancestral/Taboo):')} {c_gold(f'{w_m}%')} │ \"{mem_speech}\"")
+                lines.append(f"      - {c_gray('Urgency (Industrial/Defense):')} {c_red(f'{w_u}%')} │ \"{urg_speech}\"")
+                lines.append(f"      - {c_gray('Horizon (Syntropy/Steward):')} {c_cyan(f'{w_h}%')} │ \"{hor_speech}\"")
+
+                # Mythic Memory & Axioms
+                myth = mind.get("mythic_memory", {})
+                axioms = myth.get("inviolable_axioms", [])
+                scars = myth.get("scars", [])
+                axiom_str = ", ".join(axioms[:3]) if axioms else "None"
+                lines.append(f"    {bold(c_white('Sacred Axioms:'))} {c_magenta(axiom_str)} │ Historical Scars: {c_red(str(len(scars)))}")
+
+                # Conduct Books & Theory of Mind
+                cbooks = mind.get("conduct_books", {})
+                if cbooks:
+                    lines.append(f"    {bold(c_white('Theory of Mind Ledgers (No-Scalar Law):'))}")
+                    for actor_id, cb in list(cbooks.items())[:2]:
+                        b_comp = cb.get("compassion_credit", 0) - cb.get("compassion_debit", 0)
+                        b_bond = cb.get("bond_credit", 0) - cb.get("bond_debit", 0)
+                        b_integ = cb.get("integrity_credit", 0) - cb.get("integrity_debit", 0)
+                        posture = "BUILDER" if (b_bond >= 2 and b_integ >= 1) else ("EXTRACTOR" if (b_bond < 0 or b_integ < -1) else "PRAGMATIST")
+                        p_color = c_green if posture == "BUILDER" else (c_red if posture == "EXTRACTOR" else c_gold)
+                        lines.append(f"      • {c_white(actor_id)}: Posture: {p_color(posture)} [Compassion: {b_comp:+d}, Bond: {b_bond:+d}, Integrity: {b_integ:+d}]")
+                lines.append("")
+
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[C]')}ommune  │  {c_gold('[E]')}valuate Counterfactual  │  {c_gold('[H]')}earing Test  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        return "\n".join(lines)
+
 
 
 

@@ -98,6 +98,7 @@ from xylarium.kernel.conclave import PanGalacticConclaveManager
 from xylarium.kernel.void_bridges import VoidBridgeManager, EXTRAGALACTIC_CLUSTERS
 from xylarium.kernel.entropy_tides import EntropyTidesManager
 from xylarium.kernel.emergent_economy import EmergentEconomyManager
+from xylarium.kernel.sovereign_mind import SovereignMindManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -219,6 +220,7 @@ class GameKernel:
         self.void_bridge_manager = VoidBridgeManager()
         self.entropy_tides_manager = EntropyTidesManager()
         self.emergent_economy_manager = EmergentEconomyManager()
+        self.sovereign_mind_manager = SovereignMindManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
@@ -2714,6 +2716,10 @@ class GameKernel:
         if hasattr(self, "emergent_economy_manager"):
             self.emergent_economy_manager.tick(self)
 
+        # 29. Sovereign Indigenous Consciousness Engine (SICE)
+        if hasattr(self, "sovereign_mind_manager"):
+            self.sovereign_mind_manager.tick(self)
+
 
 
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
@@ -3105,6 +3111,7 @@ class GameKernel:
             "foreign_clusters": EXTRAGALACTIC_CLUSTERS,
             "entropy_tides": self.entropy_tides_manager.to_dict() if hasattr(self, "entropy_tides_manager") else {},
             "emergent_economy": self.emergent_economy_manager.to_dict() if hasattr(self, "emergent_economy_manager") else {},
+            "sovereign_mind": self.sovereign_mind_manager.to_dict() if hasattr(self, "sovereign_mind_manager") else {},
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

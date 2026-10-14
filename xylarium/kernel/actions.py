@@ -1545,6 +1545,64 @@ def _emergent_trigger_uplink(k: Any, captain: Any, current_sector: Any, kwargs: 
     )
 
 
+# [26] Sovereign Indigenous Consciousness Engine (SICE) Actions
+
+@action(ActionType.SOVEREIGN_COMMUNE_PARLIAMENT, turns=1)
+def _sovereign_commune_parliament(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    return k.sovereign_mind_manager.commune_parliament(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+    )
+
+
+@action(ActionType.SOVEREIGN_RECORD_HISTORICAL_DEED, turns=0)
+def _sovereign_record_historical_deed(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    d_type = kwargs.get("deed_type", "GENERAL_DEED")
+    desc = kwargs.get("description", "")
+    align_imp = float(kwargs.get("alignment_impact", 0.0))
+    act_id = kwargs.get("actor_id", captain.id if captain else None)
+    act_name = kwargs.get("actor_name", captain.name if captain else None)
+    return k.sovereign_mind_manager.record_historical_deed(
+        kernel=k,
+        planet_id=p_id,
+        deed_type=d_type,
+        description=desc,
+        alignment_impact=align_imp,
+        actor_id=act_id,
+        actor_name=act_name,
+    )
+
+
+@action(ActionType.SOVEREIGN_EVALUATE_COUNTERFACTUAL, turns=1)
+def _sovereign_evaluate_counterfactual(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    cand = kwargs.get("candidate_action")
+    return k.sovereign_mind_manager.evaluate_counterfactual(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+        candidate_action=cand,
+    )
+
+
+@action(ActionType.SOVEREIGN_HEAR_INTENT, turns=1)
+def _sovereign_hear_intent(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    c_id = kwargs.get("counterparty_id", captain.id if captain else None)
+    prop = kwargs.get("proposal_summary", "")
+    act_key = kwargs.get("action_type_key")
+    return k.sovereign_mind_manager.hear_intent(
+        kernel=k,
+        planet_id=p_id,
+        counterparty_id=c_id,
+        proposal_summary=prop,
+        action_type_key=act_key,
+    )
+
+
 
 
 

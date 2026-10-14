@@ -92,6 +92,7 @@ class StatePersistence:
             "void_bridges": kernel.void_bridge_manager.to_dict() if hasattr(kernel, "void_bridge_manager") else None,
             "entropy_tides": kernel.entropy_tides_manager.to_dict() if hasattr(kernel, "entropy_tides_manager") else None,
             "emergent_economy": kernel.emergent_economy_manager.to_dict() if hasattr(kernel, "emergent_economy_manager") else None,
+            "sovereign_mind": kernel.sovereign_mind_manager.to_dict() if hasattr(kernel, "sovereign_mind_manager") else None,
         }
         return data
 
@@ -301,6 +302,7 @@ class StatePersistence:
             from xylarium.kernel.void_bridges import VoidBridgeManager
             from xylarium.kernel.entropy_tides import EntropyTidesManager
             from xylarium.kernel.emergent_economy import EmergentEconomyManager
+            from xylarium.kernel.sovereign_mind import SovereignMindManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -363,6 +365,11 @@ class StatePersistence:
                 kernel.emergent_economy_manager = EmergentEconomyManager.from_dict(data["emergent_economy"])
             else:
                 kernel.emergent_economy_manager = EmergentEconomyManager()
+
+            if data.get("sovereign_mind"):
+                kernel.sovereign_mind_manager = SovereignMindManager.from_dict(data["sovereign_mind"])
+            else:
+                kernel.sovereign_mind_manager = SovereignMindManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):
