@@ -81,6 +81,10 @@ from xylarium.kernel.factions import FactionManager
 from xylarium.kernel.natives import NativeManager
 from xylarium.kernel.chronicle import ChronicleEngine
 from xylarium.kernel.workbenches import WorkbenchManager
+from xylarium.kernel.crises import CrisesManager
+from xylarium.kernel.megastructures import MegastructuresManager
+from xylarium.kernel.biofleets import BioFleetsManager
+from xylarium.kernel.biosphere_genesis import BiosphereGenesisManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -185,10 +189,16 @@ class GameKernel:
         self.banking = BankingSystem()                   # federations' central banks + the clearing union
         self.settlement = SettlementChain()              # chain-shaped quarterly settlement record
         self.workbench_manager = WorkbenchManager()
+        self.crises_manager = CrisesManager()
+        self.megastructures_manager = MegastructuresManager()
+        self.biofleets_manager = BioFleetsManager()
+        self.biosphere_genesis_manager = BiosphereGenesisManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
         self.research_manager.seed_initial_anomalies(self)
+        self.crises_manager.seed_initial_crises(self)
+        self.megastructures_manager.seed_initial_derelicts(self)
         for cap in self.captains.values():     # the genesis fleets leave port fuelled
             cap.ship.fuel = propulsion_mod.bunker_capacity(cap.ship)
         ledger_mod.endow_exchange_depth(self)  # exchanges as deep as the economies they serve
@@ -2609,6 +2619,22 @@ class GameKernel:
         if hasattr(self, "workbench_manager"):
             self.workbench_manager.tick(self)
 
+        # 12. Galactic Crises & GalNet Subspace Newsfeed
+        if hasattr(self, "crises_manager"):
+            self.crises_manager.tick(self)
+
+        # 13. Deep-Space Megastructures & Precursor Hulks
+        if hasattr(self, "megastructures_manager"):
+            self.megastructures_manager.tick(self)
+
+        # 14. Living Bio-Fleet Swarms & Tactical Doctrines
+        if hasattr(self, "biofleets_manager"):
+            self.biofleets_manager.tick(self)
+
+        # 15. Biosphere Genesis & Deep Planetary Terraforming
+        if hasattr(self, "biosphere_genesis_manager"):
+            self.biosphere_genesis_manager.tick(self)
+
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
         """Finds planet across all sectors by ID or name (by ID through an index rebuilt whenever it misses)."""
         if not planet_id_or_name:
@@ -2956,6 +2982,31 @@ class GameKernel:
                 "ascii_cladogram": self.phylogeny_manager.render_ascii_cladogram(captain) if hasattr(self, "phylogeny_manager") else "",
             },
             "workbenches": self.workbench_manager.get_view(captain, self) if hasattr(self, "workbench_manager") else {},
+            "crises": {
+                "active_crises": [c.to_dict() for c in self.crises_manager.active_crises.values()] if hasattr(self, "crises_manager") else [],
+                "recent_news": [a.to_dict() for a in list(self.crises_manager.news_history)[-10:]] if hasattr(self, "crises_manager") else [],
+            },
+            "megastructures": {
+                "sector_projects": [p.to_dict() for p in self.megastructures_manager.projects.values() if p.sector_id == captain.sector_id] if hasattr(self, "megastructures_manager") else [],
+                "all_projects": [p.to_dict() for p in self.megastructures_manager.projects.values()] if hasattr(self, "megastructures_manager") else [],
+                "sector_hulks": [h.to_dict() for h in self.megastructures_manager.derelicts.values() if h.sector_id == captain.sector_id and not h.salvaged] if hasattr(self, "megastructures_manager") else [],
+                "all_hulks": [h.to_dict() for h in self.megastructures_manager.derelicts.values() if not h.salvaged] if hasattr(self, "megastructures_manager") else [],
+                "player_relics": list(getattr(captain, "precursor_relics", [])),
+                "catalog": [dict(v) for v in __import__("xylarium.kernel.megastructures", fromlist=["MEGASTRUCTURE_CATALOG"]).MEGASTRUCTURE_CATALOG.values()],
+            },
+            "biofleets": {
+                "my_wings": [w.to_dict() for w in self.biofleets_manager.wings.values() if w.owner_id == captain.id] if hasattr(self, "biofleets_manager") else [],
+                "all_wings": [w.to_dict() for w in self.biofleets_manager.wings.values()] if hasattr(self, "biofleets_manager") else [],
+                "sector_wings": [w.to_dict() for w in self.biofleets_manager.wings.values() if w.sector_id == captain.sector_id] if hasattr(self, "biofleets_manager") else [],
+                "incubator_recipes": [dict(v) for v in __import__("xylarium.kernel.biofleets", fromlist=["BIO_VESSEL_CLASSES"]).BIO_VESSEL_CLASSES.values()],
+                "tactical_doctrines": __import__("xylarium.kernel.biofleets", fromlist=["TACTICAL_DOCTRINES"]).TACTICAL_DOCTRINES,
+            },
+            "biosphere_genesis": {
+                "sector_records": [
+                    self.biosphere_genesis_manager.get_or_create_record(p).to_dict()
+                    for p in sector.planets
+                ] if hasattr(self, "biosphere_genesis_manager") else [],
+            },
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

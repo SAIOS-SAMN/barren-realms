@@ -1019,3 +1019,87 @@ def _terraform(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any]
                                       f"{r['t']:.2f} e-folds so far" +
                                       (f"; {r['displaced']:,} of its other life displaced." if r["displaced"] else "."),
                         turns_spent=2, data=r)
+
+
+# ---------------------------------------------------------------------- [9] GalNet Newsfeed & Systemic Galactic Crises
+@action(ActionType.CRISIS_RELIEF_DISPATCH, turns=0)
+def _crisis_relief_dispatch(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.crises_manager.deliver_relief(
+        kernel=k,
+        captain=captain,
+        crisis_id=kwargs.get("crisis_id", ""),
+        commodity=kwargs.get("commodity", "ORGANICS"),
+        amount=int(kwargs.get("amount", 10)),
+    )
+
+
+# ---------------------------------------------------------------------- [10] Megastructures, Derelicts & Relic Physics
+@action(ActionType.MEGASTRUCTURE_CONSTRUCT, turns=0)
+def _megastructure_construct(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.megastructures_manager.construct_megastructure(
+        kernel=k,
+        captain=captain,
+        structure_type=kwargs.get("structure_type", "DYSON_SWARM"),
+        target_id=kwargs.get("target_id"),
+    )
+
+
+@action(ActionType.DERELICT_BOARD_EXPEDITION, turns=1)
+def _derelict_board_expedition(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.megastructures_manager.board_derelict(
+        kernel=k,
+        captain=captain,
+        hulk_id=kwargs.get("hulk_id", ""),
+    )
+
+
+# ---------------------------------------------------------------------- [11] Living Bio-Fleet Armadas & Tactical Doctrines
+@action(ActionType.BIOFLEET_CULTURE_HULL, turns=0)
+def _biofleet_culture_hull(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.biofleets_manager.culture_bio_vessel(
+        kernel=k,
+        captain=captain,
+        vessel_class=kwargs.get("vessel_class", "CHITIN_SWARMER"),
+        wing_id=kwargs.get("wing_id"),
+    )
+
+
+@action(ActionType.BIOFLEET_ASSIGN_DOCTRINE, turns=0)
+def _biofleet_assign_doctrine(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.biofleets_manager.assign_doctrine(
+        kernel=k,
+        captain=captain,
+        wing_id=kwargs.get("wing_id", ""),
+        doctrine=kwargs.get("doctrine", "ORBITAL_PICKET"),
+        target_ref=kwargs.get("target_ref"),
+    )
+
+
+# ---------------------------------------------------------------------- [12] Biosphere Genesis & Atmospheric Terraforming
+@action(ActionType.TERRAFORM_BOMBARD_COMET, turns=1)
+def _terraform_bombard_comet(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.biosphere_genesis_manager.bombard_comet(
+        kernel=k,
+        captain=captain,
+        planet_id=kwargs.get("planet_id", ""),
+        volatiles_payload=int(kwargs.get("volatiles_payload", 5)),
+    )
+
+
+@action(ActionType.TERRAFORM_DEPLOY_MIRROR, turns=0)
+def _terraform_deploy_mirror(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.biosphere_genesis_manager.deploy_orbital_mirror(
+        kernel=k,
+        captain=captain,
+        planet_id=kwargs.get("planet_id", ""),
+    )
+
+
+@action(ActionType.TERRAFORM_SEED_BIOSPHERE, turns=1)
+def _terraform_seed_biosphere(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.biosphere_genesis_manager.seed_biosphere(
+        kernel=k,
+        captain=captain,
+        planet_id=kwargs.get("planet_id", ""),
+        taxon_sample=kwargs.get("taxon_sample", "Canopy Chlorophyte"),
+    )

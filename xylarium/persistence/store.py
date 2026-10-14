@@ -75,6 +75,10 @@ class StatePersistence:
             "npc_lineages": getattr(kernel, "npc_lineages", {}),
             "banking": kernel.banking.to_dict() if hasattr(kernel, "banking") else None,
             "settlement": kernel.settlement.to_dict() if hasattr(kernel, "settlement") else None,
+            "crises": kernel.crises_manager.to_dict() if hasattr(kernel, "crises_manager") else None,
+            "megastructures": kernel.megastructures_manager.to_dict() if hasattr(kernel, "megastructures_manager") else None,
+            "biofleets": kernel.biofleets_manager.to_dict() if hasattr(kernel, "biofleets_manager") else None,
+            "biosphere_genesis": kernel.biosphere_genesis_manager.to_dict() if hasattr(kernel, "biosphere_genesis_manager") else None,
         }
         return data
 
@@ -234,8 +238,38 @@ class StatePersistence:
             kernel.npc_lineages = dict(data.get("npc_lineages", {}))
             from xylarium.kernel.banking import BankingSystem
             from xylarium.kernel.settlement import SettlementChain
+            from xylarium.kernel.workbenches import WorkbenchManager
+            from xylarium.kernel.crises import CrisesManager
+            from xylarium.kernel.megastructures import MegastructuresManager
+            from xylarium.kernel.biofleets import BioFleetsManager
+            from xylarium.kernel.biosphere_genesis import BiosphereGenesisManager
+
             kernel.banking = BankingSystem.from_dict(data["banking"]) if data.get("banking") else BankingSystem()
             kernel.settlement = SettlementChain.from_dict(data["settlement"]) if data.get("settlement") else SettlementChain()
+            kernel.workbench_manager = WorkbenchManager()
+
+            if data.get("crises"):
+                kernel.crises_manager = CrisesManager.from_dict(data["crises"])
+            else:
+                kernel.crises_manager = CrisesManager()
+                kernel.crises_manager.seed_initial_crises(kernel)
+
+            if data.get("megastructures"):
+                kernel.megastructures_manager = MegastructuresManager.from_dict(data["megastructures"])
+            else:
+                kernel.megastructures_manager = MegastructuresManager()
+                kernel.megastructures_manager.seed_initial_derelicts(kernel)
+
+            if data.get("biofleets"):
+                kernel.biofleets_manager = BioFleetsManager.from_dict(data["biofleets"])
+            else:
+                kernel.biofleets_manager = BioFleetsManager()
+
+            if data.get("biosphere_genesis"):
+                kernel.biosphere_genesis_manager = BiosphereGenesisManager.from_dict(data["biosphere_genesis"])
+            else:
+                kernel.biosphere_genesis_manager = BiosphereGenesisManager()
+
             kernel.legacy_file = None
             if not data.get("fx"):
                 StatePersistence._migrate_legacy_universe(kernel)

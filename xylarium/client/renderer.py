@@ -3242,7 +3242,218 @@ class TerminalRenderer:
 
         lines.append(f"\n{bold(c_gold('═' * 78))}")
         lines.append(f"  Commands: {c_gold('[D]')}eploy Constellation  │  {c_white('[Q / Enter]')} Back")
-        lines.append(f"{bold(c_gold('═' * 78))}")
+    @classmethod
+    def render_galnet_screen(cls, view: Dict[str, Any]) -> str:
+        crises_data = view.get("crises", {})
+        active = crises_data.get("active_crises", [])
+        news = crises_data.get("recent_news", [])
+
+        lines = [
+            f"\n{bold(c_cyan('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_cyan('║'))}  {bold(c_white('GALNET SUBSPACE WIRE & CLUSTER CRISIS MONITOR'))}                        {bold(c_cyan('║'))}",
+            f"{bold(c_cyan('╚' + '═' * 76 + '╝'))}",
+            "",
+            bold(c_gold("ACTIVE SYSTEMIC CRISES & EMERGENCY RELIEF MISSIONS:")),
+        ]
+        if not active:
+            lines.append("  " + c_green("✓ All galactic sectors operating within normal baseline parameters. No active emergencies."))
+        else:
+            for c in active:
+                c_id = c.get("id")
+                name = c.get("name")
+                sec = c.get("sector_id")
+                sev = c.get("severity", 0.5)
+                rel_del = c.get("relief_delivered", 0)
+                rel_req = c.get("relief_required", 20)
+                desc = c.get("description", "")
+                
+                bar = _render_bar(rel_del, rel_req, length=12)
+                lines.append(f"  🚨 {bold(c_red(f'[{c_id}]'))} {c_gold(name)} (Sector {sec:03d})")
+                lines.append(f"     Severity: {c_red(f'{sev:.1%}')} │ Relief Progress: {c_green(f'{rel_del}/{rel_req}')} {bar}")
+                lines.append(f"     Impact: {c_gray(desc)}")
+                lines.append("")
+
+        lines.append(f"{'-' * 78}")
+        lines.append(bold(c_cyan("RECENT GALNET SUBSPACE FLASHES & BROADCASTS:")))
+        if not news:
+            lines.append("  No subspace news items on record.")
+        else:
+            for art in reversed(news[-8:]):
+                cyc = art.get("cycle", 0)
+                head = art.get("headline", "")
+                cat = art.get("category", "WIRE")
+                urg = art.get("urgency", "ROUTINE")
+                body = art.get("body", "")
+                urg_c = c_red(f"[{urg}]") if urg == "CRITICAL" else (c_gold(f"[{urg}]") if urg == "FLASH" else c_gray(f"[{urg}]"))
+                lines.append(f"  • {c_gold(f'[Cyc {cyc:04d}]')} {urg_c} {c_cyan(f'[{cat}]')} {bold(c_white(head))}")
+                lines.append(f"    {c_gray(body)}")
+
+        lines.append(f"\n{bold(c_cyan('═' * 78))}")
+        lines.append(f"  Actions: {c_gold('[R]')}elief Dispatch <crisis_id> <commodity> <amount>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_megastructures_screen(cls, view: Dict[str, Any]) -> str:
+        mega = view.get("megastructures", {})
+        sector_proj = mega.get("sector_projects", [])
+        all_proj = mega.get("all_projects", [])
+        sector_hulks = mega.get("sector_hulks", [])
+        relics = mega.get("player_relics", [])
+
+        lines = [
+            f"\n{bold(c_magenta('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_magenta('║'))}  {bold(c_gold('DEEP-SPACE MEGASTRUCTURES & PRECURSOR DERELICT HULKS'))}             {bold(c_magenta('║'))}",
+            f"{bold(c_magenta('╚' + '═' * 76 + '╝'))}",
+            "",
+            bold(c_cyan("ASTRO-ENGINEERING PROJECTS IN LOCAL SECTOR:")),
+        ]
+        if not sector_proj:
+            lines.append("  No active megastructure projects in current sector.")
+        else:
+            for p in sector_proj:
+                p_id = p.get("id")
+                m_type = p.get("structure_type")
+                status = p.get("status", "CONSTRUCTING")
+                progress = p.get("progress_pct", 0.0)
+                bar = _render_bar(int(progress), 100, length=12)
+                status_badge = c_green("★ OPERATIONAL") if status == "OPERATIONAL" else c_gold(f"CONSTRUCTING ({progress:.1f}%)")
+                lines.append(
+                    f"  ⚙ {bold(c_gold(f'[{p_id}]'))} {c_white(m_type)} │ {status_badge} {bar}"
+                )
+                eff = p.get("effects", {})
+                if eff:
+                    lines.append(f"    Active Yields & Effects: {c_cyan(str(eff))}")
+
+        lines.append(f"\n{'-' * 78}")
+        lines.append(bold(c_red("PRECURSOR DERELICT SPACE HULKS DETECTED IN SECTOR:")))
+        if not sector_hulks:
+            lines.append("  No precursor space hulks detected in current sector sensors.")
+        else:
+            for h in sector_hulks:
+                h_id = h.get("id")
+                h_class = h.get("hull_type")
+                hazard_lvl = h.get("hazard_level", 1)
+                hazard_type = h.get("hazard_type", "UNKNOWN")
+                relic = h.get("relic_stored", "NONE")
+                scrap = h.get("raw_scrap", 0)
+                lines.append(
+                    f"  🛸 {bold(c_red(f'[{h_id}]'))} {c_white(h_class)} │ Hazard: Lvl {hazard_lvl} ({c_red(hazard_type)}) │ Scrap: {scrap} │ Relic: {c_gold(relic)}"
+                )
+
+        lines.append(f"\n{'-' * 78}")
+        lines.append(bold(c_gold("SALVAGED PRECURSOR RELICS IN FLAGSHIP REPOSITORY:")))
+        if not relics:
+            lines.append("  No precursor relics acquired. Board and breach space hulks to recover exotic physics.")
+        else:
+            for r in relics:
+                name = r.get("name") if isinstance(r, dict) else str(r)
+                effect = r.get("effect") if isinstance(r, dict) else ""
+                lines.append(f"  ✦ {bold(c_cyan(name))} │ {c_gold(effect)}")
+
+        lines.append(f"\n{bold(c_magenta('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[C]')}onstruct <type>  │  {c_gold('[B]')}oard <hulk_id>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_biofleets_screen(cls, view: Dict[str, Any]) -> str:
+        bio = view.get("biofleets", {})
+        wings = bio.get("my_wings", [])
+        recipes = bio.get("incubator_recipes", [])
+
+        lines = [
+            f"\n{bold(c_green('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_green('║'))}  {bold(c_white('LIVING BIO-FLEET SWARMS & CHITIN COMBAT WINGS'))}                     {bold(c_green('║'))}",
+            f"{bold(c_green('╚' + '═' * 76 + '╝'))}",
+            "",
+            bold(c_gold("FLAGSHIP INCUBATOR BIO-WINGS:")),
+        ]
+        if not wings:
+            lines.append("  No bio-wings cultured. Culture chitin larvae using xenobiological metabolites.")
+        else:
+            for w in wings:
+                w_id = w.get("id")
+                name = w.get("name")
+                sec = w.get("sector_id")
+                doc = w.get("doctrine", "AUTONOMOUS_HARVESTER")
+                vessels = w.get("vessels", [])
+                total_hp = sum(v.get("hull_integrity", 0) for v in vessels)
+                max_hp = sum(v.get("max_hull", 0) for v in vessels)
+                hp_bar = _render_bar(int(total_hp), int(max_hp), length=10) if max_hp > 0 else "[░░░░░░░░░░]"
+                lines.append(
+                    f"  🦗 {bold(c_green(f'[{w_id}]'))} {c_white(name)} (Sector {sec:03d}) │ Doctrine: {c_cyan(doc)}"
+                )
+                lines.append(
+                    f"     Vessels: {c_gold(str(len(vessels)))} │ Swarm HP: {c_green(f'{total_hp:.0f}/{max_hp:.0f}')} {hp_bar}"
+                )
+                for v in vessels:
+                    v_cls = v.get("vessel_class")
+                    res = v.get("adaptive_resistances", {})
+                    res_str = " ".join(f"{k}:{v:.0%}" for k, v in res.items()) if res else "None"
+                    lines.append(
+                        f"       • {c_cyan(v_cls)} HP:{v.get('hull_integrity',0):.0f}/{v.get('max_hull',0):.0f} Carapace:{v.get('carapace_armor',0):.0f} Resist: {c_gray(res_str)}"
+                    )
+
+        lines.append(f"\n{'-' * 78}")
+        lines.append(bold(c_cyan("XENOBIOLOGICAL INCUBATOR VESSEL CATALOG:")))
+        for r in recipes:
+            cls_name = r.get("name")
+            desc = r.get("description", "")
+            cost = r.get("cost_biomass", 0)
+            org = r.get("cost_organics", 0)
+            lines.append(f"  • {bold(c_gold(cls_name))} (Biomass: {cost}, Organics: {org}) - {c_gray(desc)}")
+
+        lines.append(f"\n{bold(c_green('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[C]')}ulture <class_name>  │  {c_gold('[D]')}octrine <wing_id> <doctrine>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_green('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_terraforming_screen(cls, view: Dict[str, Any]) -> str:
+        geo = view.get("biosphere_genesis", {})
+        records = geo.get("sector_records", [])
+
+        lines = [
+            f"\n{bold(c_blue('╔' + '═' * 76 + '╗'))}",
+            f"{bold(c_blue('║'))}  {bold(c_white('BIOSPHERE GENESIS & PLANETARY TERRAFORMING OPERATIONS'))}               {bold(c_blue('║'))}",
+            f"{bold(c_blue('╚' + '═' * 76 + '╝'))}",
+            "",
+            bold(c_gold("SECTOR PLANETARY ATMOSPHERIC & ECOLOGICAL EQUILIBRIA:")),
+        ]
+        if not records:
+            lines.append("  No planetary bodies in this sector.")
+        else:
+            for r in records:
+                p_id = r.get("planet_id")
+                pressure = r.get("atmospheric_pressure_bar", 0.0)
+                hydro = r.get("hydrosphere_pct", 0.0)
+                greenhouse = r.get("greenhouse_index", 0.0)
+                biomass = r.get("trophic_biomass", 0.0)
+                hab = r.get("habitability_score", 0.0)
+                taxa = r.get("seeded_taxa", [])
+                mirrors = r.get("mirrors_deployed", 0)
+                comets = r.get("comets_impacted", 0)
+                indig = r.get("indigenous_born", False)
+
+                hab_bar = _render_bar(int(hab * 100), 100, length=12)
+                hab_color = c_green if hab >= 0.70 else (c_gold if hab >= 0.35 else c_red)
+                status = c_green("★ SENTIENT SPECIES EMERGED") if indig else (c_cyan("ECOLOGICAL HARMONY") if hab >= 0.70 else c_gray("BARREN / UNSTABLE"))
+
+                lines.append(f"  🌍 {bold(c_white(f'Planet [{p_id}]'))} │ Habitability: {hab_color(f'{hab:.1%}')} {hab_bar} [{status}]")
+                lines.append(
+                    f"     Pressure: {c_cyan(f'{pressure:.2f} bar')} (Ideal ~1.0) │ Hydrosphere: {c_blue(f'{hydro:.1f}%')} (Ideal ~60%)"
+                )
+                lines.append(
+                    f"     Greenhouse: {c_gold(f'{greenhouse:.2f}')} (Ideal ~1.0) │ Biomass: {c_green(f'{biomass:.1f}')} │ Mirrors: {mirrors} │ Comets: {comets}"
+                )
+                if taxa:
+                    lines.append(f"     Seeded Ecological Taxa: {c_green(', '.join(taxa))}")
+                lines.append("")
+
+        lines.append(f"{bold(c_blue('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[C]')}omet <planet_id>  │  {c_gold('[M]')}irror <planet_id>  │  {c_gold('[S]')}eed <planet_id> <taxon>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_blue('═' * 78))}")
         return "\n".join(lines)
 
     @classmethod
@@ -3270,6 +3481,10 @@ class TerminalRenderer:
   {c_gold("[N] Anomaly")} - Research breakthroughs, cognitive metabolism & cosmic anomaly matrix.
   {c_gold("[J]ump")}     - Hyper-Dimensional Jump Drive across charted space & outer clusters.
   {c_gold("[X] Cartography")} - Decrypt starmap fragments to discover ghost sectors & bypasses.
+  {c_gold("GALNET")}     - GalNet subspace news wire, systemic crises & emergency relief dispatch.
+  {c_gold("MEGA")}       - Deep-space megastructures (Dyson Swarm, Skyhook) & precursor derelicts.
+  {c_gold("BIOFLEET")}   - Living bio-fleet swarm armadas, adaptive armor & standing doctrines.
+  {c_gold("TERRAFORM")}  - Biosphere genesis: comet bombardment, mirrors & ecological seeding.
   {c_gold("[R]adio")}    - Broadcast subspace message across universe comm channels.
   {c_gold("[H]elp")}     - Display this tactical manual.
   {c_gold("[Q]uit")}     - Save game state and exit to BBS door prompt.

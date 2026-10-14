@@ -227,6 +227,10 @@ class TerminalClient:
         **{w: "HOUSE" for w in ["HOUSE", "DYNASTY", "RONIN", "SWEAR", "COMMISSION"]},
         **{w: "SPHERES" for w in ["SPHERES", "NETWORKS", "FRONTS"]},
         **{w: "TRANSIT" for w in ["TRANSIT", "TOLLS", "WORMHOLES", "THROATS"]},
+        **{w: "GALNET" for w in ["GALNET", "NEWS", "CRISIS", "CRISES", "RELIEF"]},
+        **{w: "MEGASTRUCTURES" for w in ["MEGA", "MEGASTRUCTURE", "MEGASTRUCTURES", "HULK", "DERELICT", "BOARD"]},
+        **{w: "BIOFLEETS" for w in ["BIOFLEET", "BIOFLEETS", "SWARM", "CHITIN", "CULTURE"]},
+        **{w: "TERRAFORMING" for w in ["GENESIS", "TERRAFORM", "TERRAFORMING", "COMET", "MIRROR"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -268,6 +272,7 @@ class TerminalClient:
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))
         print(c_gray("  Lineage: [E]mpire mode │ FLEET │ STOCK │ BANKS │ CLONE (Sol vats) │ RETIRE"))
         print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALM (if you rule) │ HOUSE │ SPHERES │ TRANSIT │ PUBLISH │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
+        print(c_gray("  Universe Expansions: ") + c_gold("GALNET") + c_gray(" (news & crises) │ ") + c_gold("MEGA") + c_gray(" (megastructures & hulks) │ ") + c_gold("BIOFLEET") + c_gray(" (chitin swarms) │ ") + c_gold("TERRAFORM") + c_gray(" (biosphere genesis)"))
         try:
             from xylarium.kernel import advisor
             tip = advisor.best(self.kernel, self.player_id)
@@ -311,6 +316,18 @@ class TerminalClient:
             return
         if choice == "SURFACE":
             self._prompt_surface(view)
+            return
+        if choice == "GALNET":
+            self._prompt_galnet(view)
+            return
+        if choice == "MEGASTRUCTURES":
+            self._prompt_megastructures(view)
+            return
+        if choice == "BIOFLEETS":
+            self._prompt_biofleets(view)
+            return
+        if choice == "TERRAFORMING":
+            self._prompt_terraforming(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3313,6 +3330,150 @@ class TerminalClient:
                     input(c_gold("Press Enter to continue..."))
                 except (ValueError, KeyboardInterrupt, EOFError):
                     print(c_red("Invalid satellite parameters."))
+
+    def _prompt_galnet(self, view: Dict[str, Any]) -> None:
+        """Handle GalNet newsfeed and crisis relief dispatch."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_galnet_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('GalNet Command [R/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "R":
+                c_id = input("Crisis ID to relieve (e.g. CRISIS-101) > ").strip().upper()
+                comm = input("Commodity to deliver (e.g. ORGANICS, MEDICINE, EQUIPMENT, H2O) [default ORGANICS] > ").strip().upper() or "ORGANICS"
+                amt_str = input("Amount to dispatch [default 10] > ").strip() or "10"
+                try:
+                    amt = int(amt_str)
+                except ValueError:
+                    amt = 10
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.CRISIS_RELIEF_DISPATCH,
+                    crisis_id=c_id,
+                    commodity=comm,
+                    amount=amt,
+                )
+                self._print_result(res)
+
+    def _prompt_megastructures(self, view: Dict[str, Any]) -> None:
+        """Handle megastructure astro-engineering and precursor derelict boarding."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_megastructures_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Megastructures Command [C/B/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "C":
+                stype = input("Structure type [DYSON_SWARM / ORBITAL_SKYHOOK / MATRIOSHKA_BRAIN] > ").strip().upper() or "DYSON_SWARM"
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.MEGASTRUCTURE_CONSTRUCT,
+                    structure_type=stype,
+                )
+                self._print_result(res)
+            elif cmd == "B":
+                h_id = input("Derelict Hulk ID to board (e.g. HULK-201) > ").strip().upper()
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.DERELICT_BOARD_EXPEDITION,
+                    hulk_id=h_id,
+                )
+                self._print_result(res)
+
+    def _prompt_biofleets(self, view: Dict[str, Any]) -> None:
+        """Handle bio-vessel culturing and tactical swarm doctrines."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_biofleets_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Bio-Fleet Command [C/D/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "C":
+                cls_name = input("Vessel class to culture [CHITIN_SWARMER / VOID_MANTA / ABYSSAL_LEVIATHAN] > ").strip().upper() or "CHITIN_SWARMER"
+                w_in = input("Target Wing ID (or leave blank to create/auto-assign) > ").strip().upper() or None
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.BIOFLEET_CULTURE_HULL,
+                    vessel_class=cls_name,
+                    wing_id=w_in,
+                )
+                self._print_result(res)
+            elif cmd == "D":
+                w_id = input("Wing ID to assign doctrine (e.g. WING-301) > ").strip().upper()
+                doc = input("Tactical Doctrine [CONVOY_ESCORT / ORBITAL_PICKET / AUTONOMOUS_HARVESTER] > ").strip().upper() or "ORBITAL_PICKET"
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.BIOFLEET_ASSIGN_DOCTRINE,
+                    wing_id=w_id,
+                    doctrine=doc,
+                )
+                self._print_result(res)
+
+    def _prompt_terraforming(self, view: Dict[str, Any]) -> None:
+        """Handle comet bombardment, orbital mirror deployment, and biosphere seeding."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_terraforming_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Terraforming Command [C/M/S/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "C":
+                pid = input("Planet ID to bombard with volatile comet > ").strip()
+                amt_str = input("Volatiles payload [H2O / H] [default 5] > ").strip() or "5"
+                try:
+                    payload = int(amt_str)
+                except ValueError:
+                    payload = 5
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.TERRAFORM_BOMBARD_COMET,
+                    planet_id=pid,
+                    volatiles_payload=payload,
+                )
+                self._print_result(res)
+            elif cmd == "M":
+                pid = input("Planet ID to deploy orbital greenhouse mirror > ").strip()
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.TERRAFORM_DEPLOY_MIRROR,
+                    planet_id=pid,
+                )
+                self._print_result(res)
+            elif cmd == "S":
+                pid = input("Planet ID to seed with xenobiological taxon > ").strip()
+                taxon = input("Taxon sample name [default 'Canopy Chlorophyte'] > ").strip() or "Canopy Chlorophyte"
+                res = self.kernel.dispatch(
+                    self.player_id,
+                    ActionType.TERRAFORM_SEED_BIOSPHERE,
+                    planet_id=pid,
+                    taxon_sample=taxon,
+                )
+                self._print_result(res)
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""
