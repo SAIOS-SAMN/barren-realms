@@ -86,6 +86,7 @@ class StatePersistence:
             "shadow_ops": kernel.shadow_manager.to_dict() if hasattr(kernel, "shadow_manager") else None,
             "omega_protocol": kernel.omega_manager.to_dict() if hasattr(kernel, "omega_manager") else None,
             "epochs": kernel.epoch_manager.to_dict() if hasattr(kernel, "epoch_manager") else None,
+            "relic_foundry": kernel.relic_foundry_manager.to_dict() if hasattr(kernel, "relic_foundry_manager") else None,
         }
         return data
 
@@ -289,6 +290,7 @@ class StatePersistence:
             from xylarium.kernel.shadow_ops import ShadowOpsManager
             from xylarium.kernel.omega_protocol import OmegaProtocolManager
             from xylarium.kernel.civilizational_epochs import CivilizationalEpochManager
+            from xylarium.kernel.relic_foundry import RelicFoundryManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -321,6 +323,11 @@ class StatePersistence:
                 kernel.epoch_manager = CivilizationalEpochManager.from_dict(data["epochs"])
             else:
                 kernel.epoch_manager = CivilizationalEpochManager()
+
+            if data.get("relic_foundry"):
+                kernel.relic_foundry_manager = RelicFoundryManager.from_dict(data["relic_foundry"])
+            else:
+                kernel.relic_foundry_manager = RelicFoundryManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):

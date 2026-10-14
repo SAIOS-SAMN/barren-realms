@@ -92,6 +92,7 @@ from xylarium.kernel.stellar_engineering import StellarEngineeringManager
 from xylarium.kernel.shadow_ops import ShadowOpsManager
 from xylarium.kernel.omega_protocol import OmegaProtocolManager
 from xylarium.kernel.civilizational_epochs import CivilizationalEpochManager
+from xylarium.kernel.relic_foundry import RelicFoundryManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -207,6 +208,7 @@ class GameKernel:
         self.shadow_manager = ShadowOpsManager()
         self.omega_manager = OmegaProtocolManager()
         self.epoch_manager = CivilizationalEpochManager()
+        self.relic_foundry_manager = RelicFoundryManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
@@ -2678,6 +2680,10 @@ class GameKernel:
         if hasattr(self, "epoch_manager"):
             self.epoch_manager.tick(self)
 
+        # 23. Syntropic Relic Foundry & Modular Artifacts
+        if hasattr(self, "relic_foundry_manager"):
+            self.relic_foundry_manager.tick(self)
+
 
 
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
@@ -3060,6 +3066,8 @@ class GameKernel:
             "omega_protocol": self.omega_manager.to_dict() if hasattr(self, "omega_manager") else {},
             "epochs": self.epoch_manager.to_dict() if hasattr(self, "epoch_manager") else {},
             "epoch_record": self.epoch_manager.get_or_create_record(player_id).to_dict() if hasattr(self, "epoch_manager") else {},
+            "foundry": self.relic_foundry_manager.to_dict() if hasattr(self, "relic_foundry_manager") else {},
+            "foundry_inventory": self.relic_foundry_manager.get_inventory(player_id) if hasattr(self, "relic_foundry_manager") else {},
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

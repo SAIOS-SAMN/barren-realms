@@ -240,6 +240,7 @@ class TerminalClient:
         **{w: "OMEGA_PROTOCOL" for w in ["OMEGA", "ASCEND", "TRANSCEND", "FILTER", "KARDASHEV"]},
         **{w: "COSMOLOGY_AUDIT" for w in ["COSMOLOGY", "AUDIT", "PHYSICS", "TELEMETRY", "LANDIS", "HILL"]},
         **{w: "CIVILIZATIONAL_EPOCHS" for w in ["EPOCH", "EPOCHS", "STEWARD", "STEWARDSHIP", "PROGENITOR", "METAMORPHOSIS"]},
+        **{w: "RELIC_FOUNDRY" for w in ["FOUNDRY", "FORGE", "ARTIFACTS", "RELIC_FOUNDRY"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -364,6 +365,9 @@ class TerminalClient:
             return
         if choice == "CIVILIZATIONAL_EPOCHS":
             self._prompt_epoch_stewardship(view)
+            return
+        if choice == "RELIC_FOUNDRY":
+            self._prompt_relic_foundry(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3745,6 +3749,37 @@ class TerminalClient:
                 captain = self.kernel.get_player(self.player_id)
                 assessment = self.kernel.epoch_manager.assess_civilization(self.kernel, captain)
                 print(c_cyan(f"Equilibrium Assessed: Phase={assessment['phase']} │ Entropy={assessment['entropy_strain']:.1f} │ Syntropy={assessment['syntropic_resilience']:.1f}"))
+
+    def _prompt_relic_foundry(self, view: Dict[str, Any]) -> None:
+        """Syntropic Relic Foundry & Modular Artifact Forge Console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_relic_foundry_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Foundry Command [A/F/E/D/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "A":
+                res = self.kernel.dispatch(self.player_id, ActionType.FOUNDRY_ANALYZE)
+                self._print_result(res)
+            elif cmd == "F":
+                bp = input("Blueprint ID to Forge (e.g. CHRONO_SLIPDRIVE) > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.FOUNDRY_FORGE, blueprint_id=bp)
+                self._print_result(res)
+            elif cmd == "E":
+                art = input("Artifact ID to Equip > ").strip().upper()
+                targ = input("Target (Planet ID / Sector ID / blank) > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.FOUNDRY_EQUIP, artifact_id=art, target_id=targ or None)
+                self._print_result(res)
+            elif cmd == "D":
+                art = input("Artifact ID to Dismantle > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.FOUNDRY_DISMANTLE, artifact_id=art)
+                self._print_result(res)
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

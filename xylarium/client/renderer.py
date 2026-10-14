@@ -3784,6 +3784,59 @@ class TerminalRenderer:
         lines.append(f"{bold(c_gold('═' * 78))}")
         return "\n".join(lines)
 
+    @classmethod
+    def render_relic_foundry_screen(cls, view: Dict[str, Any]) -> str:
+        """Syntropic Relic Foundry & Modular Artifact Engineering Console."""
+        from xylarium.kernel.relic_foundry import BLUEPRINTS, COMPONENT_TYPES
+        foundry = view.get("foundry", {})
+        inv = view.get("foundry_inventory", {})
+        artifacts = foundry.get("artifacts", {})
+        player = view.get("player", {})
+
+        lines = [
+            f"{bold(c_cyan('═════════════ [ SYNTROPIC RELIC FOUNDRY & ARTIFACT FORGE ] ═════════════'))}",
+            f"  {c_white('Modular Precursor engineering, crystalline synthesis & masterwork assembly.')}",
+            f"{bold(c_cyan('─' * 78))}",
+        ]
+
+        # Component Vault
+        lines.append(f"  {bold(c_gold('QUANTUM COMPONENT VAULT:'))}")
+        comp_display = []
+        for c in COMPONENT_TYPES:
+            count = inv.get(c, 0)
+            color = c_green if count > 0 else c_gray
+            comp_display.append(f"{c_white(c)}: {color(str(count))}")
+        lines.append(f"    • {'  │  '.join(comp_display[:3])}")
+        lines.append(f"    • {'  │  '.join(comp_display[3:])}")
+        lines.append("")
+
+        # Masterwork Blueprints
+        lines.append(f"  {bold(c_gold('MASTERWORK PRECURSOR BLUEPRINTS:'))}")
+        for bp_id, bp in BLUEPRINTS.items():
+            reqs = bp["requirements"]
+            can_forge = all(inv.get(c, 0) >= n for c, n in reqs.items()) and player.get("credits", 0) >= bp["cost_credits"]
+            req_str = ", ".join(f"{n}x {c}" for c, n in reqs.items())
+            cost_str = f"{bp['cost_credits']:,} Cr"
+            status = c_green("✔ READY TO FORGE") if can_forge else c_red("▲ MISSING MATERIALS")
+            lines.append(f"    [{c_gold(bp_id)}] {bold(c_white(bp['name']))} ({c_cyan(bp['category'])}) — {status}")
+            lines.append(f"       Cost: {c_gold(cost_str)}  │  Reqs: {c_gray(req_str)}")
+            lines.append(f"       Effect: {c_white(bp['description'])}")
+        lines.append("")
+
+        # Assembled Artifacts
+        lines.append(f"  {bold(c_gold('ASSEMBLED & ACTIVE ARTIFACTS:'))}")
+        if not artifacts:
+            lines.append(f"    {c_gray('No masterwork artifacts currently assembled in this realm.')}")
+        else:
+            for art_id, art in artifacts.items():
+                loc = c_green(art.get("equipped_to", "UNINSTALLED")) if art.get("equipped_to") else c_gold("STOWED")
+                lines.append(f"    • [{c_cyan(art_id)}] {bold(art['name'])} ({art['category']}) — Location: {loc}")
+
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[A]')}nalyze Relics  │  {c_gold('[F]')}orge <bp_id>  │  {c_gold('[E]')}quip <art_id>  │  {c_gold('[D]')}ismantle  │  {c_white('[Q]')} Back")
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        return "\n".join(lines)
+
 
     @classmethod
     def render_help(cls) -> str:

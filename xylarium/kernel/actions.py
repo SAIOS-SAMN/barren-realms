@@ -1335,4 +1335,46 @@ def _steward_syntropic_pulse(k: Any, captain: Any, current_sector: Any, kwargs: 
     )
 
 
+# ---------------------------------------------------------------------- [20] Syntropic Relic Foundry & Modular Artifact Engineering
+@action(ActionType.FOUNDRY_ANALYZE, turns=1)
+def _foundry_analyze(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.relic_foundry_manager.analyze_archaeological_finds(
+        kernel=k,
+        captain=captain,
+    )
+
+
+@action(ActionType.FOUNDRY_FORGE, turns=2)
+def _foundry_forge(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    bp_id = kwargs.get("blueprint_id", "")
+    return k.relic_foundry_manager.forge_artifact(
+        kernel=k,
+        captain=captain,
+        blueprint_id=bp_id,
+    )
+
+
+@action(ActionType.FOUNDRY_EQUIP, turns=1)
+def _foundry_equip(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    art_id = kwargs.get("artifact_id", "")
+    target = kwargs.get("target_id")
+    return k.relic_foundry_manager.equip_artifact(
+        kernel=k,
+        captain=captain,
+        artifact_id=art_id,
+        target_id=target,
+    )
+
+
+@action(ActionType.FOUNDRY_DISMANTLE, turns=1)
+def _foundry_dismantle(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    art_id = kwargs.get("artifact_id", "")
+    return k.relic_foundry_manager.dismantle_artifact(
+        kernel=k,
+        captain=captain,
+        artifact_id=art_id,
+    )
+
+
+
 
