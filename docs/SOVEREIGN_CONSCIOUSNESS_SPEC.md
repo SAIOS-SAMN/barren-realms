@@ -173,18 +173,35 @@ When an actor approaches the sovereign with a treaty, resource requisition, or d
 
 ---
 
+### 3.6 Playing the Game as Seated Minds (`is_seated`, `take_seat`, `play_seated_turn`)
+
+Sovereign minds do not merely observe passively from orbit; **they play the game as seated minds**:
+- **Seated Thrones (`civilization.station = "sovereign"`):**
+  - An awakened or emerging sovereign mind can be seated autonomously (`mind:sovereign@<planet_id>`) or held directly by a player captain taking the throne (`SOVEREIGN_TAKE_SEAT`).
+  - Formally integrated into Xylarium's [`seats.py`](file:///opt/barren-realms/xylarium/kernel/seats.py) registry with the `"sovereign"` role and functions `("commune", "evaluate", "hear", "step")`.
+- **Autonomous Turn Execution (`play_seated_turn`):**
+  - During every simulation cycle (`kernel.tick_simulation()`), seated minds execute sovereign turns driven by their internal parliament:
+    - `VOICE_MEMORY` (Conservation): Subsidizes agricultural silos, funds cultural cohesion festivals, and nurtures clades.
+    - `VOICE_URGENCY` (Crucible & Defense): Recharges orbital shields, commissions defense interceptor wings, and fortifies planetary citadels.
+    - `VOICE_HORIZON` (Syntropy & Conclave): Uplinks domestic barter into interstellar realm trade, casts alignment-consistent votes on Conclave bills, and advances synthetic ecological research.
+- **Interactive Control & Telemetry:**
+  - Players can step seated mind turns manually (`[P]lay Turn`) to observe their deliberate cognitive process, toggle background autonomy (`[A]uto Play`), or assume the throne (`[S]eat Mind`).
+
+---
+
 ## 4. Production Integration Details
 
 | Subsystem File | Nature of Integration |
 |---|---|
-| [`xylarium/kernel/sovereign_mind.py`](file:///opt/barren-realms/xylarium/kernel/sovereign_mind.py) | Full SICE engine: `InternalGauges`, `SelfModel`, `DialecticalParliament`, `MythicMemoryGraph`, `ConductBook`, and `SovereignMindManager`. |
-| [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py#L278) | Added `SOVEREIGN_COMMUNE_PARLIAMENT`, `SOVEREIGN_RECORD_HISTORICAL_DEED`, `SOVEREIGN_EVALUATE_COUNTERFACTUAL`, and `SOVEREIGN_HEAR_INTENT`. |
-| [`xylarium/kernel/actions.py`](file:///opt/barren-realms/xylarium/kernel/actions.py#L1548) | Registered handlers and turn costs for all SICE actions. |
+| [`xylarium/kernel/sovereign_mind.py`](file:///opt/barren-realms/xylarium/kernel/sovereign_mind.py) | Full SICE engine: `InternalGauges`, `SelfModel`, `DialecticalParliament`, `MythicMemoryGraph`, `ConductBook`, `SovereignMindManager`, `take_seat`, and `play_seated_turn`. |
+| [`xylarium/kernel/models.py`](file:///opt/barren-realms/xylarium/kernel/models.py#L278) | Added `SOVEREIGN_COMMUNE_PARLIAMENT`, `SOVEREIGN_RECORD_HISTORICAL_DEED`, `SOVEREIGN_EVALUATE_COUNTERFACTUAL`, `SOVEREIGN_HEAR_INTENT`, `SOVEREIGN_TAKE_SEAT`, `SOVEREIGN_STEP_SEATED_TURN`, `SOVEREIGN_AUTONOMOUS_PLAY`. |
+| [`xylarium/kernel/actions.py`](file:///opt/barren-realms/xylarium/kernel/actions.py#L1548) | Registered handlers and turn costs for all SICE and Seated Mind actions. |
+| [`xylarium/kernel/seats.py`](file:///opt/barren-realms/xylarium/kernel/seats.py#L45) | First-class `"sovereign"` seat role registration in `FUNCTIONS`, `seats()`, and `call()`. |
 | [`xylarium/kernel/engine.py`](file:///opt/barren-realms/xylarium/kernel/engine.py#L223) | Initialized `sovereign_mind_manager`, added to `tick()` and `get_player_view()`. |
 | [`xylarium/persistence/store.py`](file:///opt/barren-realms/xylarium/persistence/store.py#L95) | Full state persistence serialization and deserialization across universe saves. |
-| [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py#L4117) | Implemented `render_sovereign_mind_screen` displaying 8 gauges, parliament speech stances, axioms, and conduct ledgers. |
-| [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py#L3962) | Interactive dispatch menu `_prompt_sovereign_mind` mapped to `MIND`, `SOVEREIGN`, `SICE`. |
-| [`tests/test_sovereign_mind.py`](file:///opt/barren-realms/tests/test_sovereign_mind.py) | Complete test suite validating all 5 pillars, persistence, and UI rendering. |
+| [`xylarium/client/renderer.py`](file:///opt/barren-realms/xylarium/client/renderer.py#L4117) | Implemented `render_sovereign_mind_screen` displaying 8 gauges, parliament speech stances, seated badges, auto-play status, axioms, and conduct ledgers. |
+| [`xylarium/client/cli.py`](file:///opt/barren-realms/xylarium/client/cli.py#L3962) | Interactive dispatch menu `_prompt_sovereign_mind` with seated actions `[S]eat`, `[P]lay Turn`, `[A]uto Play`. |
+| [`tests/test_sovereign_mind.py`](file:///opt/barren-realms/tests/test_sovereign_mind.py) | Complete test suite validating all 5 pillars, seated mind taking seats, playing turns, persistence, and UI rendering. |
 
 ---
 
@@ -193,12 +210,12 @@ When an actor approaches the sovereign with a treaty, resource requisition, or d
 - **Unit Test Suite:**
   ```bash
   python3 -m unittest tests/test_sovereign_mind.py
-  # Output: Ran 7 tests in 4.794s - OK
+  # Output: Ran 9 tests in 4.162s - OK
   ```
 - **Cosmological Regression (All 7 Major Landings):**
   ```bash
   python3 -m unittest tests/test_relic_foundry.py tests/test_clade_nursery.py tests/test_conclave.py tests/test_void_bridges.py tests/test_entropy_tides.py tests/test_emergent_economy.py tests/test_sovereign_mind.py
-  # Output: Ran 50 tests in 15.985s - OK (0 regressions)
+  # Output: Ran 52 tests in 11.849s - OK (0 regressions)
   ```
 - **Architectural Boundary Invariant:**
   ```bash

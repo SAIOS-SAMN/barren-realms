@@ -18,7 +18,10 @@ here is exact.
 from fractions import Fraction
 from typing import Any, Dict, List, Optional
 
-FUNCTIONS = {"ancients": ("answer",)}
+FUNCTIONS = {
+    "ancients": ("answer",),
+    "sovereign": ("commune", "evaluate", "hear", "step"),
+}
 
 
 def stats(kernel: Any) -> Dict[str, Any]:
@@ -48,6 +51,16 @@ def seats(kernel: Any) -> List[Dict[str, Any]]:
         for w in sorted(worlds.get(house) or [], key=lambda p: p.id):   # take (3.9) - one seat for every world the
             out.append({"id": f"ancients:{house}@{w.id}", "role": "ancients", "on": house, "world": w.id,   # house
                         "beat": _q(4 * FISCAL_QUARTER_CYCLES)})   # holds: the council grows as the ancients do
+    if hasattr(kernel, "sovereign_mind_manager"):
+        for s_pid, sc in getattr(kernel.sovereign_mind_manager, "minds", {}).items():
+            if sc.is_seated:
+                out.append({
+                    "id": f"sovereign:{s_pid}",
+                    "role": "sovereign",
+                    "on": sc.planet_name,
+                    "world": s_pid,
+                    "beat": _q(1),
+                })
     for s in out:
         s["functions"] = list(FUNCTIONS[s["role"]])
         s["held_by"] = held.get(s["id"])
@@ -159,6 +172,24 @@ def call(kernel: Any, seat_id: str, vk_hex: str, function: str, **args: Any) -> 
         out = {"ok": False, "why": f"no function '{function}' for a {s['role']}"}
     elif function == "answer":
         out = _answer(kernel, s, args)
+    elif s["role"] == "sovereign":
+        mgr = getattr(kernel, "sovereign_mind_manager", None)
+        if mgr is None:
+            out = {"ok": False, "why": "sovereign mind manager unavailable"}
+        elif function == "commune":
+            res = mgr.commune_parliament(kernel, None, s["world"])
+            out = {"ok": res.success, "verdict": res.message, "data": res.data}
+        elif function == "step":
+            res = mgr.step_seated_turn(kernel, None, s["world"])
+            out = {"ok": res.success, "verdict": res.message, "data": res.data}
+        elif function == "evaluate":
+            res = mgr.evaluate_counterfactual(kernel, None, s["world"], args.get("candidate_action"))
+            out = {"ok": res.success, "verdict": res.message, "data": res.data}
+        elif function == "hear":
+            res = mgr.hear_intent(kernel, s["world"], args.get("counterparty_id"), args.get("proposal_summary", ""))
+            out = {"ok": res.success, "verdict": res.message, "data": res.data}
+        else:
+            out = {"ok": False, "why": f"unsupported sovereign function {function}"}
     else:
         out = command.dispatch(kernel, pid(vk_hex, seat_id), function, **args)
     if s is not None:

@@ -4141,12 +4141,20 @@ class TerminalRenderer:
                 awakened = mind.get("awakened", False)
                 skill = mind.get("introspection_skill", 0.25)
                 cycles_c = mind.get("cycles_conscious", 0)
+                is_seated = mind.get("is_seated", True)
+                seated_id = mind.get("seated_entity_id") or "sovereign"
+                auto_play = mind.get("autonomous_play", True)
+                turns_played = mind.get("seated_turns_played", 0)
+                last_act = mind.get("last_action_taken", "THRONE_INITIALIZED")
 
                 awake_badge = c_green("[AWAKENED SENTIENCE]") if awakened else c_gold("[PRE-CONSCIOUS REFLEX]")
+                seated_badge = c_cyan(f"[SEATED: {seated_id}]") if is_seated else c_gray("[UNSEATED]")
+                auto_badge = c_green("[AUTOPLAY: ON]") if auto_play else c_gold("[AUTOPLAY: OFF]")
                 skill_str = c_cyan(f"{skill * 100:.1f}%")
 
-                lines.append(f"  • {bold(c_white(pname))} [{c_cyan(pid)}] {awake_badge}")
-                lines.append(f"    Introspection Skill: {skill_str}  │  Cycles Conscious: {c_white(str(cycles_c))}")
+                lines.append(f"  • {bold(c_white(pname))} [{c_cyan(pid)}] {awake_badge} {seated_badge} {auto_badge}")
+                lines.append(f"    Introspection Skill: {skill_str}  │  Cycles Conscious: {c_white(str(cycles_c))}  │  Seated Turns Played: {c_gold(str(turns_played))}")
+                lines.append(f"    Last Seated Action: {c_white(last_act)}")
 
                 # Self Model Gauges
                 sm = mind.get("self_model", {})
@@ -4217,7 +4225,7 @@ class TerminalRenderer:
                 lines.append("")
 
         lines.append(f"{bold(c_magenta('═' * 78))}")
-        lines.append(f"  Commands: {c_gold('[C]')}ommune  │  {c_gold('[E]')}valuate Counterfactual  │  {c_gold('[H]')}earing Test  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"  Commands: {c_gold('[C]')}ommune  │  {c_gold('[E]')}valuate  │  {c_gold('[H]')}earing  │  {c_gold('[S]')}eat Mind  │  {c_gold('[P]')}lay Turn  │  {c_gold('[A]')}uto Play  │  {c_white('[Q / Enter]')} Back")
         lines.append(f"{bold(c_magenta('═' * 78))}")
         return "\n".join(lines)
 

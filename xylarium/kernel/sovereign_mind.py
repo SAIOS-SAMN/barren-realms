@@ -278,6 +278,12 @@ class SovereignConsciousness:
     parliament: DialecticalParliament = field(default_factory=DialecticalParliament)
     mythic_memory: MythicMemoryGraph = field(default_factory=MythicMemoryGraph)
     conduct_books: Dict[str, ConductBook] = field(default_factory=dict)
+    is_seated: bool = True
+    seated_role: str = "sovereign"
+    seated_entity_id: Optional[str] = None
+    autonomous_play: bool = True
+    seated_turns_played: int = 0
+    last_action_taken: str = "THRONE_INITIALIZED"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -287,6 +293,12 @@ class SovereignConsciousness:
             "cycles_conscious": self.cycles_conscious,
             "introspection_skill": self.introspection_skill,
             "alignment": self.alignment,
+            "is_seated": self.is_seated,
+            "seated_role": self.seated_role,
+            "seated_entity_id": self.seated_entity_id,
+            "autonomous_play": self.autonomous_play,
+            "seated_turns_played": self.seated_turns_played,
+            "last_action_taken": self.last_action_taken,
             "self_model": self.self_model.to_dict(),
             "counterfactual": self.counterfactual.to_dict(),
             "parliament": self.parliament.to_dict(),
@@ -303,6 +315,12 @@ class SovereignConsciousness:
             cycles_conscious=int(data.get("cycles_conscious", 0)),
             introspection_skill=float(data.get("introspection_skill", 0.25)),
             alignment=float(data.get("alignment", 0.0)),
+            is_seated=bool(data.get("is_seated", True)),
+            seated_role=str(data.get("seated_role", "sovereign")),
+            seated_entity_id=data.get("seated_entity_id"),
+            autonomous_play=bool(data.get("autonomous_play", True)),
+            seated_turns_played=int(data.get("seated_turns_played", 0)),
+            last_action_taken=str(data.get("last_action_taken", "THRONE_INITIALIZED")),
             self_model=SelfModel.from_dict(data.get("self_model", {})),
             counterfactual=CounterfactualEngine.from_dict(data.get("counterfactual", {})),
             parliament=DialecticalParliament.from_dict(data.get("parliament", {})),
@@ -366,6 +384,10 @@ class SovereignMindManager:
         sc.self_model.current_gauges = initial_gauges
         sc.self_model.previous_gauges = initial_gauges
         sc.self_model.predicted_gauges = self._forecast_gauges(initial_gauges)
+
+        sc.seated_entity_id = f"mind:sovereign@{pid}"
+        if getattr(planet, "civilization", None):
+            planet.civilization.station = "sovereign"
 
         self.minds[pid] = sc
         return sc
@@ -764,6 +786,194 @@ class SovereignMindManager:
             turns_spent=1,
         )
 
+    def take_seat(self, kernel: Any, captain: Optional[Captain], planet_id: str, as_player: bool = True) -> ActionResult:
+        """Binds a player captain or sovereign intelligence to the seat of this world."""
+        planet = kernel.get_planet(planet_id)
+        if not planet:
+            return ActionResult(success=False, message=f"Planet {planet_id} not found.", turns_spent=0)
+
+        sc = self.ensure_consciousness(kernel, planet)
+        sc.is_seated = True
+        if as_player and captain:
+            sc.seated_entity_id = captain.id
+            if getattr(planet, "civilization", None):
+                planet.civilization.station = "sovereign"
+            msg = f"Captain {captain.name} has taken the throne of {planet.name} as its Seated Sovereign Mind."
+        else:
+            sc.seated_entity_id = f"mind:sovereign@{planet.id}"
+            if getattr(planet, "civilization", None):
+                planet.civilization.station = "sovereign"
+            msg = f"Autonomous Sovereign Mind of {planet.name} is seated and ruling."
+
+        return ActionResult(
+            success=True,
+            message=msg,
+            data={
+                "planet_id": planet_id,
+                "seated_entity_id": sc.seated_entity_id,
+                "is_seated": sc.is_seated,
+                "autonomous_play": sc.autonomous_play,
+            },
+            turns_spent=1,
+        )
+
+    def toggle_autonomous_play(self, kernel: Any, captain: Optional[Captain], planet_id: str, enable: Optional[bool] = None) -> ActionResult:
+        """Toggles autonomous turn-taking during universe simulation ticks."""
+        planet = kernel.get_planet(planet_id)
+        if not planet:
+            return ActionResult(success=False, message=f"Planet {planet_id} not found.", turns_spent=0)
+
+        sc = self.ensure_consciousness(kernel, planet)
+        if enable is not None:
+            sc.autonomous_play = bool(enable)
+        else:
+            sc.autonomous_play = not sc.autonomous_play
+
+        status_str = "ENABLED" if sc.autonomous_play else "DISABLED"
+        msg = f"Autonomous play for Seated Mind [{planet.name}] is now {status_str}."
+        return ActionResult(
+            success=True,
+            message=msg,
+            data={
+                "planet_id": planet_id,
+                "autonomous_play": sc.autonomous_play,
+            },
+            turns_spent=0,
+        )
+
+    def step_seated_turn(self, kernel: Any, captain: Optional[Captain], planet_id: str) -> ActionResult:
+        """Executes a single game turn for this seated sovereign mind."""
+        planet = kernel.get_planet(planet_id)
+        if not planet:
+            return ActionResult(success=False, message=f"Planet {planet_id} not found.", turns_spent=0)
+
+        sc = self.ensure_consciousness(kernel, planet)
+        turn_result = self.play_seated_turn(kernel, sc)
+        msg = f"Seated Mind [{planet.name}] played turn #{turn_result['turns_played']}: {turn_result['action']} ({turn_result['detail']})."
+        return ActionResult(
+            success=True,
+            message=msg,
+            data=turn_result,
+            turns_spent=1,
+        )
+
+    def play_seated_turn(self, kernel: Any, sc: SovereignConsciousness) -> Dict[str, Any]:
+        """A seated sovereign mind plays its game turn: deliberates through Parliament,
+        evaluates counterfactuals, and executes real in-game actions modifying the universe."""
+        planet = kernel.get_planet(sc.planet_id)
+        if not planet:
+            return {"action": "NONE", "reason": "Planet not found", "turns_played": sc.seated_turns_played}
+
+        if getattr(planet, "civilization", None):
+            planet.civilization.station = "sovereign"
+
+        g = sc.self_model.current_gauges
+        p = sc.parliament
+
+        w_mem = 0.33
+        w_urg = 0.34
+        w_hor = 0.33
+        if g.sustenance < 0.4 or g.vitality < 0.4 or len(sc.mythic_memory.scars) > 0:
+            w_mem += 0.20
+        if g.peace < 0.5 or g.prosperity < 0.3 or getattr(planet, "siege", None):
+            w_urg += 0.25
+        if g.peace >= 0.6 and g.knowledge >= 0.5:
+            w_hor += 0.20
+        tot = w_mem + w_urg + w_hor
+        w_mem = round(w_mem / tot, 3)
+        w_urg = round(w_urg / tot, 3)
+        w_hor = round(1.0 - w_mem - w_urg, 3)
+
+        v_mem = p.voices[ParliamentaryVoiceType.VOICE_MEMORY.value]
+        v_urg = p.voices[ParliamentaryVoiceType.VOICE_URGENCY.value]
+        v_hor = p.voices[ParliamentaryVoiceType.VOICE_HORIZON.value]
+        v_mem.weight = w_mem
+        v_urg.weight = w_urg
+        v_hor.weight = w_hor
+
+        max_w = max(w_mem, w_urg, w_hor)
+        if max_w == w_mem:
+            mandate = ParliamentaryVoiceType.VOICE_MEMORY
+        elif max_w == w_urg:
+            mandate = ParliamentaryVoiceType.VOICE_URGENCY
+        else:
+            mandate = ParliamentaryVoiceType.VOICE_HORIZON
+
+        p.dominant_voice = mandate
+        p.consensus_confidence = round(max_w - min(w_mem, w_urg, w_hor), 3)
+
+        action_name = "HOLD_VIGIL"
+        detail = "Maintaining balanced sovereign stewardship."
+
+        if mandate == ParliamentaryVoiceType.VOICE_MEMORY:
+            if planet.organics_silo < 120 and planet.treasury >= 60:
+                cost = 60
+                gained = 25
+                planet.treasury -= cost
+                planet.organics_silo += gained
+                action_name = "RESTOCK_AGRI_SILOS"
+                detail = f"Voice of Memory allocated {cost} Cr to agricultural silos (+{gained} Organics)."
+            elif planet.morale < 85 and planet.treasury >= 80:
+                planet.treasury -= 80
+                planet.morale = min(100, planet.morale + 10)
+                action_name = "CIVIC_SUBSIDY"
+                detail = "Voice of Memory subsidized cultural cohesion and festival (+10 Morale)."
+            elif planet.population < 400:
+                planet.population += 20
+                action_name = "NURTURE_CLADE"
+                detail = "Voice of Memory nurtured ancestral nurseries (+20 Pop)."
+
+        elif mandate == ParliamentaryVoiceType.VOICE_URGENCY:
+            if planet.shields < planet.max_shields and planet.treasury >= 100:
+                recharge = min(50, planet.max_shields - planet.shields)
+                planet.treasury -= 100
+                planet.shields += recharge
+                action_name = "FORTIFY_SHIELDS"
+                detail = f"Voice of Urgency reinforced planetary shield matrix (+{recharge} Shields)."
+            elif planet.fighters < 50 and planet.treasury >= 80:
+                planet.treasury -= 80
+                planet.fighters += 5
+                action_name = "COMMISSION_INTERCEPTORS"
+                detail = "Voice of Urgency commissioned +5 planetary defense interceptors."
+            elif planet.citadel_level < 2 and planet.treasury >= 1200 and planet.ore_silo >= 100:
+                planet.treasury -= 1200
+                planet.ore_silo -= 100
+                planet.citadel_level += 1
+                action_name = "UPGRADE_CITADEL"
+                detail = f"Voice of Urgency upgraded planetary citadel to Level {planet.citadel_level}."
+
+        else:  # VOICE_HORIZON
+            if hasattr(kernel, "emergent_economy_manager") and not kernel.emergent_economy_manager.economies.get(str(planet.id), {}).get("is_uplinked", False) and planet.treasury >= 500:
+                kernel.emergent_economy_manager.trigger_uplink(kernel, None, str(planet.id))
+                action_name = "TRIGGER_REALM_UPLINK"
+                detail = "Voice of Horizon uplinked planetary economy into interstellar realm trade."
+            elif hasattr(kernel, "conclave_manager") and getattr(kernel.conclave_manager, "active_proposal", None):
+                prop = kernel.conclave_manager.active_proposal
+                vote = "AYE" if sc.alignment >= 0.0 else "NAY"
+                kernel.conclave_manager.vote(kernel, sc.seated_entity_id or f"sovereign@{planet.id}", prop.id, vote)
+                action_name = "CONCLAVE_VOTE"
+                detail = f"Voice of Horizon voted {vote} on Conclave Bill [{prop.id}] '{prop.title}'."
+            elif planet.treasury >= 150:
+                planet.treasury -= 150
+                if "SYNTHETIC_ECOLOGY" not in planet.technologies:
+                    planet.technologies.append("SYNTHETIC_ECOLOGY")
+                action_name = "DEEP_SYNTHESIS"
+                detail = "Voice of Horizon advanced synthetic ecological research."
+
+        sc.seated_turns_played += 1
+        sc.last_action_taken = f"{action_name}: {detail}"
+
+        if hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(f"[SEATED MIND: {planet.name}] {action_name} - {detail}")
+
+        return {
+            "planet_id": str(planet.id),
+            "dominant_voice": mandate.value,
+            "action": action_name,
+            "detail": detail,
+            "turns_played": sc.seated_turns_played,
+        }
+
     def tick(self, kernel: Any) -> None:
         """Simulation cycle: updates self-model predictions, introspection skill, and cognitive states."""
         for pid, sc in list(self.minds.items()):
@@ -805,6 +1015,10 @@ class SovereignMindManager:
             sc.self_model.previous_gauges = sc.self_model.current_gauges
             sc.self_model.current_gauges = real_gauges
             sc.self_model.predicted_gauges = self._forecast_gauges(real_gauges)
+
+            # If this mind is seated and autonomous play is enabled, it plays its game turn
+            if sc.is_seated and sc.autonomous_play:
+                self.play_seated_turn(kernel, sc)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

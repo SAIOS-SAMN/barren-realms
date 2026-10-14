@@ -3965,7 +3965,7 @@ class TerminalClient:
             fresh_view = self.kernel.get_player_view(self.player_id)
             print(TerminalRenderer.render_sovereign_mind_screen(fresh_view))
             try:
-                cmd = input(f"{c_magenta('Sovereign Mind Command [C/E/H/Q] > ')}").strip().upper()
+                cmd = input(f"{c_magenta('Sovereign Mind Command [C/E/H/S/P/A/Q] > ')}").strip().upper()
             except (KeyboardInterrupt, EOFError):
                 break
 
@@ -3986,6 +3986,18 @@ class TerminalClient:
                 p_id = input("Planet ID for The Hearing > ").strip()
                 prop = input("Proposal terms / intended action > ").strip()
                 res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_HEAR_INTENT, planet_id=p_id, proposal_summary=prop)
+                self._print_result(res)
+            elif cmd == "S":
+                p_id = input("Planet ID to take throne as Seated Mind > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_TAKE_SEAT, planet_id=p_id, as_player=True)
+                self._print_result(res)
+            elif cmd == "P":
+                p_id = input("Planet ID for Seated Mind to play turn > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_STEP_SEATED_TURN, planet_id=p_id)
+                self._print_result(res)
+            elif cmd == "A":
+                p_id = input("Planet ID to toggle autonomous play > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SOVEREIGN_AUTONOMOUS_PLAY, planet_id=p_id)
                 self._print_result(res)
 
     def _print_result(self, res) -> None:

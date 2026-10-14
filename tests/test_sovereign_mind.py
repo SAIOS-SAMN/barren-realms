@@ -255,6 +255,74 @@ class TestSovereignMind(unittest.TestCase):
         self.assertIn("Internal Parliament", screen)
         self.assertIn("Sacred Axioms", screen)
 
+    def test_seated_mind_taking_seat_and_playing_turns(self):
+        """Verifies sovereign minds take seats and execute real game turns."""
+        sc = self.mgr.ensure_consciousness(self.kernel, self.planet)
+        self.assertTrue(sc.is_seated)
+
+        # 1. Player binds seat to become the Seated Sovereign Mind
+        res_seat = self.kernel.dispatch(
+            self.captain_id,
+            ActionType.SOVEREIGN_TAKE_SEAT,
+            planet_id=str(self.planet.id),
+            as_player=True,
+        )
+        self.assertTrue(res_seat.success)
+        self.assertEqual(res_seat.data["seated_entity_id"], self.captain_id)
+        self.assertTrue(res_seat.data["is_seated"])
+
+        # 2. Step seated turn (executes in-game actions according to parliamentary mandate)
+        initial_turns = sc.seated_turns_played
+        res_step = self.kernel.dispatch(
+            self.captain_id,
+            ActionType.SOVEREIGN_STEP_SEATED_TURN,
+            planet_id=str(self.planet.id),
+        )
+        self.assertTrue(res_step.success)
+        self.assertGreaterEqual(sc.seated_turns_played, initial_turns + 1)
+        self.assertIn("action", res_step.data)
+        self.assertIn("dominant_voice", res_step.data)
+
+        # 3. Toggle autonomous play
+        res_auto = self.kernel.dispatch(
+            self.captain_id,
+            ActionType.SOVEREIGN_AUTONOMOUS_PLAY,
+            planet_id=str(self.planet.id),
+            enable=True,
+        )
+        self.assertTrue(res_auto.success)
+        self.assertTrue(sc.autonomous_play)
+
+        # 4. Advance universe tick and verify seated mind plays autonomously
+        prev_played = sc.seated_turns_played
+        self.kernel.tick_simulation()
+        self.assertGreaterEqual(sc.seated_turns_played, prev_played + 1)
+
+    def test_seats_module_sovereign_integration(self):
+        """Verifies integration with Xylarium seats.py registry and dispatch."""
+        from xylarium.kernel import seats
+        sc = self.mgr.ensure_consciousness(self.kernel, self.planet)
+        all_seats = seats.seats(self.kernel)
+        sovereign_seats = [s for s in all_seats if s["role"] == "sovereign"]
+        self.assertGreater(len(sovereign_seats), 0)
+
+        # Test calling sovereign seat function directly through seats.call
+        seat_id = f"sovereign:{self.planet.id}"
+        # Bind mind to seat in seats registry
+        vk_test = "0123456789abcdef"
+        take_res = seats.take(self.kernel, seat_id, vk_test)
+        self.assertTrue(take_res["ok"])
+
+        # Invoke commune function through seated mind
+        call_res = seats.call(self.kernel, seat_id, vk_test, "commune")
+        self.assertTrue(call_res["ok"])
+        self.assertIn("Parliament of", call_res["verdict"])
+
+        # Invoke step function through seated mind
+        step_call = seats.call(self.kernel, seat_id, vk_test, "step")
+        self.assertTrue(step_call["ok"])
+        self.assertIn("played turn", step_call["verdict"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1603,6 +1603,40 @@ def _sovereign_hear_intent(k: Any, captain: Any, current_sector: Any, kwargs: Di
     )
 
 
+@action(ActionType.SOVEREIGN_TAKE_SEAT, turns=1)
+def _sovereign_take_seat(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    as_p = bool(kwargs.get("as_player", True))
+    return k.sovereign_mind_manager.take_seat(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+        as_player=as_p,
+    )
+
+
+@action(ActionType.SOVEREIGN_STEP_SEATED_TURN, turns=1)
+def _sovereign_step_seated_turn(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    return k.sovereign_mind_manager.step_seated_turn(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+    )
+
+
+@action(ActionType.SOVEREIGN_AUTONOMOUS_PLAY, turns=0)
+def _sovereign_autonomous_play(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    enable = kwargs.get("enable")
+    return k.sovereign_mind_manager.toggle_autonomous_play(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+        enable=enable,
+    )
+
+
 
 
 
