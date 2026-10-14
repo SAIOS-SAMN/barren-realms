@@ -1434,6 +1434,38 @@ def _conclave_enforce_sanctions(k: Any, captain: Any, current_sector: Any, kwarg
     )
 
 
+# ---------------------------------------------------------------------- [23] Extragalactic Void Bridges & Multi-Cluster Cosmos
+@action(ActionType.VOID_BRIDGE_COMMISSION, turns=2)
+def _void_bridge_commission(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    dest = kwargs.get("destination_cluster", "")
+    return k.void_bridge_manager.commission_bridge(
+        kernel=k,
+        captain=captain,
+        destination_cluster=dest,
+    )
+
+
+@action(ActionType.VOID_BRIDGE_TRANSIT, turns=1)
+def _void_bridge_transit(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    b_id = kwargs.get("bridge_id", "")
+    return k.void_bridge_manager.transit_bridge(
+        kernel=k,
+        captain=captain,
+        bridge_id=b_id,
+    )
+
+
+@action(ActionType.VOID_BRIDGE_SURVEY_CLUSTER, turns=1)
+def _void_bridge_survey_cluster(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    c_id = kwargs.get("cluster_id", "")
+    return k.void_bridge_manager.survey_cluster(
+        kernel=k,
+        captain=captain,
+        cluster_id=c_id,
+    )
+
+
+
 
 
 

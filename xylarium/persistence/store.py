@@ -89,6 +89,7 @@ class StatePersistence:
             "relic_foundry": kernel.relic_foundry_manager.to_dict() if hasattr(kernel, "relic_foundry_manager") else None,
             "clade_nursery": kernel.clade_nursery_manager.to_dict() if hasattr(kernel, "clade_nursery_manager") else None,
             "conclave": kernel.conclave_manager.to_dict() if hasattr(kernel, "conclave_manager") else None,
+            "void_bridges": kernel.void_bridge_manager.to_dict() if hasattr(kernel, "void_bridge_manager") else None,
         }
         return data
 
@@ -295,6 +296,7 @@ class StatePersistence:
             from xylarium.kernel.relic_foundry import RelicFoundryManager
             from xylarium.kernel.clade_nursery import CladeNurseryManager
             from xylarium.kernel.conclave import PanGalacticConclaveManager
+            from xylarium.kernel.void_bridges import VoidBridgeManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -342,6 +344,11 @@ class StatePersistence:
                 kernel.conclave_manager = PanGalacticConclaveManager.from_dict(data["conclave"])
             else:
                 kernel.conclave_manager = PanGalacticConclaveManager()
+
+            if data.get("void_bridges"):
+                kernel.void_bridge_manager = VoidBridgeManager.from_dict(data["void_bridges"])
+            else:
+                kernel.void_bridge_manager = VoidBridgeManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):

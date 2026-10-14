@@ -243,6 +243,7 @@ class TerminalClient:
         **{w: "RELIC_FOUNDRY" for w in ["FOUNDRY", "FORGE", "ARTIFACTS", "RELIC_FOUNDRY"]},
         **{w: "CLADE_NURSERY" for w in ["NURSERY", "CLADES", "CHILDREN", "PHYLOGENY_NURSERY"]},
         **{w: "CONCLAVE" for w in ["CONCLAVE", "SENATE", "LEAGUE", "LAWS", "ASSEMBLY", "PARLIAMENT"]},
+        **{w: "VOID_BRIDGES" for w in ["BRIDGES", "BRIDGE", "VOID", "CLUSTERS", "VOID_BRIDGES"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -376,6 +377,9 @@ class TerminalClient:
             return
         if choice == "CONCLAVE":
             self._prompt_conclave(view)
+            return
+        if choice == "VOID_BRIDGES":
+            self._prompt_void_bridges(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3840,6 +3844,33 @@ class TerminalClient:
             elif cmd == "E":
                 target_id = input("Captain ID to sanction / embargo > ").strip()
                 res = self.kernel.dispatch(self.player_id, ActionType.CONCLAVE_ENFORCE_SANCTIONS, target_captain_id=target_id)
+                self._print_result(res)
+
+    def _prompt_void_bridges(self, view: Dict[str, Any]) -> None:
+        """Extragalactic Void Bridges & Multi-Cluster Cosmos console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_void_bridges_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Void Bridge Command [C/T/S/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "C":
+                dest = input("Extragalactic Destination [CLUSTER_MAGELLANIC / CLUSTER_GLOBULAR / CLUSTER_SEYFERT] > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.VOID_BRIDGE_COMMISSION, destination_cluster=dest)
+                self._print_result(res)
+            elif cmd == "T":
+                b_id = input("Bridge ID to transit (e.g. BRIDGE-001) > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.VOID_BRIDGE_TRANSIT, bridge_id=b_id)
+                self._print_result(res)
+            elif cmd == "S":
+                c_id = input("Cluster ID to survey > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.VOID_BRIDGE_SURVEY_CLUSTER, cluster_id=c_id)
                 self._print_result(res)
 
     def _print_result(self, res) -> None:

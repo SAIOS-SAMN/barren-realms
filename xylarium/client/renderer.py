@@ -3934,6 +3934,62 @@ class TerminalRenderer:
         return "\n".join(lines)
 
 
+    @classmethod
+    def render_void_bridges_screen(cls, view: Dict[str, Any]) -> str:
+        """Extragalactic Void Bridges and Multi-Cluster Cosmos Console."""
+        vb_data = view.get("void_bridges", {})
+        bridges = vb_data.get("bridges", {})
+        clusters = view.get("foreign_clusters", {})
+        sector = view.get("sector", {})
+        curr_sec_id = sector.get("id", 1)
+        curr_cluster = sector.get("cluster", "LOCAL_MILKY_CORE")
+
+        lines = [
+            f"{bold(c_gold('═════════════ [ EXTRAGALACTIC VOID BRIDGES & MULTI-CLUSTER COSMOS ] ═════════════'))}",
+            f"  {c_white('Transcending the 100-sector Milky Core to chart extragalactic space across the cosmic abyss.')}",
+            f"  Current Position: {c_gold(f'Sector {curr_sec_id}')}  │  Domain: {bold(c_cyan(str(curr_cluster)))}",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+
+        # Active Bridges
+        lines.append(f"  {bold(c_white('ANCHORED VOID BRIDGE PYLONS:'))}")
+        if not bridges:
+            lines.append(f"    {c_gray('No extragalactic conduits currently anchored. The Local Cluster remains isolated.')}")
+            lines.append(f"    {c_white('Tip: Commission a Void Bridge below using a Void Bridge Capacitor or 500,000 Cr.')}")
+        else:
+            for bid, b in bridges.items():
+                integrity = b.get("coherence_integrity", 100.0)
+                int_color = c_green if integrity > 80 else (c_gold if integrity > 40 else c_red)
+                orig_sec = b.get("origin_sector_id", 1)
+                targ_sec = b.get("target_sector_id", 1)
+                dest_c = b.get("destination_cluster", "")
+                orig_str = c_gold(f"Sector {orig_sec}")
+                targ_str = c_green(f"Sector {targ_sec}")
+                lines.append(f"    [{c_cyan(bid)}] {bold(c_white(b.get('name', bid)))}")
+                lines.append(f"       Conduit: {orig_str} ◄═══► {targ_str} ({dest_c})")
+                lines.append(f"       Integrity: {int_color(f'{integrity:.1f}%')}  │  Transits Logged: {c_white(str(b.get('transits_count', 0)))}")
+        lines.append("")
+
+        # Foreign Star Clusters
+        lines.append(f"  {bold(c_white('EXTRAGALACTIC STAR CLUSTERS (THE DEEP ABYSS):'))}")
+        for cid, c_info in clusters.items():
+            dist_str = f"{c_info.get('distance_kpc', 0):,} kpc"
+            sec_range = c_info.get("sector_range", (0, 0))
+            is_bridged = any(b.get("destination_cluster") == cid for b in bridges.values())
+            status_tag = c_green("[CONDUIT ACTIVE]") if is_bridged else c_gray("[UNBRIDGED]")
+            lines.append(f"    • {bold(c_gold(cid))}: {c_white(c_info.get('name', cid))} {status_tag}")
+            lines.append(f"      Distance: {c_cyan(dist_str)} │ Sectors: {sec_range[0]}-{sec_range[1]} │ Hazard: {c_red(c_info.get('hazard_type', 'NONE'))}")
+            lines.append(f"      Astrophysics: Mining x{c_info.get('mining_modifier', 1.0):.1f} │ Precursor Density: {int(c_info.get('precursor_density', 0)*100)}%")
+            lines.append(f"      {c_gray(c_info.get('description', ''))}")
+        lines.append("")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[C]')}ommission <Cluster>  │  {c_gold('[T]')}ransit <Bridge ID>  │  {c_gold('[S]')}urvey <Cluster>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+
+
 
     @classmethod
     def render_help(cls) -> str:
