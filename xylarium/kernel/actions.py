@@ -1496,6 +1496,56 @@ def _inflationary_genesis(k: Any, captain: Any, current_sector: Any, kwargs: Dic
     )
 
 
+# ---------------------------------------------------------------------- [25] Emergent Civilizational Economics & Realm Uplink
+@action(ActionType.EMERGENT_BARTER_EXCHANGE, turns=1)
+def _emergent_barter_exchange(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    off_good = kwargs.get("offered_good", "EQUIPMENT")
+    off_qty = int(kwargs.get("offered_qty", 5))
+    req_good = kwargs.get("requested_good", "ORGANICS")
+    return k.emergent_economy_manager.barter_exchange(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+        offered_good=off_good,
+        offered_qty=off_qty,
+        requested_good=req_good,
+    )
+
+
+@action(ActionType.EMERGENT_NURTURE_BUILDER, turns=1)
+def _emergent_nurture_builder(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    invest = int(kwargs.get("investment_credits", 50000))
+    return k.emergent_economy_manager.nurture_builder(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+        investment_credits=invest,
+    )
+
+
+@action(ActionType.EMERGENT_EXTRACT_RESOURCES, turns=1)
+def _emergent_extract_resources(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    return k.emergent_economy_manager.extract_resources(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+    )
+
+
+@action(ActionType.EMERGENT_TRIGGER_UPLINK, turns=1)
+def _emergent_trigger_uplink(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    p_id = kwargs.get("planet_id", "")
+    return k.emergent_economy_manager.trigger_uplink(
+        kernel=k,
+        captain=captain,
+        planet_id=p_id,
+    )
+
+
+
 
 
 

@@ -4054,6 +4054,67 @@ class TerminalRenderer:
         return "\n".join(lines)
 
 
+    @classmethod
+    def render_emergent_economy_screen(cls, view: Dict[str, Any]) -> str:
+        """Emergent Civilizational Economics and Realm Uplink Console."""
+        ee_data = view.get("emergent_economy", {})
+        economies = ee_data.get("economies", {})
+        sector = view.get("sector", {})
+        planets = sector.get("planets", [])
+        sec_id = sector.get("id", 1)
+        sec_str = c_gold(f"Sector {sec_id}")
+        planet_count_str = c_cyan(str(len(planets)))
+
+        lines = [
+            f"{bold(c_gold('═════ [ EMERGENT CIVILIZATIONAL ECONOMICS & REALM UPLINK ] ═════'))}",
+            f"  {c_white('The organic bottom-up genesis of trade: from barter to sovereign realm counterparties.')}",
+            f"  Current System: {sec_str} │ Charted Worlds in Orbit: {planet_count_str}",
+            f"{bold(c_gold('─' * 78))}",
+            f"  {bold(c_white('MONETARY EVOLUTION LADDER:'))}",
+            f"    1. {c_gray('PRE_MONETARY_BARTER')}  - Physical goods exchange; cannot use fiat credits.",
+            f"    2. {c_cyan('COMMODITY_MONEY')}     - Physical store of value (grain, ingots, shells).",
+            f"    3. {c_gold('PLANETARY_FIAT')}      - Isolated domestic sovereign currency and treasury.",
+            f"    4. {c_green('INTERSTELLAR_UPLINK')} - Listed on ISSE exchange; active realm trade counterparty.",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+
+        if not planets:
+            lines.append(f"  {c_gray('No planetary bodies in this sector to inspect economic metabolism.')}")
+        else:
+            lines.append(f"  {bold(c_white('LOCAL PLANETARY ECONOMIES IN THIS SECTOR:'))}")
+            lines.append("")
+            for p in planets:
+                pid = str(p.get("id"))
+                pname = p.get("name", pid)
+                econ = economies.get(pid, {})
+                tier = econ.get("monetary_tier", "PRE_MONETARY_BARTER")
+                metab = econ.get("metabolism", "PRAGMATIST")
+                strain = econ.get("ecological_strain", 0.0)
+                reinvest = int(econ.get("reinvestment_rate", 0.5) * 100)
+                uplinked = econ.get("is_uplinked", False)
+                curr = econ.get("local_currency_code") or "None (Barter Only)"
+                treasury = econ.get("local_treasury", 0)
+
+                tier_color = c_green if uplinked else (c_gold if "FIAT" in tier else (c_cyan if "COMMODITY" in tier else c_gray))
+                metab_color = c_green if metab == "BUILDER" else (c_red if metab == "EXTRACTOR" else c_gold)
+                uplink_badge = c_green("[UPLINKED TO REALM]") if uplinked else c_gray("[ISOLATED DOMESTIC]")
+
+                lines.append(f"  • {bold(c_white(pname))} [{c_cyan(pid)}] {uplink_badge}")
+                lines.append(f"    Monetary Stage: {tier_color(tier)}  │  Currency: {c_gold(curr)}  │  Treasury: {c_white(f'{treasury:,}')}")
+                lines.append(f"    Economic Metabolism: {metab_color(metab)}  │  Reinvestment Rate: {c_white(f'{reinvest}%')}  │  Ecological Strain: {c_red(f'{strain:.1f}%')}")
+
+                barter_inv = econ.get("barter_inventory", {})
+                barter_summary = ", ".join(f"{v} {k}" for k, v in barter_inv.items()) if barter_inv else "Subsistence Only"
+                lines.append(f"    Physical Barter Stocks: {c_gray(barter_summary)}")
+                lines.append("")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[B]')}arter <PID>  │  {c_gold('[N]')}urture Builder (50k Cr)  │  {c_gold('[E]')}xtract  │  {c_gold('[U]')}plink  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+
+
 
 
 

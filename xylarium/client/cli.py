@@ -245,6 +245,7 @@ class TerminalClient:
         **{w: "CONCLAVE" for w in ["CONCLAVE", "SENATE", "LEAGUE", "LAWS", "ASSEMBLY", "PARLIAMENT"]},
         **{w: "VOID_BRIDGES" for w in ["BRIDGES", "BRIDGE", "VOID", "CLUSTERS", "VOID_BRIDGES"]},
         **{w: "ENTROPY_TIDES" for w in ["ENTROPY", "GENESIS", "TIDES", "BIGBANG", "REBIRTH"]},
+        **{w: "EMERGENT_ECONOMY" for w in ["UPLINK", "BARTER", "METABOLISM", "EMERGENT", "NURTURE"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -384,6 +385,9 @@ class TerminalClient:
             return
         if choice == "ENTROPY_TIDES":
             self._prompt_entropy_tides(view)
+            return
+        if choice == "EMERGENT_ECONOMY":
+            self._prompt_emergent_economy(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3910,6 +3914,46 @@ class TerminalClient:
                 if confirm in ["Y", "YES"]:
                     res = self.kernel.dispatch(self.player_id, ActionType.INFLATIONARY_GENESIS)
                     self._print_result(res)
+
+    def _prompt_emergent_economy(self, view: Dict[str, Any]) -> None:
+        """Emergent Civilizational Economics and Realm Uplink console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_emergent_economy_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Emergent Economy Command [B/N/E/U/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "B":
+                p_id = input("Planet ID for barter > ").strip()
+                off_good = input("Offered commodity [EQUIPMENT / ORE / ORGANICS] > ").strip().upper()
+                off_qty = input("Offered quantity > ").strip()
+                req_good = input("Requested commodity [ORGANICS / ORE / EQUIPMENT] > ").strip().upper()
+                try:
+                    qty = int(off_qty)
+                    res = self.kernel.dispatch(self.player_id, ActionType.EMERGENT_BARTER_EXCHANGE, planet_id=p_id, offered_good=off_good, offered_qty=qty, requested_good=req_good)
+                    self._print_result(res)
+                except ValueError:
+                    print(c_red("Invalid quantity."))
+            elif cmd == "N":
+                p_id = input("Planet ID to nurture as Builder (50,000 Cr) > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.EMERGENT_NURTURE_BUILDER, planet_id=p_id)
+                self._print_result(res)
+            elif cmd == "E":
+                p_id = input("Planet ID to strip-mine / extract [Dark Deed] > ").strip()
+                confirm = input(c_red("Confirm predatory resource extraction? [Y/N] > ")).strip().upper()
+                if confirm in ["Y", "YES"]:
+                    res = self.kernel.dispatch(self.player_id, ActionType.EMERGENT_EXTRACT_RESOURCES, planet_id=p_id)
+                    self._print_result(res)
+            elif cmd == "U":
+                p_id = input("Planet ID to uplink into realm trade network > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.EMERGENT_TRIGGER_UPLINK, planet_id=p_id)
+                self._print_result(res)
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

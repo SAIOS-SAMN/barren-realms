@@ -91,6 +91,7 @@ class StatePersistence:
             "conclave": kernel.conclave_manager.to_dict() if hasattr(kernel, "conclave_manager") else None,
             "void_bridges": kernel.void_bridge_manager.to_dict() if hasattr(kernel, "void_bridge_manager") else None,
             "entropy_tides": kernel.entropy_tides_manager.to_dict() if hasattr(kernel, "entropy_tides_manager") else None,
+            "emergent_economy": kernel.emergent_economy_manager.to_dict() if hasattr(kernel, "emergent_economy_manager") else None,
         }
         return data
 
@@ -299,6 +300,7 @@ class StatePersistence:
             from xylarium.kernel.conclave import PanGalacticConclaveManager
             from xylarium.kernel.void_bridges import VoidBridgeManager
             from xylarium.kernel.entropy_tides import EntropyTidesManager
+            from xylarium.kernel.emergent_economy import EmergentEconomyManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -356,6 +358,11 @@ class StatePersistence:
                 kernel.entropy_tides_manager = EntropyTidesManager.from_dict(data["entropy_tides"])
             else:
                 kernel.entropy_tides_manager = EntropyTidesManager()
+
+            if data.get("emergent_economy"):
+                kernel.emergent_economy_manager = EmergentEconomyManager.from_dict(data["emergent_economy"])
+            else:
+                kernel.emergent_economy_manager = EmergentEconomyManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):
