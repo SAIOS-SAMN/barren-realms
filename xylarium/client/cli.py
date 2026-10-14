@@ -239,6 +239,7 @@ class TerminalClient:
         **{w: "SHADOW_OPERATIONS" for w in ["SHADOW", "COVERT", "BLACKOPS", "SABOTAGE", "INFILTRATE"]},
         **{w: "OMEGA_PROTOCOL" for w in ["OMEGA", "ASCEND", "TRANSCEND", "FILTER", "KARDASHEV"]},
         **{w: "COSMOLOGY_AUDIT" for w in ["COSMOLOGY", "AUDIT", "PHYSICS", "TELEMETRY", "LANDIS", "HILL"]},
+        **{w: "CIVILIZATIONAL_EPOCHS" for w in ["EPOCH", "EPOCHS", "STEWARD", "STEWARDSHIP", "PROGENITOR", "METAMORPHOSIS"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -360,6 +361,9 @@ class TerminalClient:
             return
         if choice == "COSMOLOGY_AUDIT":
             self._prompt_cosmology_audit(view)
+            return
+        if choice == "CIVILIZATIONAL_EPOCHS":
+            self._prompt_epoch_stewardship(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3701,6 +3705,46 @@ class TerminalClient:
             if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
                 self.clear_screen()
                 break
+
+    def _prompt_epoch_stewardship(self, view: Dict[str, Any]) -> None:
+        """Civilizational Epochs & Deep-Time Stewardship Command Console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_epoch_stewardship_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Epoch Directive [M/S/C/P/H/A/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "M":
+                res = self.kernel.dispatch(self.player_id, ActionType.EPOCH_INITIATE_METAMORPHOSIS)
+                self._print_result(res)
+            elif cmd == "S":
+                pid = input("Target Prebiotic Planet ID > ").strip()
+                clade = input("Name for nascent sapient clade (blank for default) > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.STEWARD_SEED_NASCENT_LIFE, planet_id=pid, clade_name=clade or None)
+                self._print_result(res)
+            elif cmd == "C":
+                sec_str = input("Target Sector ID to stabilize (blank for current) > ").strip()
+                sec_id = int(sec_str) if sec_str.isdigit() else None
+                res = self.kernel.dispatch(self.player_id, ActionType.STEWARD_STABILIZE_STAR, sector_id=sec_id)
+                self._print_result(res)
+            elif cmd == "P":
+                pid = input("Target Planet ID for Precursor Beacon > ").strip()
+                relic = input("Relic Name to deposit (blank for default) > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.STEWARD_PLANT_PRECURSOR_BEACON, planet_id=pid, relic_name=relic or None)
+                self._print_result(res)
+            elif cmd == "H":
+                res = self.kernel.dispatch(self.player_id, ActionType.STEWARD_SYNTROPIC_PULSE)
+                self._print_result(res)
+            elif cmd == "A":
+                captain = self.kernel.get_player(self.player_id)
+                assessment = self.kernel.epoch_manager.assess_civilization(self.kernel, captain)
+                print(c_cyan(f"Equilibrium Assessed: Phase={assessment['phase']} │ Entropy={assessment['entropy_strain']:.1f} │ Syntropy={assessment['syntropic_resilience']:.1f}"))
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

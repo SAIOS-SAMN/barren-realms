@@ -1282,3 +1282,57 @@ def _omega_awaken_filter(k: Any, captain: Any, current_sector: Any, kwargs: Dict
     )
 
 
+# ---------------------------------------------------------------------- [19] Civilizational Epochs & Deep-Time Stewardship
+@action(ActionType.EPOCH_INITIATE_METAMORPHOSIS, turns=3)
+def _epoch_initiate_metamorphosis(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.epoch_manager.initiate_metamorphosis(
+        kernel=k,
+        captain=captain,
+    )
+
+
+@action(ActionType.STEWARD_SEED_NASCENT_LIFE, turns=2)
+def _steward_seed_nascent_life(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("planet_id")
+    if not pid and current_sector and current_sector.planets:
+        pid = current_sector.planets[0].id
+    return k.epoch_manager.seed_nascent_life(
+        kernel=k,
+        captain=captain,
+        planet_id=pid or "",
+        clade_name=kwargs.get("clade_name"),
+    )
+
+
+@action(ActionType.STEWARD_STABILIZE_STAR, turns=2)
+def _steward_stabilize_star(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    sid = kwargs.get("sector_id", current_sector.id if current_sector else None)
+    return k.epoch_manager.stabilize_stellar_core(
+        kernel=k,
+        captain=captain,
+        sector_id=sid,
+    )
+
+
+@action(ActionType.STEWARD_PLANT_PRECURSOR_BEACON, turns=1)
+def _steward_plant_precursor_beacon(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("planet_id")
+    if not pid and current_sector and current_sector.planets:
+        pid = current_sector.planets[0].id
+    return k.epoch_manager.plant_precursor_beacon(
+        kernel=k,
+        captain=captain,
+        planet_id=pid or "",
+        relic_name=kwargs.get("relic_name"),
+    )
+
+
+@action(ActionType.STEWARD_SYNTROPIC_PULSE, turns=1)
+def _steward_syntropic_pulse(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.epoch_manager.syntropic_harmonic_pulse(
+        kernel=k,
+        captain=captain,
+    )
+
+
+

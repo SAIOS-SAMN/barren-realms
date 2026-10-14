@@ -3711,6 +3711,79 @@ class TerminalRenderer:
         lines.append(f"{bold(c_cyan('═' * 78))}")
         return "\n".join(lines)
 
+    @classmethod
+    def render_epoch_stewardship_screen(cls, view: Dict[str, Any]) -> str:
+        """Civilizational Epochs & Deep-Time Stewardship Console."""
+        ep_rec = view.get("epoch_record", {})
+        phase = ep_rec.get("phase", "EXPANSION")
+        title = ep_rec.get("title", "Sovereign Commander")
+        entropy = ep_rec.get("entropy_strain", 0.0)
+        syntropy = ep_rec.get("syntropic_resilience", 0.0)
+        player = view.get("player", {})
+
+        lines = [
+            f"{bold(c_gold('══════════════ [ CIVILIZATIONAL EPOCHS & DEEP-TIME STEWARDSHIP ] ══════════════'))}",
+            f"  {c_white('Non-terminal civilizational evolution across deep cosmic time.')}",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+
+        # Phase Status
+        if phase == "EXPANSION":
+            phase_desc = c_cyan("EPOCH I: THE SOVEREIGN EXPANSION (Territorial Growth & Resource Scramble)")
+        elif phase == "FILTER_TRANSIT":
+            phase_desc = c_red("EPOCH II: THE GREAT FILTER (The Civilizational Bottleneck & Thermodynamic Limit)")
+        else:
+            phase_desc = c_green("EPOCH III: DEEP-TIME STEWARDSHIP (The Precursor & Progenitor Era)")
+
+        lines.append(f"  Current Status: {phase_desc}")
+        lines.append(f"  Civilizational Title: {bold(c_gold(title))}  │  Commander: {c_white(player.get('name', 'Unknown'))}")
+        lines.append("")
+
+        # Gauge rendering
+        def _gauge(val: float, max_v: float = 100.0, color_fn=c_cyan) -> str:
+            bars = int(min(20, max(0, (val / max_v) * 20)))
+            return color_fn("█" * bars) + c_gray("░" * (20 - bars))
+
+        ent_color = c_green if entropy < 60 else (c_gold if entropy < 100 else c_red)
+        syn_color = c_green if syntropy >= entropy else c_gold
+
+        lines.append(f"  {bold('THERMODYNAMIC EQUILIBRIUM GAUGES:')}")
+        lines.append(f"    • Entropy Strain:       [{_gauge(entropy, 100.0, ent_color)}] {ent_color(f'{entropy:.1f}')} / 100.0 (Bottleneck Limit)")
+        lines.append(f"    • Syntropic Resilience: [{_gauge(syntropy, 100.0, syn_color)}] {syn_color(f'{syntropy:.1f}')} / 100.0 (Cosmic Order)")
+        lines.append("")
+
+        # Vital stats
+        lines.append(f"  {bold('DEEP-TIME RECORD & ACHIEVEMENTS:')}")
+        lines.append(f"    • Nascent Worlds Seeded:     {c_cyan(str(ep_rec.get('nascent_worlds_seeded', 0)))} (Primitive Clades)")
+        lines.append(f"    • Stellar Cores Stabilized:  {c_cyan(str(ep_rec.get('stellar_cores_stabilized', 0)))} (Flares Suppressed)")
+        lines.append(f"    • Precursor Beacons Planted: {c_cyan(str(ep_rec.get('precursor_beacons_planted', 0)))} (Relics for Future Races)")
+        lines.append(f"    • Syntropic Pulses Fired:    {c_cyan(str(ep_rec.get('syntropic_pulses_fired', 0)))} (Galactic Waves)")
+        lines.append("")
+
+        # Narrative Guidance
+        if phase == "EXPANSION":
+            lines.append(f"  {c_white('Epoch I Guidance:')} Your civilization expands across star systems. Beware: unchecked colonial")
+            lines.append(f"  sprawl and star lifting generate entropy strain. Prepare mind lattices and megastructures.")
+        elif phase == "FILTER_TRANSIT":
+            lines.append(f"  {c_red('Epoch II Alert:')} Your realm is traversing the Great Filter! Thermodynamic entropy threatens collapse.")
+            if syntropy >= entropy:
+                lines.append(f"  {c_green('✔ SYNTHESIS ACHIEVED:')} Syntropic resilience matches entropy! You may now enact {bold('[M]etamorphosis')}.")
+            else:
+                lines.append(f"  {c_gold('▲ DEFICIT:')} Syntropy ({syntropy:.1f}) < Entropy ({entropy:.1f}). Upload minds or stabilize worlds.")
+        else:
+            lines.append(f"  {c_green('Epoch III Stewardship Active:')} You have surmounted the Great Filter. The universe does not end—")
+            lines.append(f"  you are now the Precursor. Seed primitive worlds, heal host suns, and guide younger species.")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        if phase == "FILTER_TRANSIT":
+            lines.append(f"  Commands: {c_gold('[M]')}etamorphosis Accord  │  {c_white('[Q / Enter]')} Back")
+        elif phase == "STEWARDSHIP":
+            lines.append(f"  Commands: {c_gold('[S]')}eed Nascent Life  │  {c_gold('[C]')}ore Stabilize Star  │  {c_gold('[P]')}lant Precursor Beacon  │  {c_gold('[H]')}armonic Pulse  │  {c_white('[Q]')} Back")
+        else:
+            lines.append(f"  Commands: {c_gold('[A]')}ssess Equilibrium  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
 
     @classmethod
     def render_help(cls) -> str:

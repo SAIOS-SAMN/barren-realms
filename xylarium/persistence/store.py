@@ -85,6 +85,7 @@ class StatePersistence:
             "stellar_engineering": kernel.stellar_manager.to_dict() if hasattr(kernel, "stellar_manager") else None,
             "shadow_ops": kernel.shadow_manager.to_dict() if hasattr(kernel, "shadow_manager") else None,
             "omega_protocol": kernel.omega_manager.to_dict() if hasattr(kernel, "omega_manager") else None,
+            "epochs": kernel.epoch_manager.to_dict() if hasattr(kernel, "epoch_manager") else None,
         }
         return data
 
@@ -287,11 +288,13 @@ class StatePersistence:
             from xylarium.kernel.stellar_engineering import StellarEngineeringManager
             from xylarium.kernel.shadow_ops import ShadowOpsManager
             from xylarium.kernel.omega_protocol import OmegaProtocolManager
+            from xylarium.kernel.civilizational_epochs import CivilizationalEpochManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
             else:
                 kernel.wormhole_manager = WormholeEngineeringManager()
+
 
             if data.get("hegemony"):
                 kernel.hegemony_manager = HegemonyAIManager.from_dict(data["hegemony"])
@@ -313,6 +316,11 @@ class StatePersistence:
                 kernel.omega_manager = OmegaProtocolManager.from_dict(data["omega_protocol"])
             else:
                 kernel.omega_manager = OmegaProtocolManager()
+
+            if data.get("epochs"):
+                kernel.epoch_manager = CivilizationalEpochManager.from_dict(data["epochs"])
+            else:
+                kernel.epoch_manager = CivilizationalEpochManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):
