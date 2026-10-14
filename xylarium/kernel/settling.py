@@ -320,6 +320,9 @@ def xy(kernel: Any, sector_id: int, t_gyr: float) -> Optional[Tuple[float, float
     return g["r"] * math.cos(th), g["r"] * math.sin(th)
 
 
+CRITICAL_PERCOLATION_PC = 0.2488  # 3D continuum percolation threshold (Geoffrey Landis 1998)
+
+
 def begin(kernel: Any, who: str, home: Any, t0: float, gen_years: float) -> Dict[str, Any]:
     """A people's bubble from its crossing at coordinate epoch t0."""
     from xylarium.kernel import biosphere, clocks, cosmos
@@ -333,10 +336,19 @@ def begin(kernel: Any, who: str, home: Any, t0: float, gen_years: float) -> Dict
     n = systems_per_pc3(r0)
     hop = (n * share) ** (-1.0 / 3.0) / 1000.0                 # kpc
     gens_per_gyr = 1e9 * clocks.lapse(kernel, home.sector_id) / max(1.0, gen_years)
+    # Landis Percolation Boundary: below critical percolation density, expansion is
+    # topologically bounded by the correlation length xi rather than spanning the disc.
+    if share < CRITICAL_PERCOLATION_PC:
+        xi = hop * ((CRITICAL_PERCOLATION_PC / max(0.005, CRITICAL_PERCOLATION_PC - share)) ** 0.88)
+        rmax = min(r0 + cosmos.R_MAX_KPC, r0 + xi)
+        regime = "FINITE_CLUSTER"
+    else:
+        rmax = r0 + cosmos.R_MAX_KPC
+        regime = "INFINITE_SPANNING"
     b = stats(kernel)[who] = {"sid": home.sector_id, "r0": r0, "crossed": t0, "t0": t0, "metab": metab,
                               "home_type": home.planet_type,
-                              "share": share, "hop": hop,
-                              "g": settle_rate(kernel, home) * gens_per_gyr, "rmax": r0 + cosmos.R_MAX_KPC,
+                              "share": share, "hop": hop, "percolation_regime": regime,
+                              "g": settle_rate(kernel, home) * gens_per_gyr, "rmax": rmax,
                               "cuts": {}, "enclosed": None, "fell": None, "band": band(kernel, home)}
     b.update(policy(kernel, who, home, metab, home.planet_type))
     b["v"] = front_speed(kernel, home, hop, gens_per_gyr)       # kpc per Gyr
@@ -370,25 +382,20 @@ def cohort_reach(kernel: Any, home: Any) -> Optional[float]:
 
 
 def front_speed(kernel: Any, home: Any, hop: float, gens_per_gyr: float) -> float:
-    """How fast its settled front advances (kpc per coordinate Gyr): a hybrid wave combining Fisher-KPP
-    diffusion (Newman & Sagan 1981) and directed percolation along accessible star lanes. r its intrinsic
-    increase; D its dispersal. When cohort reach is available, spacefarers direct their vectors rather than
-    purely undergoing an isotropic random walk. Capped by light's speed."""
+    """How fast its settled front advances (kpc per coordinate Gyr): a Fisher-KPP wave, v = 2 sqrt(r D), from the
+    people's own numbers - nothing tuned. r its intrinsic increase (biosphere.growth_rate: the rate a small colony
+    multiplies at, before its land fills); D its dispersal, a random walk of its emigrants (Newman & Sagan 1981): each
+    generation its emigrant share moves one step - to the nearest system it can live on, as far as its drive
+    carries a cohort (cohort_reach) - D = s l^2 / (6 T). Never faster than its ships: a crossed people's fold is a
+    null flow, so light's speed. (Light also bounds who can be told where to go: no front outruns its own news.)"""
     from xylarium.config import DAUGHTER_EMIGRANT_SHARE
     from xylarium.kernel import biosphere, clocks
     lapse = clocks.lapse(kernel, home.sector_id)
     r = float(biosphere.growth_rate(kernel, home)) * 1e9 * lapse              # per coordinate Gyr
     reach = cohort_reach(kernel, home)
     step = min(hop, reach) if reach else hop
-    # 1. Newman-Sagan Brownian diffusion component: D = s l^2 / (6 T)
     d = DAUGHTER_EMIGRANT_SHARE * step * step * gens_per_gyr / 6.0            # kpc^2 per Gyr
-    v_diff = 2.0 * math.sqrt(max(0.0, r) * d)
-    # 2. Directed percolation component: intentional navigation towards habitable star systems
-    directed_efficiency = 0.20 if reach else 0.05
-    v_directed = directed_efficiency * step * gens_per_gyr * DAUGHTER_EMIGRANT_SHARE
-    # Wave front velocity from coupled diffusion and directed percolation
-    v_combined = math.sqrt(v_diff * v_diff + v_directed * v_directed)
-    return min(C_KPC_PER_GYR, v_combined)
+    return min(C_KPC_PER_GYR, 2.0 * math.sqrt(max(0.0, r) * d))
 
 
 def alive(b: Dict[str, Any], t: float) -> bool:

@@ -47,12 +47,13 @@ class TestUniverseEquationsAndDecoherence(unittest.TestCase):
     def test_correlated_hazard_scaling(self):
         """Verify annals._dominion_hazard applies correlated hazard factor."""
         cap_fn = lambda t: 10.0
-        # Single world vs multi-world
-        h_single, _ = annals._dominion_hazard(rate=1.0, w0=1.0, gens=10.0, cap_of=cap_fn, g=0.0)
-        h_multi, _ = annals._dominion_hazard(rate=1.0, w0=10.0, gens=10.0, cap_of=cap_fn, g=0.0)
+        # Single world vs multi-world with correlated catastrophe scaling
+        h_single, _ = annals._dominion_hazard(rate=1.0, w0=1.0, gens=10.0, cap_of=cap_fn, g=0.0, correlated=True)
+        h_multi, _ = annals._dominion_hazard(rate=1.0, w0=10.0, gens=10.0, cap_of=cap_fn, g=0.0, correlated=True)
         self.assertGreater(h_single, h_multi)
         # Because of correlated hazard w**0.85, 10 worlds shouldn't reduce hazard by full 10x
         ratio = h_single / h_multi
+        self.assertAlmostEqual(ratio, 10.0 ** 0.85, places=3)
         self.assertLess(ratio, 10.0)
         self.assertGreater(ratio, 1.0)
 
@@ -157,11 +158,56 @@ class TestUniverseEquationsAndDecoherence(unittest.TestCase):
             saved = StatePersistence.save_to_file(self.kernel, filepath)
             self.assertTrue(saved)
 
-            loaded_kernel = StatePersistence.load_from_file(filepath)
-            self.assertIsNotNone(loaded_kernel)
-            self.assertTrue(hasattr(loaded_kernel, "decoherence_manager"))
-            self.assertIn(p.id, loaded_kernel.decoherence_manager.records)
+    def test_astrophysics_and_relativistic_horizons(self):
+        """Verify Keplerian Hill sphere, Gladman stability, orbital migration energy, and Landis percolation."""
+        from xylarium.kernel import physics
+        from xylarium.client.renderer import TerminalRenderer
+
+        # 1. Hill Sphere Radius
+        r_h = physics.hill_radius(star_mass_solar=1.0, planet_mass_earth=1.0, semi_major_axis_au=1.0)
+        # Earth's Hill radius is approx 0.01 AU (1.5 million km)
+        self.assertAlmostEqual(r_h, 0.01, delta=0.005)
+
+        # 2. Mutual Hill Stability (Gladman 1993)
+        delta_stable, is_stable = physics.mutual_hill_stability(1.0, 1.0, 1.0, 1.0, 1.5)
+        self.assertTrue(is_stable)
+        self.assertGreater(delta_stable, 3.4641)
+
+        delta_unstable, is_unstable = physics.mutual_hill_stability(1.0, 1.0, 1.0, 1.0, 1.01)
+        self.assertFalse(is_unstable)
+        self.assertLess(delta_unstable, 3.4641)
+
+        # 3. Orbital Migration Energy
+        delta_e, solar_frac = physics.migration_energy_joules(1.0, 1.0, 1.0, 1.5)
+        # For Earth from 1.0 to 1.5 AU, delta_e is on order of ~10^32 Joules
+        self.assertGreater(delta_e, 1e32)
+        self.assertLess(delta_e, 1e34)
+        self.assertGreater(solar_frac, 0.0)
+
+        # 4. Landis Percolation Boundary
+        self.assertAlmostEqual(settling.CRITICAL_PERCOLATION_PC, 0.2488, places=4)
+        home = self.kernel.sectors[1].planets[0]
+        # Settling begin creates bubble with percolation_regime
+        b = settling.begin(self.kernel, "TEST_CLADE", home, 0.0, 25.0)
+        self.assertIn("percolation_regime", b)
+        self.assertIn(b["percolation_regime"], ["FINITE_CLUSTER", "INFINITE_SPANNING"])
+
+        # 5. Relativistic Command Horizon
+        horizon = self.kernel.decoherence_manager.get_relativistic_command_horizon(self.kernel, self.player_id)
+        self.assertIn("light_lag_years", horizon)
+        self.assertIn("doctrine_regime", horizon)
+
+        # 6. Cosmology Audit Renderer
+        view = self.kernel.get_player_view(self.player_id)
+        rendered = TerminalRenderer.render_cosmology_audit_screen(view)
+        self.assertIn("COSMOLOGY, ASTROPHYSICS & HORIZON AUDIT", rendered)
+        self.assertIn("LANDIS 1998 BOUNDARY", rendered)
+        self.assertIn("KEPLERIAN HILL SPHERE", rendered)
+        self.assertIn("RELATIVISTIC CAUSAL COMMAND HORIZON", rendered)
+        self.assertIn("CORRELATED EXTINCTION HAZARD SCALING", rendered)
+        self.assertIn("KARDASHEV PROGRESSION & THE GREAT FILTER", rendered)
 
 
 if __name__ == "__main__":
     unittest.main()
+

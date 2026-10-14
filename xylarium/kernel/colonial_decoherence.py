@@ -60,6 +60,37 @@ class ColonialDecoherenceManager:
             mgr.records[k] = ColonialDecoherenceRecord.from_dict(v)
         return mgr
 
+    def get_relativistic_command_horizon(self, kernel: Any, owner_id: str) -> Dict[str, Any]:
+        """Calculates exact relativistic light-cone lag and causal command horizon for a sovereign realm.
+        Each warp lane hop averages ~4.2 light-years across galactic thin disc.
+        Relativistic Decoherence occurs when communication lag breaches 20 standard years (1 generation).
+        """
+        seat_sector = self.get_owner_seat_sector(kernel, owner_id)
+        max_hops = 0
+        farthest_world = None
+
+        for s in kernel.sectors.values():
+            for p in getattr(s, "planets", []):
+                if p.owner_id == owner_id:
+                    hops = self._shortest_path_hops(kernel, seat_sector, s.id)
+                    if hops > max_hops and hops < 900:
+                        max_hops = hops
+                        farthest_world = p.name
+
+        mean_hop_ly = 4.2  # light years per lane hop in local cluster
+        light_lag_years = round(max_hops * mean_hop_ly, 1)
+        breached = light_lag_years > 20.0  # > 1 generation communication latency
+
+        return {
+            "seat_sector": seat_sector,
+            "max_hops": max_hops,
+            "farthest_world": farthest_world or "None",
+            "light_lag_years": light_lag_years,
+            "horizon_threshold_years": 20.0,
+            "horizon_breached": breached,
+            "doctrine_regime": "CENTRALIZED_EDICT" if not breached else "DECENTRALIZED_STANDING_ORDERS",
+        }
+
     def _shortest_path_hops(self, kernel: Any, start_sector: int, target_sector: int) -> int:
         """Finds hop distance between two sectors via sector warp lanes."""
         if start_sector == target_sector:

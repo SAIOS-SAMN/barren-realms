@@ -124,6 +124,66 @@ def period_years(st: Dict[str, F], q: F) -> F:
     return q ** 3 / st["m"]
 
 
+def hill_radius(star_mass_solar: float, planet_mass_earth: float, semi_major_axis_au: float) -> float:
+    """Calculates the Hill sphere radius of a planet in AU:
+    r_H = a * (m_p / (3 * M_*))^(1/3)
+    1 Solar mass = 332,946 Earth masses.
+    """
+    m_star_earth = max(1e-6, star_mass_solar * 332946.0)
+    return semi_major_axis_au * ((planet_mass_earth / (3.0 * m_star_earth)) ** (1.0 / 3.0))
+
+
+def mutual_hill_stability(
+    star_mass_solar: float,
+    m1_earth: float,
+    a1_au: float,
+    m2_earth: float,
+    a2_au: float,
+) -> Tuple[float, bool]:
+    """Evaluates the mutual Hill sphere stability parameter Delta (Gladman 1993, Chambers 1996):
+    Delta = (a2 - a1) / R_H,mutual
+    where R_H,mutual = ((m1 + m2) / (3 M_*))^(1/3) * (a1 + a2) / 2
+    Coplanar circular stability strictly requires Delta > 2 * sqrt(3) ~ 3.46.
+    Returns (Delta, is_stable).
+    """
+    if a1_au >= a2_au:
+        a1_au, a2_au = a2_au, a1_au
+        m1_earth, m2_earth = m2_earth, m1_earth
+    m_star_earth = max(1e-6, star_mass_solar * 332946.0)
+    mu = ((m1_earth + m2_earth) / (3.0 * m_star_earth)) ** (1.0 / 3.0)
+    r_h_mut = mu * (a1_au + a2_au) / 2.0
+    if r_h_mut <= 0:
+        return 999.0, True
+    delta = (a2_au - a1_au) / r_h_mut
+    is_stable = delta > 3.4641
+    return delta, is_stable
+
+
+def migration_energy_joules(
+    star_mass_solar: float,
+    planet_mass_earth: float,
+    a_start_au: float,
+    a_end_au: float,
+) -> Tuple[float, float]:
+    """Calculates the orbital mechanical energy required to shift a planet's semi-major axis:
+    Delta E = (G * M_* * m_p / 2) * |1/a_start - 1/a_end|
+    G = 6.6743e-11 N m^2 / kg^2
+    1 Solar Mass = 1.989e30 kg
+    1 Earth Mass = 5.972e24 kg
+    1 AU = 1.496e11 m
+    Returns (energy_joules, solar_lifetime_fraction).
+    """
+    G = 6.6743e-11
+    m_star_kg = max(1e28, star_mass_solar * 1.989e30)
+    m_planet_kg = max(1e22, planet_mass_earth * 5.972e24)
+    r1_m = max(1e9, a_start_au * 1.496e11)
+    r2_m = max(1e9, a_end_au * 1.496e11)
+    delta_e = 0.5 * G * m_star_kg * m_planet_kg * abs(1.0 / r1_m - 1.0 / r2_m)
+    solar_lifetime_e = 1.2e44  # L_sun * 10 Gyr in Joules
+    return delta_e, delta_e / solar_lifetime_e
+
+
+
 def classify(fl: F, radius: F, giant: bool, rng: random.Random) -> str:
     """A world's type follows from the light it receives and what it can hold on to."""
     if giant:

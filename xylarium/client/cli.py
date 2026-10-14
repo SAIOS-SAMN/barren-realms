@@ -238,6 +238,7 @@ class TerminalClient:
         **{w: "STELLAR_ENGINEERING" for w in ["STELLAR", "STARLIFT", "LIFTER", "SOLAR", "IGNITE"]},
         **{w: "SHADOW_OPERATIONS" for w in ["SHADOW", "COVERT", "BLACKOPS", "SABOTAGE", "INFILTRATE"]},
         **{w: "OMEGA_PROTOCOL" for w in ["OMEGA", "ASCEND", "TRANSCEND", "FILTER", "KARDASHEV"]},
+        **{w: "COSMOLOGY_AUDIT" for w in ["COSMOLOGY", "AUDIT", "PHYSICS", "TELEMETRY", "LANDIS", "HILL"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -356,6 +357,9 @@ class TerminalClient:
             return
         if choice == "OMEGA_PROTOCOL":
             self._prompt_omega(view)
+            return
+        if choice == "COSMOLOGY_AUDIT":
+            self._prompt_cosmology_audit(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3683,6 +3687,20 @@ class TerminalClient:
                 if confirm == "yes":
                     res = self.kernel.dispatch(self.player_id, ActionType.OMEGA_AWAKEN_FILTER)
                     self._print_result(res)
+
+    def _prompt_cosmology_audit(self, view: Dict[str, Any]) -> None:
+        """Astrophysical, Relativistic Horizon & Percolation Diagnostics."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_cosmology_audit_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Cosmology Diagnostics [Q to return] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

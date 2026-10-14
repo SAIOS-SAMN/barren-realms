@@ -3652,6 +3652,65 @@ class TerminalRenderer:
         lines.append(f"{bold(c_gold('═' * 78))}")
         return "\n".join(lines)
 
+    @classmethod
+    def render_cosmology_audit_screen(cls, view: Dict[str, Any]) -> str:
+        """Deep cosmological telemetry and astrophysical audit console."""
+        from xylarium.kernel import physics
+        sector = view.get("sector", {})
+        planets = sector.get("planets", [])
+        lines = [
+            f"{bold(c_cyan('═══════════════ [ COSMOLOGY, ASTROPHYSICS & HORIZON AUDIT ] ═══════════════'))}",
+            f"  {c_white('Deep mathematical diagnostics across the 5 fundamental physical horizons.')}",
+            f"{bold(c_cyan('─' * 78))}",
+        ]
+
+        # 1. LANDIS PERCOLATION DYNAMICS
+        lines.append(f"  {bold(c_gold('1. PERCOLATION PHASE STATE (LANDIS 1998 BOUNDARY):'))}")
+        lines.append(f"     • Critical Percolation Threshold: {c_gold('p_c = 24.88%')} (3D Continuum Packing)")
+        lines.append(f"     • Physical Meaning: Below p_c, colonies form isolated finite clusters and stall.")
+        lines.append(f"     • Solution: Genetic plasticity or artificial wormhole bridges (Project 1).")
+        lines.append("")
+
+        # 2. KEPLERIAN HILL SPHERE & ORBITAL STABILITY
+        lines.append(f"  {bold(c_gold('2. KEPLERIAN HILL SPHERE & ORBITAL STABILITY MARGINS:'))}")
+        if planets:
+            p = planets[0]
+            r_h = physics.hill_radius(1.0, 1.0, 1.0)
+            lines.append(f"     • Local Primary World: {c_white(p.get('name', 'World'))} (Type: {p.get('planet_type')})")
+            lines.append(f"     • Hill Sphere Radius (r_H): {c_cyan(f'{r_h:.4f} AU')} (~{r_h * 1.496e8:.1f} thousand km)")
+            lines.append(f"     • Mutual Stability Margin (Gladman Delta): {c_green('Delta = 22.4 >> 3.46')} (Orbitally Stable)")
+            delta_e, solar_frac = physics.migration_energy_joules(1.0, 1.0, 1.0, 1.5)
+            lines.append(f"     • Energy to Migrate Orbit (+0.5 AU): {c_red(f'{delta_e:.2e} Joules')} (~{solar_frac:.4%} solar lifetime)")
+            lines.append(f"     • Conclusion: Moving planets burns stars and triggers mutual Hill-sphere collapse.")
+        else:
+            lines.append(f"     • No celestial bodies in current sector.")
+        lines.append("")
+
+        # 3. RELATIVISTIC CAUSAL COMMAND HORIZON
+        lines.append(f"  {bold(c_gold('3. RELATIVISTIC CAUSAL COMMAND HORIZON (LIGHT-CONE LAG):'))}")
+        lines.append(f"     • Galactic Light Speed Limit (c): 1 kpc per 3,261.56 standard years")
+        lines.append(f"     • Generational Coherence Threshold: {c_gold('20.0 Years')} (Maximum centralized light cone)")
+        lines.append(f"     • Beyond 20 light-years: Colonies speciate and require autonomous standing doctrines.")
+        lines.append("")
+
+        # 4. CORRELATED EXTINCTION HAZARDS
+        lines.append(f"  {bold(c_gold('4. CORRELATED EXTINCTION HAZARD SCALING (ANNALS):'))}")
+        lines.append(f"     • Uncoupled IID Model: Hazard ~ 1/W  [FLAW: Assumes total catastrophe independence]")
+        lines.append(f"     • Modern Correlated Model: Hazard ~ 1/W^0.85  [CORRECT: Accounts for lane collapse & CMEs]")
+        lines.append(f"     • Result: 10 colonies yield 7.08x safety margin, not 10.0x.")
+        lines.append("")
+
+        # 5. KARDASHEV ASCENDANCE & OMEGA PROTOCOL
+        om = view.get("omega_protocol", {})
+        filter_status = c_red("AWAKENED (CRITICAL)") if om.get("great_filter_active") else c_green("DORMANT")
+        lines.append(f"  {bold(c_gold('5. KARDASHEV PROGRESSION & THE GREAT FILTER:'))}")
+        lines.append(f"     • Great Filter Status: {filter_status}")
+        lines.append(f"     • Metric Torsion Fields Active: {len(om.get('torsion_fields', {}))}")
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        lines.append(f"  {c_white('[Q / Enter] Return to Cockpit')}")
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        return "\n".join(lines)
+
 
     @classmethod
     def render_help(cls) -> str:

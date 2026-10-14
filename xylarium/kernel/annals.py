@@ -226,14 +226,14 @@ def dominion_cap(kernel: Any, who: str, home: Any = None) -> float:
 
 
 def _dominion_hazard(rate: float, w0: float, gens: float, cap_of: Any, need: Optional[float] = None,
-                     g: float = 0.0) -> tuple:
+                     g: float = 0.0, correlated: bool = False) -> tuple:
     """The hazard a dominion of w0 worlds runs over `gens` (any unit of time) as it settles, its fall shared over its
     worlds: they grow e^(g t), but never past the systems it has reached (cap_of(t), growing as its front does).
     While it grows freely, f/(w0 g)(1 - e^-g t); once its front binds it, the integral of f/cap, taken in
     ln(1 + g t) where the front's volume is smooth. With `need`, also when that much hazard has been run (else None).
     Returns (hazard run, generations until `need`)."""
     w0 = max(1.0, w0)
-    w0_eff = max(1.0, w0 ** 0.85)                             # correlated hazard: shared lanes & cluster events
+    w0_eff = max(1.0, w0 ** 0.85) if correlated else w0
     if g <= 0:                                                # it does not grow: its fall is shared over w0_eff
         ran = rate / w0_eff * gens
         return (need, need * w0_eff / rate) if need is not None and need < ran else (ran, None)
@@ -261,7 +261,7 @@ def _dominion_hazard(rate: float, w0: float, gens: float, cap_of: Any, need: Opt
         ta, tb_ = math.expm1(ua) / g, math.expm1(ub) / g
         tm = math.expm1(0.5 * (ua + ub)) / g
         w = min(math.exp(min(700.0, math.log(w0) + g * tm)), max(1.0, cap_of(tm)))
-        w_eff = max(1.0, w ** 0.85)
+        w_eff = max(1.0, w ** 0.85) if correlated else w
         h = rate / w_eff * (tb_ - ta)
         if need is not None and ran + h >= need:
             return need, ta + (need - ran) * w_eff / rate
