@@ -28,10 +28,13 @@ def main():
     parser.add_argument("-l", "--load", type=str, default="xylarium_save.json", help="Save file to load from")
     parser.add_argument("--new", action="store_true", help="Start a new game even if save file exists")
     parser.add_argument("--demo", action="store_true", help="Run a quick automated kernel simulation pass")
-    parser.add_argument("--bridge", action="store_true", help="Launch Mycelium Bridge Daemon (WebSocket + Telnet)")
+    parser.add_argument("--runtime", action="store_true", help="Launch headless runtime engine that loads universe and runs ambient continuous simulation")
+    parser.add_argument("--bridge", action="store_true", help="Launch Mycelium Bridge Daemon")
+    parser.add_argument("--enable-telnet", action="store_true", default=False, help="Enable legacy Telnet BBS door (default: disabled, no telnet)")
+    parser.add_argument("--no-ws", action="store_true", default=False, help="Disable WebSocket API gateway")
     parser.add_argument("--progenitor", action="store_true", help="Take the progenitors' seat: write laws, begin, watch")
     parser.add_argument("--ws-port", type=int, default=8765, help="WebSocket port (default: 8765)")
-    parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet port (default: 2002)")
+    parser.add_argument("--telnet-port", type=int, default=2002, help="Telnet port if enabled (default: 2002)")
 
     args = parser.parse_args()
     if args.progenitor:
@@ -50,7 +53,8 @@ def main():
             print(c_green("Save state loaded successfully."))
 
     player_id = "player_1"
-    single_player = not (args.demo or args.bridge)
+    headless = args.demo or args.bridge or args.runtime
+    single_player = not headless
     if not kernel:
         print(f"Generating new deterministic universe (Seed: {args.seed})...")
         if single_player:
@@ -144,7 +148,7 @@ def main():
         print(c_green("Demo pass complete! Kernel is verified and fully operational."))
         return
 
-    if args.bridge:
+    if args.runtime or args.bridge:
         import asyncio
         from bridge.daemon import BridgeDaemon
         daemon = BridgeDaemon(
@@ -152,7 +156,9 @@ def main():
             host="0.0.0.0",
             ws_port=args.ws_port,
             telnet_port=args.telnet_port,
-            save_file=save_file
+            save_file=save_file,
+            enable_telnet=args.enable_telnet,
+            enable_ws=not args.no_ws
         )
         try:
             asyncio.run(daemon.start())
