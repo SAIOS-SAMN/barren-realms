@@ -250,6 +250,10 @@ class ActionType(str, Enum):
     FOUNDRY_EQUIP = "FOUNDRY_EQUIP"
     FOUNDRY_DISMANTLE = "FOUNDRY_DISMANTLE"
 
+    # [21] Deep-Time Nursery & Clade Phylogeny
+    NURSERY_IMPART_GUIDANCE = "NURSERY_IMPART_GUIDANCE"
+    NURSERY_DEFEND_CLADE = "NURSERY_DEFEND_CLADE"
+
 
 class AIPersonality(str, Enum):
     TRADER = "trader"

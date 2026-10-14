@@ -241,6 +241,7 @@ class TerminalClient:
         **{w: "COSMOLOGY_AUDIT" for w in ["COSMOLOGY", "AUDIT", "PHYSICS", "TELEMETRY", "LANDIS", "HILL"]},
         **{w: "CIVILIZATIONAL_EPOCHS" for w in ["EPOCH", "EPOCHS", "STEWARD", "STEWARDSHIP", "PROGENITOR", "METAMORPHOSIS"]},
         **{w: "RELIC_FOUNDRY" for w in ["FOUNDRY", "FORGE", "ARTIFACTS", "RELIC_FOUNDRY"]},
+        **{w: "CLADE_NURSERY" for w in ["NURSERY", "CLADES", "CHILDREN", "PHYLOGENY_NURSERY"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -368,6 +369,9 @@ class TerminalClient:
             return
         if choice == "RELIC_FOUNDRY":
             self._prompt_relic_foundry(view)
+            return
+        if choice == "CLADE_NURSERY":
+            self._prompt_clade_nursery(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3779,6 +3783,30 @@ class TerminalClient:
             elif cmd == "D":
                 art = input("Artifact ID to Dismantle > ").strip().upper()
                 res = self.kernel.dispatch(self.player_id, ActionType.FOUNDRY_DISMANTLE, artifact_id=art)
+                self._print_result(res)
+
+    def _prompt_clade_nursery(self, view: Dict[str, Any]) -> None:
+        """Deep-Time Clade Nursery & Progenitor Phylogeny Console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_clade_nursery_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Nursery Command [G/D/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "G":
+                cid = input("Clade ID to guide > ").strip().upper()
+                d_str = input("Directive [ECOLOGICAL_HARMONY / MARTIAL_DEFENSE / TECHNOLOGICAL_UPLIFT] > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.NURSERY_IMPART_GUIDANCE, clade_id=cid, directive=d_str)
+                self._print_result(res)
+            elif cmd == "D":
+                cid = input("Clade ID to defend > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.NURSERY_DEFEND_CLADE, clade_id=cid)
                 self._print_result(res)
 
     def _print_result(self, res) -> None:

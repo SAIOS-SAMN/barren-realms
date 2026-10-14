@@ -87,6 +87,7 @@ class StatePersistence:
             "omega_protocol": kernel.omega_manager.to_dict() if hasattr(kernel, "omega_manager") else None,
             "epochs": kernel.epoch_manager.to_dict() if hasattr(kernel, "epoch_manager") else None,
             "relic_foundry": kernel.relic_foundry_manager.to_dict() if hasattr(kernel, "relic_foundry_manager") else None,
+            "clade_nursery": kernel.clade_nursery_manager.to_dict() if hasattr(kernel, "clade_nursery_manager") else None,
         }
         return data
 
@@ -291,6 +292,7 @@ class StatePersistence:
             from xylarium.kernel.omega_protocol import OmegaProtocolManager
             from xylarium.kernel.civilizational_epochs import CivilizationalEpochManager
             from xylarium.kernel.relic_foundry import RelicFoundryManager
+            from xylarium.kernel.clade_nursery import CladeNurseryManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -328,6 +330,11 @@ class StatePersistence:
                 kernel.relic_foundry_manager = RelicFoundryManager.from_dict(data["relic_foundry"])
             else:
                 kernel.relic_foundry_manager = RelicFoundryManager()
+
+            if data.get("clade_nursery"):
+                kernel.clade_nursery_manager = CladeNurseryManager.from_dict(data["clade_nursery"])
+            else:
+                kernel.clade_nursery_manager = CladeNurseryManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):

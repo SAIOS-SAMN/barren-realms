@@ -285,11 +285,11 @@ class CivilizationalEpochManager:
                 message=f"Planet '{planet_id}' not found.",
             )
 
-        if getattr(planet, "population", 0) > 0 and getattr(planet, "owner_id", None) != captain.id:
+        if getattr(planet, "owner_id", None) is not None and getattr(planet, "owner_id", None) != captain.id:
             return ActionResult(
                 success=False,
                 action=ActionType.STEWARD_SEED_NASCENT_LIFE,
-                message=f"{planet.name} already supports an inhabited civilization.",
+                message=f"{planet.name} is claimed by another sovereign empire.",
             )
 
         cost = 25000
@@ -306,9 +306,23 @@ class CivilizationalEpochManager:
         planet.population = 1000
         planet.habitability = 0.95
         planet.natives = {
+            "name": clade,
             "species": clade,
-            "stage": "PRE_WARP",
-            "temperament": "REVERENT",
+            "metabolism": "biotic",
+            "sapience": 6.5,
+            "stage": 0,
+            "progress": 0.1,
+            "population": 1000,
+            "awareness": 0.0,
+            "contamination": 0.0,
+            "stability": 0.95,
+            "temperament": "devout",
+            "protector": captain.id,
+            "contacted_by": [captain.id],
+            "converted": False,
+            "tribute": {},
+            "observations": 0,
+            "history": [],
             "reverence_for_progenitor": 100,
         }
         planet.owner_id = None  # Free primitive world under player's stewardship
@@ -316,6 +330,14 @@ class CivilizationalEpochManager:
         rec.nascent_worlds_seeded += 1
         rec.syntropic_resilience += 25.0
         rec.entropy_strain = max(0.0, rec.entropy_strain - 10.0)
+
+        if hasattr(kernel, "clade_nursery_manager"):
+            kernel.clade_nursery_manager.register_seeded_clade(
+                kernel=kernel,
+                progenitor_id=captain.id,
+                planet=planet,
+                clade_name=clade,
+            )
 
         if hasattr(kernel, "event_bus"):
             kernel.event_bus.broadcast_radio(

@@ -3837,6 +3837,43 @@ class TerminalRenderer:
         lines.append(f"{bold(c_cyan('═' * 78))}")
         return "\n".join(lines)
 
+    @classmethod
+    def render_clade_nursery_screen(cls, view: Dict[str, Any]) -> str:
+        """Deep-Time Clade Nursery & Progenitor Phylogeny Console."""
+        nursery = view.get("nursery", {})
+        clades = nursery.get("clades", {})
+        player = view.get("player", {})
+
+        lines = [
+            f"{bold(c_gold('═════════════ [ DEEP-TIME NURSERY & CLADE PHYLOGENY ] ═════════════'))}",
+            f"  {c_white('The living evolution of sapient species seeded across deep cosmic time.')}",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+
+        if not clades:
+            lines.append(f"  {c_gray('No nascent clades currently recorded in the nursery registry.')}")
+            lines.append(f"  {c_white('Tip: Seed young clades in Epoch III Stewardship via [EPOCH] -> [S]eed.')}")
+        else:
+            lines.append(f"  {bold('SEEDED SAPIENT CLADES UNDER PROGENITOR STEWARDSHIP:')}")
+            lines.append("")
+            for cid, c in clades.items():
+                stage_color = c_green if c["stage"] == "WARP_SOVEREIGN" else (c_cyan if "SPACE" in c["stage"] else c_gold)
+                sec_str = f"Sector {c['origin_sector_id']}"
+                pop_str = f"{c['population']:,}"
+                rev_str = f"{c['reverence_pct']}%"
+                lines.append(f"  [{c_cyan(cid)}] {bold(c_white(c['name']))}  │  Origin: {c_gold(sec_str)} ({c['origin_planet_id']})")
+                lines.append(f"     • Evolutionary Stage: {stage_color(c['stage'])}  │  Population: {c_white(pop_str)}")
+                lines.append(f"     • Progenitor Reverence: {c_green(rev_str)} ({c['theology']})")
+                directive_str = c_cyan(c["guidance_directive"]) if c.get("guidance_directive") else c_gray("None")
+                lines.append(f"     • Active Guidance Directive: {directive_str}")
+                lines.append(f"     • Cycles Lived: {c['cycles_lived']}  │  Colonies: {len(c.get('colonized_planets', []))}")
+                lines.append("")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[G]')}uidance <clade_id>  │  {c_gold('[D]')}efend World  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
 
     @classmethod
     def render_help(cls) -> str:

@@ -1376,5 +1376,29 @@ def _foundry_dismantle(k: Any, captain: Any, current_sector: Any, kwargs: Dict[s
     )
 
 
+# ---------------------------------------------------------------------- [21] Deep-Time Nursery & Clade Phylogeny
+@action(ActionType.NURSERY_IMPART_GUIDANCE, turns=1)
+def _nursery_impart_guidance(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    cid = kwargs.get("clade_id", "")
+    dir_str = kwargs.get("directive", "ECOLOGICAL_HARMONY")
+    return k.clade_nursery_manager.impart_guidance(
+        kernel=k,
+        captain=captain,
+        clade_id=cid,
+        directive=dir_str,
+    )
+
+
+@action(ActionType.NURSERY_DEFEND_CLADE, turns=1)
+def _nursery_defend_clade(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    cid = kwargs.get("clade_id", "")
+    return k.clade_nursery_manager.defend_clade(
+        kernel=k,
+        captain=captain,
+        clade_id=cid,
+    )
+
+
+
 
 
