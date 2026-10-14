@@ -264,6 +264,11 @@ class ActionType(str, Enum):
     VOID_BRIDGE_TRANSIT = "VOID_BRIDGE_TRANSIT"
     VOID_BRIDGE_SURVEY_CLUSTER = "VOID_BRIDGE_SURVEY_CLUSTER"
 
+    # [24] Cosmic Entropy Tides & The Inflationary Genesis Loop
+    ENTROPY_PURGE_PULSE = "ENTROPY_PURGE_PULSE"
+    ENTROPY_ATTUNE_METRIC = "ENTROPY_ATTUNE_METRIC"
+    INFLATIONARY_GENESIS = "INFLATIONARY_GENESIS"
+
 
 class AIPersonality(str, Enum):
     TRADER = "trader"

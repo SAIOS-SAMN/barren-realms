@@ -1465,6 +1465,38 @@ def _void_bridge_survey_cluster(k: Any, captain: Any, current_sector: Any, kwarg
     )
 
 
+# ---------------------------------------------------------------------- [24] Cosmic Entropy Tides & The Inflationary Genesis Loop
+@action(ActionType.ENTROPY_PURGE_PULSE, turns=1)
+def _entropy_purge_pulse(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.entropy_tides_manager.purge_entropy(
+        kernel=k,
+        captain=captain,
+    )
+
+
+@action(ActionType.ENTROPY_ATTUNE_METRIC, turns=1)
+def _entropy_attune_metric(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    m = kwargs.get("matter_density", 1.0)
+    s = kwargs.get("syntropic_affinity", 1.0)
+    h = kwargs.get("hyperlane_percolation", 1.0)
+    return k.entropy_tides_manager.attune_constants(
+        kernel=k,
+        captain=captain,
+        matter_density=float(m),
+        syntropic_affinity=float(s),
+        hyperlane_percolation=float(h),
+    )
+
+
+@action(ActionType.INFLATIONARY_GENESIS, turns=5)
+def _inflationary_genesis(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.entropy_tides_manager.trigger_inflationary_genesis(
+        kernel=k,
+        captain=captain,
+    )
+
+
+
 
 
 

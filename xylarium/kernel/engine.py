@@ -96,6 +96,7 @@ from xylarium.kernel.relic_foundry import RelicFoundryManager
 from xylarium.kernel.clade_nursery import CladeNurseryManager
 from xylarium.kernel.conclave import PanGalacticConclaveManager
 from xylarium.kernel.void_bridges import VoidBridgeManager, EXTRAGALACTIC_CLUSTERS
+from xylarium.kernel.entropy_tides import EntropyTidesManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -215,6 +216,7 @@ class GameKernel:
         self.clade_nursery_manager = CladeNurseryManager()
         self.conclave_manager = PanGalacticConclaveManager()
         self.void_bridge_manager = VoidBridgeManager()
+        self.entropy_tides_manager = EntropyTidesManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
@@ -2702,6 +2704,10 @@ class GameKernel:
         if hasattr(self, "void_bridge_manager"):
             self.void_bridge_manager.tick(self)
 
+        # 27. Cosmic Entropy Tides & The Inflationary Genesis Loop
+        if hasattr(self, "entropy_tides_manager"):
+            self.entropy_tides_manager.tick(self)
+
 
 
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
@@ -3091,6 +3097,7 @@ class GameKernel:
             "conclave_voting_weight": self.conclave_manager.calculate_voting_weight(self, player_id) if hasattr(self, "conclave_manager") else 10,
             "void_bridges": self.void_bridge_manager.to_dict() if hasattr(self, "void_bridge_manager") else {},
             "foreign_clusters": EXTRAGALACTIC_CLUSTERS,
+            "entropy_tides": self.entropy_tides_manager.to_dict() if hasattr(self, "entropy_tides_manager") else {},
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

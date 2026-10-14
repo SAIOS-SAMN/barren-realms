@@ -244,6 +244,7 @@ class TerminalClient:
         **{w: "CLADE_NURSERY" for w in ["NURSERY", "CLADES", "CHILDREN", "PHYLOGENY_NURSERY"]},
         **{w: "CONCLAVE" for w in ["CONCLAVE", "SENATE", "LEAGUE", "LAWS", "ASSEMBLY", "PARLIAMENT"]},
         **{w: "VOID_BRIDGES" for w in ["BRIDGES", "BRIDGE", "VOID", "CLUSTERS", "VOID_BRIDGES"]},
+        **{w: "ENTROPY_TIDES" for w in ["ENTROPY", "GENESIS", "TIDES", "BIGBANG", "REBIRTH"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -380,6 +381,9 @@ class TerminalClient:
             return
         if choice == "VOID_BRIDGES":
             self._prompt_void_bridges(view)
+            return
+        if choice == "ENTROPY_TIDES":
+            self._prompt_entropy_tides(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3872,6 +3876,40 @@ class TerminalClient:
                 c_id = input("Cluster ID to survey > ").strip().upper()
                 res = self.kernel.dispatch(self.player_id, ActionType.VOID_BRIDGE_SURVEY_CLUSTER, cluster_id=c_id)
                 self._print_result(res)
+
+    def _prompt_entropy_tides(self, view: Dict[str, Any]) -> None:
+        """Cosmic Entropy Tides and Inflationary Genesis console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_entropy_tides_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Entropy Command [P/A/I/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "P":
+                res = self.kernel.dispatch(self.player_id, ActionType.ENTROPY_PURGE_PULSE)
+                self._print_result(res)
+            elif cmd == "A":
+                raw = input("Enter 3 float values for Matter Syntropy Percolation (e.g. 1.2 1.5 1.0) > ").strip().split()
+                if len(raw) == 3:
+                    try:
+                        m, s, h = float(raw[0]), float(raw[1]), float(raw[2])
+                        res = self.kernel.dispatch(self.player_id, ActionType.ENTROPY_ATTUNE_METRIC, matter_density=m, syntropic_affinity=s, hyperlane_percolation=h)
+                        self._print_result(res)
+                    except ValueError:
+                        print(c_red("Invalid numeric values."))
+                else:
+                    print(c_red("Must supply exactly 3 values."))
+            elif cmd == "I":
+                confirm = input(c_red("CONFIRM INFLATIONARY GENESIS (REBOOT UNIVERSE)? [Y/N] > ")).strip().upper()
+                if confirm in ["Y", "YES"]:
+                    res = self.kernel.dispatch(self.player_id, ActionType.INFLATIONARY_GENESIS)
+                    self._print_result(res)
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

@@ -3989,6 +3989,72 @@ class TerminalRenderer:
         return "\n".join(lines)
 
 
+    @classmethod
+    def render_entropy_tides_screen(cls, view: Dict[str, Any]) -> str:
+        """Cosmic Entropy Tides and Inflationary Genesis Console."""
+        et_data = view.get("entropy_tides", {})
+        entropy_lvl = et_data.get("entropy_level", 10.0)
+        generation = et_data.get("genesis_generation", 1)
+        constants = et_data.get("constants", {})
+        history = et_data.get("genesis_history", [])
+
+        # Visual entropy meter (20 blocks)
+        blocks = int(entropy_lvl / 5.0)
+        blocks = max(0, min(20, blocks))
+        meter_filled = "█" * blocks
+        meter_empty = "░" * (20 - blocks)
+        meter_str = f"[{meter_filled}{meter_empty}]"
+        meter_color = c_green if entropy_lvl < 40 else (c_gold if entropy_lvl < 75 else c_red)
+
+        cyc_val = view.get("cycle", 1)
+        cyc_str = c_gold(f"Cycle {cyc_val}")
+        gen_str = bold(c_cyan(f"Generation {generation}"))
+
+        lines = [
+            f"{bold(c_gold('═════ [ COSMIC ENTROPY TIDES & THE INFLATIONARY GENESIS LOOP ] ═════'))}",
+            f"  {c_white('Deep-time thermodynamic decay, metric preservation, and the eternal cycle of rebirth.')}",
+            f"  Cosmic Generation: {gen_str}  │  Thermodynamic Epoch: {cyc_str}",
+            f"{bold(c_gold('─' * 78))}",
+            f"  {bold(c_white('GLOBAL ENTROPY STRAIN:'))}  {meter_color(meter_str)}  {meter_color(f'{entropy_lvl:.1f}%')}",
+        ]
+
+        if entropy_lvl >= 75.0:
+            lines.append(f"  {bold(c_red('CRITICAL METRIC INSTABILITY: Stars overheating; hyperlane topology decaying!'))}")
+        elif entropy_lvl >= 40.0:
+            lines.append(f"  {c_gold('ELEVATED ENTROPY: Star lifting and metric torsion are warming the galactic void.')}")
+        else:
+            lines.append(f"  {c_green('SYNTROPIC EQUILIBRIUM: Vacuum energy is calm and orderly.')}")
+        lines.append("")
+
+        # Attuned Constants
+        m_dens = constants.get("matter_density", 1.0)
+        s_aff = constants.get("syntropic_affinity", 1.0)
+        h_perc = constants.get("hyperlane_percolation", 1.0)
+        lines.append(f"  {bold(c_white('ATTUNED PHYSICAL LAWS OF THIS COSMIC ITERATION:'))}")
+        lines.append(f"    • Matter Density Multiplier: {c_cyan(f'{m_dens:.2f}x')} (Scales resource yields)")
+        lines.append(f"    • Syntropic Affinity:        {c_green(f'{s_aff:.2f}x')} (Scales Progenitor resilience)")
+        lines.append(f"    • Hyperlane Percolation:     {c_gold(f'{h_perc:.2f}x')} (Scales wormhole warp velocity)")
+        lines.append("")
+
+        # Ancestral History
+        lines.append(f"  {bold(c_white('ANCESTRAL GENESIS ARCHIVES:'))}")
+        if not history:
+            lines.append(f"    {c_gray('This is Genesis Generation 1: The Prime Creation. No prior cycles recorded.')}")
+        else:
+            for rec in history[-3:]:
+                g_num = rec.get("generation", 1)
+                creator = rec.get("creator_captain", "First Cause")
+                cyc = rec.get("cycle_achieved", 0)
+                lines.append(f"    • Generation {g_num} Rebirth by {bold(c_gold(creator))} at Cycle {cyc}")
+        lines.append("")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[P]')}urge Entropy  │  {c_gold('[A]')}ttune Constants <M S H>  │  {c_gold('[I]')}gnite Genesis  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+
+
 
 
     @classmethod

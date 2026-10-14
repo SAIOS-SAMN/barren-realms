@@ -90,6 +90,7 @@ class StatePersistence:
             "clade_nursery": kernel.clade_nursery_manager.to_dict() if hasattr(kernel, "clade_nursery_manager") else None,
             "conclave": kernel.conclave_manager.to_dict() if hasattr(kernel, "conclave_manager") else None,
             "void_bridges": kernel.void_bridge_manager.to_dict() if hasattr(kernel, "void_bridge_manager") else None,
+            "entropy_tides": kernel.entropy_tides_manager.to_dict() if hasattr(kernel, "entropy_tides_manager") else None,
         }
         return data
 
@@ -297,6 +298,7 @@ class StatePersistence:
             from xylarium.kernel.clade_nursery import CladeNurseryManager
             from xylarium.kernel.conclave import PanGalacticConclaveManager
             from xylarium.kernel.void_bridges import VoidBridgeManager
+            from xylarium.kernel.entropy_tides import EntropyTidesManager
 
             if data.get("wormhole_engineering"):
                 kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
@@ -349,6 +351,11 @@ class StatePersistence:
                 kernel.void_bridge_manager = VoidBridgeManager.from_dict(data["void_bridges"])
             else:
                 kernel.void_bridge_manager = VoidBridgeManager()
+
+            if data.get("entropy_tides"):
+                kernel.entropy_tides_manager = EntropyTidesManager.from_dict(data["entropy_tides"])
+            else:
+                kernel.entropy_tides_manager = EntropyTidesManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):
