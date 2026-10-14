@@ -86,6 +86,11 @@ from xylarium.kernel.megastructures import MegastructuresManager
 from xylarium.kernel.biofleets import BioFleetsManager
 from xylarium.kernel.biosphere_genesis import BiosphereGenesisManager
 from xylarium.kernel.colonial_decoherence import ColonialDecoherenceManager
+from xylarium.kernel.wormhole_engineering import WormholeEngineeringManager
+from xylarium.kernel.hegemony_ai import HegemonyAIManager
+from xylarium.kernel.stellar_engineering import StellarEngineeringManager
+from xylarium.kernel.shadow_ops import ShadowOpsManager
+from xylarium.kernel.omega_protocol import OmegaProtocolManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -195,12 +200,18 @@ class GameKernel:
         self.biofleets_manager = BioFleetsManager()
         self.biosphere_genesis_manager = BiosphereGenesisManager()
         self.decoherence_manager = ColonialDecoherenceManager()
+        self.wormhole_manager = WormholeEngineeringManager()
+        self.hegemony_manager = HegemonyAIManager()
+        self.stellar_manager = StellarEngineeringManager()
+        self.shadow_manager = ShadowOpsManager()
+        self.omega_manager = OmegaProtocolManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
         self.research_manager.seed_initial_anomalies(self)
         self.crises_manager.seed_initial_crises(self)
         self.megastructures_manager.seed_initial_derelicts(self)
+        self.hegemony_manager.seed_initial_factions(self)
         for cap in self.captains.values():     # the genesis fleets leave port fuelled
             cap.ship.fuel = propulsion_mod.bunker_capacity(cap.ship)
         ledger_mod.endow_exchange_depth(self)  # exchanges as deep as the economies they serve
@@ -2641,6 +2652,27 @@ class GameKernel:
         if hasattr(self, "decoherence_manager"):
             self.decoherence_manager.tick(self)
 
+        # 17. Dynamic Hyperlane & Wormhole Engineering
+        if hasattr(self, "wormhole_manager"):
+            self.wormhole_manager.tick(self)
+
+        # 18. Grand Hegemony AI & Galactic Total War
+        if hasattr(self, "hegemony_manager"):
+            self.hegemony_manager.tick(self)
+
+        # 19. Deep-Space Stellar Engineering & Star-Lifting
+        if hasattr(self, "stellar_manager"):
+            self.stellar_manager.tick(self)
+
+        # 20. Shadow Corporations & Covert Infiltration
+        if hasattr(self, "shadow_manager"):
+            self.shadow_manager.tick(self)
+
+        # 21. Kardashev Type III Cosmic Ascendance
+        if hasattr(self, "omega_manager"):
+            self.omega_manager.tick(self)
+
+
 
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
         """Finds planet across all sectors by ID or name (by ID through an index rebuilt whenever it misses)."""
@@ -3015,6 +3047,11 @@ class GameKernel:
                 ] if hasattr(self, "biosphere_genesis_manager") else [],
             },
             "decoherence": self.decoherence_manager.to_dict() if hasattr(self, "decoherence_manager") else {},
+            "wormhole_engineering": self.wormhole_manager.to_dict() if hasattr(self, "wormhole_manager") else {},
+            "hegemony": self.hegemony_manager.to_dict() if hasattr(self, "hegemony_manager") else {},
+            "stellar_engineering": self.stellar_manager.to_dict() if hasattr(self, "stellar_manager") else {},
+            "shadow_ops": self.shadow_manager.to_dict() if hasattr(self, "shadow_manager") else {},
+            "omega_protocol": self.omega_manager.to_dict() if hasattr(self, "omega_manager") else {},
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

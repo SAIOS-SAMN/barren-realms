@@ -1142,3 +1142,143 @@ def _stabilize_decoherence(k: Any, captain: Any, current_sector: Any, kwargs: Di
         method=kwargs.get("method", "RELAY")
     )
 
+
+# ---------------------------------------------------------------------- [14] Dynamic Hyperlane & Wormhole Engineering
+@action(ActionType.GATE_CONSTRUCT, turns=2)
+def _gate_construct(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.wormhole_manager.construct_jump_gate(
+        kernel=k,
+        captain=captain,
+        target_sector=int(kwargs.get("target_sector", 0)),
+    )
+
+
+@action(ActionType.WORMHOLE_COLLAPSE, turns=1)
+def _wormhole_collapse(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.wormhole_manager.collapse_wormhole(
+        kernel=k,
+        captain=captain,
+        target_sector=int(kwargs.get("target_sector", 0)),
+    )
+
+
+@action(ActionType.TOLL_BUOY_DEPLOY, turns=0)
+def _toll_buoy_deploy(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.wormhole_manager.deploy_toll_buoy(
+        kernel=k,
+        captain=captain,
+        toll_fee=int(kwargs.get("toll_fee", 250)),
+    )
+
+
+# ---------------------------------------------------------------------- [15] Grand Hegemony AI & Galactic Total War
+@action(ActionType.HEGEMONY_ENLIST_STRIKE, turns=0)
+def _hegemony_enlist_strike(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.hegemony_manager.enlist_mercenary_strike(
+        kernel=k,
+        captain=captain,
+        faction_id=kwargs.get("faction_id", "IMPERIUM"),
+        target_sector=int(kwargs.get("target_sector", 0)),
+    )
+
+
+# ---------------------------------------------------------------------- [16] Deep-Space Stellar Engineering & Star-Lifting
+@action(ActionType.STELLAR_DEPLOY_LIFTER, turns=1)
+def _stellar_deploy_lifter(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.stellar_manager.deploy_star_lifter(
+        kernel=k,
+        captain=captain,
+    )
+
+
+@action(ActionType.STELLAR_IGNITE_PROTOSTAR, turns=2)
+def _stellar_ignite_protostar(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.stellar_manager.ignite_protostar(
+        kernel=k,
+        captain=captain,
+    )
+
+
+@action(ActionType.STELLAR_CORONAL_BURST, turns=1)
+def _stellar_coronal_burst(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.stellar_manager.fire_coronal_burst(
+        kernel=k,
+        captain=captain,
+        target_sector=int(kwargs.get("target_sector", 0)),
+    )
+
+
+# ---------------------------------------------------------------------- [17] Shadow Corporations & Covert Infiltration
+@action(ActionType.SHADOW_INCORPORATE_SHELL, turns=0)
+def _shadow_incorporate_shell(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.shadow_manager.incorporate_shell_company(
+        kernel=k,
+        captain=captain,
+        company_name=kwargs.get("name", "Obsidian Holdings Anon"),
+    )
+
+
+@action(ActionType.SHADOW_PLANT_SLEEPER, turns=1)
+def _shadow_plant_sleeper(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("planet_id")
+    if not pid and current_sector and current_sector.planets:
+        pid = current_sector.planets[0].id
+    return k.shadow_manager.plant_sleeper_cell(
+        kernel=k,
+        captain=captain,
+        planet_id=pid or "",
+    )
+
+
+@action(ActionType.SHADOW_EXECUTE_SABOTAGE, turns=1)
+def _shadow_execute_sabotage(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("planet_id")
+    if not pid and current_sector and current_sector.planets:
+        pid = current_sector.planets[0].id
+    return k.shadow_manager.execute_sabotage(
+        kernel=k,
+        captain=captain,
+        planet_id=pid or "",
+        target_subsystem=kwargs.get("target", "GRID"),
+    )
+
+
+@action(ActionType.SHADOW_FALSE_FLAG_STRIKE, turns=1)
+def _shadow_false_flag_strike(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.shadow_manager.stage_false_flag(
+        kernel=k,
+        captain=captain,
+        target_sector=int(kwargs.get("target_sector", current_sector.id if current_sector else 0)),
+        framed_faction=kwargs.get("framed_faction", "CHOIR"),
+    )
+
+
+# ---------------------------------------------------------------------- [18] Kardashev Type III Cosmic Ascendance
+@action(ActionType.OMEGA_UPLOAD_POPULATION, turns=2)
+def _omega_upload_population(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("planet_id")
+    if not pid and current_sector and current_sector.planets:
+        pid = current_sector.planets[0].id
+    return k.omega_manager.upload_population(
+        kernel=k,
+        captain=captain,
+        planet_id=pid or "",
+    )
+
+
+@action(ActionType.OMEGA_METRIC_TORSION, turns=1)
+def _omega_metric_torsion(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.omega_manager.anchor_metric_torsion(
+        kernel=k,
+        captain=captain,
+    )
+
+
+@action(ActionType.OMEGA_AWAKEN_FILTER, turns=2)
+def _omega_awaken_filter(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    return k.omega_manager.awaken_great_filter(
+        kernel=k,
+        captain=captain,
+    )
+
+

@@ -80,6 +80,11 @@ class StatePersistence:
             "biofleets": kernel.biofleets_manager.to_dict() if hasattr(kernel, "biofleets_manager") else None,
             "biosphere_genesis": kernel.biosphere_genesis_manager.to_dict() if hasattr(kernel, "biosphere_genesis_manager") else None,
             "decoherence": kernel.decoherence_manager.to_dict() if hasattr(kernel, "decoherence_manager") else None,
+            "wormhole_engineering": kernel.wormhole_manager.to_dict() if hasattr(kernel, "wormhole_manager") else None,
+            "hegemony": kernel.hegemony_manager.to_dict() if hasattr(kernel, "hegemony_manager") else None,
+            "stellar_engineering": kernel.stellar_manager.to_dict() if hasattr(kernel, "stellar_manager") else None,
+            "shadow_ops": kernel.shadow_manager.to_dict() if hasattr(kernel, "shadow_manager") else None,
+            "omega_protocol": kernel.omega_manager.to_dict() if hasattr(kernel, "omega_manager") else None,
         }
         return data
 
@@ -276,6 +281,38 @@ class StatePersistence:
                 kernel.decoherence_manager = ColonialDecoherenceManager.from_dict(data["decoherence"])
             else:
                 kernel.decoherence_manager = ColonialDecoherenceManager()
+
+            from xylarium.kernel.wormhole_engineering import WormholeEngineeringManager
+            from xylarium.kernel.hegemony_ai import HegemonyAIManager
+            from xylarium.kernel.stellar_engineering import StellarEngineeringManager
+            from xylarium.kernel.shadow_ops import ShadowOpsManager
+            from xylarium.kernel.omega_protocol import OmegaProtocolManager
+
+            if data.get("wormhole_engineering"):
+                kernel.wormhole_manager = WormholeEngineeringManager.from_dict(data["wormhole_engineering"])
+            else:
+                kernel.wormhole_manager = WormholeEngineeringManager()
+
+            if data.get("hegemony"):
+                kernel.hegemony_manager = HegemonyAIManager.from_dict(data["hegemony"])
+            else:
+                kernel.hegemony_manager = HegemonyAIManager()
+                kernel.hegemony_manager.seed_initial_factions(kernel)
+
+            if data.get("stellar_engineering"):
+                kernel.stellar_manager = StellarEngineeringManager.from_dict(data["stellar_engineering"])
+            else:
+                kernel.stellar_manager = StellarEngineeringManager()
+
+            if data.get("shadow_ops"):
+                kernel.shadow_manager = ShadowOpsManager.from_dict(data["shadow_ops"])
+            else:
+                kernel.shadow_manager = ShadowOpsManager()
+
+            if data.get("omega_protocol"):
+                kernel.omega_manager = OmegaProtocolManager.from_dict(data["omega_protocol"])
+            else:
+                kernel.omega_manager = OmegaProtocolManager()
 
             kernel.legacy_file = None
             if not data.get("fx"):

@@ -3489,6 +3489,171 @@ class TerminalRenderer:
         return "\n".join(lines)
 
     @classmethod
+    def render_wormhole_screen(cls, view: Dict[str, Any]) -> str:
+        """Renders dynamic hyperlane & jump gate network console."""
+        lines = [
+            f"{bold(c_cyan('══════════════ [ HYPERLANE & WORMHOLE ENGINEERING CONSOLE ] ══════════════'))}",
+            f"  {c_white('Construct artificial Jump Gates, collapse choke-points, or deploy Toll Buoys.')}",
+            f"{bold(c_cyan('─' * 78))}",
+        ]
+        eng = view.get("wormhole_engineering", {})
+        gates = eng.get("jump_gates", {})
+        buoys = eng.get("toll_buoys", {})
+
+        lines.append(f"  {bold(c_gold('ACTIVE JUMP GATES:'))}")
+        if not gates:
+            lines.append(f"    {c_gray('No artificial Jump Gates constructed.')}")
+        else:
+            for gid, g in gates.items():
+                lines.append(f"    • {c_white(gid)}: Sector {g['origin_sector']} <===> Sector {g['target_sector']} (Builder: {g['builder_id']})")
+
+        lines.append("")
+        lines.append(f"  {bold(c_gold('AUTOMATED TOLL BUOYS:'))}")
+        if not buoys:
+            lines.append(f"    {c_gray('No active toll buoys deployed.')}")
+        else:
+            for s_id, b in buoys.items():
+                lines.append(f"    • Sector {s_id}: Toll {b['toll_fee_credits']} Cr │ Revenue: {b['total_revenue_collected']:,} Cr (Owner: {b['owner_id']})")
+
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[G]')}ate <target_sec>  │  {c_gold('[C]')}ollapse <target_sec>  │  {c_gold('[T]')}oll <fee>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_cyan('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_hegemony_screen(cls, view: Dict[str, Any]) -> str:
+        """Renders Hegemonic Grand AI & Galactic Total War console."""
+        lines = [
+            f"{bold(c_red('═══════════════════ [ HEGEMONIC TOTAL WAR & ARMADAS ] ═══════════════════'))}",
+            f"  {c_white('Great powers project naval power, lay planetary sieges, and annex star systems.')}",
+            f"{bold(c_red('─' * 78))}",
+        ]
+        heg = view.get("hegemony", {})
+        factions = heg.get("factions", {})
+        armadas = heg.get("armadas", {})
+
+        lines.append(f"  {bold(c_gold('GREAT POWER FACTIONS:'))}")
+        for fid, f in factions.items():
+            controlled = len(f.get("controlled_sectors", []))
+            treasury = f.get("treasury", 0)
+            lines.append(f"    • {bold(c_gold(f['name']))} [{fid}]: Treasury {treasury:,} Cr │ Sectors: {controlled} │ Home: {f['home_sector']}")
+
+        lines.append("")
+        lines.append(f"  {bold(c_gold('STANDING ARMADA FLEETS:'))}")
+        for aid, a in armadas.items():
+            stat_color = c_green if a['status'] == 'PATROLLING' else (c_red if a['status'] == 'SIEGING' else c_cyan)
+            lines.append(f"    • {c_white(aid)} [{a['faction_id']}]: Sector {a['sector_id']} │ Power: {a['fleet_power']} ({a['ships']} hulls) │ {stat_color(a['status'])}")
+
+        lines.append(f"{bold(c_red('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[E]')}nlist Strike <faction_id> <target_sec> (25k Cr)  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_red('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_stellar_screen(cls, view: Dict[str, Any]) -> str:
+        """Renders Deep-Space Stellar Engineering console."""
+        lines = [
+            f"{bold(c_gold('═════════════════ [ STELLAR ENGINEERING & STAR-LIFTING ] ═════════════════'))}",
+            f"  {c_white('Harness solar photospheres, ignite proto-stars, and discharge coronal flares.')}",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+        st = view.get("stellar_engineering", {})
+        lifters = st.get("star_lifters", {})
+        ignitions = st.get("ignition_projects", {})
+
+        lines.append(f"  {bold(c_gold('ACTIVE STAR-LIFTERS:'))}")
+        if not lifters:
+            lines.append(f"    {c_gray('No star-lifters currently operating.')}")
+        else:
+            for lid, l in lifters.items():
+                lines.append(f"    • {c_white(lid)}: Sector {l['sector_id']} │ Harvested: {l['total_ore_extracted']} Ore, {l['total_fuel_extracted']} Fuel (Owner: {l['owner_id']})")
+
+        lines.append("")
+        lines.append(f"  {bold(c_gold('IGNITED PROTO-STARS:'))}")
+        if not ignitions:
+            lines.append(f"    {c_gray('No proto-stars ignited.')}")
+        else:
+            for s_id, ig in ignitions.items():
+                lines.append(f"    • Sector {s_id}: Ignited from {ig['original_class']} into radiant {ig['new_class']}!")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[L]')}ifter (Deploy in Sector)  │  {c_gold('[I]')}gnite Sun  │  {c_gold('[B]')}urst <target_sec>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_shadow_screen(cls, view: Dict[str, Any]) -> str:
+        """Renders Interstellar Espionage & Shadow Ops console."""
+        lines = [
+            f"{bold(c_magenta('══════════════════ [ SHADOW CORPORATIONS & COVERT OPS ] ══════════════════'))}",
+            f"  {c_white('Operate anonymous shell corps, infiltrate citadels, and stage false-flags.')}",
+            f"{bold(c_magenta('─' * 78))}",
+        ]
+        sh = view.get("shadow_ops", {})
+        shells = sh.get("shell_companies", {})
+        cells = sh.get("sleeper_cells", {})
+
+        lines.append(f"  {bold(c_gold('SHADOW CORPORATIONS:'))}")
+        if not shells:
+            lines.append(f"    {c_gray('No shadow companies incorporated.')}")
+        else:
+            for cid, s in shells.items():
+                lines.append(f"    • {bold(c_white(s['name']))} [{cid}]: Front Sector {s['front_sector']} │ Laundered: {s['laundered_credits']:,} Cr")
+
+        lines.append("")
+        lines.append(f"  {bold(c_gold('EMBEDDED SLEEPER CELLS:'))}")
+        if not cells:
+            lines.append(f"    {c_gray('No active sleeper cells planted.')}")
+        else:
+            for pid, c in cells.items():
+                lines.append(f"    • Planet {pid}: Cover Level {c['cover_level']:.0%} │ Status: {'Active' if not c['compromised'] else 'Compromised'}")
+
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[I]')}ncorporate <name>  │  {c_gold('[P]')}lant Sleeper <planet_id>  │  {c_gold('[S]')}abotage <planet_id> <GRID/TREASURY>  │  {c_gold('[F]')}alse-Flag <target_sec> <framed_fac>  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
+    def render_omega_screen(cls, view: Dict[str, Any]) -> str:
+        """Renders Kardashev Type III Cosmic Ascendance console."""
+        lines = [
+            f"{bold(c_gold('══════════════════ [ THE OMEGA PROTOCOL & ASCENDANCE ] ══════════════════'))}",
+            f"  {c_white('Mind uploading, metric torsion manipulation, and the Great Filter.')}",
+            f"{bold(c_gold('─' * 78))}",
+        ]
+        om = view.get("omega_protocol", {})
+        matrices = om.get("ascendance_matrices", {})
+        fields = om.get("torsion_fields", {})
+        filter_active = om.get("great_filter_active", False)
+
+        lines.append(f"  {bold(c_gold('ASCENDANCE MATRICES (MIND UPLOADING):'))}")
+        if not matrices:
+            lines.append(f"    {c_gray('No populations uploaded into digital substrate.')}")
+        else:
+            for oid, m in matrices.items():
+                lines.append(f"    • Sovereign {oid}: Kardashev Level {m['kardashev_level']:.2f} │ Uploaded: {m['uploaded_population']:,} Minds │ Syntropy Yield: +{m['syntropy_yield_per_cycle']} Cr/cycle")
+
+        lines.append("")
+        lines.append(f"  {bold(c_gold('ANCHORED METRIC TORSION FIELDS:'))}")
+        if not fields:
+            lines.append(f"    {c_gray('No metric torsion fields anchored.')}")
+        else:
+            for s_id, tf in fields.items():
+                lines.append(f"    • Sector {s_id}: Grav Friction {tf['gravity_mod']}x │ Local C {tf['lightspeed_mod']}x (+500 Planetary Shields)")
+
+        lines.append("")
+        if filter_active:
+            lines.append(f"  {bold(c_red('[APOCALYPSE ACTIVE] THE GREAT FILTER HAS AWAKENED! Cosmic Threat: ' + str(round(om.get('filter_threat_level', 0.5) * 100)) + '%'))}")
+        else:
+            lines.append(f"  {c_gray('The Great Filter remains dormant in deep time.')}")
+
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        lines.append(f"  Commands: {c_gold('[U]')}pload <planet_id>  │  {c_gold('[T]')}orsion (Anchor in Sector)  │  {c_gold('[A]')}waken Filter  │  {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_gold('═' * 78))}")
+        return "\n".join(lines)
+
+
+    @classmethod
     def render_help(cls) -> str:
         """Renders classic BBS door game guide and mechanics."""
         return f"""

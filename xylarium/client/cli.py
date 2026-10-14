@@ -233,6 +233,11 @@ class TerminalClient:
         **{w: "TERRAFORMING" for w in ["GENESIS", "TERRAFORM", "TERRAFORMING", "COMET", "MIRROR"]},
         **{w: "PRECURSOR_EXPEDITION" for w in ["PRECURSOR", "PRECURSORS", "CORE_DIG", "DEEP_DIG"]},
         **{w: "COLONIAL_DECOHERENCE" for w in ["DECOHERENCE", "DECO", "HORIZON", "STABILIZE"]},
+        **{w: "WORMHOLE_ENGINEERING" for w in ["GATES", "GATE", "WORMHOLE", "WORMHOLES", "TOLL"]},
+        **{w: "HEGEMONY_COMMAND" for w in ["HEGEMONY", "ARMADA", "ARMADAS", "SIEGE", "TOTALWAR"]},
+        **{w: "STELLAR_ENGINEERING" for w in ["STELLAR", "STARLIFT", "LIFTER", "SOLAR", "IGNITE"]},
+        **{w: "SHADOW_OPERATIONS" for w in ["SHADOW", "COVERT", "BLACKOPS", "SABOTAGE", "INFILTRATE"]},
+        **{w: "OMEGA_PROTOCOL" for w in ["OMEGA", "ASCEND", "TRANSCEND", "FILTER", "KARDASHEV"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -273,8 +278,8 @@ class TerminalClient:
         print(c_gray("  Archaeology: RUINS (survey) │ DIG │ SHORE (dig + shoring) │ ARTIFACTS │ PERMIT (at Sol)"))
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))
         print(c_gray("  Lineage: [E]mpire mode │ FLEET │ STOCK │ BANKS │ CLONE (Sol vats) │ RETIRE"))
-        print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALM (if you rule) │ HOUSE │ SPHERES │ TRANSIT │ PUBLISH │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
-        print(c_gray("  Universe Expansions: ") + c_gold("GALNET") + c_gray(" │ ") + c_gold("MEGA") + c_gray(" │ ") + c_gold("BIOFLEET") + c_gray(" │ ") + c_gold("TERRAFORM") + c_gray(" │ ") + c_gold("PRECURSOR") + c_gray(" (relics) │ ") + c_gold("DECO") + c_gray(" (horizon)"))
+        print(c_gray("  Universe Expansions: ") + c_gold("GALNET") + c_gray(" │ ") + c_gold("MEGA") + c_gray(" │ ") + c_gold("BIOFLEET") + c_gray(" │ ") + c_gold("TERRAFORM") + c_gray(" │ ") + c_gold("PRECURSOR") + c_gray(" │ ") + c_gold("DECO"))
+        print(c_gray("  Massive Vectors: ") + c_gold("GATES") + c_gray(" (wormholes) │ ") + c_gold("HEGEMONY") + c_gray(" (armadas) │ ") + c_gold("STELLAR") + c_gray(" (starlift) │ ") + c_gold("SHADOW") + c_gray(" (blackops) │ ") + c_gold("OMEGA") + c_gray(" (ascend)"))
         try:
             from xylarium.kernel import advisor
             tip = advisor.best(self.kernel, self.player_id)
@@ -336,6 +341,21 @@ class TerminalClient:
             return
         if choice == "COLONIAL_DECOHERENCE":
             self._prompt_colonial_decoherence(view)
+            return
+        if choice == "WORMHOLE_ENGINEERING":
+            self._prompt_wormholes(view)
+            return
+        if choice == "HEGEMONY_COMMAND":
+            self._prompt_hegemony(view)
+            return
+        if choice == "STELLAR_ENGINEERING":
+            self._prompt_stellar(view)
+            return
+        if choice == "SHADOW_OPERATIONS":
+            self._prompt_shadow(view)
+            return
+        if choice == "OMEGA_PROTOCOL":
+            self._prompt_omega(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3525,6 +3545,144 @@ class TerminalClient:
                 method=method,
             )
             self._print_result(res)
+
+    def _prompt_wormholes(self, view: Dict[str, Any]) -> None:
+        """Hyperlane and wormhole engineering console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_wormhole_screen(fresh_view))
+            try:
+                cmd = input(f"{c_cyan('Wormhole Command [G/C/T/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "G":
+                targ_str = input("Target Sector to link with Jump Gate > ").strip()
+                if targ_str.isdigit():
+                    res = self.kernel.dispatch(self.player_id, ActionType.GATE_CONSTRUCT, target_sector=int(targ_str))
+                    self._print_result(res)
+            elif cmd == "C":
+                targ_str = input("Target Sector connection to collapse > ").strip()
+                if targ_str.isdigit():
+                    res = self.kernel.dispatch(self.player_id, ActionType.WORMHOLE_COLLAPSE, target_sector=int(targ_str))
+                    self._print_result(res)
+            elif cmd == "T":
+                fee_str = input("Toll fee in Credits [default 250] > ").strip() or "250"
+                fee = int(fee_str) if fee_str.isdigit() else 250
+                res = self.kernel.dispatch(self.player_id, ActionType.TOLL_BUOY_DEPLOY, toll_fee=fee)
+                self._print_result(res)
+
+    def _prompt_hegemony(self, view: Dict[str, Any]) -> None:
+        """Hegemonic total war & armada command."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_hegemony_screen(fresh_view))
+            try:
+                cmd = input(f"{c_red('Hegemony Command [E/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "E":
+                fac = input("Faction to enlist [IMPERIUM/CHOIR/SYNDICATE] > ").strip().upper()
+                sec_str = input("Target Sector to assault > ").strip()
+                if sec_str.isdigit():
+                    res = self.kernel.dispatch(self.player_id, ActionType.HEGEMONY_ENLIST_STRIKE, faction_id=fac, target_sector=int(sec_str))
+                    self._print_result(res)
+
+    def _prompt_stellar(self, view: Dict[str, Any]) -> None:
+        """Stellar engineering and star-lifting console."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_stellar_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Stellar Command [L/I/B/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "L":
+                res = self.kernel.dispatch(self.player_id, ActionType.STELLAR_DEPLOY_LIFTER)
+                self._print_result(res)
+            elif cmd == "I":
+                res = self.kernel.dispatch(self.player_id, ActionType.STELLAR_IGNITE_PROTOSTAR)
+                self._print_result(res)
+            elif cmd == "B":
+                targ_str = input("Adjacent Sector to target with Coronal Burst > ").strip()
+                if targ_str.isdigit():
+                    res = self.kernel.dispatch(self.player_id, ActionType.STELLAR_CORONAL_BURST, target_sector=int(targ_str))
+                    self._print_result(res)
+
+    def _prompt_shadow(self, view: Dict[str, Any]) -> None:
+        """Shadow corporations and covert operations."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_shadow_screen(fresh_view))
+            try:
+                cmd = input(f"{c_magenta('Shadow Ops Command [I/P/S/F/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "I":
+                name = input("Shadow Corporation Name > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SHADOW_INCORPORATE_SHELL, name=name)
+                self._print_result(res)
+            elif cmd == "P":
+                pid = input("Target Planet ID to infiltrate > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.SHADOW_PLANT_SLEEPER, planet_id=pid)
+                self._print_result(res)
+            elif cmd == "S":
+                pid = input("Target Planet ID > ").strip()
+                target = input("Sabotage target [GRID/TREASURY] > ").strip().upper()
+                res = self.kernel.dispatch(self.player_id, ActionType.SHADOW_EXECUTE_SABOTAGE, planet_id=pid, target=target)
+                self._print_result(res)
+            elif cmd == "F":
+                targ_str = input("Target Sector for false-flag > ").strip()
+                fac = input("Framed Faction [CHOIR/IMPERIUM/SYNDICATE] > ").strip().upper()
+                sec = int(targ_str) if targ_str.isdigit() else 0
+                res = self.kernel.dispatch(self.player_id, ActionType.SHADOW_FALSE_FLAG_STRIKE, target_sector=sec, framed_faction=fac)
+                self._print_result(res)
+
+    def _prompt_omega(self, view: Dict[str, Any]) -> None:
+        """Kardashev Type III Cosmic Ascendance & Omega Protocol."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_omega_screen(fresh_view))
+            try:
+                cmd = input(f"{c_gold('Omega Protocol Command [U/T/A/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            if cmd == "U":
+                pid = input("Colony Planet ID to transcend > ").strip()
+                res = self.kernel.dispatch(self.player_id, ActionType.OMEGA_UPLOAD_POPULATION, planet_id=pid)
+                self._print_result(res)
+            elif cmd == "T":
+                res = self.kernel.dispatch(self.player_id, ActionType.OMEGA_METRIC_TORSION)
+                self._print_result(res)
+            elif cmd == "A":
+                confirm = input("AWAKEN THE GREAT FILTER? (yes/no) > ").strip().lower()
+                if confirm == "yes":
+                    res = self.kernel.dispatch(self.player_id, ActionType.OMEGA_AWAKEN_FILTER)
+                    self._print_result(res)
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""
