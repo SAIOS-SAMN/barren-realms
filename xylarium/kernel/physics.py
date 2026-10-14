@@ -477,6 +477,12 @@ class Quaternion:
         c = self.conjugate()
         return Quaternion(c.w / n_sq, c.x / n_sq, c.y / n_sq, c.z / n_sq)
 
+    def __iter__(self):
+        yield self.w
+        yield self.x
+        yield self.y
+        yield self.z
+
     @classmethod
     def from_axis_angle(cls, axis: Tuple[float, float, float], angle: float) -> "Quaternion":
         ax, ay, az = axis

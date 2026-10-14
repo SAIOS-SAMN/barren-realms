@@ -83,6 +83,8 @@ class EpistemicOntology:
 
     def quaternion(self) -> Quaternion:
         """Returns the worldview orientation as an SU(2) unit quaternion."""
+        if isinstance(self.worldview_q, Quaternion):
+            return self.worldview_q.normalized() if self.worldview_q.norm() > 1e-12 else Quaternion(1.0, 0.0, 0.0, 0.0)
         w, x, y, z = self.worldview_q
         q = Quaternion(w, x, y, z)
         norm = q.norm()

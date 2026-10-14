@@ -74,7 +74,9 @@ class TerminalRenderer:
         pl = dash.get("player", {})
         lin = dash.get("lineage") or {}
         colonies = dash.get("colonies", [])
-        fleets = dash.get("fleets", {})
+        fleets = dash.get("fleets")
+        if not isinstance(fleets, dict):
+            fleets = {}
         rule = c_blue("=" * 80)
         house = lin.get("house") or f"Captain {pl.get('name', '')}"
         seat = next((c["name"] for c in colonies if c.get("seat")), "no seat yet (found a colony)")
