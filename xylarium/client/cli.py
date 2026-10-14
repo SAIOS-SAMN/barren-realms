@@ -231,6 +231,8 @@ class TerminalClient:
         **{w: "MEGASTRUCTURES" for w in ["MEGA", "MEGASTRUCTURE", "MEGASTRUCTURES", "HULK", "DERELICT", "BOARD"]},
         **{w: "BIOFLEETS" for w in ["BIOFLEET", "BIOFLEETS", "SWARM", "CHITIN", "CULTURE"]},
         **{w: "TERRAFORMING" for w in ["GENESIS", "TERRAFORM", "TERRAFORMING", "COMET", "MIRROR"]},
+        **{w: "PRECURSOR_EXPEDITION" for w in ["PRECURSOR", "PRECURSORS", "CORE_DIG", "DEEP_DIG"]},
+        **{w: "COLONIAL_DECOHERENCE" for w in ["DECOHERENCE", "DECO", "HORIZON", "STABILIZE"]},
     }
 
     def _prompt_action(self, view: Dict[str, Any]) -> None:
@@ -272,7 +274,7 @@ class TerminalClient:
         print(c_gray("  Cosmos: NATIVES (locals) │ DOCTRINE (policy deck) │ ALIGN (Light/Dark) │ [L]IBRARY │ WRITE (your log)"))
         print(c_gray("  Lineage: [E]mpire mode │ FLEET │ STOCK │ BANKS │ CLONE (Sol vats) │ RETIRE"))
         print(c_gray("  Careers: ") + c_gold("? ADVISOR") + c_gray(" (what to do here) │ PROGRESS │ REALM (if you rule) │ HOUSE │ SPHERES │ TRANSIT │ PUBLISH │ REALMS │ WORKBENCH │ DRIVE │ STATION │ CHARTER"))
-        print(c_gray("  Universe Expansions: ") + c_gold("GALNET") + c_gray(" (news & crises) │ ") + c_gold("MEGA") + c_gray(" (megastructures & hulks) │ ") + c_gold("BIOFLEET") + c_gray(" (chitin swarms) │ ") + c_gold("TERRAFORM") + c_gray(" (biosphere genesis)"))
+        print(c_gray("  Universe Expansions: ") + c_gold("GALNET") + c_gray(" │ ") + c_gold("MEGA") + c_gray(" │ ") + c_gold("BIOFLEET") + c_gray(" │ ") + c_gold("TERRAFORM") + c_gray(" │ ") + c_gold("PRECURSOR") + c_gray(" (relics) │ ") + c_gold("DECO") + c_gray(" (horizon)"))
         try:
             from xylarium.kernel import advisor
             tip = advisor.best(self.kernel, self.player_id)
@@ -328,6 +330,12 @@ class TerminalClient:
             return
         if choice == "TERRAFORMING":
             self._prompt_terraforming(view)
+            return
+        if choice == "PRECURSOR_EXPEDITION":
+            self._prompt_precursor_expedition(view)
+            return
+        if choice == "COLONIAL_DECOHERENCE":
+            self._prompt_colonial_decoherence(view)
             return
         if choice == "REST":
             res = self.kernel.dispatch(self.player_id, ActionType.REST)
@@ -3474,6 +3482,49 @@ class TerminalClient:
                     taxon_sample=taxon,
                 )
                 self._print_result(res)
+
+    def _prompt_precursor_expedition(self, view: Dict[str, Any]) -> None:
+        """Deep core expedition into ancient precursor ruins."""
+        sector = view.get("sector", {})
+        planets = sector.get("planets", [])
+        if not planets:
+            print(c_red("No celestial bodies in this sector to excavate precursor relics from."))
+            return
+        p = planets[0]
+        res = self.kernel.dispatch(
+            self.player_id,
+            ActionType.EXCAVATE_PRECURSOR,
+            planet_id=p["id"],
+        )
+        self._print_result(res)
+
+    def _prompt_colonial_decoherence(self, view: Dict[str, Any]) -> None:
+        """Colonial decoherence and horizon stabilization."""
+        while True:
+            fresh_view = self.kernel.get_player_view(self.player_id)
+            print(TerminalRenderer.render_decoherence_screen(fresh_view))
+            try:
+                cmd = input(f"{c_magenta('Decoherence Command [R/E/C/Q] > ')}").strip().upper()
+            except (KeyboardInterrupt, EOFError):
+                break
+
+            if not cmd or cmd in ["Q", "QUIT", "B", "BACK"]:
+                self.clear_screen()
+                break
+
+            pid = input("Colony Planet ID > ").strip()
+            if not pid:
+                continue
+
+            method_map = {"R": "RELAY", "E": "ENVOY", "C": "PRECURSOR_CORE"}
+            method = method_map.get(cmd, "RELAY")
+            res = self.kernel.dispatch(
+                self.player_id,
+                ActionType.STABILIZE_DECOHERENCE,
+                planet_id=pid,
+                method=method,
+            )
+            self._print_result(res)
 
     def _print_result(self, res) -> None:
         """Helper to print ActionResult status."""

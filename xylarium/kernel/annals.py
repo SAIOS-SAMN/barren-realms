@@ -233,9 +233,10 @@ def _dominion_hazard(rate: float, w0: float, gens: float, cap_of: Any, need: Opt
     ln(1 + g t) where the front's volume is smooth. With `need`, also when that much hazard has been run (else None).
     Returns (hazard run, generations until `need`)."""
     w0 = max(1.0, w0)
-    if g <= 0:                                                # it does not grow: its fall is shared over w0
-        ran = rate / w0 * gens
-        return (need, need * w0 / rate) if need is not None and need < ran else (ran, None)
+    w0_eff = max(1.0, w0 ** 0.85)                             # correlated hazard: shared lanes & cluster events
+    if g <= 0:                                                # it does not grow: its fall is shared over w0_eff
+        ran = rate / w0_eff * gens
+        return (need, need * w0_eff / rate) if need is not None and need < ran else (ran, None)
     bound = lambda t: math.log(w0) + g * t >= math.log(max(1.0, cap_of(t)))   # noqa: E731
     if bound(0.0):
         tb = 0.0
@@ -247,9 +248,9 @@ def _dominion_hazard(rate: float, w0: float, gens: float, cap_of: Any, need: Opt
             mid = 0.5 * (lo + hi)
             lo, hi = (lo, mid) if bound(mid) else (mid, hi)
         tb = hi
-    free = rate / (w0 * g) * (1.0 - math.exp(-g * tb))
+    free = rate / (w0_eff * g) * (1.0 - math.exp(-g * tb))
     if need is not None and need < free:
-        return need, -math.log(1.0 - need * w0 * g / rate) / g
+        return need, -math.log(1.0 - need * w0_eff * g / rate) / g
     ran, steps = free, HAZARD_STEPS
     u0, u1 = math.log1p(g * tb), math.log1p(g * gens)
     du = (u1 - u0) / steps
@@ -260,9 +261,10 @@ def _dominion_hazard(rate: float, w0: float, gens: float, cap_of: Any, need: Opt
         ta, tb_ = math.expm1(ua) / g, math.expm1(ub) / g
         tm = math.expm1(0.5 * (ua + ub)) / g
         w = min(math.exp(min(700.0, math.log(w0) + g * tm)), max(1.0, cap_of(tm)))
-        h = rate / w * (tb_ - ta)
+        w_eff = max(1.0, w ** 0.85)
+        h = rate / w_eff * (tb_ - ta)
         if need is not None and ran + h >= need:
-            return need, ta + (need - ran) * w / rate
+            return need, ta + (need - ran) * w_eff / rate
         ran += h
     return ran, None
 

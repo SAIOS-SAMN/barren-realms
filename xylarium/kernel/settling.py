@@ -370,20 +370,25 @@ def cohort_reach(kernel: Any, home: Any) -> Optional[float]:
 
 
 def front_speed(kernel: Any, home: Any, hop: float, gens_per_gyr: float) -> float:
-    """How fast its settled front advances (kpc per coordinate Gyr): a Fisher-KPP wave, v = 2 sqrt(r D), from the
-    people's own numbers - nothing tuned. r its intrinsic increase (biosphere.growth_rate: the rate a small colony
-    multiplies at, before its land fills); D its dispersal, a random walk of its emigrants (Newman & Sagan 1981): each
-    generation its emigrant share moves one step - to the nearest system it can live on, as far as its drive
-    carries a cohort (cohort_reach) - D = s l^2 / (6 T). Never faster than its ships: a crossed people's fold is a
-    null flow, so light's speed. (Light also bounds who can be told where to go: no front outruns its own news.)"""
+    """How fast its settled front advances (kpc per coordinate Gyr): a hybrid wave combining Fisher-KPP
+    diffusion (Newman & Sagan 1981) and directed percolation along accessible star lanes. r its intrinsic
+    increase; D its dispersal. When cohort reach is available, spacefarers direct their vectors rather than
+    purely undergoing an isotropic random walk. Capped by light's speed."""
     from xylarium.config import DAUGHTER_EMIGRANT_SHARE
     from xylarium.kernel import biosphere, clocks
     lapse = clocks.lapse(kernel, home.sector_id)
     r = float(biosphere.growth_rate(kernel, home)) * 1e9 * lapse              # per coordinate Gyr
     reach = cohort_reach(kernel, home)
     step = min(hop, reach) if reach else hop
+    # 1. Newman-Sagan Brownian diffusion component: D = s l^2 / (6 T)
     d = DAUGHTER_EMIGRANT_SHARE * step * step * gens_per_gyr / 6.0            # kpc^2 per Gyr
-    return min(C_KPC_PER_GYR, 2.0 * math.sqrt(max(0.0, r) * d))
+    v_diff = 2.0 * math.sqrt(max(0.0, r) * d)
+    # 2. Directed percolation component: intentional navigation towards habitable star systems
+    directed_efficiency = 0.20 if reach else 0.05
+    v_directed = directed_efficiency * step * gens_per_gyr * DAUGHTER_EMIGRANT_SHARE
+    # Wave front velocity from coupled diffusion and directed percolation
+    v_combined = math.sqrt(v_diff * v_diff + v_directed * v_directed)
+    return min(C_KPC_PER_GYR, v_combined)
 
 
 def alive(b: Dict[str, Any], t: float) -> bool:
@@ -402,16 +407,20 @@ def radius(b: Dict[str, Any], t: float) -> float:
 
 
 def _cut_fraction(a: Optional[float], reach: float) -> float:
-    """The share of a bubble beyond a plane at distance a from its centre: a spherical cap, or a circle's segment
-    once it is a slab - or the whole of it, for a bubble begun inside another's (a None)."""
+    """The share of a bubble beyond a plane at distance a from its centre: smoothly interpolating between
+    a 3D spherical cap and a 2D slab segment over the galactic disc's vertical scale height."""
     if a is None:
         return 1.0
     if a >= reach:
         return 0.0
     x = max(0.0, a / reach)
-    if reach * 1000.0 <= DISC_HALF_THICKNESS_PC:
-        return (1.0 - x) ** 2 * (2.0 + x) / 4.0
-    return (math.acos(x) - x * math.sqrt(1.0 - x * x)) / math.pi
+    f_3d = (1.0 - x) ** 2 * (2.0 + x) / 4.0
+    f_2d = (math.acos(x) - x * math.sqrt(1.0 - x * x)) / math.pi
+    # Smooth logistic transition across DISC_HALF_THICKNESS_PC
+    h_kpc = DISC_HALF_THICKNESS_PC / 1000.0
+    delta = (reach - h_kpc) / max(0.02, 0.25 * h_kpc)
+    w_2d = 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, delta))))
+    return (1.0 - w_2d) * f_3d + w_2d * f_2d
 
 
 def _cut_on(kernel: Any, c: Dict[str, Any], t: float) -> bool:

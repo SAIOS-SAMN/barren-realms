@@ -85,6 +85,7 @@ from xylarium.kernel.crises import CrisesManager
 from xylarium.kernel.megastructures import MegastructuresManager
 from xylarium.kernel.biofleets import BioFleetsManager
 from xylarium.kernel.biosphere_genesis import BiosphereGenesisManager
+from xylarium.kernel.colonial_decoherence import ColonialDecoherenceManager
 from xylarium.kernel import alignment as alignment_mod
 from xylarium.kernel import chronicle as chronicle_mod
 from xylarium.kernel import lineage as lineage_mod
@@ -193,6 +194,7 @@ class GameKernel:
         self.megastructures_manager = MegastructuresManager()
         self.biofleets_manager = BioFleetsManager()
         self.biosphere_genesis_manager = BiosphereGenesisManager()
+        self.decoherence_manager = ColonialDecoherenceManager()
         self.activate()
         self.market_manager._kernel_ref = self
         self.initialize_universe(seed)
@@ -2635,6 +2637,11 @@ class GameKernel:
         if hasattr(self, "biosphere_genesis_manager"):
             self.biosphere_genesis_manager.tick(self)
 
+        # 16. Colonial Decoherence & Relativistic Network Horizon
+        if hasattr(self, "decoherence_manager"):
+            self.decoherence_manager.tick(self)
+
+
     def get_planet(self, planet_id_or_name: Optional[str]) -> Optional[Planet]:
         """Finds planet across all sectors by ID or name (by ID through an index rebuilt whenever it misses)."""
         if not planet_id_or_name:
@@ -3007,6 +3014,7 @@ class GameKernel:
                     for p in sector.planets
                 ] if hasattr(self, "biosphere_genesis_manager") else [],
             },
+            "decoherence": self.decoherence_manager.to_dict() if hasattr(self, "decoherence_manager") else {},
             "radio": radio_msgs,
             "logs": list(self.action_logs)[-4:],
             "cycle": self.cycle_count,

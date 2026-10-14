@@ -3457,6 +3457,38 @@ class TerminalRenderer:
         return "\n".join(lines)
 
     @classmethod
+    def render_decoherence_screen(cls, view: Dict[str, Any]) -> str:
+        """Renders imperial colonial decoherence and network horizon status."""
+        lines = [
+            f"{bold(c_magenta('═════════════════ [ IMPERIAL DECOHERENCE & NETWORK HORIZON ] ═════════════════'))}",
+            f"  {c_cyan('Relativistic latency creates cultural and economic divergence across deep-space realms.')}",
+            f"  {c_gray('Outer colonies experience secessionist unrest and tariff leakage unless stabilized.')}",
+            f"{bold(c_magenta('─' * 78))}",
+        ]
+        deco = view.get("decoherence", {})
+        records = deco.get("records", {})
+        if not records:
+            lines.append(f"  {c_gray('No active colonial holdings currently tracked across warp horizons.')}")
+        else:
+            lines.append(f"  {'PLANET':<18} {'SECTOR':<8} {'HOPS':<6} {'DECOHERENCE':<14} {'UNREST':<10} {'STATUS'}")
+            lines.append(f"  {'-' * 74}")
+            for pid, r in records.items():
+                deco_pct = r.get("decoherence_index", 0.0) * 100.0
+                unrest = r.get("unrest", 0.0)
+                status = r.get("status", "STABLE")
+                stat_col = c_green if status == "STABLE" else (c_gold if status == "STRAINED" else (c_magenta if status == "DIVERGENT" else c_red))
+                lines.append(f"  {c_white(r.get('planet_name', pid)[:16]):<18} {r.get('sector_id', 0):<8} {r.get('distance_hops', 0):<6} {deco_pct:>5.1f}%         {unrest:>5.1f}%     {stat_col(status)}")
+
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        lines.append(f"  Stabilization Methods:")
+        lines.append(f"    {c_gold('[R]ELAY')}   Deploy Subspace Hyper-Relay Beacon (10 Equip, 2,500 SOL, -0.40 Deco)")
+        lines.append(f"    {c_gold('[E]NVOY')}   Dispatch Imperial Diplomatic Envoy (1,200 SOL, -45% Unrest)")
+        lines.append(f"    {c_gold('[C]ORE')}    Socket Precursor Coherence Engine Shard (0.00 Deco, Shields +200)")
+        lines.append(f"    {c_white('[Q / Enter]')} Back")
+        lines.append(f"{bold(c_magenta('═' * 78))}")
+        return "\n".join(lines)
+
+    @classmethod
     def render_help(cls) -> str:
         """Renders classic BBS door game guide and mechanics."""
         return f"""

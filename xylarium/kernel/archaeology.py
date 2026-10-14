@@ -382,3 +382,72 @@ class ArchaeologyManager:
         captain.permits.append("FED_ANTIQUITIES")
         return ActionResult(success=True, action=ActionType.BANK_TRANSACTION,
                             message=f"Federal Antiquities Permit issued ({ARCH_PERMIT_FEE:,} SOL): your digs now carry provenance.")
+
+    @classmethod
+    def excavate_precursor_core(cls, captain: Captain, planet: Planet, kernel: Any) -> ActionResult:
+        """Deep core expedition into ancient precursor ruins.
+        Requires equipment/tools and delivers high-tier precursor tech relics:
+        - Precursor Coherence Engine Shard
+        - Riemannian Metric Lens
+        - Precursor Bio-Forge Seed
+        - Phonon Memory Stack
+        """
+        r = getattr(planet, "ruins", None)
+        if not r:
+            return ActionResult(
+                success=False,
+                action=ActionType.EXCAVATE_PRECURSOR,
+                message=f"No archaeological ruins detected on {planet.name}."
+            )
+
+        equip_needed = 5
+        if captain.ship.cargo.equipment < equip_needed:
+            return ActionResult(
+                success=False,
+                action=ActionType.EXCAVATE_PRECURSOR,
+                message=f"Deep-core precursor excavation requires {equip_needed} Equipment in cargo."
+            )
+
+        captain.ship.cargo.equipment -= equip_needed
+        rng = random.Random(f"{planet.id}:{captain.id}:{getattr(kernel, 'cycle_count', 0)}")
+
+        precursor_relics = [
+            ("Precursor Coherence Engine Shard", "Stabilizes colonial decoherence across imperial sectors when socketed."),
+            ("Riemannian Metric Lens", "Bends null-space paths, reducing fold drive jump burn."),
+            ("Precursor Bio-Forge Seed", "Accelerates ecological inoculation and planetary terraforming."),
+            ("Phonon Memory Stack", "Stores encrypted precursor annals, providing major research breakthroughs.")
+        ]
+        chosen_name, chosen_desc = rng.choice(precursor_relics)
+
+        if not hasattr(captain, "relics") or captain.relics is None:
+            captain.relics = []
+        captain.relics.append(chosen_name)
+
+        artifact = {
+            "id": f"PREC-{planet.id}-{rng.randint(1000, 9999)}",
+            "name": chosen_name,
+            "kind": "TECH_RELIC",
+            "culture": r.get("culture", "Ancient Precursors"),
+            "era": "PRECURSOR",
+            "stratum": 5,
+            "era_name": "Precursor Deep Time",
+            "tech_level": 5,
+            "condition": 1.0,
+            "provenance": "licensed" if "FED_ANTIQUITIES" in captain.permits else "unlicensed",
+            "origin_sector": planet.sector_id,
+            "elements": list(r.get("elements", [])),
+            "description": chosen_desc,
+        }
+        artifact["appraisal_sol"] = cls.appraisal(artifact) * 2.5
+        captain.artifacts.append(artifact)
+
+        ExperienceManager.award(captain, "science", 25.0, kernel, key=f"precursor_core:{planet.id}")
+
+        return ActionResult(
+            success=True,
+            action=ActionType.EXCAVATE_PRECURSOR,
+            turns_spent=1,
+            message=f"PRECURSOR DEEP EXPEDITION on {planet.name}: Recovered {chosen_name}! ({chosen_desc}) +25 Science XP.",
+            data={"relic": chosen_name, "artifact": artifact}
+        )
+

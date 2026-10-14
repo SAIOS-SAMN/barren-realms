@@ -209,6 +209,10 @@ class ActionType(str, Enum):
     TERRAFORM_DEPLOY_MIRROR = "TERRAFORM_DEPLOY_MIRROR"
     TERRAFORM_SEED_BIOSPHERE = "TERRAFORM_SEED_BIOSPHERE"
 
+    # [13] Precursor Archaeology & Colonial Decoherence
+    EXCAVATE_PRECURSOR = "EXCAVATE_PRECURSOR"
+    STABILIZE_DECOHERENCE = "STABILIZE_DECOHERENCE"
+
 
 class AIPersonality(str, Enum):
     TRADER = "trader"

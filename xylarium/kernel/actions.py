@@ -1103,3 +1103,42 @@ def _terraform_seed_biosphere(k: Any, captain: Any, current_sector: Any, kwargs:
         planet_id=kwargs.get("planet_id", ""),
         taxon_sample=kwargs.get("taxon_sample", "Canopy Chlorophyte"),
     )
+
+
+# ---------------------------------------------------------------------- [13] Precursor Archaeology & Colonial Decoherence
+@action(ActionType.EXCAVATE_PRECURSOR, turns=1)
+def _excavate_precursor(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    planet = None
+    pid = kwargs.get("planet_id")
+    if pid:
+        planet = k.get_planet(pid)
+    elif current_sector and current_sector.planets:
+        planet = current_sector.planets[0]
+    if not planet:
+        return ActionResult(
+            success=False,
+            action=ActionType.EXCAVATE_PRECURSOR,
+            message="No planet in sector to excavate precursor relics from."
+        )
+    from xylarium.kernel.archaeology import ArchaeologyManager
+    return ArchaeologyManager.excavate_precursor_core(captain=captain, planet=planet, kernel=k)
+
+
+@action(ActionType.STABILIZE_DECOHERENCE, turns=0)
+def _stabilize_decoherence(k: Any, captain: Any, current_sector: Any, kwargs: Dict[str, Any], action: Any, player_id: str) -> ActionResult:
+    pid = kwargs.get("planet_id")
+    if not pid and current_sector and current_sector.planets:
+        pid = current_sector.planets[0].id
+    if not pid:
+        return ActionResult(
+            success=False,
+            action=ActionType.STABILIZE_DECOHERENCE,
+            message="Specify planet_id to stabilize colonial decoherence."
+        )
+    return k.decoherence_manager.stabilize(
+        kernel=k,
+        captain=captain,
+        planet_id=pid,
+        method=kwargs.get("method", "RELAY")
+    )
+
