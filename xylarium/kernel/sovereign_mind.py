@@ -35,6 +35,15 @@ class InferredPosture(str, Enum):
     PRAGMATIST = "PRAGMATIST"
 
 
+class AdversarialDoctrine(str, Enum):
+    EXPLOITATIVE_CAPITALIST = "EXPLOITATIVE_CAPITALIST"
+    BUNKER_TURTLE = "BUNKER_TURTLE"
+    WARMONGER_REAVER = "WARMONGER_REAVER"
+    EQUILIBRIUM_PEER = "EQUILIBRIUM_PEER"
+    VACANT_PERIMETER = "VACANT_PERIMETER"
+
+
+
 @dataclass
 class InternalGauges:
     """The eight foundational existential concerns of a sovereign civilization."""
@@ -265,6 +274,114 @@ class CounterfactualEngine:
 
 
 @dataclass
+class Ideation:
+    """A latent macro-strategic trajectory held in superposition within the sovereign mind."""
+    ideation_id: str
+    name: str
+    amplitude: float = 0.20           # Probability amplitude |c_k|^2
+    phase: float = 0.0                # Internal phase angle in radians
+    horizon_steps: int = 5            # Projection lookahead depth
+    candidate_actions: List[str] = field(default_factory=list)
+    predicted_syntropy_payoff: float = 0.5
+    projected_state: Dict[str, float] = field(default_factory=dict)
+    consecutive_selections: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Ideation:
+        return cls(**data)
+
+
+@dataclass
+class IdeationSpace:
+    """The mental superposition manifold of competing strategic hypotheses."""
+    ideations: Dict[str, Ideation] = field(default_factory=dict)
+    last_collapsed_ideation: Optional[str] = None
+    surprise_tensor: float = 0.0
+    total_collapses: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ideations": {k: v.to_dict() for k, v in self.ideations.items()},
+            "last_collapsed_ideation": self.last_collapsed_ideation,
+            "surprise_tensor": self.surprise_tensor,
+            "total_collapses": self.total_collapses,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> IdeationSpace:
+        return cls(
+            ideations={k: Ideation.from_dict(v) for k, v in data.get("ideations", {}).items()},
+            last_collapsed_ideation=data.get("last_collapsed_ideation"),
+            surprise_tensor=float(data.get("surprise_tensor", 0.0)),
+            total_collapses=int(data.get("total_collapses", 0)),
+        )
+
+
+@dataclass
+class AdversarialTracker:
+    """Theory of Mind tracker modeling external rival strategies and doctrine inversion."""
+    rival_metrics: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    dominant_rival_id: Optional[str] = None
+    inferred_doctrine: str = AdversarialDoctrine.VACANT_PERIMETER.value
+    confidence: float = 0.5
+    last_inversion_cycle: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "rival_metrics": dict(self.rival_metrics),
+            "dominant_rival_id": self.dominant_rival_id,
+            "inferred_doctrine": self.inferred_doctrine,
+            "confidence": self.confidence,
+            "last_inversion_cycle": self.last_inversion_cycle,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> AdversarialTracker:
+        return cls(
+            rival_metrics=dict(data.get("rival_metrics", {})),
+            dominant_rival_id=data.get("dominant_rival_id"),
+            inferred_doctrine=str(data.get("inferred_doctrine", AdversarialDoctrine.VACANT_PERIMETER.value)),
+            confidence=float(data.get("confidence", 0.5)),
+            last_inversion_cycle=int(data.get("last_inversion_cycle", 0)),
+        )
+
+
+@dataclass
+class PhaseSpaceTracker:
+    """Tracks civilization trajectory velocity in multi-dimensional state space to detect attractor traps."""
+    state_history: List[Dict[str, float]] = field(default_factory=list)
+    action_history: List[str] = field(default_factory=list)
+    phase_velocity: float = 1.0
+    stagnation_counter: int = 0
+    singularity_tripped: bool = False
+    total_breakouts: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "state_history": list(self.state_history[-10:]),
+            "action_history": list(self.action_history[-10:]),
+            "phase_velocity": self.phase_velocity,
+            "stagnation_counter": self.stagnation_counter,
+            "singularity_tripped": self.singularity_tripped,
+            "total_breakouts": self.total_breakouts,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> PhaseSpaceTracker:
+        return cls(
+            state_history=list(data.get("state_history", [])),
+            action_history=list(data.get("action_history", [])),
+            phase_velocity=float(data.get("phase_velocity", 1.0)),
+            stagnation_counter=int(data.get("stagnation_counter", 0)),
+            singularity_tripped=bool(data.get("singularity_tripped", False)),
+            total_breakouts=int(data.get("total_breakouts", 0)),
+        )
+
+
+@dataclass
 class SovereignConsciousness:
     """The holistic sovereign mind of a world or polity."""
     planet_id: str
@@ -284,6 +401,9 @@ class SovereignConsciousness:
     autonomous_play: bool = True
     seated_turns_played: int = 0
     last_action_taken: str = "THRONE_INITIALIZED"
+    ideation_space: IdeationSpace = field(default_factory=IdeationSpace)
+    adversarial_tracker: AdversarialTracker = field(default_factory=AdversarialTracker)
+    phase_space: PhaseSpaceTracker = field(default_factory=PhaseSpaceTracker)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -304,6 +424,9 @@ class SovereignConsciousness:
             "parliament": self.parliament.to_dict(),
             "mythic_memory": self.mythic_memory.to_dict(),
             "conduct_books": {k: v.to_dict() for k, v in self.conduct_books.items()},
+            "ideation_space": self.ideation_space.to_dict(),
+            "adversarial_tracker": self.adversarial_tracker.to_dict(),
+            "phase_space": self.phase_space.to_dict(),
         }
 
     @classmethod
@@ -326,7 +449,11 @@ class SovereignConsciousness:
             parliament=DialecticalParliament.from_dict(data.get("parliament", {})),
             mythic_memory=MythicMemoryGraph.from_dict(data.get("mythic_memory", {})),
             conduct_books={k: ConductBook.from_dict(v) for k, v in data.get("conduct_books", {}).items()},
+            ideation_space=IdeationSpace.from_dict(data.get("ideation_space", {})),
+            adversarial_tracker=AdversarialTracker.from_dict(data.get("adversarial_tracker", {})),
+            phase_space=PhaseSpaceTracker.from_dict(data.get("phase_space", {})),
         )
+
 
 
 class SovereignMindManager:
@@ -389,8 +516,11 @@ class SovereignMindManager:
         if getattr(planet, "civilization", None):
             planet.civilization.station = "sovereign"
 
+        self._init_ideation_space(sc)
+
         self.minds[pid] = sc
         return sc
+
 
     def _sample_gauges(self, kernel: Any, planet: Planet) -> InternalGauges:
         """Samples ground-truth existential gauges from real planetary state."""
@@ -857,9 +987,509 @@ class SovereignMindManager:
             turns_spent=1,
         )
 
+    def _init_ideation_space(self, sc: SovereignConsciousness) -> None:
+        """Initializes the multi-horizon ideation space if not already populated."""
+        if sc.ideation_space.ideations:
+            return
+
+        ideations = [
+            Ideation(
+                ideation_id="BIO_GENESIS",
+                name="Bio-Genesis & Clade Multiplier",
+                amplitude=0.25,
+                phase=0.0,
+                horizon_steps=5,
+                candidate_actions=["NURTURE_CLADE", "RESTOCK_AGRI_SILOS", "CIVIC_SUBSIDY"],
+                predicted_syntropy_payoff=0.65,
+            ),
+            Ideation(
+                ideation_id="CAPITAL_UPLINK",
+                name="Capital Accumulation & Realm Uplink",
+                amplitude=0.25,
+                phase=0.0,
+                horizon_steps=5,
+                candidate_actions=["TRIGGER_REALM_UPLINK", "EXPAND_COMMERCIAL_NODE", "CIVIC_SUBSIDY"],
+                predicted_syntropy_payoff=0.70,
+            ),
+            Ideation(
+                ideation_id="CITADEL_HEGEMONY",
+                name="Planetary Citadel & Kinetic Bastion",
+                amplitude=0.15,
+                phase=0.0,
+                horizon_steps=5,
+                candidate_actions=["FORTIFY_SHIELDS", "COMMISSION_INTERCEPTORS", "UPGRADE_CITADEL"],
+                predicted_syntropy_payoff=0.40,
+            ),
+            Ideation(
+                ideation_id="COGNITIVE_TRANSCENDENCE",
+                name="Syntropic Attunement & Synthetic Ecology",
+                amplitude=0.20,
+                phase=0.0,
+                horizon_steps=5,
+                candidate_actions=["DEEP_SYNTHESIS", "CONCLAVE_VOTE", "CIVIC_SUBSIDY"],
+                predicted_syntropy_payoff=0.60,
+            ),
+            Ideation(
+                ideation_id="ASYMMETRIC_DISRUPTION",
+                name="Interstellar Espionage & Economic Interdiction",
+                amplitude=0.15,
+                phase=0.0,
+                horizon_steps=5,
+                candidate_actions=["ORBITAL_TARIFF_ENFORCEMENT", "COMMISSION_INTERCEPTORS", "CIVIC_SUBSIDY"],
+                predicted_syntropy_payoff=0.50,
+            ),
+        ]
+        sc.ideation_space.ideations = {i.ideation_id: i for i in ideations}
+
+    def _observe_and_model_rivals(
+        self, kernel: Any, sc: SovereignConsciousness, planet: Planet
+    ) -> Tuple[str, Dict[str, float]]:
+        """Theory of Mind: Scans external entities in the universe, calculates
+        Greed, Paranoia, Aggression, and Velocity, and classifies rival doctrine."""
+        tracker = sc.adversarial_tracker
+        observed_rivals: Dict[str, Dict[str, Any]] = {}
+
+        # Scan captains in the kernel
+        captains = getattr(kernel, "captains", getattr(kernel, "players", {}))
+        for player_id, captain in captains.items():
+            if str(player_id) == str(sc.seated_entity_id):
+                continue
+            credits_val = getattr(captain, "credits", 0)
+            turns_spent = getattr(captain, "turns_spent", getattr(captain, "turns", 0))
+            ship = getattr(captain, "ship", None)
+            fighters_val = getattr(captain, "fighters", getattr(ship, "fighters", 0))
+            shields_val = getattr(captain, "shields", getattr(ship, "shields", 0))
+            fleet_val = len(getattr(captain, "fleet", [])) + fighters_val
+
+            total_assets = max(1, credits_val + (fleet_val * 100) + (shields_val * 2))
+            greed = min(1.0, max(0.0, credits_val / total_assets))
+            paranoia = min(1.0, max(0.0, (shields_val * 2) / total_assets))
+            aggression = min(1.0, max(0.0, (fleet_val * 100) / total_assets))
+            velocity = min(1.0, max(0.0, turns_spent / 150.0))
+
+
+            observed_rivals[str(player_id)] = {
+                "name": getattr(captain, "name", str(player_id)),
+                "credits": credits_val,
+                "fleet": fleet_val,
+                "shields": shields_val,
+                "greed": round(greed, 3),
+                "paranoia": round(paranoia, 3),
+                "aggression": round(aggression, 3),
+                "velocity": round(velocity, 3),
+            }
+
+        # Also scan other sovereign civilizations
+        for pid, other_sc in getattr(self, "minds", {}).items():
+            if pid == sc.planet_id:
+                continue
+            other_p = kernel.get_planet(pid)
+            if not other_p:
+                continue
+            treasury = getattr(other_p, "treasury", 0)
+            fighters = getattr(other_p, "fighters", 0)
+            shields = getattr(other_p, "shields", 0)
+            total_assets = max(1, treasury + (fighters * 80) + (shields * 2))
+            greed = min(1.0, max(0.0, treasury / total_assets))
+            paranoia = min(1.0, max(0.0, (shields * 2) / total_assets))
+            aggression = min(1.0, max(0.0, (fighters * 80) / total_assets))
+            velocity = min(1.0, max(0.0, other_sc.seated_turns_played / 50.0))
+
+            observed_rivals[f"civ:{pid}"] = {
+                "name": getattr(other_p, "name", f"World-{pid}"),
+                "credits": treasury,
+                "fleet": fighters,
+                "shields": shields,
+                "greed": round(greed, 3),
+                "paranoia": round(paranoia, 3),
+                "aggression": round(aggression, 3),
+                "velocity": round(velocity, 3),
+            }
+
+        tracker.rival_metrics = observed_rivals
+
+        if not observed_rivals:
+            tracker.inferred_doctrine = AdversarialDoctrine.VACANT_PERIMETER.value
+            tracker.confidence = 0.9
+            return tracker.inferred_doctrine, {"greed": 0.0, "paranoia": 0.0, "aggression": 0.0, "velocity": 0.0}
+
+        dominant_id, dominant_data = max(
+            observed_rivals.items(),
+            key=lambda item: item[1]["credits"] + (item[1]["fleet"] * 100) + (item[1]["shields"] * 2),
+        )
+        tracker.dominant_rival_id = dominant_id
+
+        g = dominant_data["greed"]
+        p = dominant_data["paranoia"]
+        a = dominant_data["aggression"]
+        v = dominant_data["velocity"]
+
+        if dominant_data["credits"] >= 1000 and g >= 0.55 and a <= 0.20 and p <= 0.25:
+            doctrine = AdversarialDoctrine.EXPLOITATIVE_CAPITALIST.value
+            confidence = round(min(1.0, g + 0.2), 2)
+        elif p >= 0.60:
+            doctrine = AdversarialDoctrine.BUNKER_TURTLE.value
+            confidence = round(min(1.0, p + 0.1), 2)
+        elif a >= 0.45:
+            doctrine = AdversarialDoctrine.WARMONGER_REAVER.value
+            confidence = round(min(1.0, a + 0.2), 2)
+        else:
+            doctrine = AdversarialDoctrine.EQUILIBRIUM_PEER.value
+            confidence = 0.60
+
+        tracker.inferred_doctrine = doctrine
+        tracker.confidence = confidence
+        return doctrine, dominant_data
+
+    def _invert_rival_doctrine(self, sc: SovereignConsciousness, rival_doctrine: str) -> None:
+        """Doctrine Inversion: Adjusts macro-ideation superposition amplitudes based on rival archetype."""
+        self._init_ideation_space(sc)
+        ideations = sc.ideation_space.ideations
+
+        if rival_doctrine == AdversarialDoctrine.EXPLOITATIVE_CAPITALIST.value:
+            weights = {
+                "BIO_GENESIS": 0.35,
+                "CAPITAL_UPLINK": 0.40,
+                "COGNITIVE_TRANSCENDENCE": 0.15,
+                "CITADEL_HEGEMONY": 0.05,
+                "ASYMMETRIC_DISRUPTION": 0.05,
+            }
+        elif rival_doctrine == AdversarialDoctrine.BUNKER_TURTLE.value:
+            weights = {
+                "BIO_GENESIS": 0.20,
+                "CAPITAL_UPLINK": 0.45,
+                "COGNITIVE_TRANSCENDENCE": 0.25,
+                "CITADEL_HEGEMONY": 0.05,
+                "ASYMMETRIC_DISRUPTION": 0.05,
+            }
+        elif rival_doctrine == AdversarialDoctrine.WARMONGER_REAVER.value:
+            weights = {
+                "BIO_GENESIS": 0.10,
+                "CAPITAL_UPLINK": 0.10,
+                "COGNITIVE_TRANSCENDENCE": 0.10,
+                "CITADEL_HEGEMONY": 0.50,
+                "ASYMMETRIC_DISRUPTION": 0.20,
+            }
+        else:
+            weights = {
+                "BIO_GENESIS": 0.30,
+                "CAPITAL_UPLINK": 0.30,
+                "COGNITIVE_TRANSCENDENCE": 0.20,
+                "CITADEL_HEGEMONY": 0.10,
+                "ASYMMETRIC_DISRUPTION": 0.10,
+            }
+
+        for i_id, target_amp in weights.items():
+            if i_id in ideations:
+                current_amp = ideations[i_id].amplitude
+                ideations[i_id].amplitude = round(0.70 * current_amp + 0.30 * target_amp, 3)
+
+        tot = sum(i.amplitude for i in ideations.values()) or 1.0
+        for i in ideations.values():
+            i.amplitude = round(i.amplitude / tot, 3)
+
+    def _simulate_mental_rollout(
+        self, kernel: Any, planet: Planet, ideation_id: str, horizon: int = 5
+    ) -> Dict[str, Any]:
+        """Runs an internal mental forward projection across τ horizons for an ideation."""
+        pop = getattr(planet, "population", 500)
+        treasury = getattr(planet, "treasury", 500)
+        silo = getattr(planet, "organics_silo", 50)
+        shields = getattr(planet, "shields", 0)
+        tech_count = len(getattr(planet, "technologies", []))
+
+        proj_pop = pop
+        proj_treasury = treasury
+        proj_silo = silo
+        proj_shields = shields
+        proj_techs = tech_count
+
+        if ideation_id == "BIO_GENESIS":
+            proj_pop += 20 * horizon
+            proj_silo = max(0, silo + (15 * horizon) - int(pop * 0.05 * horizon))
+            proj_treasury = max(0, treasury - (60 * horizon))
+            syntropy = min(1.0, 0.4 + (proj_pop / 1000.0) * 0.3 + (min(100, proj_silo) / 200.0))
+        elif ideation_id == "CAPITAL_UPLINK":
+            compounded = treasury
+            for _ in range(horizon):
+                compounded = int(compounded * 1.15) + 50
+            proj_treasury = compounded
+            syntropy = min(1.0, 0.35 + (min(10000, proj_treasury) / 10000.0) * 0.45)
+        elif ideation_id == "CITADEL_HEGEMONY":
+            proj_shields = min(getattr(planet, "max_shields", 2500), shields + (50 * horizon))
+            proj_treasury = max(0, treasury - (100 * horizon))
+            syntropy = min(1.0, 0.30 + (proj_shields / 2500.0) * 0.25)
+        elif ideation_id == "COGNITIVE_TRANSCENDENCE":
+            proj_techs += 2
+            proj_treasury = max(0, treasury - (150 * 2))
+            syntropy = min(1.0, 0.40 + (proj_techs * 0.08))
+        else:
+            proj_treasury = max(0, treasury - (80 * horizon))
+            syntropy = min(1.0, 0.45 + (treasury / 5000.0) * 0.2)
+
+        return {
+            "ideation_id": ideation_id,
+            "horizon": horizon,
+            "projected_pop": proj_pop,
+            "projected_treasury": proj_treasury,
+            "projected_silo": proj_silo,
+            "projected_shields": proj_shields,
+            "projected_techs": proj_techs,
+            "syntropy_payoff": round(syntropy, 3),
+        }
+
+    def _evaluate_gauge_action_potentials(
+        self, kernel: Any, sc: SovereignConsciousness, planet: Planet, rival_doctrine: str
+    ) -> Dict[str, float]:
+        """Calculates Gauge Field Potentials: V_urgency (boundary barrier), V_horizon (compounding attractor),
+        V_memory (inviolable axioms), and V_desire (expansion drift). Returns Lagrangian score for each action."""
+        treasury = getattr(planet, "treasury", 0)
+        shields = getattr(planet, "shields", 0)
+        silo = getattr(planet, "organics_silo", 0)
+        pop = getattr(planet, "population", 0)
+        morale = getattr(planet, "morale", 100)
+        is_besieged = getattr(planet, "siege", None) is not None
+
+        if is_besieged or rival_doctrine == AdversarialDoctrine.WARMONGER_REAVER.value:
+            defense_barrier = 1200
+        elif rival_doctrine == AdversarialDoctrine.EXPLOITATIVE_CAPITALIST.value:
+            defense_barrier = 50
+        elif rival_doctrine == AdversarialDoctrine.BUNKER_TURTLE.value:
+            defense_barrier = 50
+        else:
+            defense_barrier = 200
+
+        candidate_actions = [
+            "RESTOCK_AGRI_SILOS",
+            "NURTURE_CLADE",
+            "CIVIC_SUBSIDY",
+            "FORTIFY_SHIELDS",
+            "COMMISSION_INTERCEPTORS",
+            "UPGRADE_CITADEL",
+            "TRIGGER_REALM_UPLINK",
+            "EXPAND_COMMERCIAL_NODE",
+            "DEEP_SYNTHESIS",
+            "HOLD_VIGIL",
+        ]
+
+        scores: Dict[str, float] = {}
+
+        for act in candidate_actions:
+            v_urg = 0.0
+            if act == "FORTIFY_SHIELDS":
+                if shields < defense_barrier:
+                    v_urg = -12.0
+                else:
+                    v_urg = +10.0
+            else:
+                if shields < (defense_barrier * 0.5):
+                    v_urg += 8.0
+
+            if silo < 30 and pop > 100:
+                if act == "RESTOCK_AGRI_SILOS":
+                    v_urg -= 10.0
+                else:
+                    v_urg += 6.0
+
+            if morale < 50:
+                if act == "CIVIC_SUBSIDY":
+                    v_urg -= 8.0
+                else:
+                    v_urg += 4.0
+
+            v_hor = 0.0
+            if act == "TRIGGER_REALM_UPLINK":
+                v_hor = -14.0
+            elif act == "EXPAND_COMMERCIAL_NODE":
+                v_hor = -11.0
+            elif act == "NURTURE_CLADE":
+                v_hor = -9.0
+            elif act == "DEEP_SYNTHESIS":
+                v_hor = -8.0
+            elif act == "RESTOCK_AGRI_SILOS":
+                v_hor = -6.0
+            elif act == "CIVIC_SUBSIDY":
+                v_hor = -5.0
+            elif act == "UPGRADE_CITADEL":
+                v_hor = -4.0
+            elif act == "FORTIFY_SHIELDS":
+                v_hor = -1.0
+            elif act == "HOLD_VIGIL":
+                v_hor = 0.0
+
+            v_mem = 0.0
+            for axiom in sc.mythic_memory.inviolable_axioms:
+                if "SURRENDER" in axiom and "EXTRACT" in act:
+                    v_mem += 100.0
+            if len(sc.mythic_memory.scars) > 0 and act == "NURTURE_CLADE":
+                v_mem -= 3.0
+
+            v_des = 0.0
+            if act in ("TRIGGER_REALM_UPLINK", "EXPAND_COMMERCIAL_NODE"):
+                v_des = -5.0
+            elif act == "UPGRADE_CITADEL":
+                v_des = -3.0
+
+            act_to_ideation = {
+                "RESTOCK_AGRI_SILOS": "BIO_GENESIS",
+                "NURTURE_CLADE": "BIO_GENESIS",
+                "CIVIC_SUBSIDY": "BIO_GENESIS",
+                "TRIGGER_REALM_UPLINK": "CAPITAL_UPLINK",
+                "EXPAND_COMMERCIAL_NODE": "CAPITAL_UPLINK",
+                "FORTIFY_SHIELDS": "CITADEL_HEGEMONY",
+                "COMMISSION_INTERCEPTORS": "CITADEL_HEGEMONY",
+                "UPGRADE_CITADEL": "CITADEL_HEGEMONY",
+                "DEEP_SYNTHESIS": "COGNITIVE_TRANSCENDENCE",
+                "HOLD_VIGIL": "COGNITIVE_TRANSCENDENCE",
+            }
+            parent_id = act_to_ideation.get(act, "COGNITIVE_TRANSCENDENCE")
+            ideation_obj = sc.ideation_space.ideations.get(parent_id)
+            ideation_amp = ideation_obj.amplitude if ideation_obj else 0.20
+            amp_factor = max(0.0, ideation_amp / 0.20)
+            v_hor *= amp_factor
+            v_des *= amp_factor
+
+            # Repetition drag: consecutive identical actions suffer diminishing marginal psychological returns
+            recent_count = sc.phase_space.action_history[-3:].count(act)
+            repetition_drag = 3.0 * recent_count
+
+            cost = 0
+            if act == "RESTOCK_AGRI_SILOS":
+                cost = 60
+            elif act == "CIVIC_SUBSIDY":
+                cost = 80
+            elif act == "FORTIFY_SHIELDS":
+                cost = 100
+            elif act == "COMMISSION_INTERCEPTORS":
+                cost = 80
+            elif act == "UPGRADE_CITADEL":
+                cost = 1200
+            elif act == "TRIGGER_REALM_UPLINK":
+                cost = 500
+            elif act == "EXPAND_COMMERCIAL_NODE":
+                cost = 120
+            elif act == "DEEP_SYNTHESIS":
+                cost = 150
+
+            cost_penalty = cost / max(1, treasury + 1)
+            lagrangian = v_urg + v_hor + v_mem + v_des + repetition_drag + cost_penalty
+            scores[act] = round(lagrangian, 3)
+
+        return scores
+
+
+    def _track_phase_space_velocity(
+        self, sc: SovereignConsciousness, planet: Planet, selected_action: str
+    ) -> None:
+        """Monitors civilization trajectory in phase space to detect attractor singularities."""
+        ps = sc.phase_space
+        pop = getattr(planet, "population", 0)
+        treasury = getattr(planet, "treasury", 0)
+        shields = getattr(planet, "shields", 0)
+        techs = len(getattr(planet, "technologies", []))
+        citadel = getattr(planet, "citadel_level", 0)
+
+        current_state = {
+            "pop": pop,
+            "treasury": treasury,
+            "shields": shields,
+            "techs": techs,
+            "citadel": citadel,
+        }
+
+        if ps.state_history:
+            prev = ps.state_history[-1]
+            d_pop = abs(pop - prev["pop"]) / 100.0
+            d_tr = abs(treasury - prev["treasury"]) / 500.0
+            d_sh = abs(shields - prev["shields"]) / 200.0
+            d_tc = abs(techs - prev["techs"])
+            d_ct = abs(citadel - prev["citadel"])
+            velocity = math.sqrt(d_pop**2 + d_tr**2 + d_sh**2 + d_tc**2 + d_ct**2)
+            ps.phase_velocity = round(velocity, 3)
+        else:
+            ps.phase_velocity = 1.0
+
+        ps.state_history.append(current_state)
+        ps.action_history.append(selected_action)
+
+        recent_actions = ps.action_history[-3:]
+        if len(recent_actions) == 3 and len(set(recent_actions)) == 1:
+            ps.stagnation_counter += 1
+        elif ps.phase_velocity < 0.05:
+            ps.stagnation_counter += 1
+        else:
+            ps.stagnation_counter = max(0, ps.stagnation_counter - 1)
+
+    def _check_attractor_singularity(self, sc: SovereignConsciousness) -> bool:
+        """Determines if the sovereign mind has collapsed into an attractor trap."""
+        return sc.phase_space.stagnation_counter >= 3
+
+    def _trigger_singularity_disruption(
+        self, kernel: Any, sc: SovereignConsciousness, planet: Planet
+    ) -> None:
+        """Shatters the stagnant attractor state via forced quantum cognitive re-seeding."""
+        ps = sc.phase_space
+        ps.singularity_tripped = True
+        ps.total_breakouts += 1
+        ps.stagnation_counter = 0
+
+        last_ideation = sc.ideation_space.last_collapsed_ideation
+        if last_ideation and last_ideation in sc.ideation_space.ideations:
+            sc.ideation_space.ideations[last_ideation].amplitude = 0.0
+
+        orthogonal_candidates = ["CAPITAL_UPLINK", "BIO_GENESIS", "COGNITIVE_TRANSCENDENCE"]
+        for cid in orthogonal_candidates:
+            if cid != last_ideation and cid in sc.ideation_space.ideations:
+                sc.ideation_space.ideations[cid].amplitude += 0.40
+
+        tot = sum(i.amplitude for i in sc.ideation_space.ideations.values()) or 1.0
+        for i in sc.ideation_space.ideations.values():
+            i.amplitude = round(i.amplitude / tot, 3)
+
+        breakout_msg = (
+            f"[COGNITIVE SINGULARITY BREAKOUT: {planet.name}] Detected 3+ cycles of stagnant attractor "
+            f"loop ({last_ideation}). Quantum disruption executed. Orthogonal ideations re-seeded."
+        )
+        if hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(breakout_msg)
+        if hasattr(kernel, "chronicle") and hasattr(kernel.chronicle, "record_event"):
+            kernel.chronicle.record_event(breakout_msg, category="MIND")
+
+    def _compute_cognitive_surprise(
+        self, sc: SovereignConsciousness, planet: Planet, selected_ideation: str, pre_state: Dict[str, float]
+    ) -> float:
+        """Calculates Cognitive Surprise Tensor by comparing post-turn reality to projected ideation."""
+        ideation = sc.ideation_space.ideations.get(selected_ideation)
+        if not ideation:
+            return 0.0
+
+        pop = getattr(planet, "population", 0)
+        treasury = getattr(planet, "treasury", 0)
+        shields = getattr(planet, "shields", 0)
+
+        actual_d_pop = pop - pre_state.get("pop", pop)
+        actual_d_treasury = treasury - pre_state.get("treasury", treasury)
+        actual_d_shields = shields - pre_state.get("shields", shields)
+
+        expected_d_pop = ideation.projected_state.get("expected_d_pop", 0)
+        expected_d_treasury = ideation.projected_state.get("expected_d_treasury", 0)
+        expected_d_shields = ideation.projected_state.get("expected_d_shields", 0)
+
+        err_pop = abs(actual_d_pop - expected_d_pop) / 100.0
+        err_tr = abs(actual_d_treasury - expected_d_treasury) / 500.0
+        err_sh = abs(actual_d_shields - expected_d_shields) / 200.0
+
+        surprise = round(min(1.0, math.sqrt(err_pop**2 + err_tr**2 + err_sh**2)), 3)
+        sc.ideation_space.surprise_tensor = surprise
+        return surprise
+
     def play_seated_turn(self, kernel: Any, sc: SovereignConsciousness) -> Dict[str, Any]:
-        """A seated sovereign mind plays its game turn: deliberates through Parliament,
-        evaluates counterfactuals, and executes real in-game actions modifying the universe."""
+        """A seated sovereign mind plays its game turn using the Advanced Sovereign Cognition Engine:
+        1. Observes rivals and inverts adversary doctrine (Theory of Mind).
+        2. Evaluates multi-horizon mental rollouts across ideations.
+        3. Synthesizes decisions via continuous Gauge Field Lagrangian minimization.
+        4. Detects and shatters attractor traps (Attractor Breakout).
+        5. Executes real in-game actions modifying the universe state."""
         planet = kernel.get_planet(sc.planet_id)
         if not planet:
             return {"action": "NONE", "reason": "Planet not found", "turns_played": sc.seated_turns_played}
@@ -867,112 +1497,183 @@ class SovereignMindManager:
         if getattr(planet, "civilization", None):
             planet.civilization.station = "sovereign"
 
-        g = sc.self_model.current_gauges
-        p = sc.parliament
+        self._init_ideation_space(sc)
 
-        w_mem = 0.33
-        w_urg = 0.34
-        w_hor = 0.33
-        if g.sustenance < 0.4 or g.vitality < 0.4 or len(sc.mythic_memory.scars) > 0:
-            w_mem += 0.20
-        if g.peace < 0.5 or g.prosperity < 0.3 or getattr(planet, "siege", None):
-            w_urg += 0.25
-        if g.peace >= 0.6 and g.knowledge >= 0.5:
-            w_hor += 0.20
-        tot = w_mem + w_urg + w_hor
-        w_mem = round(w_mem / tot, 3)
-        w_urg = round(w_urg / tot, 3)
-        w_hor = round(1.0 - w_mem - w_urg, 3)
+        rival_doctrine, dominant_rival = self._observe_and_model_rivals(kernel, sc, planet)
+        self._invert_rival_doctrine(sc, rival_doctrine)
 
-        v_mem = p.voices[ParliamentaryVoiceType.VOICE_MEMORY.value]
-        v_urg = p.voices[ParliamentaryVoiceType.VOICE_URGENCY.value]
-        v_hor = p.voices[ParliamentaryVoiceType.VOICE_HORIZON.value]
-        v_mem.weight = w_mem
-        v_urg.weight = w_urg
-        v_hor.weight = w_hor
+        if self._check_attractor_singularity(sc):
+            self._trigger_singularity_disruption(kernel, sc, planet)
 
-        max_w = max(w_mem, w_urg, w_hor)
-        if max_w == w_mem:
-            mandate = ParliamentaryVoiceType.VOICE_MEMORY
-        elif max_w == w_urg:
-            mandate = ParliamentaryVoiceType.VOICE_URGENCY
-        else:
-            mandate = ParliamentaryVoiceType.VOICE_HORIZON
+        for ideation_id, ideation in sc.ideation_space.ideations.items():
+            rollout = self._simulate_mental_rollout(kernel, planet, ideation_id, horizon=ideation.horizon_steps)
+            ideation.predicted_syntropy_payoff = rollout["syntropy_payoff"]
+            ideation.projected_state = rollout
 
-        p.dominant_voice = mandate
-        p.consensus_confidence = round(max_w - min(w_mem, w_urg, w_hor), 3)
+        action_potentials = self._evaluate_gauge_action_potentials(kernel, sc, planet, rival_doctrine)
 
-        action_name = "HOLD_VIGIL"
-        detail = "Maintaining balanced sovereign stewardship."
+        feasible_actions = []
+        for act, score in sorted(action_potentials.items(), key=lambda x: x[1]):
+            cost = 0
+            ore_cost = 0
+            can_execute = True
 
-        if mandate == ParliamentaryVoiceType.VOICE_MEMORY:
-            if planet.organics_silo < 120 and planet.treasury >= 60:
+            if act == "RESTOCK_AGRI_SILOS":
                 cost = 60
-                gained = 25
-                planet.treasury -= cost
-                planet.organics_silo += gained
-                action_name = "RESTOCK_AGRI_SILOS"
-                detail = f"Voice of Memory allocated {cost} Cr to agricultural silos (+{gained} Organics)."
-            elif planet.morale < 85 and planet.treasury >= 80:
-                planet.treasury -= 80
-                planet.morale = min(100, planet.morale + 10)
-                action_name = "CIVIC_SUBSIDY"
-                detail = "Voice of Memory subsidized cultural cohesion and festival (+10 Morale)."
-            elif planet.population < 400:
-                planet.population += 20
-                action_name = "NURTURE_CLADE"
-                detail = "Voice of Memory nurtured ancestral nurseries (+20 Pop)."
+            elif act == "CIVIC_SUBSIDY":
+                cost = 80
+            elif act == "FORTIFY_SHIELDS":
+                cost = 100
+                if getattr(planet, "shields", 0) >= getattr(planet, "max_shields", 2500):
+                    can_execute = False
+            elif act == "COMMISSION_INTERCEPTORS":
+                cost = 80
+                if getattr(planet, "fighters", 0) >= 150:
+                    can_execute = False
+            elif act == "UPGRADE_CITADEL":
+                cost = 1200
+                ore_cost = 100
+                if getattr(planet, "citadel_level", 0) >= 3 or getattr(planet, "ore_silo", 0) < ore_cost:
+                    can_execute = False
+            elif act == "TRIGGER_REALM_UPLINK":
+                cost = 500
+                econ_mgr = getattr(kernel, "emergent_economy_manager", None)
+                if not econ_mgr:
+                    can_execute = False
+                else:
+                    p_econ = econ_mgr.economies.get(str(planet.id))
+                    if getattr(p_econ, "is_uplinked", False):
+                        can_execute = False
 
-        elif mandate == ParliamentaryVoiceType.VOICE_URGENCY:
-            if planet.shields < planet.max_shields and planet.treasury >= 100:
-                recharge = min(50, planet.max_shields - planet.shields)
-                planet.treasury -= 100
-                planet.shields += recharge
-                action_name = "FORTIFY_SHIELDS"
-                detail = f"Voice of Urgency reinforced planetary shield matrix (+{recharge} Shields)."
-            elif planet.fighters < 50 and planet.treasury >= 80:
-                planet.treasury -= 80
-                planet.fighters += 5
-                action_name = "COMMISSION_INTERCEPTORS"
-                detail = "Voice of Urgency commissioned +5 planetary defense interceptors."
-            elif planet.citadel_level < 2 and planet.treasury >= 1200 and planet.ore_silo >= 100:
-                planet.treasury -= 1200
-                planet.ore_silo -= 100
-                planet.citadel_level += 1
-                action_name = "UPGRADE_CITADEL"
-                detail = f"Voice of Urgency upgraded planetary citadel to Level {planet.citadel_level}."
+            elif act == "EXPAND_COMMERCIAL_NODE":
+                cost = 120
+                if not hasattr(kernel, "emergent_economy_manager"):
+                    can_execute = False
+            elif act == "DEEP_SYNTHESIS":
+                cost = 150
+                if "SYNTHETIC_ECOLOGY" in getattr(planet, "technologies", []):
+                    can_execute = False
+            elif act == "NURTURE_CLADE":
+                cost = 0
 
-        else:  # VOICE_HORIZON
-            if hasattr(kernel, "emergent_economy_manager") and not kernel.emergent_economy_manager.economies.get(str(planet.id), {}).get("is_uplinked", False) and planet.treasury >= 500:
-                kernel.emergent_economy_manager.trigger_uplink(kernel, None, str(planet.id))
-                action_name = "TRIGGER_REALM_UPLINK"
-                detail = "Voice of Horizon uplinked planetary economy into interstellar realm trade."
-            elif hasattr(kernel, "conclave_manager") and getattr(kernel.conclave_manager, "active_proposal", None):
-                prop = kernel.conclave_manager.active_proposal
-                vote = "AYE" if sc.alignment >= 0.0 else "NAY"
-                kernel.conclave_manager.vote(kernel, sc.seated_entity_id or f"sovereign@{planet.id}", prop.id, vote)
-                action_name = "CONCLAVE_VOTE"
-                detail = f"Voice of Horizon voted {vote} on Conclave Bill [{prop.id}] '{prop.title}'."
-            elif planet.treasury >= 150:
-                planet.treasury -= 150
-                if "SYNTHETIC_ECOLOGY" not in planet.technologies:
-                    planet.technologies.append("SYNTHETIC_ECOLOGY")
-                action_name = "DEEP_SYNTHESIS"
-                detail = "Voice of Horizon advanced synthetic ecological research."
+            if can_execute and getattr(planet, "treasury", 0) >= cost:
+                feasible_actions.append((act, score, cost, ore_cost))
 
+        if feasible_actions:
+            best_action, best_score, best_cost, best_ore = feasible_actions[0]
+        else:
+            best_action, best_score, best_cost, best_ore = ("HOLD_VIGIL", 0.0, 0, 0)
+
+        pre_state = {
+            "pop": getattr(planet, "population", 0),
+            "treasury": getattr(planet, "treasury", 0),
+            "shields": getattr(planet, "shields", 0),
+        }
+
+        action_name = best_action
+        detail = "Balanced sovereign stewardship."
+
+        if best_action == "RESTOCK_AGRI_SILOS":
+            planet.treasury -= best_cost
+            gained = 25
+            planet.organics_silo = getattr(planet, "organics_silo", 0) + gained
+            detail = f"Allocated {best_cost} Cr to agricultural silos (+{gained} Organics)."
+            dominant_ideation = "BIO_GENESIS"
+            dominant_voice = ParliamentaryVoiceType.VOICE_MEMORY
+
+        elif best_action == "CIVIC_SUBSIDY":
+            planet.treasury -= best_cost
+            planet.morale = min(100, getattr(planet, "morale", 0) + 10)
+            detail = f"Subsidized cultural cohesion and public festivals (+10 Morale)."
+            dominant_ideation = "BIO_GENESIS"
+            dominant_voice = ParliamentaryVoiceType.VOICE_MEMORY
+
+        elif best_action == "NURTURE_CLADE":
+            planet.population = getattr(planet, "population", 0) + 20
+            detail = "Nurtured ancestral clade nurseries (+20 Pop)."
+            dominant_ideation = "BIO_GENESIS"
+            dominant_voice = ParliamentaryVoiceType.VOICE_MEMORY
+
+        elif best_action == "FORTIFY_SHIELDS":
+            planet.treasury -= best_cost
+            recharge = min(50, getattr(planet, "max_shields", 2500) - getattr(planet, "shields", 0))
+            planet.shields = getattr(planet, "shields", 0) + recharge
+            detail = f"Reinforced planetary shield matrix (+{recharge} Shields)."
+            dominant_ideation = "CITADEL_HEGEMONY"
+            dominant_voice = ParliamentaryVoiceType.VOICE_URGENCY
+
+        elif best_action == "COMMISSION_INTERCEPTORS":
+            planet.treasury -= best_cost
+            planet.fighters = getattr(planet, "fighters", 0) + 5
+            detail = "Commissioned +5 planetary defense interceptors."
+            dominant_ideation = "CITADEL_HEGEMONY"
+            dominant_voice = ParliamentaryVoiceType.VOICE_URGENCY
+
+        elif best_action == "UPGRADE_CITADEL":
+            planet.treasury -= best_cost
+            planet.ore_silo = getattr(planet, "ore_silo", 0) - best_ore
+            planet.citadel_level = getattr(planet, "citadel_level", 0) + 1
+            detail = f"Upgraded planetary citadel to Level {planet.citadel_level}."
+            dominant_ideation = "CITADEL_HEGEMONY"
+            dominant_voice = ParliamentaryVoiceType.VOICE_URGENCY
+
+        elif best_action == "TRIGGER_REALM_UPLINK":
+            planet.treasury -= best_cost
+            kernel.emergent_economy_manager.trigger_uplink(kernel, None, str(planet.id))
+            detail = "Uplinked planetary economy into interstellar realm trade."
+            dominant_ideation = "CAPITAL_UPLINK"
+            dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
+
+        elif best_action == "EXPAND_COMMERCIAL_NODE":
+            planet.treasury -= best_cost
+            bonus = 150
+            planet.treasury += bonus
+            detail = f"Expanded commercial trade node (invested {best_cost} Cr, yielding {bonus} Cr trade flow)."
+            dominant_ideation = "CAPITAL_UPLINK"
+            dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
+
+        elif best_action == "DEEP_SYNTHESIS":
+            planet.treasury -= best_cost
+            if not hasattr(planet, "technologies") or planet.technologies is None:
+                planet.technologies = []
+            if "SYNTHETIC_ECOLOGY" not in planet.technologies:
+                planet.technologies.append("SYNTHETIC_ECOLOGY")
+            detail = "Advanced synthetic ecological research and syntropy attunement."
+            dominant_ideation = "COGNITIVE_TRANSCENDENCE"
+            dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
+
+        else:
+            detail = "Observing cosmic tides in meditative stillness."
+            dominant_ideation = "COGNITIVE_TRANSCENDENCE"
+            dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
+
+        self._track_phase_space_velocity(sc, planet, action_name)
+        sc.ideation_space.last_collapsed_ideation = dominant_ideation
+        sc.ideation_space.total_collapses += 1
+        surprise = self._compute_cognitive_surprise(sc, planet, dominant_ideation, pre_state)
+
+        sc.parliament.dominant_voice = dominant_voice
         sc.seated_turns_played += 1
         sc.last_action_taken = f"{action_name}: {detail}"
 
         if hasattr(kernel, "action_logs"):
-            kernel.action_logs.append(f"[SEATED MIND: {planet.name}] {action_name} - {detail}")
+            kernel.action_logs.append(
+                f"[SEATED MIND: {planet.name}] {action_name} - {detail} (ToM: {rival_doctrine}, Surprise: {surprise:.2f})"
+            )
 
         return {
             "planet_id": str(planet.id),
-            "dominant_voice": mandate.value,
+            "dominant_voice": dominant_voice.value,
             "action": action_name,
             "detail": detail,
             "turns_played": sc.seated_turns_played,
+            "rival_doctrine": rival_doctrine,
+            "ideation": dominant_ideation,
+            "surprise": surprise,
+            "phase_velocity": sc.phase_space.phase_velocity,
+            "breakouts": sc.phase_space.total_breakouts,
         }
+
 
     def tick(self, kernel: Any) -> None:
         """Simulation cycle: updates self-model predictions, introspection skill, and cognitive states."""
