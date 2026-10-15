@@ -70,6 +70,10 @@ class BridgeDaemon:
         save_file: str = "xylarium_save.json",
         enable_telnet: bool = False,
         enable_ws: bool = True,
+        tick_interval: float = TICK_S,
+        enable_seated_minds: bool = False,
+        observer_mode: bool = False,
+        max_cycles: Optional[int] = None,
     ):
         self.kernel = kernel
         self.host = host
@@ -78,9 +82,68 @@ class BridgeDaemon:
         self.save_file = save_file
         self.enable_telnet = enable_telnet and (telnet_port is not None and telnet_port > 0)
         self.enable_ws = enable_ws and (ws_port is not None and ws_port > 0)
+        self.tick_interval = tick_interval
+        self.enable_seated_minds = enable_seated_minds
+        self.observer_mode = observer_mode
+        self.max_cycles = max_cycles
         self.ws_gateway = WebSocketGateway(kernel, host=host, port=ws_port) if self.enable_ws else None
         self.telnet_server = TelnetServer(kernel, host=host, port=telnet_port) if self.enable_telnet else None
         self._shutdown_event = asyncio.Event()
+
+        if self.enable_seated_minds:
+            self._initialize_seated_minds()
+
+    def _initialize_seated_minds(self) -> None:
+        """Awakens and seats autonomous sovereign minds on primary civilizational worlds."""
+        candidates = [
+            p for s in self.kernel.sectors.values() for p in s.planets
+            if p.population >= 5000
+        ]
+        candidates.sort(key=lambda p: getattr(p, "population", 0), reverse=True)
+        selected = candidates[:4] if candidates else [p for s in self.kernel.sectors.values() for p in s.planets if p.population > 0][:3]
+
+        print(bold(c_gold("\n[INITIALIZING SEATED SOVEREIGN COGNITION IN DAEMON]")))
+        for p in selected:
+            sc = self.kernel.sovereign_mind_manager.ensure_consciousness(self.kernel, p)
+            self.kernel.sovereign_mind_manager.take_seat(self.kernel, None, str(p.id), as_player=False)
+            self.kernel.sovereign_mind_manager.toggle_autonomous_play(self.kernel, None, str(p.id), enable=True)
+            print(f"  ★ Seated Mind online: {bold(c_cyan(p.name))} ({p.planet_type}, Pop: {p.population:,})")
+        print()
+
+    def _report_observer_state(self, cycle: int) -> None:
+        """Renders live telemetry of all seated sovereign minds evolving in the universe."""
+        minds = self.kernel.sovereign_mind_manager.minds
+        seated = {pid: sc for pid, sc in minds.items() if sc.is_seated and sc.autonomous_play}
+        if not seated:
+            return
+
+        print(bold(c_cyan(f"\n╔══════════════════════════════════════════════════════════════════════════════╗")))
+        print(bold(c_cyan(f"║ [OBSERVER] UNIVERSAL TICK CYCLE {cycle:05d} │ ACTIVE SEATED SOVEREIGNS: {len(seated)}   ║")))
+        print(bold(c_cyan(f"╠══════════════════════════════════════════════════════════════════════════════╣")))
+        for pid, sc in seated.items():
+            p = self.kernel.get_planet(pid)
+            if not p:
+                continue
+            t_data = getattr(sc, "last_turn_data", {})
+            action = t_data.get("action", sc.last_action_taken)
+            detail = t_data.get("detail", "")
+            voice = t_data.get("dominant_voice", sc.parliament.dominant_voice.value)
+            ideation = t_data.get("ideation", getattr(sc.ideation_space, "last_collapsed_ideation", "NONE"))
+            tom = t_data.get("rival_doctrine", getattr(sc.adversarial_tracker, "inferred_doctrine", "UNKNOWN"))
+            techs = ", ".join(getattr(p, "technologies", [])) or "None"
+            pop = getattr(p, "population", 0)
+            treasury = getattr(p, "treasury", 0)
+            food = getattr(p, "organics_silo", 0)
+            ore = getattr(p, "ore_silo", 0)
+            citadel = getattr(p, "citadel_level", 1)
+            vessel = "Yes" if "INTERSTELLAR_FLIGHT" in getattr(p, "technologies", []) else "No"
+
+            print(f"║  ► {c_gold(bold(p.name))} ({p.planet_type}, Sec {p.sector_id}) │ {c_cyan('Pop')}: {pop:,} │ {c_cyan('Treasury')}: {treasury:,} Cr │ {c_cyan('Citadel')}: L{citadel}")
+            print(f"║      {c_gray('Reserves')}: Food: {food} │ Ore: {ore} │ {c_gray('Interstellar')}: {c_green(vessel)} │ {c_gray('Techs')}: {c_green(techs)}")
+            print(f"║      {c_gray('Cognition')}: ToM: {c_gold(tom)} │ Ideation: {c_cyan(ideation)} │ Voice: {voice}")
+            print(f"║      {c_gray('Action')}:    {bold(action)} -> {c_gray(detail)}")
+            print(c_cyan("╟──────────────────────────────────────────────────────────────────────────────╢"))
+        print(bold(c_cyan(f"╚══════════════════════════════════════════════════════════════════════════════╝\n")))
 
     async def start(self) -> None:
         """Starts network listeners and runs the background universe tick loop."""
@@ -100,11 +163,15 @@ class BridgeDaemon:
             print(f"║  {bold('Telnet Node')}:       {c_gold(f'telnet {self.host} {self.telnet_port}')} (RFC 854 Terminal Door)     ║")
         else:
             print(f"║  {bold('Telnet Node')}:       {c_gray('DISABLED (No Telnet Mode)')}                               ║")
-        print(f"║  {bold('Continuous Clock')}:  {c_green(f'Active (TICK_S={TICK_S:.0f}s, Orbit & Economy Recycling)')}     ║")
+        print(f"║  {bold('Continuous Clock')}:  {c_green(f'Active (TICK_S={self.tick_interval:.1f}s, Orbit & Economy Recycling)')}     ║")
+        if self.enable_seated_minds:
+            print(f"║  {bold('Seated Cognition')}:  {c_gold('ACTIVE (Autonomous Sovereign Minds Governing Worlds)')}     ║")
+        if self.observer_mode:
+            print(f"║  {bold('Observer Stream')}:   {c_green('ACTIVE (Real-time telemetry logging enabled)')}             ║")
         print(bold(c_cyan("╚══════════════════════════════════════════════════════════════════════════════╝\n")))
         print(c_green("Runtime running. Press Ctrl+C to save state and terminate.\n"))
 
-        # Background world tick task (runs every 30 seconds to simulate ambient universe activity)
+        # Background world tick task
         tick_task = asyncio.create_task(self._ambient_universe_ticker())
 
         try:
@@ -114,12 +181,18 @@ class BridgeDaemon:
             await self.stop()
 
     async def _ambient_universe_ticker(self) -> None:
-        """The universe's one clock: a cycle every TICK_S of wall time, whoever is connected. The wall time of the last
-        cycle is kept with the universe, so a server that was down catches up what its orbits ran meanwhile."""
+        """The universe's one clock: a cycle every tick_interval of wall time."""
+        cycles_run = 0
         while not self._shutdown_event.is_set():
-            await asyncio.sleep(TICK_S)
+            await asyncio.sleep(self.tick_interval)
             self.kernel.tick_simulation()
+            cycles_run += 1
             stamp(self.kernel)
+            if self.observer_mode:
+                self._report_observer_state(self.kernel.cycle_count)
+            if self.max_cycles and cycles_run >= self.max_cycles:
+                self.trigger_shutdown()
+                break
 
     async def stop(self) -> None:
         """Gracefully shuts down listeners and persists universe state."""
@@ -145,6 +218,10 @@ def run_daemon(
     seed: int = 42,
     enable_telnet: bool = False,
     enable_ws: bool = True,
+    tick_interval: float = TICK_S,
+    enable_seated_minds: bool = False,
+    observer_mode: bool = False,
+    max_cycles: Optional[int] = None,
 ):
     if host is None or ws_port is None:
         parser = argparse.ArgumentParser(description="Xylarium Runtime Engine & Bridge Daemon")
@@ -155,6 +232,10 @@ def run_daemon(
         parser.add_argument("--no-ws", action="store_true", default=False, help="Disable WebSocket API gateway")
         parser.add_argument("--seed", type=int, default=42, help="Universe seed (default: 42)")
         parser.add_argument("--save", type=str, default="xylarium_save.json", help="Save file path")
+        parser.add_argument("--tick-interval", type=float, default=TICK_S, help=f"Seconds per universe simulation cycle (default: {TICK_S:.1f})")
+        parser.add_argument("--seated-minds", action="store_true", default=False, help="Seat autonomous sovereign minds on primary homeworlds")
+        parser.add_argument("--observer", action="store_true", default=False, help="Stream real-time observer telemetry of seated minds")
+        parser.add_argument("--max-cycles", type=int, default=None, help="Optional max simulation cycles to run")
 
         args = parser.parse_args()
         host = args.host
@@ -164,6 +245,10 @@ def run_daemon(
         seed = args.seed
         enable_telnet = args.enable_telnet
         enable_ws = not args.no_ws
+        tick_interval = args.tick_interval
+        enable_seated_minds = args.seated_minds
+        observer_mode = args.observer or args.seated_minds
+        max_cycles = args.max_cycles
     else:
         if save_file is None:
             save_file = "xylarium_save.json"
@@ -185,7 +270,11 @@ def run_daemon(
         telnet_port=telnet_port,
         save_file=save_file,
         enable_telnet=enable_telnet,
-        enable_ws=enable_ws
+        enable_ws=enable_ws,
+        tick_interval=tick_interval,
+        enable_seated_minds=enable_seated_minds,
+        observer_mode=observer_mode,
+        max_cycles=max_cycles,
     )
 
     loop = asyncio.new_event_loop()

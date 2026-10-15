@@ -404,6 +404,7 @@ class SovereignConsciousness:
     ideation_space: IdeationSpace = field(default_factory=IdeationSpace)
     adversarial_tracker: AdversarialTracker = field(default_factory=AdversarialTracker)
     phase_space: PhaseSpaceTracker = field(default_factory=PhaseSpaceTracker)
+    last_turn_data: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -419,6 +420,7 @@ class SovereignConsciousness:
             "autonomous_play": self.autonomous_play,
             "seated_turns_played": self.seated_turns_played,
             "last_action_taken": self.last_action_taken,
+            "last_turn_data": self.last_turn_data,
             "self_model": self.self_model.to_dict(),
             "counterfactual": self.counterfactual.to_dict(),
             "parliament": self.parliament.to_dict(),
@@ -444,6 +446,7 @@ class SovereignConsciousness:
             autonomous_play=bool(data.get("autonomous_play", True)),
             seated_turns_played=int(data.get("seated_turns_played", 0)),
             last_action_taken=str(data.get("last_action_taken", "THRONE_INITIALIZED")),
+            last_turn_data=dict(data.get("last_turn_data", {})),
             self_model=SelfModel.from_dict(data.get("self_model", {})),
             counterfactual=CounterfactualEngine.from_dict(data.get("counterfactual", {})),
             parliament=DialecticalParliament.from_dict(data.get("parliament", {})),
@@ -1699,7 +1702,7 @@ class SovereignMindManager:
                 f"[SEATED MIND: {planet.name}] {action_name} - {detail} (ToM: {rival_doctrine}, Surprise: {surprise:.2f})"
             )
 
-        return {
+        res = {
             "planet_id": str(planet.id),
             "dominant_voice": dominant_voice.value,
             "action": action_name,
@@ -1711,6 +1714,8 @@ class SovereignMindManager:
             "phase_velocity": sc.phase_space.phase_velocity,
             "breakouts": sc.phase_space.total_breakouts,
         }
+        sc.last_turn_data = res
+        return res
 
 
     def tick(self, kernel: Any) -> None:
