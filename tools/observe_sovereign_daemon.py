@@ -23,16 +23,26 @@ from xylarium.persistence.store import StatePersistence
 from xylarium.client.ansi import c_cyan, c_gold, c_green, c_red, c_gray, bold
 
 
-def initialize_seated_minds(kernel: GameKernel, top_n: int = 4) -> List[Planet]:
-    """Seats autonomous sovereign minds on primary inhabited homeworlds."""
-    candidates = [
-        p for s in kernel.sectors.values() for p in s.planets
-        if p.population >= 1000 or getattr(p, "civilization", None)
+def initialize_seated_minds(kernel: GameKernel, top_n: int = 9) -> List[Planet]:
+    """Seats autonomous sovereign minds on diverse archetypal civilizational worlds."""
+    priority_pids = [
+        "planet_1",     # Terra (Terrestrial Hegemon, Sec 1)
+        "planet_1_c",   # Luna Yards (Barren Lunar Stratoport, Sec 1)
+        "planet_32",    # Aurelia Throneworld (Commercial Throneworld, Sec 32)
+        "planet_88",    # Pyre Ascendant (Heavy Smelter, Sec 88)
+        "planet_68_c",  # Krynn V (Oceanic Waterworld, Sec 68)
+        "planet_62",    # Tartarus Prime (Volcanic Crucible, Sec 62)
+        "planet_5",     # Segmentum Fortress Kadmos (Military Bastion, Sec 5)
+        "planet_21",    # Sanctuary (Gas Giant Aerostat, Sec 21)
+        "planet_57",    # Elysium-9 (Rogue Ice World, Sec 57)
     ]
-    # Sort by population descending to select major population centers
-    candidates.sort(key=lambda p: getattr(p, "population", 0), reverse=True)
-    selected = candidates[:top_n] if candidates else [p for s in kernel.sectors.values() for p in s.planets if p.population > 0][:top_n]
+    selected = []
+    for pid in priority_pids:
+        p = kernel.get_planet(pid)
+        if p and p not in selected:
+            selected.append(p)
 
+    selected = selected[:top_n]
     for p in selected:
         sc = kernel.sovereign_mind_manager.ensure_consciousness(kernel, p)
         kernel.sovereign_mind_manager.take_seat(kernel, None, str(p.id), as_player=False)
@@ -77,6 +87,13 @@ def render_cycle_observer(cycle: int, kernel: GameKernel, seated_planets: List[P
         print(f"║      {c_gray('Cognition')}:  ToM: {c_gold(tom)} │ Active Ideation: {c_cyan(ideation)} │ Voice: {voice}")
         print(f"║      {c_gray('Dynamics')}:   Surprise: {surprise:.2f} │ Phase Breakouts: {breakouts}")
         print(f"║      {c_gray('Action')}:     {bold(action)} -> {c_gray(detail)}")
+        print(c_cyan("╟──────────────────────────────────────────────────────────────────────────────────────────────╢"))
+
+    recent_logs = [l for l in list(getattr(kernel, "action_logs", []))[-15:] if any(tag in l for tag in ("[FREE TRADER", "[CORSAIR", "[DEFENSE TRIUMPH", "[COLONIAL DIASPORA"))]
+    if recent_logs:
+        print(f"║  {bold(c_gold('★ GALACTIC TRAFFIC & ENCOUNTERS:'))}")
+        for ev in recent_logs[-3:]:
+            print(f"║    {c_cyan('✦')} {ev}")
         print(c_cyan("╟──────────────────────────────────────────────────────────────────────────────────────────────╢"))
 
     print(bold(c_cyan(f"╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝")))

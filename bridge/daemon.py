@@ -94,20 +94,30 @@ class BridgeDaemon:
             self._initialize_seated_minds()
 
     def _initialize_seated_minds(self) -> None:
-        """Awakens and seats autonomous sovereign minds on primary civilizational worlds."""
-        candidates = [
-            p for s in self.kernel.sectors.values() for p in s.planets
-            if p.population >= 5000
+        """Awakens and seats autonomous sovereign minds on diverse archetypal civilizational worlds."""
+        priority_pids = [
+            "planet_1",     # Terra (Terrestrial Hegemon, Sec 1)
+            "planet_1_c",   # Luna Yards (Barren Lunar Stratoport, Sec 1)
+            "planet_32",    # Aurelia Throneworld (Commercial Throneworld, Sec 32)
+            "planet_88",    # Pyre Ascendant (Heavy Smelter, Sec 88)
+            "planet_68_c",  # Krynn V (Oceanic Waterworld, Sec 68)
+            "planet_62",    # Tartarus Prime (Volcanic Crucible, Sec 62)
+            "planet_5",     # Segmentum Fortress Kadmos (Military Bastion, Sec 5)
+            "planet_21",    # Sanctuary (Gas Giant Aerostat, Sec 21)
+            "planet_57",    # Elysium-9 (Rogue Ice World, Sec 57)
         ]
-        candidates.sort(key=lambda p: getattr(p, "population", 0), reverse=True)
-        selected = candidates[:4] if candidates else [p for s in self.kernel.sectors.values() for p in s.planets if p.population > 0][:3]
+        selected = []
+        for pid in priority_pids:
+            p = self.kernel.get_planet(pid)
+            if p and p not in selected:
+                selected.append(p)
 
-        print(bold(c_gold("\n[INITIALIZING SEATED SOVEREIGN COGNITION IN DAEMON]")))
+        print(bold(c_gold("\n[INITIALIZING DIVERSE SEATED SOVEREIGN COGNITION IN DAEMON]")))
         for p in selected:
             sc = self.kernel.sovereign_mind_manager.ensure_consciousness(self.kernel, p)
             self.kernel.sovereign_mind_manager.take_seat(self.kernel, None, str(p.id), as_player=False)
             self.kernel.sovereign_mind_manager.toggle_autonomous_play(self.kernel, None, str(p.id), enable=True)
-            print(f"  ★ Seated Mind online: {bold(c_cyan(p.name))} ({p.planet_type}, Pop: {p.population:,})")
+            print(f"  ★ Seated Mind online: {bold(c_cyan(p.name))} ({p.planet_type}, Sec {p.sector_id}, Pop: {p.population:,})")
         print()
 
     def _report_observer_state(self, cycle: int) -> None:

@@ -131,6 +131,17 @@ class MythicMemoryGraph:
     golden_ages: List[Dict[str, Any]] = field(default_factory=list)
     inviolable_axioms: List[str] = field(default_factory=list)
 
+    def record_scar(self, description: str, scar_type: str = "GENERIC", weight: float = 0.5, cycle: int = 0) -> TraumaScar:
+        scar = TraumaScar(
+            scar_id=f"scar_{len(self.scars)+1}_{scar_type.lower()}",
+            cycle=cycle,
+            severity=min(1.0, max(0.0, weight)),
+            deed_type=scar_type,
+            description=description,
+        )
+        self.scars.append(scar)
+        return scar
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "scars": [s.to_dict() for s in self.scars],
@@ -1763,6 +1774,131 @@ class SovereignMindManager:
             # If this mind is seated and autonomous play is enabled, it plays its game turn
             if sc.is_seated and sc.autonomous_play:
                 self.play_seated_turn(kernel, sc)
+                if getattr(planet, "diaspora_escrow", 0) > 0:
+                    self._process_diaspora_expedition(kernel, sc, planet)
+
+        # Tick mobile spacefaring entities (Merchant Convoys & Corsair Raiders)
+        self._tick_mobile_galactic_actors(kernel)
+
+    def _process_diaspora_expedition(
+        self, kernel: Any, sc: SovereignConsciousness, mother_planet: Planet
+    ) -> Optional[Dict[str, Any]]:
+        """Finds an unsettled frontier planet and establishes an autonomous daughter colony with an awakened mind."""
+        if getattr(mother_planet, "diaspora_escrow", 0) <= 0:
+            return None
+
+        frontier_candidates: List[Planet] = []
+        for s in kernel.sectors.values():
+            for p in getattr(s, "planets", []):
+                if str(p.id) != str(mother_planet.id) and getattr(p, "population", 0) == 0 and not getattr(p, "owner_id", None):
+                    frontier_candidates.append(p)
+
+        if not frontier_candidates:
+            frontier_candidates = [
+                p for s in kernel.sectors.values() for p in getattr(s, "planets", [])
+                if str(p.id) != str(mother_planet.id) and getattr(p, "population", 0) <= 100 and not getattr(p, "owner_id", None)
+            ]
+
+        if not frontier_candidates:
+            return None
+
+        mother_sec = getattr(mother_planet, "sector_id", 1)
+        frontier_candidates.sort(
+            key=lambda p: (abs(getattr(p, "sector_id", 1) - mother_sec), -getattr(p, "habitability", 1.0))
+        )
+        target = frontier_candidates[0]
+
+        # Settle the daughter colony
+        mother_planet.diaspora_escrow -= 1
+        target.owner_id = str(mother_planet.id)
+        target.population = 250
+        target.treasury = 1500
+        target.organics_silo = 80
+        target.ore_silo = 80
+        target.citadel_level = 1
+        target.shields = 150
+        target.max_shields = 1000
+        target.technologies = list(getattr(mother_planet, "technologies", []))
+
+        # Awaken daughter sovereign mind
+        daughter_sc = self.ensure_consciousness(kernel, target)
+        self.take_seat(kernel, None, str(target.id), as_player=False)
+        self.toggle_autonomous_play(kernel, None, str(target.id), enable=True)
+
+        daughter_sc.mythic_memory.inviolable_axioms = list(sc.mythic_memory.inviolable_axioms)
+        daughter_sc.mythic_memory.record_scar(
+            f"Exodus Diaspora from {mother_planet.name}",
+            scar_type="FOUNDING_EXODUS",
+            weight=0.5,
+        )
+
+        msg = f"[COLONIAL DIASPORA] {mother_planet.name} has launched an Interstellar Colony Expedition and settled {target.name} in Sector {target.sector_id}!"
+        if hasattr(kernel, "action_logs"):
+            kernel.action_logs.append(msg)
+
+        return {
+            "mother_planet": mother_planet.name,
+            "daughter_planet": target.name,
+            "sector_id": target.sector_id,
+            "message": msg,
+        }
+
+    def _tick_mobile_galactic_actors(self, kernel: Any) -> List[str]:
+        """Simulates autonomous mobile spacefaring entities: Free Merchant Convoys and Corsair Raiders."""
+        events: List[str] = []
+        active_minds = [sc for sc in self.minds.values() if sc.is_seated and sc.autonomous_play]
+        if len(active_minds) < 2:
+            return events
+
+        import random
+        c_seed = getattr(kernel, "cycle_count", 1)
+
+        # 1. Autonomous Interstellar Merchant Trade Routes (every 2 cycles)
+        if c_seed % 2 == 0:
+            rng_t = random.Random(c_seed + 1337)
+            sc_a, sc_b = rng_t.sample(active_minds, 2)
+            p_a = kernel.get_planet(sc_a.planet_id)
+            p_b = kernel.get_planet(sc_b.planet_id)
+            if p_a and p_b:
+                trade_volume = min(30, max(5, getattr(p_a, "ore_silo", 0) // 10))
+                if getattr(p_a, "ore_silo", 0) >= trade_volume and getattr(p_b, "treasury", 0) >= 150:
+                    p_a.ore_silo -= trade_volume
+                    p_b.ore_silo += trade_volume
+                    p_b.treasury -= 150
+                    p_a.treasury += 150
+                    ev = f"[FREE TRADER CONVOY] Freighters completed cargo transit: {p_a.name} -> {p_b.name} (Shipped {trade_volume} Ore for 150 Cr)."
+                    events.append(ev)
+                    if hasattr(kernel, "action_logs"):
+                        kernel.action_logs.append(ev)
+
+        # 2. Corsair Fleets & Pirate Raiding Runs (every 3 cycles)
+        if c_seed % 3 == 0:
+            rng_c = random.Random(c_seed + 777)
+            target_sc = rng_c.choice(active_minds)
+            target_p = kernel.get_planet(target_sc.planet_id)
+            if target_p:
+                shields = getattr(target_p, "shields", 0)
+                fighters = getattr(target_p, "fighters", 0)
+                corsair_name = rng_c.choice(["Void Vipers", "Black Sun Corsairs", "Nebula Reavers", "Ashen Corsairs"])
+
+                if shields >= 200 or fighters >= 20:
+                    absorbed = min(shields, 40)
+                    target_p.shields = max(0, shields - absorbed)
+                    ev = f"[DEFENSE TRIUMPH] {target_p.name} orbital defense grid repelled {corsair_name} attack! (-{absorbed} Shields, Grid Intact)."
+                    target_sc.mythic_memory.record_scar(f"Repelled {corsair_name}", scar_type="VICTORY", weight=0.2)
+                else:
+                    stolen_cr = min(getattr(target_p, "treasury", 0), 150)
+                    target_p.treasury = max(0, target_p.treasury - stolen_cr)
+                    target_p.morale = max(30, getattr(target_p, "morale", 100) - 6)
+                    ev = f"[CORSAIR INVASION] {corsair_name} breached weak orbital perimeter of {target_p.name}! Plundered {stolen_cr} Cr (-6 Morale)."
+                    target_sc.mythic_memory.record_scar(f"Raided by {corsair_name}", scar_type="RAID_SCAR", weight=0.8)
+                    target_sc.parliament.dominant_voice = ParliamentaryVoiceType.VOICE_URGENCY
+
+                events.append(ev)
+                if hasattr(kernel, "action_logs"):
+                    kernel.action_logs.append(ev)
+
+        return events
 
     def to_dict(self) -> Dict[str, Any]:
         return {
