@@ -116,13 +116,21 @@ def run_observer_session(
     print(bold(c_cyan("=" * 100)))
 
     os.makedirs(os.path.dirname(os.path.abspath(save_file)), exist_ok=True)
-    kernel = GameKernel(seed=seed)
-
-    print(f"\n{bold('[BOOTSTRAPPING UNIVERSE & SEATING MINDS]')}")
-    seated_planets = initialize_seated_minds(kernel, top_n=top_n)
+    if os.path.exists(save_file):
+        print(f"\n{bold('[RESUMING PERSISTENT UNIVERSE]')}")
+        print(f"  • Loading existing universe state from {save_file}...")
+        kernel = StatePersistence.load_from_file(save_file)
+        seated_pids = list(kernel.sovereign_mind_manager.minds.keys())
+        seated_planets = [kernel.get_planet(pid) for pid in seated_pids if kernel.get_planet(pid)]
+        if not seated_planets:
+            seated_planets = initialize_seated_minds(kernel, top_n=top_n)
+    else:
+        print(f"\n{bold('[BOOTSTRAPPING NEW UNIVERSE & SEATING MINDS]')}")
+        kernel = GameKernel(seed=seed)
+        seated_planets = initialize_seated_minds(kernel, top_n=top_n)
 
     for p in seated_planets:
-        print(f"  • {c_gold(bold(p.name))} ({p.planet_type}, Sector {p.sector_id}) - Initial Pop: {p.population:,}, Treasury: {p.treasury:,} Cr")
+        print(f"  • {c_gold(bold(p.name))} ({p.planet_type}, Sector {p.sector_id}) - Pop: {p.population:,}, Treasury: {p.treasury:,} Cr")
 
     print(c_gray("\nBeginning continuous simulation observation loop...\n"))
 
