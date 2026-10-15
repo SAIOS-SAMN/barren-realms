@@ -1067,7 +1067,6 @@ class SovereignMindManager:
             aggression = min(1.0, max(0.0, (fleet_val * 100) / total_assets))
             velocity = min(1.0, max(0.0, turns_spent / 150.0))
 
-
             observed_rivals[str(player_id)] = {
                 "name": getattr(captain, "name", str(player_id)),
                 "credits": credits_val,
@@ -1130,7 +1129,7 @@ class SovereignMindManager:
         elif p >= 0.60:
             doctrine = AdversarialDoctrine.BUNKER_TURTLE.value
             confidence = round(min(1.0, p + 0.1), 2)
-        elif a >= 0.45:
+        elif a >= 0.45 and dominant_data["fleet"] >= 30:
             doctrine = AdversarialDoctrine.WARMONGER_REAVER.value
             confidence = round(min(1.0, a + 0.2), 2)
         else:
@@ -1250,14 +1249,16 @@ class SovereignMindManager:
         morale = getattr(planet, "morale", 100)
         is_besieged = getattr(planet, "siege", None) is not None
 
-        if is_besieged or rival_doctrine == AdversarialDoctrine.WARMONGER_REAVER.value:
-            defense_barrier = 1200
+        if is_besieged:
+            defense_barrier = 800
+        elif rival_doctrine == AdversarialDoctrine.WARMONGER_REAVER.value:
+            defense_barrier = 350
         elif rival_doctrine == AdversarialDoctrine.EXPLOITATIVE_CAPITALIST.value:
-            defense_barrier = 50
+            defense_barrier = 80
         elif rival_doctrine == AdversarialDoctrine.BUNKER_TURTLE.value:
-            defense_barrier = 50
+            defense_barrier = 80
         else:
-            defense_barrier = 200
+            defense_barrier = 150
 
         candidate_actions = [
             "RESTOCK_AGRI_SILOS",
@@ -1269,6 +1270,7 @@ class SovereignMindManager:
             "TRIGGER_REALM_UPLINK",
             "EXPAND_COMMERCIAL_NODE",
             "DEEP_SYNTHESIS",
+            "COMMISSION_INTERSTELLAR_VESSEL",
             "HOLD_VIGIL",
         ]
 
@@ -1278,12 +1280,11 @@ class SovereignMindManager:
             v_urg = 0.0
             if act == "FORTIFY_SHIELDS":
                 if shields < defense_barrier:
-                    v_urg = -12.0
+                    v_urg = -14.0 if is_besieged else -6.0
                 else:
                     v_urg = +10.0
-            else:
-                if shields < (defense_barrier * 0.5):
-                    v_urg += 8.0
+            elif is_besieged and shields < (defense_barrier * 0.5):
+                v_urg += 8.0
 
             if silo < 30 and pop > 100:
                 if act == "RESTOCK_AGRI_SILOS":
@@ -1306,6 +1307,11 @@ class SovereignMindManager:
                 v_hor = -9.0
             elif act == "DEEP_SYNTHESIS":
                 v_hor = -8.0
+                # Biotic awareness: harsh worlds with low habitability urgently need synthetic ecology
+                if getattr(planet, "habitability", 1.0) < 0.70 and "SYNTHETIC_ECOLOGY" not in getattr(planet, "technologies", []):
+                    v_hor -= 6.0
+            elif act == "COMMISSION_INTERSTELLAR_VESSEL":
+                v_hor = -16.0  # Supreme compounding payoff of reaching the stars
             elif act == "RESTOCK_AGRI_SILOS":
                 v_hor = -6.0
             elif act == "CIVIC_SUBSIDY":
@@ -1325,7 +1331,9 @@ class SovereignMindManager:
                 v_mem -= 3.0
 
             v_des = 0.0
-            if act in ("TRIGGER_REALM_UPLINK", "EXPAND_COMMERCIAL_NODE"):
+            if act == "COMMISSION_INTERSTELLAR_VESSEL":
+                v_des = -14.0
+            elif act in ("TRIGGER_REALM_UPLINK", "EXPAND_COMMERCIAL_NODE"):
                 v_des = -5.0
             elif act == "UPGRADE_CITADEL":
                 v_des = -3.0
@@ -1340,8 +1348,10 @@ class SovereignMindManager:
                 "COMMISSION_INTERCEPTORS": "CITADEL_HEGEMONY",
                 "UPGRADE_CITADEL": "CITADEL_HEGEMONY",
                 "DEEP_SYNTHESIS": "COGNITIVE_TRANSCENDENCE",
+                "COMMISSION_INTERSTELLAR_VESSEL": "COGNITIVE_TRANSCENDENCE",
                 "HOLD_VIGIL": "COGNITIVE_TRANSCENDENCE",
             }
+
             parent_id = act_to_ideation.get(act, "COGNITIVE_TRANSCENDENCE")
             ideation_obj = sc.ideation_space.ideations.get(parent_id)
             ideation_amp = ideation_obj.amplitude if ideation_obj else 0.20
@@ -1551,7 +1561,12 @@ class SovereignMindManager:
                     can_execute = False
             elif act == "DEEP_SYNTHESIS":
                 cost = 150
-                if "SYNTHETIC_ECOLOGY" in getattr(planet, "technologies", []):
+            elif act == "COMMISSION_INTERSTELLAR_VESSEL":
+                cost = 2000
+                techs = getattr(planet, "technologies", [])
+                if "JUMP_PROPULSION" not in techs or "ORBITAL_FOUNDRY" not in techs or getattr(planet, "citadel_level", 0) < 2:
+                    can_execute = False
+                elif "INTERSTELLAR_FLIGHT" in techs:
                     can_execute = False
             elif act == "NURTURE_CLADE":
                 cost = 0
@@ -1589,8 +1604,12 @@ class SovereignMindManager:
             dominant_voice = ParliamentaryVoiceType.VOICE_MEMORY
 
         elif best_action == "NURTURE_CLADE":
-            planet.population = getattr(planet, "population", 0) + 20
-            detail = "Nurtured ancestral clade nurseries (+20 Pop)."
+            hab = getattr(planet, "habitability", 1.0)
+            if "SYNTHETIC_ECOLOGY" in getattr(planet, "technologies", []):
+                hab = max(hab, 1.0)
+            pop_gain = max(10, int(20 * hab))
+            planet.population = getattr(planet, "population", 0) + pop_gain
+            detail = f"Nurtured ancestral clade nurseries (+{pop_gain} Pop on {getattr(planet, 'planet_type', 'Terrestrial')} world)."
             dominant_ideation = "BIO_GENESIS"
             dominant_voice = ParliamentaryVoiceType.VOICE_MEMORY
 
@@ -1626,7 +1645,7 @@ class SovereignMindManager:
 
         elif best_action == "EXPAND_COMMERCIAL_NODE":
             planet.treasury -= best_cost
-            bonus = 150
+            bonus = 200
             planet.treasury += bonus
             detail = f"Expanded commercial trade node (invested {best_cost} Cr, yielding {bonus} Cr trade flow)."
             dominant_ideation = "CAPITAL_UPLINK"
@@ -1638,9 +1657,28 @@ class SovereignMindManager:
                 planet.technologies = []
             if "SYNTHETIC_ECOLOGY" not in planet.technologies:
                 planet.technologies.append("SYNTHETIC_ECOLOGY")
-            detail = "Advanced synthetic ecological research and syntropy attunement."
+                detail = "Advanced synthetic ecological research and closed-loop biosynergies."
+            elif "ORBITAL_FOUNDRY" not in planet.technologies:
+                planet.technologies.append("ORBITAL_FOUNDRY")
+                detail = "Engineered orbital manufacturing and heavy metallurgical stratoports."
+            elif "JUMP_PROPULSION" not in planet.technologies:
+                planet.technologies.append("JUMP_PROPULSION")
+                detail = "Unlocked interstellar fold-space jump propulsion cores."
+            else:
+                detail = "Deepened syntropic resonance and hyper-dimensional astrophysics."
             dominant_ideation = "COGNITIVE_TRANSCENDENCE"
             dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
+
+        elif best_action == "COMMISSION_INTERSTELLAR_VESSEL":
+            planet.treasury -= best_cost
+            if not hasattr(planet, "technologies") or planet.technologies is None:
+                planet.technologies = []
+            planet.technologies.append("INTERSTELLAR_FLIGHT")
+            planet.diaspora_escrow = getattr(planet, "diaspora_escrow", 0) + 1
+            detail = "Constructed Orbital Stratoport and commissioned civilization's first Interstellar Colony Vessel!"
+            dominant_ideation = "COGNITIVE_TRANSCENDENCE"
+            dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
+
 
         else:
             detail = "Observing cosmic tides in meditative stillness."
