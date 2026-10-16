@@ -197,11 +197,23 @@ def orbital_bombardment_holonomy_su2(
     Computes non-abelian SU(2) orbital geometry holonomy for planetary orbital sieges.
     Integrates planetary orbital parameters (q, day, mass) with the sector metric.
     """
+    def _parse_num(val, default=1.0) -> float:
+        if val is None:
+            return default
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            try:
+                from fractions import Fraction
+                return float(Fraction(str(val)))
+            except Exception:
+                return default
+
     st = physics.star(sector)
-    m_star = float(st.get("m", 1.0))
+    m_star = _parse_num(st.get("m", 1.0))
     b = planet.body or {}
-    q_val = float(b.get("q", 1.0)) if "q" in b else float(planet.orbital_radius)
-    planet_r = float(b.get("r", 1.0)) if "r" in b else 1.0
+    q_val = _parse_num(b.get("q", 1.0) if "q" in b else planet.orbital_radius)
+    planet_r = _parse_num(b.get("r", 1.0) if "r" in b else 1.0)
 
     phi_grav = (m_star / max(0.1, q_val * q_val)) + (planet_r / 2.0)
     amp, phase, chirality = torsion.eval_wavefront(kernel, sector.id) if kernel is not None else (0.0, 0.0, 1)
