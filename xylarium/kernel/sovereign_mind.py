@@ -1251,6 +1251,151 @@ class SovereignMindManager:
             "syntropy_payoff": round(syntropy, 3),
         }
 
+    def _get_orbital_launch_requirements(self, planet: Planet) -> Dict[str, Any]:
+        """Calculates emergent physical material & fiscal requirements for orbital escape and vessel construction:
+        - Structural metallurgical alloys (ore silo) scaled to planetary surface gravity well (v_esc).
+        - Biogenic closed-loop life support and reaction mass (organics silo).
+        - Gantry / stratoport fabrication infrastructure (Citadel Level >= 2 or ORBITAL_FOUNDRY).
+        - Fiscal tooling backing (treasury)."""
+        ptype = getattr(planet, "planet_type", "TERRESTRIAL").upper()
+        g_map = {
+            "BARREN": 0.35,
+            "ROGUE": 0.50,
+            "ICE": 0.50,
+            "OCEANIC": 0.90,
+            "TERRESTRIAL": 1.00,
+            "EARTH_LIKE": 1.00,
+            "VOLCANIC": 1.15,
+            "FORTRESS": 1.05,
+            "GAS": 1.60,
+            "GAS_GIANT": 1.60,
+        }
+        g_factor = g_map.get(ptype, 1.00)
+
+        required_ore = max(25, int(round(80 * g_factor)))
+        is_harsh = ptype in ("BARREN", "ROGUE", "ICE")
+        required_organics = max(30, int(round(50 * (1.2 if is_harsh else 1.0))))
+        required_credits = max(500, int(round(1500 * g_factor)))
+
+        techs = getattr(planet, "technologies", [])
+        has_gantry = getattr(planet, "citadel_level", 0) >= 2 or "ORBITAL_FOUNDRY" in techs
+        has_materials = (
+            getattr(planet, "ore_silo", 0) >= required_ore
+            and getattr(planet, "organics_silo", 0) >= required_organics
+            and getattr(planet, "treasury", 0) >= required_credits
+        )
+
+        return {
+            "g_factor": g_factor,
+            "required_ore": required_ore,
+            "required_organics": required_organics,
+            "required_credits": required_credits,
+            "has_gantry": has_gantry,
+            "has_materials": has_materials,
+            "can_build": has_gantry and has_materials,
+        }
+
+    def _check_stellar_awakening(self, sc: SovereignConsciousness, planet: Planet) -> bool:
+        """Determines if a terrestrial-bound civilization experiences the epistemic paradigm shift
+        to overcome ancestral soil dogma, believing in the sky and stars as their true horizon."""
+        stellar_axiom = "AXIOM_OF_THE_STELLAR_HORIZON"
+        if stellar_axiom in sc.mythic_memory.inviolable_axioms:
+            return True
+
+        # Emergent epiphany triggers:
+        # 1. Demographic limit: Population reaches critical density, outgrowing planetary cradle.
+        pop = getattr(planet, "population", 0)
+        pop_epiphany = pop >= 1000
+
+        # 2. Epistemic intellect & knowledge gauges:
+        knowledge = getattr(sc.self_model.current_gauges, "knowledge", 0.0)
+        intellect = getattr(sc.self_model.current_gauges, "intellect", 0.0)
+        epistemic_epiphany = knowledge >= 0.50 or sc.introspection_skill >= 0.45 or intellect >= 0.60
+
+        # 3. High transcendence or orbital technology awareness:
+        techs = getattr(planet, "technologies", [])
+        transcendence_amp = sc.ideation_space.ideations.get("COGNITIVE_TRANSCENDENCE")
+        trans_epiphany = (
+            (transcendence_amp and transcendence_amp.amplitude >= 0.30)
+            or "ORBITAL_FOUNDRY" in techs
+            or "JUMP_PROPULSION" in techs
+        )
+
+        if pop_epiphany or epistemic_epiphany or trans_epiphany:
+            sc.mythic_memory.inviolable_axioms.append(stellar_axiom)
+            sc.mythic_memory.record_scar(
+                "Awakening of the Stellar Horizon: Shattered soil dogma to embrace the stars.",
+                scar_type="STELLAR_AWAKENING",
+                weight=1.0,
+            )
+            return True
+
+        return False
+
+    def _decipher_epistemic_progress(
+        self, kernel: Any, sc: SovereignConsciousness, planet: Planet, focus: bool = False
+    ) -> Tuple[Optional[str], float, bool]:
+        """Continuous mathematical deciphering of propulsion and orbital physics over research epochs.
+        Returns: (target_tech, delta_progress, achieved_breakthrough)."""
+        if not hasattr(planet, "technologies") or planet.technologies is None:
+            planet.technologies = []
+        if not hasattr(planet, "epistemic_progress") or planet.epistemic_progress is None:
+            planet.epistemic_progress = {}
+
+        tech_ladder = [
+            "SYNTHETIC_ECOLOGY",
+            "ORBITAL_FOUNDRY",
+            "JUMP_PROPULSION",
+            "INTERSTELLAR_FLIGHT",
+        ]
+
+        target_tech = None
+        for t in tech_ladder:
+            if t not in planet.technologies:
+                target_tech = t
+                break
+
+        if not target_tech:
+            return (None, 0.0, False)
+
+        # Mathematical deciphering rate derived from civic intellect (g4) and knowledge (g3)
+        g_intellect = getattr(sc.self_model.current_gauges, "intellect", 0.35)
+        g_knowledge = getattr(sc.self_model.current_gauges, "knowledge", 0.30)
+        citadel_bonus = 0.15 if getattr(planet, "citadel_level", 0) >= 2 else 0.0
+        siege_penalty = -0.20 if getattr(planet, "siege", None) is not None else 0.0
+        morale = getattr(planet, "morale", 100)
+        morale_factor = max(0.5, morale / 100.0)
+
+        if focus:
+            # Dedicated epistemic focus during DEEP_SYNTHESIS
+            base_rate = 0.40
+            d_math = (base_rate + (0.35 * g_intellect) + (0.25 * g_knowledge) + citadel_bonus + siege_penalty) * morale_factor
+        else:
+            # Passive ambient deciphering in tick() during peace & intellectual contemplation
+            if getattr(planet, "siege", None) is not None or morale < 50:
+                return (target_tech, 0.0, False)
+            base_ambient = 0.04
+            d_math = (base_ambient + (0.05 * g_intellect) + (0.03 * g_knowledge) + (citadel_bonus * 0.5)) * morale_factor
+
+        d_math = max(0.02, round(d_math, 3))
+        current = planet.epistemic_progress.get(target_tech, 0.0)
+        new_progress = round(current + d_math, 3)
+        planet.epistemic_progress[target_tech] = new_progress
+
+        breakthrough = False
+        if new_progress >= 1.0:
+            breakthrough = True
+            planet.technologies.append(target_tech)
+            planet.epistemic_progress[target_tech] = 1.0
+
+            msg = f"[EPISTEMIC BREAKTHROUGH: {planet.name}] Solved governing tensor equations and mastered {target_tech}!"
+            if hasattr(kernel, "action_logs"):
+                kernel.action_logs.append(msg)
+            if hasattr(kernel, "chronicle") and hasattr(kernel.chronicle, "record_event"):
+                kernel.chronicle.record_event(msg, category="MIND")
+
+        return (target_tech, d_math, breakthrough)
+
     def _evaluate_gauge_action_potentials(
         self, kernel: Any, sc: SovereignConsciousness, planet: Planet, rival_doctrine: str
     ) -> Dict[str, float]:
@@ -1262,6 +1407,11 @@ class SovereignMindManager:
         pop = getattr(planet, "population", 0)
         morale = getattr(planet, "morale", 100)
         is_besieged = getattr(planet, "siege", None) is not None
+
+        is_stellar_awakened = self._check_stellar_awakening(sc, planet)
+        launch_reqs = self._get_orbital_launch_requirements(planet)
+        current_cycle = getattr(kernel, "cycle_count", 0)
+        cycles_since_last = current_cycle - getattr(planet, "last_diaspora_cycle", -999)
 
         if is_besieged:
             defense_barrier = 800
@@ -1312,6 +1462,17 @@ class SovereignMindManager:
                 else:
                     v_urg += 4.0
 
+            if act == "COMMISSION_INTERSTELLAR_VESSEL":
+                techs = getattr(planet, "technologies", [])
+                if "INTERSTELLAR_FLIGHT" not in techs:
+                    v_urg += 25.0
+                elif not launch_reqs["has_gantry"]:
+                    v_urg += 15.0
+                elif not launch_reqs["has_materials"]:
+                    v_urg += 12.0
+                elif cycles_since_last < 12:
+                    v_urg += 10.0
+
             v_hor = 0.0
             if act == "TRIGGER_REALM_UPLINK":
                 v_hor = -14.0
@@ -1321,9 +1482,15 @@ class SovereignMindManager:
                 v_hor = -9.0
             elif act == "DEEP_SYNTHESIS":
                 v_hor = -8.0
-                # Biotic awareness: harsh worlds with low habitability urgently need synthetic ecology
-                if getattr(planet, "habitability", 1.0) < 0.70 and "SYNTHETIC_ECOLOGY" not in getattr(planet, "technologies", []):
+                techs = getattr(planet, "technologies", [])
+                if getattr(planet, "habitability", 1.0) < 0.70 and "SYNTHETIC_ECOLOGY" not in techs:
                     v_hor -= 6.0
+                elif "ORBITAL_FOUNDRY" not in techs:
+                    v_hor -= 4.0
+                elif "JUMP_PROPULSION" not in techs:
+                    v_hor -= 6.0
+                elif "INTERSTELLAR_FLIGHT" not in techs:
+                    v_hor -= 7.0
             elif act == "COMMISSION_INTERSTELLAR_VESSEL":
                 v_hor = -16.0  # Supreme compounding payoff of reaching the stars
             elif act == "RESTOCK_AGRI_SILOS":
@@ -1344,9 +1511,16 @@ class SovereignMindManager:
             if len(sc.mythic_memory.scars) > 0 and act == "NURTURE_CLADE":
                 v_mem -= 3.0
 
+            if not is_stellar_awakened and act == "COMMISSION_INTERSTELLAR_VESSEL":
+                # Soil dogma: clinging to terrestrial ground; void is viewed as an existential heresy
+                v_mem += 14.0
+
             v_des = 0.0
             if act == "COMMISSION_INTERSTELLAR_VESSEL":
-                v_des = -14.0
+                if is_stellar_awakened:
+                    v_des = -16.0 - 4.0 * min(2.0, pop / 3000.0)
+                else:
+                    v_des = +4.0  # Lack of cosmic desire without epiphany
             elif act in ("TRIGGER_REALM_UPLINK", "EXPAND_COMMERCIAL_NODE"):
                 v_des = -5.0
             elif act == "UPGRADE_CITADEL":
@@ -1394,6 +1568,8 @@ class SovereignMindManager:
                 cost = 120
             elif act == "DEEP_SYNTHESIS":
                 cost = 150
+            elif act == "COMMISSION_INTERSTELLAR_VESSEL":
+                cost = launch_reqs["required_credits"]
 
             cost_penalty = cost / max(1, treasury + 1)
             lagrangian = v_urg + v_hor + v_mem + v_des + repetition_drag + cost_penalty
@@ -1576,16 +1752,26 @@ class SovereignMindManager:
             elif act == "DEEP_SYNTHESIS":
                 cost = 150
             elif act == "COMMISSION_INTERSTELLAR_VESSEL":
-                cost = 2000
+                launch_reqs = self._get_orbital_launch_requirements(planet)
+                cost = launch_reqs["required_credits"]
+                ore_cost = launch_reqs["required_ore"]
                 techs = getattr(planet, "technologies", [])
-                if "JUMP_PROPULSION" not in techs or "ORBITAL_FOUNDRY" not in techs or getattr(planet, "citadel_level", 0) < 2:
+                current_cycle = getattr(kernel, "cycle_count", 0)
+                cycles_since_last = current_cycle - getattr(planet, "last_diaspora_cycle", -999)
+
+                # Spaceflight requires mastered INTERSTELLAR_FLIGHT math, gantry, materials, and staging cooldown
+                if "INTERSTELLAR_FLIGHT" not in techs:
                     can_execute = False
-                elif "INTERSTELLAR_FLIGHT" in techs:
+                elif not launch_reqs["has_gantry"]:
+                    can_execute = False
+                elif not launch_reqs["has_materials"]:
+                    can_execute = False
+                elif cycles_since_last < 12:
                     can_execute = False
             elif act == "NURTURE_CLADE":
                 cost = 0
 
-            if can_execute and getattr(planet, "treasury", 0) >= cost:
+            if can_execute and getattr(planet, "treasury", 0) >= cost and getattr(planet, "ore_silo", 0) >= ore_cost:
                 feasible_actions.append((act, score, cost, ore_cost))
 
         if feasible_actions:
@@ -1667,29 +1853,38 @@ class SovereignMindManager:
 
         elif best_action == "DEEP_SYNTHESIS":
             planet.treasury -= best_cost
-            if not hasattr(planet, "technologies") or planet.technologies is None:
-                planet.technologies = []
-            if "SYNTHETIC_ECOLOGY" not in planet.technologies:
-                planet.technologies.append("SYNTHETIC_ECOLOGY")
-                detail = "Advanced synthetic ecological research and closed-loop biosynergies."
-            elif "ORBITAL_FOUNDRY" not in planet.technologies:
-                planet.technologies.append("ORBITAL_FOUNDRY")
-                detail = "Engineered orbital manufacturing and heavy metallurgical stratoports."
-            elif "JUMP_PROPULSION" not in planet.technologies:
-                planet.technologies.append("JUMP_PROPULSION")
-                detail = "Unlocked interstellar fold-space jump propulsion cores."
+            target_tech, d_math, breakthrough = self._decipher_epistemic_progress(
+                kernel, sc, planet, focus=True
+            )
+            if target_tech:
+                pct = int(planet.epistemic_progress.get(target_tech, 0.0) * 100)
+                if breakthrough:
+                    detail = f"Epistemic breakthrough! Solved tensor equations and mastered {target_tech}!"
+                else:
+                    detail = f"Deciphering mathematics for {target_tech} (+{int(d_math * 100)}% progress, total: {pct}%)."
             else:
                 detail = "Deepened syntropic resonance and hyper-dimensional astrophysics."
             dominant_ideation = "COGNITIVE_TRANSCENDENCE"
             dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
 
         elif best_action == "COMMISSION_INTERSTELLAR_VESSEL":
-            planet.treasury -= best_cost
-            if not hasattr(planet, "technologies") or planet.technologies is None:
-                planet.technologies = []
-            planet.technologies.append("INTERSTELLAR_FLIGHT")
+            launch_reqs = self._get_orbital_launch_requirements(planet)
+            planet.treasury -= launch_reqs["required_credits"]
+            planet.ore_silo = max(0, getattr(planet, "ore_silo", 0) - launch_reqs["required_ore"])
+            planet.organics_silo = max(0, getattr(planet, "organics_silo", 0) - launch_reqs["required_organics"])
+
+            if getattr(planet, "population", 0) > 200:
+                planet.population -= 100
+
+            current_cycle = getattr(kernel, "cycle_count", 0)
+            planet.last_diaspora_cycle = current_cycle
             planet.diaspora_escrow = getattr(planet, "diaspora_escrow", 0) + 1
-            detail = "Constructed Orbital Stratoport and commissioned civilization's first Interstellar Colony Vessel!"
+
+            detail = (
+                f"Fabricated hull ({launch_reqs['required_ore']} Ore), stocked life-support "
+                f"({launch_reqs['required_organics']} Org), and commissioned Interstellar Ark Vessel "
+                f"with 100 pioneers (g-factor: {launch_reqs['g_factor']:.2f})!"
+            )
             dominant_ideation = "COGNITIVE_TRANSCENDENCE"
             dominant_voice = ParliamentaryVoiceType.VOICE_HORIZON
 
@@ -1771,6 +1966,10 @@ class SovereignMindManager:
             sc.self_model.current_gauges = real_gauges
             sc.self_model.predicted_gauges = self._forecast_gauges(real_gauges)
 
+            # Ambient epistemic deciphering & stellar awakening evaluation
+            self._check_stellar_awakening(sc, planet)
+            self._decipher_epistemic_progress(kernel, sc, planet, focus=False)
+
             # If this mind is seated and autonomous play is enabled, it plays its game turn
             if sc.is_seated and sc.autonomous_play:
                 self.play_seated_turn(kernel, sc)
@@ -1811,6 +2010,8 @@ class SovereignMindManager:
         # Settle the daughter colony
         mother_planet.diaspora_escrow -= 1
         target.owner_id = str(mother_planet.id)
+        target.metropole_id = str(mother_planet.id)
+        target.last_diaspora_cycle = getattr(kernel, "cycle_count", 0)
         target.population = 250
         target.treasury = 1500
         target.organics_silo = 80
@@ -1826,6 +2027,8 @@ class SovereignMindManager:
         self.toggle_autonomous_play(kernel, None, str(target.id), enable=True)
 
         daughter_sc.mythic_memory.inviolable_axioms = list(sc.mythic_memory.inviolable_axioms)
+        if "AXIOM_OF_THE_STELLAR_HORIZON" not in daughter_sc.mythic_memory.inviolable_axioms:
+            daughter_sc.mythic_memory.inviolable_axioms.append("AXIOM_OF_THE_STELLAR_HORIZON")
         daughter_sc.mythic_memory.record_scar(
             f"Exodus Diaspora from {mother_planet.name}",
             scar_type="FOUNDING_EXODUS",

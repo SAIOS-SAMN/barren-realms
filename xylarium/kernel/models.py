@@ -544,6 +544,8 @@ class Planet:
     society: Dict[str, Any] = field(default_factory=dict)   # fertility, natal policy, luxury, stresses (fertility.py)
     diaspora_escrow: int = 0                 # Escrow fund dedicated to commissioning expeditionary colony ship
     crowded_cycles: int = 0                  # Consecutive cycles crowded at >= 95% housing cap with food stable
+    epistemic_progress: Dict[str, float] = field(default_factory=dict) # Continuous tensor deciphering of space tech
+    last_diaspora_cycle: int = -10 ** 6      # Cycle when last interstellar expedition was launched
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -597,6 +599,8 @@ class Planet:
             "society": _deep_copy({k: v for k, v in self.society.items() if k not in DERIVED_SOCIETY}),
             "diaspora_escrow": self.diaspora_escrow,
             "crowded_cycles": self.crowded_cycles,
+            "epistemic_progress": dict(self.epistemic_progress),
+            "last_diaspora_cycle": self.last_diaspora_cycle,
         }
 
     @classmethod
@@ -655,6 +659,8 @@ class Planet:
             society=_deep_copy(data.get("society")) or {},
             diaspora_escrow=int(data.get("diaspora_escrow", 0)),
             crowded_cycles=int(data.get("crowded_cycles", 0)),
+            epistemic_progress=dict(data.get("epistemic_progress", {})),
+            last_diaspora_cycle=int(data.get("last_diaspora_cycle", -10 ** 6)),
         )
 
     def s60_manifold(self) -> Dict[str, Any]:

@@ -147,9 +147,16 @@ class BridgeDaemon:
             ore = getattr(p, "ore_silo", 0)
             citadel = getattr(p, "citadel_level", 1)
             vessel = "Yes" if "INTERSTELLAR_FLIGHT" in getattr(p, "technologies", []) else "No"
+            epistemic = ""
+            ep_dict = getattr(p, "epistemic_progress", {})
+            for t_ladder in ["SYNTHETIC_ECOLOGY", "ORBITAL_FOUNDRY", "JUMP_PROPULSION", "INTERSTELLAR_FLIGHT"]:
+                if t_ladder not in getattr(p, "technologies", []):
+                    prog = ep_dict.get(t_ladder, 0.0)
+                    epistemic = f" │ {c_gray('Math')}: {c_cyan(t_ladder)} ({int(prog * 100)}%)"
+                    break
 
             print(f"║  ► {c_gold(bold(p.name))} ({p.planet_type}, Sec {p.sector_id}) │ {c_cyan('Pop')}: {pop:,} │ {c_cyan('Treasury')}: {treasury:,} Cr │ {c_cyan('Citadel')}: L{citadel}")
-            print(f"║      {c_gray('Reserves')}: Food: {food} │ Ore: {ore} │ {c_gray('Interstellar')}: {c_green(vessel)} │ {c_gray('Techs')}: {c_green(techs)}")
+            print(f"║      {c_gray('Reserves')}: Food: {food} │ Ore: {ore} │ {c_gray('Interstellar')}: {c_green(vessel)}{epistemic} │ {c_gray('Techs')}: {c_green(techs)}")
             print(f"║      {c_gray('Cognition')}: ToM: {c_gold(tom)} │ Ideation: {c_cyan(ideation)} │ Voice: {voice}")
             print(f"║      {c_gray('Action')}:    {bold(action)} -> {c_gray(detail)}")
             print(c_cyan("╟──────────────────────────────────────────────────────────────────────────────╢"))
