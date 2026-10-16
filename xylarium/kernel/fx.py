@@ -73,6 +73,13 @@ class FXMarket:
         p = self.pools[cur]
         return float(p["local"] / p["sol"])                 # a quote for the legacy float simulation
 
+    def set_rate(self, cur: str, new_rate: float) -> None:
+        """Sets the mid rate by adjusting local units relative to sol reserve."""
+        if cur == self.hub or cur not in self.pools or new_rate <= 0:
+            return
+        p = self.pools[cur]
+        p["local"] = p["sol"] * exact(new_rate)
+
     def to_sol_value(self, cur: str, amount: float) -> float:
         return amount if cur == self.hub else amount / self.rate(cur)
 

@@ -195,14 +195,19 @@ class BridgeDaemon:
         cycles_run = 0
         while not self._shutdown_event.is_set():
             await asyncio.sleep(self.tick_interval)
-            self.kernel.tick_simulation()
-            cycles_run += 1
-            stamp(self.kernel)
-            if self.observer_mode:
-                self._report_observer_state(self.kernel.cycle_count)
-            if self.max_cycles and cycles_run >= self.max_cycles:
-                self.trigger_shutdown()
-                break
+            try:
+                self.kernel.tick_simulation()
+                cycles_run += 1
+                stamp(self.kernel)
+                if self.observer_mode:
+                    self._report_observer_state(self.kernel.cycle_count)
+                if self.max_cycles and cycles_run >= self.max_cycles:
+                    self.trigger_shutdown()
+                    break
+            except Exception as e:
+                import traceback
+                print(f"[DAEMON ERROR in cycle {getattr(self.kernel, 'cycle_count', '?')}]: {e}")
+                traceback.print_exc()
 
     async def stop(self) -> None:
         """Gracefully shuts down listeners and persists universe state."""
