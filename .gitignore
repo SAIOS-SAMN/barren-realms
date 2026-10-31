@@ -5,3 +5,4 @@ __pycache__/
 runs/
 .keys/
 uplink-rs/target/
+perf.data
